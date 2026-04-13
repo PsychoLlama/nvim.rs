@@ -15,7 +15,20 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 use nvim_normal::types::{CmdargT, OpargT};
+use nvim_window::win_struct::WinStruct;
 use std::ffi::{c_char, c_int};
+
+/// Convert raw `WinHandle` pointer to `&WinStruct`.
+#[inline]
+unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+
+/// Convert raw `WinHandle` pointer to `&mut WinStruct`.
+#[inline]
+unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
 
 // =============================================================================
 // Mouse button constants (from mouse.h)
@@ -225,14 +238,6 @@ extern "C" {
 
     /// `p_mousescroll_hor` option value (`OptInt` = `int64_t`).
     static p_mousescroll_hor: i64;
-
-    // --- Window field accessors ---
-
-    /// Get `w_topline` field from a window.
-    fn nvim_win_get_topline(wp: WinHandle) -> linenr_T;
-
-    /// Get `w_topfill` field from a window.
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
 
     // --- Mouse globals ---
 
@@ -669,8 +674,8 @@ pub const extern "C" fn rs_is_horizontal_scroll(scroll_dir: c_int) -> bool {
 /// `wp` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_mouse_topline(wp: WinHandle) {
-    ORIG_TOPLINE = nvim_win_get_topline(wp);
-    ORIG_TOPFILL = nvim_win_get_topfill(wp);
+    ORIG_TOPLINE = win_ref(wp).w_topline;
+    ORIG_TOPFILL = win_ref(wp).w_topfill;
 }
 
 /// Set UI mouse depending on current mode and 'mouse'.
@@ -744,14 +749,6 @@ pub unsafe extern "C" fn rs_mouse_tab_close(c1: c_int) {
 
 extern "C" {
     /// Get `w_p_rl` (right-to-left) field.
-    fn nvim_win_get_p_rl(wp: WinHandle) -> c_int;
-
-    /// Get `w_view_width` field.
-    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
-
-    /// Get `w_skipcol` field.
-    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
-
     /// Check if window may have filler lines.
     fn win_may_fill(wp: WinHandle) -> bool;
 
@@ -825,20 +822,20 @@ pub unsafe extern "C" fn rs_mouse_comp_pos(
     let mut row = *rowp;
     let mut retval = false;
 
-    if nvim_win_get_p_rl(win) != 0 {
-        col = nvim_win_get_view_width(win) - 1 - col;
+    if win_ref(win).w_p_rl() != 0 {
+        col = win_ref(win).w_view_width - 1 - col;
     }
 
-    let topline = nvim_win_get_topline(win);
+    let topline = win_ref(win).w_topline;
     let mut lnum = topline;
     let line_count = nvim_win_buf_line_count(win);
-    let view_width = nvim_win_get_view_width(win);
+    let view_width = win_ref(win).w_view_width;
 
     while row > 0 {
         // Don't include filler lines in "count"
         let count = if win_may_fill(win) {
             let fill = if lnum == topline {
-                nvim_win_get_topfill(win)
+                win_ref(win).w_topfill
             } else {
                 nvim_win_get_fill(win, lnum)
             };
@@ -849,10 +846,10 @@ pub unsafe extern "C" fn rs_mouse_comp_pos(
         };
 
         let mut adjusted_count = count;
-        if nvim_win_get_skipcol(win) > 0 && lnum == topline {
+        if win_ref(win).w_skipcol > 0 && lnum == topline {
             let width1 = view_width - nvim_win_col_off(win);
             if width1 > 0 {
-                let skipcol = nvim_win_get_skipcol(win);
+                let skipcol = win_ref(win).w_skipcol;
                 let skip_lines = if skipcol > width1 {
                     (skipcol - width1) / (width1 + nvim_win_col_off2(win)) + 1
                 } else {
@@ -902,12 +899,12 @@ pub unsafe extern "C" fn rs_mouse_comp_pos(
 
         // Add skip column for the topline.
         if lnum == topline {
-            col += nvim_win_get_skipcol(win);
+            col += win_ref(win).w_skipcol;
         }
     }
 
-    if nvim_win_get_p_wrap(win) == 0 {
-        col += nvim_win_get_leftcol(win);
+    if win_ref(win).w_p_wrap() == 0 {
+        col += win_ref(win).w_leftcol;
     }
 
     // skip line number and fold column in front of the line
@@ -929,24 +926,6 @@ pub unsafe extern "C" fn rs_mouse_comp_pos(
 extern "C" {
     /// Get current window.
     fn nvim_get_curwin() -> WinHandle;
-
-    /// Get `w_p_wrap` field.
-    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
-
-    /// Get `w_leftcol` field.
-    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
-
-    /// Get `w_topline` field.
-    fn nvim_win_get_botline(wp: WinHandle) -> linenr_T;
-
-    /// Get `w_cursor.lnum` field.
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> linenr_T;
-
-    /// Set `w_cursor.lnum` field.
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: linenr_T);
-
-    /// Set `w_cursor.col` field.
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
 
     /// Get buffer line count for this window.
     fn nvim_win_buf_line_count(wp: WinHandle) -> linenr_T;
@@ -1007,9 +986,9 @@ pub unsafe extern "C" fn rs_scroll_line_len(lnum: linenr_T) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_find_longest_lnum() -> linenr_T {
     let curwin = nvim_get_curwin();
-    let topline = nvim_win_get_topline(curwin);
-    let botline = nvim_win_get_botline(curwin);
-    let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+    let topline = win_ref(curwin).w_topline;
+    let botline = win_ref(curwin).w_botline;
+    let cursor_lnum = win_ref(curwin).w_cursor.lnum;
     let line_count = nvim_win_buf_line_count(curwin);
 
     // Check for reasonable line numbers
@@ -1050,20 +1029,20 @@ pub unsafe extern "C" fn rs_find_longest_lnum() -> linenr_T {
 pub unsafe extern "C" fn rs_do_mousescroll_horiz(leftcol: c_int) -> bool {
     let curwin = nvim_get_curwin();
 
-    if nvim_win_get_p_wrap(curwin) != 0 {
+    if win_ref(curwin).w_p_wrap() != 0 {
         return false; // no horizontal scrolling when wrapping
     }
-    if nvim_win_get_leftcol(curwin) == leftcol {
+    if win_ref(curwin).w_leftcol == leftcol {
         return false; // already there
     }
 
     // When the line of the cursor is too short, move the cursor to the
     // longest visible line.
     if nvim_win_virtual_active(curwin) == 0
-        && leftcol > rs_scroll_line_len(nvim_win_get_cursor_lnum(curwin))
+        && leftcol > rs_scroll_line_len(win_ref(curwin).w_cursor.lnum)
     {
-        nvim_win_set_cursor_lnum(curwin, rs_find_longest_lnum());
-        nvim_win_set_cursor_col(curwin, 0);
+        win_mut(curwin).w_cursor.lnum = rs_find_longest_lnum();
+        win_mut(curwin).w_cursor.col = 0;
     }
 
     rs_set_leftcol(leftcol)
@@ -1094,12 +1073,6 @@ pub type OpargHandle = *mut nvim_normal::types::OpargT;
 // =============================================================================
 
 extern "C" {
-    /// Get `w_winrow_off` field.
-    fn nvim_win_get_winrow_off(wp: WinHandle) -> c_int;
-
-    /// Get `w_wincol_off` field.
-    fn nvim_win_get_wincol_off(wp: WinHandle) -> c_int;
-
     // Grid/frame accessors used by rs_mouse_find_grid_win and rs_frame_find_win.
 
     /// Get `msg_grid.handle`.
@@ -1113,9 +1086,6 @@ extern "C" {
 
     /// Return true if `wp->w_grid_alloc.chars != NULL`.
     fn nvim_win_get_grid_alloc_chars(wp: WinHandle) -> bool;
-
-    /// Return true if `wp->w_floating`.
-    fn nvim_win_get_floating(wp: WinHandle) -> bool;
 
     /// Return true if `wp->w_config.mouse`.
     fn nvim_win_config_get_mouse(wp: WinHandle) -> bool;
@@ -1184,10 +1154,10 @@ unsafe fn rs_mouse_find_grid_win(
         let wp = nvim_get_win_by_grid_handle(*gridp);
         if !wp.is_null()
             && nvim_win_get_grid_alloc_chars(wp)
-            && (!nvim_win_get_floating(wp) || nvim_win_config_get_mouse(wp))
+            && (!win_ref(wp).w_floating || nvim_win_config_get_mouse(wp))
         {
-            let view_height = nvim_win_get_view_height(wp);
-            let view_width = nvim_win_get_view_width(wp);
+            let view_height = win_ref(wp).w_view_height;
+            let view_width = win_ref(wp).w_view_width;
             let row_offset = nvim_gridview_get_row_offset(nvim_win_get_grid(wp));
             let col_offset = nvim_gridview_get_col_offset(nvim_win_get_grid(wp));
             *rowp = (*rowp - row_offset).min(view_height - 1);
@@ -1263,7 +1233,7 @@ unsafe fn rs_frame_find_win(rowp: *mut c_int, colp: *mut c_int) -> WinHandle {
 
     let wp = nvim_curtab_find_win_for_frame(fp);
     if !wp.is_null() {
-        *rowp -= nvim_win_get_winbar_height(wp);
+        *rowp -= win_ref(wp).w_winbar_height;
     }
     wp
 }
@@ -1310,8 +1280,8 @@ pub unsafe extern "C" fn rs_mouse_find_win_outer(
 ) -> WinHandle {
     let wp = rs_mouse_find_win_inner(gridp, rowp, colp);
     if !wp.is_null() {
-        *rowp += nvim_win_get_winrow_off(wp);
-        *colp += nvim_win_get_wincol_off(wp);
+        *rowp += win_ref(wp).w_winrow_off;
+        *colp += win_ref(wp).w_wincol_off;
     }
     wp
 }
@@ -1330,15 +1300,6 @@ extern "C" {
     /// Get `w_p_stc` field (statuscolumn option string).
     fn nvim_win_get_p_stc(wp: WinHandle) -> *const c_char;
 
-    /// Get `w_view_height` field.
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-
-    /// Get `w_status_height` field.
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-
-    /// Get `w_winbar_height` field.
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-
     /// Get `Rows` global.
 
     /// Get `p_ch` global (command height).
@@ -1349,9 +1310,6 @@ extern "C" {
     fn nvim_global_stl_height() -> c_int;
 
     // --- Phase 2 grid accessors ---
-
-    /// Get `w_redr_type` from a window.
-    fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
 
     /// Get `&wp->w_grid` (`GridView` pointer).
     fn nvim_win_get_grid(wp: WinHandle) -> *mut std::ffi::c_void;
@@ -1388,12 +1346,6 @@ extern "C" {
 
     /// Set `curbuf` (`buf_T*`).
     fn nvim_set_curbuf(buf: *mut std::ffi::c_void);
-
-    /// Get `w_buffer` from a window.
-    fn nvim_win_get_w_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
-
-    /// Set `w_redr_status` field.
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
 
     /// `mod_mask` global.
     static mod_mask: c_int;
@@ -1542,30 +1494,6 @@ extern "C" {
     /// Get the line count of a buffer.
     fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> linenr_T;
 
-    /// Get `w_topline` (already in earlier block, re-declared for clarity).
-    // fn nvim_win_get_topline(wp: WinHandle) -> linenr_T;  // Already declared
-
-    /// Set `w_topline`.
-    fn nvim_win_set_topline(wp: WinHandle, lnum: linenr_T);
-
-    /// Set `w_topfill`.
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
-
-    /// Get `w_wincol`.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-
-    /// Get `w_height`.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-
-    /// Get `w_width`.
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-
-    /// Set `w_curswant`.
-    fn nvim_win_set_curswant(wp: WinHandle, val: colnr_T);
-
-    /// Set `w_set_curswant`.
-    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
-
     /// Clear valid bits: `w_valid &= ~bits`.
     fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
 
@@ -1654,7 +1582,7 @@ pub unsafe extern "C" fn rs_mouse_check_grid(vcolp: *mut colnr_T, flagsp: *mut c
         std::ptr::addr_of_mut!(click_row),
         std::ptr::addr_of_mut!(click_col),
     ) != curwin
-        || nvim_win_get_redr_type(curwin) != 0
+        || win_ref(curwin).w_redr_type != 0
     {
         return;
     }
@@ -1743,8 +1671,8 @@ pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
         let p_stc = nvim_win_get_p_stc(wp);
         if !p_stc.is_null() && *p_stc != 0 {
             let col_off = nvim_win_col_off(wp);
-            if nvim_win_get_p_rl(wp) != 0 {
-                if wincol >= nvim_win_get_view_width(wp) - col_off {
+            if win_ref(wp).w_p_rl() != 0 {
+                if wincol >= win_ref(wp).w_view_width - col_off {
                     return MOUSE_STATUSCOL;
                 }
             } else if wincol < col_off {
@@ -1753,8 +1681,8 @@ pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
         }
     }
 
-    let view_height = nvim_win_get_view_height(wp);
-    let status_height = nvim_win_get_status_height(wp);
+    let view_height = win_ref(wp).w_view_height;
+    let status_height = win_ref(wp).w_status_height;
 
     if winrow >= view_height + status_height {
         // Below window — check for global status line
@@ -1773,11 +1701,11 @@ pub unsafe extern "C" fn rs_get_fpos_of_mouse(mpos: *mut PosT) -> c_int {
         return IN_STATUS_LINE;
     }
 
-    if winrow < 0 && winrow + nvim_win_get_winbar_height(wp) >= 0 {
+    if winrow < 0 && winrow + win_ref(wp).w_winbar_height >= 0 {
         return MOUSE_WINBAR;
     }
 
-    if wincol >= nvim_win_get_view_width(wp) {
+    if wincol >= win_ref(wp).w_view_width {
         return IN_SEP_LINE;
     }
 
@@ -1898,7 +1826,7 @@ pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
             // Mouse took us to another window. Go back to the previous one
             // to stop insert there properly.
             nvim_set_curwin(old_curwin);
-            let old_buf = nvim_win_get_w_buffer(old_curwin);
+            let old_buf = win_ref(old_curwin).w_buffer;
             nvim_set_curbuf(old_buf);
             if nvim_win_bt_prompt(old_curwin) != 0 {
                 // Restart Insert mode when re-entering the prompt buffer.
@@ -1914,7 +1842,7 @@ pub unsafe extern "C" fn rs_ins_mouse(c: c_int) {
         start_arrow(tpos_ptr);
         if nvim_get_curwin() != new_curwin && rs_win_valid(new_curwin) != 0 {
             nvim_set_curwin(new_curwin);
-            nvim_set_curbuf(nvim_win_get_w_buffer(new_curwin));
+            nvim_set_curbuf(win_ref(new_curwin).w_buffer);
         }
         nvim_set_can_cindent(1);
     }
@@ -1958,7 +1886,7 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
         } else {
             let count = if shift_or_ctrl {
                 // Whole page up or down: botline - topline
-                nvim_win_get_botline(curwin) - nvim_win_get_topline(curwin)
+                win_ref(curwin).w_botline - win_ref(curwin).w_topline
             } else {
                 p_mousescroll_vert as c_int
             };
@@ -1971,12 +1899,11 @@ pub unsafe extern "C" fn rs_do_mousescroll(cap: CmdargHandle) {
     } else {
         // Horizontal scrolling
         let step = if shift_or_ctrl {
-            nvim_win_get_view_width(curwin)
+            win_ref(curwin).w_view_width
         } else {
             p_mousescroll_hor as c_int
         };
-        let leftcol =
-            nvim_win_get_leftcol(curwin) + if cap_arg == MSCR_RIGHT { -step } else { step };
+        let leftcol = win_ref(curwin).w_leftcol + if cap_arg == MSCR_RIGHT { -step } else { step };
         let leftcol = if leftcol < 0 { 0 } else { leftcol };
         rs_do_mousescroll_horiz(leftcol);
     }
@@ -2010,16 +1937,16 @@ pub unsafe extern "C" fn rs_nv_mousescroll(cap: CmdargHandle) {
             return;
         }
         nvim_set_curwin(wp);
-        nvim_set_curbuf(nvim_win_get_w_buffer(wp));
+        nvim_set_curbuf(win_ref(wp).w_buffer);
     }
 
     // Call the common mouse scroll function shared with other modes.
     rs_do_mousescroll(cap);
 
     let curwin = nvim_get_curwin();
-    nvim_win_set_redr_status(curwin, 1);
+    win_mut(curwin).w_redr_status = (1) != 0;
     nvim_set_curwin(old_curwin);
-    nvim_set_curbuf(nvim_win_get_w_buffer(old_curwin));
+    nvim_set_curbuf(win_ref(old_curwin).w_buffer);
 }
 
 // =============================================================================
@@ -2085,7 +2012,7 @@ pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
             return;
         }
         nvim_set_curwin(wp);
-        nvim_set_curbuf(nvim_win_get_w_buffer(wp));
+        nvim_set_curbuf(win_ref(wp).w_buffer);
     }
 
     let curwin = nvim_get_curwin();
@@ -2103,9 +2030,9 @@ pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
     rs_do_mousescroll(std::ptr::addr_of_mut!(cap));
 
     let curwin_after = nvim_get_curwin();
-    nvim_win_set_redr_status(curwin_after, 1);
+    win_mut(curwin_after).w_redr_status = (1) != 0;
     nvim_set_curwin(old_curwin);
-    nvim_set_curbuf(nvim_win_get_w_buffer(old_curwin));
+    nvim_set_curbuf(win_ref(old_curwin).w_buffer);
 
     // If cursor moved, notify insert mode via start_arrow.
     let new_cursor = *nvim_win_get_cursor_ptr(old_curwin);
@@ -2126,9 +2053,6 @@ pub unsafe extern "C" fn rs_ins_mousescroll(dir: c_int) {
 extern "C" {
     /// Get `w_grid_alloc` pointer (`ScreenGrid`\*) from a window.
     fn nvim_win_get_w_grid_alloc(wp: WinHandle) -> *mut std::ffi::c_void;
-
-    /// Get `w_winrow` field.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
 
     /// Count foldcolumn characters for window `wp`.
     fn rs_win_fdccol_count(wp: WinHandle) -> c_int;
@@ -2237,11 +2161,11 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
         return IN_UNKNOWN;
     }
 
-    let winbar_height = nvim_win_get_winbar_height(wp);
-    let w_height = nvim_win_get_w_height(wp);
-    let w_width = nvim_win_get_w_width(wp);
-    let w_view_width = nvim_win_get_view_width(wp);
-    let w_p_rl = nvim_win_get_p_rl(wp) != 0;
+    let winbar_height = win_ref(wp).w_winbar_height;
+    let w_height = win_ref(wp).w_height;
+    let w_width = win_ref(wp).w_width;
+    let w_view_width = win_ref(wp).w_view_width;
+    let w_p_rl = win_ref(wp).w_p_rl() != 0;
     let p_stc = nvim_win_get_p_stc(wp);
     let col_off = nvim_win_col_off(wp);
 
@@ -2325,7 +2249,7 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
             // Before jumping to another buffer, or moving the cursor for a left
             // click, stop Visual mode.
             if VIsual_active
-                && (nvim_win_get_w_buffer(wp) != nvim_win_get_w_buffer(curwin)
+                && (win_ref(wp).w_buffer != win_ref(curwin).w_buffer
                     || (STATUS_LINE_OFFSET == 0
                         && SEP_LINE_OFFSET == 0
                         && (if w_p_rl {
@@ -2345,7 +2269,7 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
                 // selection if possible. Allow dragging the status lines.
                 SEP_LINE_OFFSET = 0;
                 row = 0;
-                col += nvim_win_get_wincol(wp);
+                col += win_ref(wp).w_wincol;
                 // wp = cmdwin_win (win_enter will handle this)
             }
 
@@ -2377,16 +2301,15 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
             }
 
             let curwin = nvim_get_curwin();
-            let topline = nvim_win_get_topline(curwin);
-            nvim_win_set_cursor_lnum(curwin, topline);
+            let topline = win_ref(curwin).w_topline;
+            win_mut(curwin).w_cursor.lnum = topline;
             do_foldclick = false;
         }
     } else if STATUS_LINE_OFFSET != 0 {
         let dw = rs_get_dragwin();
         if which_button == MOUSE_LEFT && !dw.is_null() {
             // Drag the status line
-            let count =
-                row - nvim_win_get_winrow(dw) - nvim_win_get_w_height(dw) + 1 - STATUS_LINE_OFFSET;
+            let count = row - win_ref(dw).w_winrow - win_ref(dw).w_height + 1 - STATUS_LINE_OFFSET;
             rs_win_drag_status_line(dw, count);
             DID_DRAG |= count;
         }
@@ -2395,8 +2318,7 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
         let dw = rs_get_dragwin();
         if !dw.is_null() {
             // Drag the separator column
-            let count =
-                col - nvim_win_get_wincol(dw) - nvim_win_get_w_width(dw) + 1 - SEP_LINE_OFFSET;
+            let count = col - win_ref(dw).w_wincol - win_ref(dw).w_width + 1 - SEP_LINE_OFFSET;
             rs_win_drag_vsep_line(dw, count);
             DID_DRAG |= count;
         }
@@ -2427,9 +2349,9 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
             col -= nvim_gridview_get_col_offset(w_grid);
         }
 
-        let view_height = nvim_win_get_view_height(curwin);
-        let topline = nvim_win_get_topline(curwin);
-        let topfill = nvim_win_get_topfill(curwin);
+        let view_height = win_ref(curwin).w_view_height;
+        let topline = win_ref(curwin).w_topline;
+        let topfill = win_ref(curwin).w_topfill;
 
         if row < 0 {
             let mut count: c_int = 0;
@@ -2461,12 +2383,12 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
                     tline -= 1;
                     tfill = 0;
                 }
-                nvim_win_set_topline(curwin, tline);
-                nvim_win_set_topfill(curwin, tfill);
+                win_mut(curwin).w_topline = tline;
+                win_mut(curwin).w_topfill = tfill;
             }
             // Final sync: write back topline/topfill in case loop didn't run
-            nvim_win_set_topline(curwin, tline);
-            nvim_win_set_topfill(curwin, tfill);
+            win_mut(curwin).w_topline = tline;
+            win_mut(curwin).w_topfill = tfill;
             check_topfill(curwin, 0);
             nvim_win_clear_valid_bits(
                 curwin,
@@ -2508,8 +2430,8 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
                     tfill = win_get_fill(curwin, tline);
                 }
             }
-            nvim_win_set_topline(curwin, tline);
-            nvim_win_set_topfill(curwin, tfill);
+            win_mut(curwin).w_topline = tline;
+            win_mut(curwin).w_topfill = tfill;
             check_topfill(curwin, 0);
             redraw_later(curwin, UPD_VALID);
             nvim_win_clear_valid_bits(
@@ -2521,7 +2443,7 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
             // When dragging the mouse, while the text has been scrolled up as
             // far as it goes, moving the mouse in the top line should scroll
             // the text down (done later when recomputing w_topline).
-            let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+            let cursor_lnum = win_ref(curwin).w_cursor.lnum;
             let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
             if rs_get_mouse_dragging() > 0 && cursor_lnum == line_count && cursor_lnum == topline {
                 nvim_win_clear_valid_bits(curwin, VALID_TOPLINE);
@@ -2570,8 +2492,8 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
         col = col_from_screen;
     }
 
-    nvim_win_set_curswant(curwin, col);
-    nvim_win_set_set_curswant(curwin, 0); // May still have been true
+    win_mut(curwin).w_curswant = col;
+    win_mut(curwin).w_set_curswant = 0; // May still have been true
     if coladvance(curwin, col) == FAIL {
         // Mouse click beyond end of line
         if !inclusive.is_null() {
@@ -2621,14 +2543,6 @@ extern "C" {
         nr: i64,
     ) -> c_int;
 
-    /// Get `w_handle` (window ID) from a window.
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-
-    /// Get `w_hsep_height` from a window.
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
-
-    /// Get `w_border_adj[idx]` from a window.
-    fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
 }
 
 /// `getmousepos()` function.
@@ -2668,19 +2582,13 @@ pub unsafe extern "C" fn rs_f_getmousepos(
         std::ptr::addr_of_mut!(col),
     );
     if !wp.is_null() {
-        let height = nvim_win_get_w_height(wp)
-            + nvim_win_get_hsep_height(wp)
-            + nvim_win_get_status_height(wp);
+        let height = win_ref(wp).w_height + win_ref(wp).w_hsep_height + win_ref(wp).w_status_height;
         // The height is adjusted by 1 when there is a bottom border.
-        if row < height + nvim_win_get_border_adj(wp, 2) {
-            winid = i64::from(nvim_win_get_handle(wp));
-            winrow = i64::from(row) + 1 + i64::from(nvim_win_get_winrow_off(wp));
-            wincol = i64::from(col) + 1 + i64::from(nvim_win_get_wincol_off(wp));
-            if row >= 0
-                && row < nvim_win_get_w_height(wp)
-                && col >= 0
-                && col < nvim_win_get_w_width(wp)
-            {
+        if row < height + win_ref(wp).w_border_adj[2] {
+            winid = i64::from(win_ref(wp).handle);
+            winrow = i64::from(row) + 1 + i64::from(win_ref(wp).w_winrow_off);
+            wincol = i64::from(col) + 1 + i64::from(win_ref(wp).w_wincol_off);
+            if row >= 0 && row < win_ref(wp).w_height && col >= 0 && col < win_ref(wp).w_width {
                 rs_mouse_comp_pos(
                     wp,
                     std::ptr::addr_of_mut!(row),
@@ -3300,8 +3208,8 @@ unsafe fn rs_do_mouse_impl(
             (click_defs_raw, click_col)
         };
 
-        let click_col = if in_statuscol && nvim_win_get_p_rl(wp) != 0 {
-            nvim_win_get_view_width(wp) - click_col - 1
+        let click_col = if in_statuscol && win_ref(wp).w_p_rl() != 0 {
+            win_ref(wp).w_view_width - click_col - 1
         } else {
             click_col
         };

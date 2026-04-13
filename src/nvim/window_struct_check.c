@@ -175,6 +175,7 @@ _Static_assert(offsetof(win_T, w_p_nu) == 928, "w_p_nu offset mismatch");
 _Static_assert(offsetof(win_T, w_p_rnu) == 932, "w_p_rnu offset mismatch");
 _Static_assert(offsetof(win_T, w_p_list) == 924, "w_p_list offset mismatch");
 _Static_assert(offsetof(win_T, w_p_sms) == 1008, "w_p_sms offset mismatch");
+_Static_assert(offsetof(win_T, w_p_spell) == 1012, "w_p_spell offset mismatch");
 _Static_assert(offsetof(win_T, w_p_cuc) == 1016, "w_p_cuc offset mismatch");
 _Static_assert(offsetof(win_T, w_p_cul) == 1020, "w_p_cul offset mismatch");
 _Static_assert(offsetof(win_T, w_p_wfb) == 960, "w_p_wfb offset mismatch");

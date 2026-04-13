@@ -553,6 +553,15 @@ impl WinStruct {
         unsafe { read_int_at(self, 800) }
     }
 
+    /// Set `w_p_diff` - at absolute offset 800
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_diff(&mut self, val: c_int) {
+        write_int_at(self, 800, val);
+    }
+
     /// `w_p_crb` (scrollbind option) - at absolute offset 1112
     #[must_use]
     #[inline]
@@ -583,11 +592,29 @@ impl WinStruct {
         unsafe { read_int_at(self, 932) }
     }
 
+    /// Set `w_p_rnu` (relativenumber) - at absolute offset 932
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_rnu(&mut self, val: c_int) {
+        write_int_at(self, 932, val);
+    }
+
     /// `w_p_nu` (number) - at absolute offset 928
     #[must_use]
     #[inline]
     pub const fn w_p_nu(&self) -> c_int {
         unsafe { read_int_at(self, 928) }
+    }
+
+    /// Set `w_p_nu` (number) - at absolute offset 928
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_nu(&mut self, val: c_int) {
+        write_int_at(self, 928, val);
     }
 
     /// `w_p_list` - at absolute offset 924
@@ -597,11 +624,29 @@ impl WinStruct {
         unsafe { read_int_at(self, 924) }
     }
 
+    /// Set `w_p_list` - at absolute offset 924
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_list(&mut self, val: c_int) {
+        write_int_at(self, 924, val);
+    }
+
     /// `w_p_cul` (cursorline) - at absolute offset 1020
     #[must_use]
     #[inline]
     pub const fn w_p_cul(&self) -> c_int {
         unsafe { read_int_at(self, 1020) }
+    }
+
+    /// Set `w_p_cul` (cursorline) - at absolute offset 1020
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_cul(&mut self, val: c_int) {
+        write_int_at(self, 1020, val);
     }
 
     /// `w_p_cole` (conceallevel) - at absolute offset 1104 (OptInt = i64)
@@ -632,11 +677,36 @@ impl WinStruct {
         unsafe { read_int_at(self, 1084) }
     }
 
+    /// `w_p_spell` (spell) - at absolute offset 1012
+    #[must_use]
+    #[inline]
+    pub const fn w_p_spell(&self) -> c_int {
+        unsafe { read_int_at(self, 1012) }
+    }
+
+    /// Set `w_p_spell` (spell) - at absolute offset 1012
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_spell(&mut self, val: c_int) {
+        write_int_at(self, 1012, val);
+    }
+
     /// `w_p_cuc` (cursorcolumn) - at absolute offset 1016
     #[must_use]
     #[inline]
     pub const fn w_p_cuc(&self) -> c_int {
         unsafe { read_int_at(self, 1016) }
+    }
+
+    /// Set `w_p_cuc` (cursorcolumn) - at absolute offset 1016
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_p_cuc(&mut self, val: c_int) {
+        write_int_at(self, 1016, val);
     }
 
     /// `w_p_bri` (breakindent) - at absolute offset 788

@@ -13,7 +13,34 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::redundant_closure_for_method_calls)]
 
+use nvim_window::win_struct::WinStruct;
 use std::ffi::c_int;
+
+/// Cast local `WinHandle` to `nvim_window::WinHandle` for `win_ref`/`win_mut`.
+///
+/// Both types are `repr(transparent)` wrappers around `*mut c_void`, so this
+/// transmute is safe at the ABI level. The local WinHandle will eventually be
+/// replaced by re-exporting from `nvim_window`.
+#[inline]
+unsafe fn as_nvim_win(wp: WinHandle) -> nvim_window::WinHandle {
+    std::mem::transmute(wp)
+}
+
+#[inline]
+unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
+    nvim_window::win_struct::win_ref(as_nvim_win(wp))
+}
+
+#[inline]
+unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut WinStruct {
+    nvim_window::win_struct::win_mut(as_nvim_win(wp))
+}
+
+/// Cast `nvim_window::WinHandle` back to local `WinHandle`.
+#[inline]
+unsafe fn from_nvim_win(wp: nvim_window::WinHandle) -> WinHandle {
+    std::mem::transmute(wp)
+}
 
 // =============================================================================
 // Float Relative Position
@@ -442,31 +469,19 @@ pub struct TabpageHandle(*mut c_void);
 
 // C accessor functions
 extern "C" {
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_relative(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_window(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_zindex(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_focusable(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
     // Phase 1: iteration accessors
     fn nvim_get_lastwin() -> WinHandle;
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
     fn nvim_stl_win_get_p_stl(wp: WinHandle) -> *const c_char;
     fn nvim_version_get_p_ls() -> i64;
     fn nvim_win_config_float(wp: WinHandle);
     fn nvim_get_curtab() -> TabpageHandle;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
     // Phase 2: find functions
-    fn nvim_win_get_float_is_info(wp: WinHandle) -> c_int;
     fn nvim_get_prevwin() -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_tabpage_get_prevwin(tp: TabpageHandle) -> WinHandle;
@@ -474,13 +489,7 @@ extern "C" {
     fn rs_tabpage_win_valid(tp: TabpageHandle, wp: WinHandle) -> c_int;
     // Phase 3: win_float_remove
     fn win_close(wp: WinHandle, free_buf: bool, force: bool) -> c_int;
-    // Phase 4: win_set_minimal_style
-    fn nvim_win_set_p_nu(wp: WinHandle, val: c_int);
-    fn nvim_win_set_p_rnu(wp: WinHandle, val: c_int);
-    fn nvim_win_set_p_cul_wrap(wp: WinHandle, val: c_int);
-    fn nvim_win_set_p_cuc_wrap(wp: WinHandle, val: c_int);
-    fn nvim_win_set_p_spell(wp: WinHandle, val: c_int);
-    fn nvim_win_set_p_list(wp: WinHandle, val: c_int);
+    // Phase 4: win_set_minimal_style (string options - cannot use WinStruct)
     fn nvim_win_get_p_fcs_eob(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_fcs_ptr(wp: WinHandle) -> *mut c_char;
     fn nvim_win_set_p_fcs(wp: WinHandle, val: *mut c_char);
@@ -502,7 +511,6 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn rs_parse_winhl_opt(winhl: *const c_char, win: WinHandle) -> bool;
     // Phase 5: win_config_float
-    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
     #[link_name = "rs_win_remove_status_line"]
     fn nvim_win_remove_status_line(wp: WinHandle, add_hsep: c_int);
     fn nvim_wconfig_get_width(cfg: *mut c_void) -> c_int;
@@ -521,9 +529,6 @@ extern "C" {
     fn nvim_win_get_config_border_flag(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_external_flag(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_border_side_char(wp: WinHandle, i: c_int) -> c_int;
-    fn nvim_win_set_w_width(wp: WinHandle, val: c_int);
-    fn nvim_win_set_w_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_border_adj(wp: WinHandle, i: c_int, val: c_int);
     fn nvim_win_set_redr_status_from_status_height(wp: WinHandle);
     static mouse_row: c_int;
     static mouse_col: c_int;
@@ -537,8 +542,6 @@ extern "C" {
     fn nvim_set_must_redraw(type_: c_int);
     fn nvim_redraw_later(wp: WinHandle, type_: c_int);
     fn nvim_win_set_inner_size(wp: WinHandle, valid_cursor: bool);
-    fn nvim_win_set_hl_needs_update(wp: WinHandle, val: c_int);
-    fn nvim_win_set_redr_border(wp: WinHandle, val: c_int);
     fn nvim_win_grid_adjust(wp: WinHandle, row: *mut c_int, col: *mut c_int);
     fn nvim_textpos2screenpos(
         wp: WinHandle,
@@ -558,8 +561,6 @@ extern "C" {
     fn nvim_win_get_config_col_after_merge(wp: WinHandle) -> f64;
     fn nvim_win_get_config_bufpos_lnum_after_merge(wp: WinHandle) -> i32;
     fn nvim_win_get_config_bufpos_col_after_merge(wp: WinHandle) -> c_int;
-    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
-    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
     // Additional Phase 5 helpers
     fn nvim_get_Rows() -> c_int;
     fn nvim_get_Columns() -> c_int;
@@ -578,7 +579,7 @@ pub unsafe extern "C" fn rs_win_is_floating(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_floating(wp)
+    c_int::from(win_ref(wp).w_floating)
 }
 
 /// Get the border-adjusted width of a floating window.
@@ -590,9 +591,9 @@ pub unsafe extern "C" fn rs_win_float_total_width(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    let width = nvim_win_get_w_width(wp);
-    let left_border = nvim_win_get_border_adj(wp, 3); // Left border
-    let right_border = nvim_win_get_border_adj(wp, 1); // Right border
+    let width = win_ref(wp).w_width;
+    let left_border = win_ref(wp).w_border_adj[3]; // Left border
+    let right_border = win_ref(wp).w_border_adj[1]; // Right border
     width + left_border + right_border
 }
 
@@ -605,9 +606,9 @@ pub unsafe extern "C" fn rs_win_float_total_height(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    let height = nvim_win_get_w_height(wp);
-    let top_border = nvim_win_get_border_adj(wp, 0); // Top border
-    let bottom_border = nvim_win_get_border_adj(wp, 2); // Bottom border
+    let height = win_ref(wp).w_height;
+    let top_border = win_ref(wp).w_border_adj[0]; // Top border
+    let bottom_border = win_ref(wp).w_border_adj[2]; // Bottom border
     height + top_border + bottom_border
 }
 
@@ -665,12 +666,12 @@ pub unsafe extern "C" fn rs_float_overlaps_region(
     region_width: c_int,
     region_height: c_int,
 ) -> c_int {
-    if wp.is_null() || nvim_win_get_floating(wp) == 0 {
+    if wp.is_null() || c_int::from(win_ref(wp).w_floating) == 0 {
         return 0;
     }
 
-    let win_row = nvim_win_get_winrow(wp);
-    let win_col = nvim_win_get_wincol(wp);
+    let win_row = win_ref(wp).w_winrow;
+    let win_col = win_ref(wp).w_wincol;
     let win_width = rs_win_float_total_width(wp);
     let win_height = rs_win_float_total_height(wp);
 
@@ -872,13 +873,13 @@ pub const extern "C" fn rs_float_point_in_rect(
 #[unsafe(export_name = "win_check_anchored_floats")]
 pub unsafe extern "C" fn rs_win_check_anchored_floats(win: WinHandle) {
     // kFloatRelativeWindow = 1
-    let win_handle = nvim_win_get_handle(win);
+    let win_handle = win_ref(win).handle;
     let mut wp = nvim_get_lastwin();
-    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+    while !wp.is_null() && c_int::from(win_ref(wp).w_floating) != 0 {
         if nvim_win_get_config_relative(wp) == 1 && nvim_win_get_config_window(wp) == win_handle {
-            nvim_win_set_pos_changed(wp, 1);
+            win_mut(wp).w_pos_changed = (1) != 0;
         }
-        wp = nvim_win_get_prev(wp);
+        wp = from_nvim_win(win_ref(wp).w_prev);
     }
 }
 
@@ -889,15 +890,15 @@ pub unsafe extern "C" fn rs_win_check_anchored_floats(win: WinHandle) {
 pub unsafe extern "C" fn rs_win_float_update_statusline() {
     let p_ls = nvim_version_get_p_ls();
     let mut wp = nvim_get_lastwin();
-    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
-        let has_status = nvim_win_get_status_height(wp) > 0;
+    while !wp.is_null() && c_int::from(win_ref(wp).w_floating) != 0 {
+        let has_status = win_ref(wp).w_status_height > 0;
         let stl = nvim_stl_win_get_p_stl(wp);
         let stl_nonempty = !stl.is_null() && *stl != 0;
         let should_show = stl_nonempty && (p_ls == 1 || p_ls == 2);
         if should_show != has_status {
             nvim_win_config_float(wp);
         }
-        wp = nvim_win_get_prev(wp);
+        wp = from_nvim_win(win_ref(wp).w_prev);
     }
 }
 
@@ -911,9 +912,9 @@ pub unsafe extern "C" fn rs_win_float_anchor_laststatus() {
     let mut wp = nvim_tabpage_get_firstwin(curtab);
     while !wp.is_null() {
         if nvim_win_get_config_relative(wp) == 5 {
-            nvim_win_set_pos_changed(wp, 1);
+            win_mut(wp).w_pos_changed = (1) != 0;
         }
-        wp = nvim_win_get_next(wp);
+        wp = from_nvim_win(win_ref(wp).w_next);
     }
 }
 
@@ -923,9 +924,9 @@ pub unsafe extern "C" fn rs_win_float_anchor_laststatus() {
 #[unsafe(export_name = "win_reconfig_floats")]
 pub unsafe extern "C" fn rs_win_reconfig_floats() {
     let mut wp = nvim_get_lastwin();
-    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+    while !wp.is_null() && c_int::from(win_ref(wp).w_floating) != 0 {
         nvim_win_config_float(wp);
-        wp = nvim_win_get_prev(wp);
+        wp = from_nvim_win(win_ref(wp).w_prev);
     }
 }
 
@@ -942,9 +943,9 @@ pub unsafe extern "C" fn rs_win_float_remove(bang: bool, count: c_int) {
     // Collect all floating windows (from lastwin backwards)
     let mut floats: Vec<WinHandle> = Vec::new();
     let mut wp = nvim_get_lastwin();
-    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+    while !wp.is_null() && c_int::from(win_ref(wp).w_floating) != 0 {
         floats.push(wp);
-        wp = nvim_win_get_prev(wp);
+        wp = from_nvim_win(win_ref(wp).w_prev);
     }
     // Sort descending by zindex (highest first)
     floats.sort_by(|a, b| {
@@ -976,11 +977,11 @@ pub unsafe extern "C" fn rs_win_float_remove(bang: bool, count: c_int) {
 #[unsafe(export_name = "win_float_find_preview")]
 pub unsafe extern "C" fn rs_win_float_find_preview() -> WinHandle {
     let mut wp = nvim_get_lastwin();
-    while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
-        if nvim_win_get_float_is_info(wp) != 0 {
+    while !wp.is_null() && c_int::from(win_ref(wp).w_floating) != 0 {
+        if c_int::from(win_ref(wp).w_float_is_info) != 0 {
             return wp;
         }
-        wp = nvim_win_get_prev(wp);
+        wp = from_nvim_win(win_ref(wp).w_prev);
     }
     WinHandle::null()
 }
@@ -1026,12 +1027,12 @@ pub unsafe extern "C" fn rs_win_float_find_altwin(win: WinHandle, tp: TabpageHan
 #[unsafe(export_name = "win_set_minimal_style")]
 pub unsafe extern "C" fn rs_win_set_minimal_style(wp: WinHandle) {
     // Boolean options: clear them all
-    nvim_win_set_p_nu(wp, 0);
-    nvim_win_set_p_rnu(wp, 0);
-    nvim_win_set_p_cul_wrap(wp, 0);
-    nvim_win_set_p_cuc_wrap(wp, 0);
-    nvim_win_set_p_spell(wp, 0);
-    nvim_win_set_p_list(wp, 0);
+    win_mut(wp).set_w_p_nu(0);
+    win_mut(wp).set_w_p_rnu(0);
+    win_mut(wp).set_w_p_cul(0);
+    win_mut(wp).set_w_p_cuc(0);
+    win_mut(wp).set_w_p_spell(0);
+    win_mut(wp).set_w_p_list(0);
 
     // Hide EOB region: use " " fillchar and cleared highlighting
     // if w_p_fcs_chars.eob != ' '
@@ -1104,12 +1105,12 @@ pub unsafe extern "C" fn rs_win_set_minimal_style(wp: WinHandle) {
     }
 
     // statusline: clear if floating and non-empty
-    if nvim_win_get_floating(wp) != 0 {
+    if c_int::from(win_ref(wp).w_floating) != 0 {
         let stl = nvim_win_get_p_stl_ptr(wp);
         if !stl.is_null() && *stl != 0 {
             free_string_option(stl);
             nvim_win_set_p_stl(wp, nvim_get_empty_string_option());
-            if nvim_win_get_status_height(wp) > 0 {
+            if win_ref(wp).w_status_height > 0 {
                 nvim_win_config_float(wp);
             }
         }
@@ -1139,20 +1140,20 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
     let stl_nonempty = !stl.is_null() && *stl != 0;
     let p_ls = nvim_version_get_p_ls();
     let show_stl = stl_nonempty && (p_ls == 1 || p_ls == 2);
-    let status_height = nvim_win_get_status_height(wp);
+    let status_height = win_ref(wp).w_status_height;
     if status_height != 0 && !show_stl {
         nvim_win_remove_status_line(wp, 0);
     } else if status_height == 0 && show_stl {
         let sh = nvim_get_status_height_const();
         // Set w_status_height via win_set_status_height (which exists in window crate)
-        nvim_win_set_status_height(wp, sh);
+        win_mut(wp).w_status_height = sh;
     }
 
     // Step 2: Set dimensions
     let fw = nvim_wconfig_get_width(fconfig).max(1);
     let fh = nvim_wconfig_get_height(fconfig).max(1);
-    nvim_win_set_w_width(wp, fw);
-    nvim_win_set_w_height(wp, fh);
+    win_mut(wp).w_width = fw;
+    win_mut(wp).w_height = fh;
 
     // Step 3: Resolve relative positioning (modifies fconfig copy)
     let rel = nvim_wconfig_get_relative(fconfig);
@@ -1180,7 +1181,7 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
             let old_col = nvim_wconfig_get_col(fconfig);
             nvim_wconfig_set_row(fconfig, old_row + f64::from(row));
             nvim_wconfig_set_col(fconfig, old_col + f64::from(col));
-            nvim_wconfig_set_window(fconfig, nvim_win_get_handle(mouse_win));
+            nvim_wconfig_set_window(fconfig, win_ref(mouse_win).handle);
         }
     }
 
@@ -1198,13 +1199,14 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
     nvim_merge_win_config_ptr(wp, fconfig);
 
     // Step 6: Update border_adj based on merged config
-    let has_border = nvim_win_get_floating(wp) != 0 && nvim_win_get_config_border_flag(wp) != 0;
+    let has_border =
+        c_int::from(win_ref(wp).w_floating) != 0 && nvim_win_get_config_border_flag(wp) != 0;
     for i in 0..4 {
         let side_char = nvim_win_get_config_border_side_char(wp, i);
         let new_adj = c_int::from(has_border && side_char != 0);
-        if new_adj != nvim_win_get_border_adj(wp, i) {
+        if new_adj != win_ref(wp).w_border_adj[i as usize] {
             change_border = true;
-            nvim_win_set_border_adj(wp, i, new_adj);
+            win_mut(wp).w_border_adj[i as usize] = new_adj;
         }
     }
 
@@ -1214,10 +1216,10 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
         let cols = nvim_get_Columns();
         let border_h = nvim_win_border_height_wrapper(wp);
         let border_w = nvim_win_border_width_wrapper(wp);
-        let clamped_h = nvim_win_get_w_height(wp).min(rows - border_h);
-        let clamped_w = nvim_win_get_w_width(wp).min(cols - border_w);
-        nvim_win_set_w_height(wp, clamped_h);
-        nvim_win_set_w_width(wp, clamped_w);
+        let clamped_h = win_ref(wp).w_height.min(rows - border_h);
+        let clamped_w = win_ref(wp).w_width.min(cols - border_w);
+        win_mut(wp).w_height = clamped_h;
+        win_mut(wp).w_width = clamped_w;
     }
 
     // Step 8: Finalize
@@ -1226,9 +1228,9 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
     let upd_not_valid = nvim_get_upd_not_valid();
     nvim_set_must_redraw(upd_valid);
     nvim_win_set_redr_status_from_status_height(wp);
-    nvim_win_set_pos_changed(wp, 1);
+    win_mut(wp).w_pos_changed = (1) != 0;
     if change_external || change_border {
-        nvim_win_set_hl_needs_update(wp, 1);
+        win_mut(wp).w_hl_needs_update = 1;
         nvim_redraw_later(wp, upd_not_valid);
     }
 
@@ -1240,8 +1242,8 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
         let parent_handle = nvim_win_get_config_window_after_merge(wp);
         let parent = nvim_find_window_by_handle_safe(parent_handle);
         if !parent.is_null() {
-            row += nvim_win_get_winrow(parent);
-            col += nvim_win_get_wincol(parent);
+            row += win_ref(parent).w_winrow;
+            col += win_ref(parent).w_wincol;
             nvim_win_grid_adjust(
                 parent,
                 std::ptr::addr_of_mut!(row),
@@ -1269,16 +1271,16 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
                 col += text_col - 1;
             }
         }
-        nvim_win_set_winrow(wp, row);
-        nvim_win_set_wincol(wp, col);
+        win_mut(wp).w_winrow = row;
+        win_mut(wp).w_wincol = col;
     } else {
-        nvim_win_set_winrow(wp, nvim_wconfig_get_row(fconfig) as c_int);
-        nvim_win_set_wincol(wp, nvim_wconfig_get_col(fconfig) as c_int);
+        win_mut(wp).w_winrow = nvim_wconfig_get_row(fconfig) as c_int;
+        win_mut(wp).w_wincol = nvim_wconfig_get_col(fconfig) as c_int;
     }
 
     // Step 10: Border redraw
     if nvim_wconfig_get_border(fconfig) != 0 {
-        nvim_win_set_redr_border(wp, 1);
+        win_mut(wp).w_redr_border = (1) != 0;
         nvim_redraw_later(wp, upd_valid);
     }
 }
@@ -1305,10 +1307,6 @@ extern "C" {
     fn nvim_win_free_and_set_p_wbr_empty(wp: WinHandle);
     fn nvim_win_p_stl_is_empty_string_option(wp: WinHandle) -> c_int;
     fn nvim_win_set_p_stl_empty_string_option(wp: WinHandle);
-    fn nvim_win_set_floating(wp: WinHandle, val: c_int);
-    fn nvim_win_set_winbar_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
     fn nvim_win_get_status_height_for_float(wp: WinHandle) -> c_int;
     fn nvim_win_config_float_with_fconfig(wp: WinHandle, fconfig: *mut c_void);
     fn nvim_winframe_remove(wp: WinHandle);
@@ -1325,8 +1323,6 @@ extern "C" {
     fn nvim_find_buffer_by_handle(b: c_int, err: *mut c_void) -> *mut c_void;
     fn nvim_buf_set_bufhidden_wipe(buf: *mut c_void);
     fn win_set_buf(wp: WinHandle, buf: *mut c_void, err: *mut c_void);
-    fn nvim_win_set_p_diff(wp: WinHandle, val: c_int);
-    fn nvim_win_set_float_is_info(wp: WinHandle, val: c_int);
     fn nvim_wconfig_alloc_init() -> *mut c_void;
     fn nvim_wconfig_free(cfg: *mut c_void);
     fn nvim_error_alloc_init() -> *mut c_void;
@@ -1398,8 +1394,10 @@ pub unsafe extern "C" fn rs_win_new_float(
                 tp_last = nvim_tabpage_get_lastwin(tp);
             }
             // Skip to the last non-floating window in this tabpage
-            while nvim_win_get_floating(tp_last) != 0 && !nvim_win_get_prev(tp_last).is_null() {
-                tp_last = nvim_win_get_prev(tp_last);
+            while c_int::from(win_ref(tp_last).w_floating) != 0
+                && !win_ref(tp_last).w_prev.is_null()
+            {
+                tp_last = from_nvim_win(win_ref(tp_last).w_prev);
             }
         }
         wp = nvim_win_alloc_float(tp_last);
@@ -1428,16 +1426,16 @@ pub unsafe extern "C" fn rs_win_new_float(
         }
         {
             let cmdwin = nvim_get_cmdwin_win();
-            if !cmdwin.is_null() && nvim_win_get_floating(cmdwin) == 0 {
+            if !cmdwin.is_null() && c_int::from(win_ref(cmdwin).w_floating) == 0 {
                 // cmdwin can't become the only non-float
                 let mut other_nonfloat = false;
                 let mut wp2 = firstwin;
-                while !wp2.is_null() && nvim_win_get_floating(wp2) == 0 {
+                while !wp2.is_null() && c_int::from(win_ref(wp2).w_floating) == 0 {
                     if wp2 != wp && wp2 != cmdwin {
                         other_nonfloat = true;
                         break;
                     }
-                    wp2 = nvim_win_get_next(wp2);
+                    wp2 = from_nvim_win(win_ref(wp2).w_next);
                 }
                 if !other_nonfloat {
                     nvim_api_set_error_e_cmdwin(err);
@@ -1457,11 +1455,11 @@ pub unsafe extern "C" fn rs_win_new_float(
     }
 
     // Set floating window fields
-    nvim_win_set_floating(wp, 1);
-    nvim_win_set_status_height(wp, nvim_win_get_status_height_for_float(wp));
-    nvim_win_set_winbar_height(wp, 0);
-    nvim_win_set_hsep_height(wp, 0);
-    nvim_win_set_vsep_width(wp, 0);
+    win_mut(wp).w_floating = (1) != 0;
+    win_mut(wp).w_status_height = nvim_win_get_status_height_for_float(wp);
+    win_mut(wp).w_winbar_height = 0;
+    win_mut(wp).w_hsep_height = 0;
+    win_mut(wp).w_vsep_width = 0;
 
     nvim_win_config_float_with_fconfig(wp, fconfig);
     let upd_valid = nvim_get_upd_valid();
@@ -1522,8 +1520,8 @@ pub unsafe extern "C" fn rs_win_float_create(enter: bool, new_buf: bool) -> WinH
         }
     }
     nvim_unblock_autocmds();
-    nvim_win_set_p_diff(wp, 0);
-    nvim_win_set_float_is_info(wp, 1);
+    win_mut(wp).set_w_p_diff(0);
+    win_mut(wp).w_float_is_info = (1) != 0;
     if enter {
         win_enter(wp, false);
     }
