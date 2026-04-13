@@ -87,6 +87,7 @@ extern "C" {
 
     // Character ops
     fn nvim_gchar_cursor() -> c_int;
+    #[link_name = "has_format_option"]
     fn nvim_has_format_option(c: c_int) -> bool;
     fn nvim_trim_eol_space();
     fn do_join(

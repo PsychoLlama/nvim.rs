@@ -2133,6 +2133,7 @@ extern "C" {
     fn rs_lineFolded(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
     fn decor_virt_lines(
         wp: WinHandle,

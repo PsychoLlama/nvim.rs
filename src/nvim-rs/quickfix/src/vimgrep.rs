@@ -48,6 +48,7 @@ type RegmmatchHandle = *mut c_void;
 extern "C" {
     fn xfree(ptr: *mut std::ffi::c_void);
     static mut got_int: bool;
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
 

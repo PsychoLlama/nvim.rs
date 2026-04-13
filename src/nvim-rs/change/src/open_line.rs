@@ -124,8 +124,11 @@ extern "C" {
 
     // Line access
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: LinenrT) -> ColnrT;
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace(lnum: LinenrT, line: *mut c_char, copy: bool) -> c_int;
+    #[link_name = "ml_append"]
     fn nvim_ml_append(lnum: LinenrT, line: *const c_char, len: ColnrT, newfile: bool) -> c_int;
     fn nvim_get_cursor_line_ptr() -> *mut c_char;
     fn nvim_get_cursor_line_len() -> ColnrT;
@@ -136,16 +139,21 @@ extern "C" {
     #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // String functions
     fn skipwhite(s: *const c_char) -> *mut c_char;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    #[link_name = "concat_str"]
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
 
     // Indent functions
+    #[link_name = "indent_size_ts"]
     fn nvim_indent_size_ts(line: *const c_char, ts: ColnrT, vts_array: *const ColnrT) -> c_int;
+    #[link_name = "get_indent"]
     fn nvim_get_indent() -> c_int;
+    #[link_name = "set_indent"]
     fn nvim_set_indent(size: c_int, flags: c_int) -> bool;
     #[link_name = "copy_indent"]
     fn nvim_copy_indent(size: c_int, src: *const c_char) -> bool;
@@ -156,13 +164,16 @@ extern "C" {
     fn truncate_spaces(line: *mut c_char, col: usize);
 
     // Comment leader functions
+    #[link_name = "get_leader_len"]
     fn nvim_get_leader_len(
         line: *const c_char,
         flags: *mut *mut c_char,
         backward: bool,
         include_space: bool,
     ) -> c_int;
+    #[link_name = "check_linecomment"]
     fn nvim_check_linecomment(line: *const c_char) -> ColnrT;
+    #[link_name = "copy_option_part"]
     fn nvim_change_copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
@@ -171,6 +182,7 @@ extern "C" {
     ) -> usize;
 
     // Format option functions
+    #[link_name = "has_format_option"]
     fn nvim_has_format_option(opt: c_int) -> bool;
     fn nvim_in_cinkeys(keytyped: c_int, when: c_int, line_is_white: bool) -> bool;
     fn cin_is_cinword(line: *const c_char) -> bool;
@@ -180,6 +192,7 @@ extern "C" {
 
     // Undo functions
     fn nvim_u_clearline();
+    #[link_name = "u_save_cursor"]
     fn nvim_u_save_cursor() -> c_int;
 
     // Replace stack functions
@@ -187,6 +200,7 @@ extern "C" {
     fn replace_push_nul();
 
     // Mark functions
+    #[link_name = "mark_adjust"]
     fn nvim_mark_adjust(
         lnum: LinenrT,
         lnume: LinenrT,
@@ -194,6 +208,7 @@ extern "C" {
         amount_after: LinenrT,
         op: c_int,
     );
+    #[link_name = "mark_col_adjust"]
     fn nvim_mark_col_adjust(
         lnum: LinenrT,
         col: ColnrT,
@@ -203,6 +218,7 @@ extern "C" {
     );
 
     // Extmark functions
+    #[link_name = "extmark_splice"]
     fn nvim_extmark_splice(
         buf: crate::BufHandle,
         lnum: c_int,
@@ -215,6 +231,7 @@ extern "C" {
         new_byte: BcountT,
         undo: c_int,
     );
+    #[link_name = "extmark_splice_cols"]
     fn nvim_extmark_splice_cols(
         buf: crate::BufHandle,
         lnum: c_int,
@@ -225,6 +242,7 @@ extern "C" {
     );
 
     // Changed notification functions
+    #[link_name = "changed_lines"]
     fn nvim_changed_lines(
         buf: crate::BufHandle,
         lnum: LinenrT,
@@ -255,6 +273,7 @@ extern "C" {
     fn nvim_utf_ptr2char(s: *const c_char) -> c_int;
 
     // Ins_bytes function
+    #[link_name = "ins_bytes"]
     fn nvim_ins_bytes(p: *const c_char);
 }
 

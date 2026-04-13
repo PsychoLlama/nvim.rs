@@ -913,6 +913,7 @@ extern "C" {
         undo: c_int,
     );
     /// buf_updates_send_changes: notify listeners of buffer changes.
+    #[link_name = "buf_updates_send_changes"]
     pub fn nvim_buf_updates_send_changes(
         buf: *mut BufHandle,
         lnum: c_int,

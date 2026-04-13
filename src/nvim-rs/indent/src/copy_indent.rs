@@ -17,6 +17,7 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ts() -> i64;
     fn nvim_curbuf_get_b_p_vts_array() -> *const c_int;
 
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace(lnum: i32, line: *mut c_char, copy: bool) -> c_int;
     fn nvim_set_curwin_cursor_col(col: i32);
     fn nvim_get_curwin_cursor_lnum() -> i32;

@@ -3593,6 +3593,7 @@ extern "C" {
         hi: *mut LinenrT,
     ) -> bool;
     /// Call changed_line_abv_curs_win(wp).
+    #[link_name = "changed_line_abv_curs_win"]
     fn nvim_changed_line_abv_curs_win(wp: WinHandle);
     /// Call number_width(wp).
     fn nvim_number_width(wp: WinHandle) -> c_int;

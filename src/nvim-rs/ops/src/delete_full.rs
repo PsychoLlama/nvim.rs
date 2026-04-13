@@ -23,6 +23,7 @@ const BL_FIX: c_int = 4; // don't leave cursor on NUL
 extern "C" {
     // Generic buffer/undo accessors (reuse existing C shims)
     fn nvim_curbuf_ml_empty() -> bool;
+    #[link_name = "u_save_cursor"]
     fn nvim_u_save_cursor() -> c_int;
     fn nvim_curbuf_is_modifiable() -> bool;
     fn nvim_emsg_modifiable();

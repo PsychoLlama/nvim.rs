@@ -72,6 +72,7 @@ extern "C" {
     fn nvim_dict_set_keys_readonly(d: DictPtr);
 
     // ── misc helpers ───────────────────────────────────────────────────────
+    #[link_name = "utf_char2bytes"]
     fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 
     // ── typval_T string/type accessors (vars.c) ───────────────────────────

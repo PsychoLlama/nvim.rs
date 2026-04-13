@@ -28,7 +28,9 @@ extern "C" {
 
     fn nvim_u_savesub_curline() -> c_int;
 
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace(lnum: i32, line: *mut c_char, copy: bool) -> c_int;
+    #[link_name = "extmark_splice_cols"]
     fn nvim_extmark_splice_cols(
         buf: BufHandle,
         start_row: c_int,

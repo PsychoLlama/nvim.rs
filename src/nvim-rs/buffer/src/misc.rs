@@ -414,6 +414,7 @@ pub unsafe extern "C" fn do_bufdel(
 // =============================================================================
 
 extern "C" {
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
     // nvim_ml_get_buf_len: takes *mut c_void in quickfix_shim.c
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;

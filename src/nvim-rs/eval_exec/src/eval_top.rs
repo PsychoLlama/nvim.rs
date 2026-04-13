@@ -1130,7 +1130,9 @@ extern "C" {
     fn nvim_buf_get_prompt_start_lnum(buf: *mut c_void) -> i32; // linenr_T = i32
     fn nvim_buf_get_b_ml_ml_line_count(buf: *mut c_void) -> i32; // linenr_T = i32
     fn ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
+    #[link_name = "prompt_text"]
     fn nvim_prompt_text() -> *const c_char;
+    #[link_name = "concat_str"]
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     // nvim_xstrdup declared in Phase 1 extern block above
 
@@ -1139,6 +1141,7 @@ extern "C" {
     fn nvim_write_prompt_start_lnum(lnum: i32);
 
     // Phase 2: prompt_invoke_callback accessors (kept)
+    #[link_name = "ml_append"]
     fn nvim_ml_append(lnum: i32, line: *const c_char, len: i32, newfile: bool) -> c_int;
     fn nvim_appended_lines_mark(lnum: i32, count: c_int);
     fn nvim_set_cursor_lnum(lnum: i32); // linenr_T

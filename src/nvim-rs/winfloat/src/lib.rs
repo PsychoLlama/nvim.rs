@@ -507,6 +507,7 @@ extern "C" {
     fn nvim_win_set_p_stl(wp: WinHandle, val: *mut c_char);
     fn free_string_option(p: *mut c_char);
     fn nvim_get_empty_string_option() -> *mut c_char;
+    #[link_name = "concat_str"]
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn rs_parse_winhl_opt(winhl: *const c_char, win: WinHandle) -> bool;

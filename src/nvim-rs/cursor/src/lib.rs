@@ -250,6 +250,7 @@ extern "C" {
 
 extern "C" {
     /// Get pointer to a line in a buffer (`ml_get_buf`)
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
 
     /// Get length of a line in a buffer (`ml_get_buf_len`)

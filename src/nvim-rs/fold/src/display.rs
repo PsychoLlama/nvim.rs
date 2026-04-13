@@ -71,6 +71,7 @@ extern "C" {
     /// Get curbuf's line count (from move.c).
     fn nvim_curbuf_line_count() -> LinenrT;
     /// Concatenate two strings into a new xmalloc'd string (from change_ffi.c).
+    #[link_name = "concat_str"]
     fn nvim_concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
 
     // NGETTEXT accessors (macro-wrapping required)

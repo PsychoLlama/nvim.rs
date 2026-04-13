@@ -13,11 +13,13 @@ const SIN_CHANGED: c_int = 1;
 
 extern "C" {
     static mut State: c_int;
+    #[link_name = "get_indent"]
     fn nvim_get_indent() -> c_int;
     fn nvim_curbuf_get_b_p_sw() -> i64;
     fn nvim_curbuf_get_b_p_ts() -> c_int;
     fn nvim_curbuf_get_b_p_vts_array() -> *const c_int;
     fn nvim_change_indent(type_: c_int, amount: c_int, round: c_int, call_changed_bytes: bool);
+    #[link_name = "set_indent"]
     fn nvim_set_indent(size: c_int, flags: c_int) -> bool;
     fn trim_to_int(x: i64) -> c_int;
 }

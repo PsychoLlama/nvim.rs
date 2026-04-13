@@ -67,29 +67,12 @@ bool nvim_silent_mode(void) { return silent_mode; }
 bool nvim_in_assert_fails(void) { return in_assert_fails; }
 
 char *nvim_ml_get(linenr_T lnum) { return ml_get(lnum); }
-colnr_T nvim_ml_get_len(linenr_T lnum) { return ml_get_len(lnum); }
-int nvim_ml_replace(linenr_T lnum, char *line, bool copy) { return ml_replace(lnum, line, copy); }
-int nvim_ml_append(linenr_T lnum, const char *line, colnr_T len, bool newfile)
-{
-  return ml_append(lnum, (char *)line, len, newfile);
-}
 
-void nvim_buf_inc_changedtick(buf_T *buf) { buf_inc_changedtick(buf); }
-
-char *nvim_xstrnsave(const char *s, size_t len) { return xstrnsave(s, len); }
-char *nvim_concat_str(const char *s1, const char *s2) { return concat_str(s1, s2); }
 const char *nvim_gettext(const char *s) { return _(s); }
 
-int nvim_utf_char2bytes(int c, char *buf) { return utf_char2bytes(c, buf); }
-int nvim_utf_ptr2len(const char *p) { return utf_ptr2len(p); }
-bool nvim_utf_composinglike(const char *p0, const char *p1, uint64_t *state)
-{
-  return utf_composinglike(p0, p1, (GraphemeState *)state);
-}
-int nvim_ptr2cells(const char *p) { return ptr2cells(p); }
-
 char *nvim_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
-bool nvim_use_indentexpr_for_lisp(void) { return use_indentexpr_for_lisp(); }
+int nvim_utf_char2bytes(int c, char *buf) { return utf_char2bytes(c, buf); }
+colnr_T nvim_ml_get_len(linenr_T lnum) { return ml_get_len(lnum); }
 
 // Curwin cursor accessors (used by open_line.rs)
 pos_T nvim_change_get_curwin_cursor(void) { return curwin->w_cursor; }
@@ -99,8 +82,6 @@ colnr_T nvim_get_curwin_cursor_col(void) { return curwin->w_cursor.col; }
 void nvim_set_curwin_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
 void nvim_set_curwin_cursor_coladd(colnr_T coladd) { curwin->w_cursor.coladd = coladd; }
 
-void nvim_replace_push_nul(void) { replace_push_nul(); }
-
 bool nvim_p_sm(void) { return p_sm; }
 bool nvim_p_ri(void) { return p_ri; }
 bool nvim_p_deco(void) { return p_deco; }
@@ -109,16 +90,8 @@ bool nvim_p_sr(void) { return p_sr; }
 
 void nvim_set_state(int state) { State = state; }
 
-colnr_T nvim_win_chartabsize(win_T *wp, const char *ptr, colnr_T vcol)
-{
-  return win_chartabsize(wp, (char *)ptr, vcol);
-}
-
 bool nvim_vim_strchr_cpo_listwm(void) { return vim_strchr(p_cpo, CPO_LISTWM) != NULL; }
 bool nvim_vim_strchr_cpo_dollar(void) { return vim_strchr(p_cpo, CPO_DOLLAR) != NULL; }
-
-void nvim_siemsg(const char *s, int64_t arg) { siemsg(s, arg); }
-void nvim_siemsg_str(const char *s, const char *arg) { siemsg(s, arg); }
 
 int nvim_curbuf_get_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
 colnr_T nvim_curbuf_get_ml_line_len(void) { return curbuf->b_ml.ml_line_len; }
@@ -178,13 +151,8 @@ win_T *nvim_for_all_tab_windows_next(void *handle)
   return iter->wp;
 }
 
-void nvim_for_all_tab_windows_end(void *handle) { xfree(handle); }
-
 win_T *nvim_curtab_first_win(void) { return firstwin; }
 win_T *nvim_win_get_next_in_tab(win_T *wp) { return wp->w_next; }
-
-void nvim_changed_line_abv_curs_win(win_T *wp) { changed_line_abv_curs_win(wp); }
-void nvim_approximate_botline_win(win_T *wp) { approximate_botline_win(wp); }
 
 bool nvim_win_get_lines_wl_valid(win_T *wp, int idx) { return wp->w_lines[idx].wl_valid; }
 void nvim_win_set_lines_wl_valid(win_T *wp, int idx, bool val) { wp->w_lines[idx].wl_valid = val; }
@@ -195,40 +163,7 @@ void nvim_win_set_lines_wl_foldend(win_T *wp, int idx, linenr_T val) { wp->w_lin
 linenr_T nvim_win_get_lines_wl_lastlnum(win_T *wp, int idx) { return wp->w_lines[idx].wl_lastlnum; }
 void nvim_win_set_lines_wl_lastlnum(win_T *wp, int idx, linenr_T val) { wp->w_lines[idx].wl_lastlnum = val; }
 
-void nvim_extmark_splice_cols(buf_T *buf, int start_row, colnr_T start_col,
-                              colnr_T old_col, colnr_T new_col, int undo)
-{
-  extmark_splice_cols(buf, start_row, start_col, old_col, new_col, undo);
-}
-
-void nvim_extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2,
-                         linenr_T amount, linenr_T amount_after, int op)
-{
-  extmark_adjust(buf, line1, line2, amount, amount_after, op);
-}
-
-void nvim_extmark_splice(buf_T *buf, int start_row, colnr_T start_col,
-                         int old_row, colnr_T old_col, bcount_t old_byte,
-                         int new_row, colnr_T new_col, bcount_t new_byte, int undo)
-{
-  extmark_splice(buf, start_row, start_col, old_row, old_col, old_byte,
-                 new_row, new_col, new_byte, undo);
-}
-
-void nvim_mark_adjust(linenr_T line1, linenr_T line2,
-                      linenr_T amount, linenr_T amount_after, int op)
-{
-  mark_adjust(line1, line2, amount, amount_after, op);
-}
-
-void nvim_mark_col_adjust(linenr_T lnum, colnr_T col,
-                          linenr_T amount_lnum, colnr_T amount_col, int spaces_removed)
-{
-  mark_col_adjust(lnum, col, amount_lnum, amount_col, spaces_removed);
-}
-
 void nvim_u_clearline(void) { u_clearline(curbuf); }
-int nvim_u_save_cursor(void) { return u_save_cursor(); }
 
 bool nvim_get_did_si(void) { return did_si; }
 void nvim_set_did_si(bool val) { did_si = val; }
@@ -252,61 +187,18 @@ void nvim_set_inhibit_delete_count(int val) { inhibit_delete_count = val; }
 
 void nvim_set_cmdmod_cmod_flags(int val) { cmdmod.cmod_flags = val; }
 
-bool nvim_has_format_option(int opt) { return has_format_option(opt); }
 pos_T *nvim_findmatch(char *initc, char ch) { return findmatch((oparg_T *)initc, ch); }
-int nvim_indent_size_ts(const char *ptr, colnr_T ts, const colnr_T *vts_array)
-{
-  return indent_size_ts(ptr, ts, (colnr_T *)vts_array);
-}
-int nvim_get_indent(void) { return get_indent(); }
-bool nvim_set_indent(int size, int flags) { return set_indent(size, flags); }
 int nvim_change_get_sw_value(void) { return get_sw_value(curbuf); }
-int nvim_get_leader_len(const char *line, char **flags, bool backward, bool include_space)
-{
-  return get_leader_len((char *)line, flags, backward, include_space);
-}
-colnr_T nvim_check_linecomment(const char *line) { return check_linecomment(line); }
-size_t nvim_change_copy_option_part(char **option, char *buf, int maxlen, const char *sep)
-{
-  return copy_option_part(option, buf, maxlen, (char *)sep);
-}
-
-const char *nvim_prompt_text(void) { return prompt_text(); }
 bool nvim_change_bt_prompt(void) { return bt_prompt(curbuf); }
 linenr_T nvim_get_curbuf_b_prompt_start_mark_lnum(void) { return curbuf->b_prompt_start.mark.lnum; }
-
-void nvim_ins_bytes(const char *p) { ins_bytes((char *)p); }
-
-char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum) { return ml_get_buf(buf, lnum); }
-
-void nvim_changed_lines(buf_T *buf, linenr_T first, int col, linenr_T last, linenr_T xtra,
-                        bool add_undo)
-{
-  changed_lines(buf, first, col, last, xtra, add_undo);
-}
-
-void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_added,
-                                   int64_t num_removed)
-{
-  buf_updates_send_changes(buf, firstlnum, num_added, num_removed);
-}
-
-int nvim_get_last_leader_offset(const char *line, char **flags) { return get_last_leader_offset((char *)line, flags); }
 
 // =============================================================================
 // Phase 1: Accessors for changed_common migration
 // =============================================================================
 
-// Wrappers for functions that need window context
-int nvim_change_linetabsize_eol(win_T *wp, linenr_T lnum) { return linetabsize_eol(wp, lnum); }
-int nvim_change_sms_marker_overlap(win_T *wp, int extra2) { return sms_marker_overlap(wp, extra2); }
-void nvim_change_set_topline(win_T *wp, linenr_T topline) { set_topline(wp, topline); }
-
 // Global state accessors
 bool nvim_get_redraw_not_allowed(void) { return redraw_not_allowed; }
 bool nvim_get_VIsual_active_bool(void) { return VIsual_active; }
-void nvim_change_check_visual_pos(void) { check_visual_pos(); }
-void nvim_change_set_must_redraw(int type) { set_must_redraw(type); }
 linenr_T nvim_get_search_hl_has_cursor_lnum(void) { return search_hl_has_cursor_lnum; }
 void nvim_set_search_hl_has_cursor_lnum(linenr_T val) { search_hl_has_cursor_lnum = val; }
 

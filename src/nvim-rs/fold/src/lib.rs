@@ -3112,6 +3112,7 @@ extern "C" {
     fn nvim_check_cursor_col(wp: WinHandle);
 
     /// Call changed_lines for buffer.
+    #[link_name = "changed_lines"]
     fn nvim_changed_lines(
         buf: BufHandle,
         first: LineNr,
@@ -3122,6 +3123,7 @@ extern "C" {
     );
 
     /// Send buffer update events.
+    #[link_name = "buf_updates_send_changes"]
     fn nvim_buf_updates_send_changes(
         buf: BufHandle,
         firstlnum: LineNr,

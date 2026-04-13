@@ -1183,6 +1183,7 @@ extern "C" {
     fn nvim_u_savesub(lnum: c_int) -> c_int;
     #[link_name = "u_savedel"]
     fn nvim_u_savedel2(lnum: c_int, count: c_int) -> c_int;
+    #[link_name = "u_save_cursor"]
     fn nvim_u_save_cursor() -> c_int;
     fn do_check_cursorbind();
     fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int;
@@ -1239,6 +1240,7 @@ extern "C" {
         new_byte: i64,
         undo: c_int,
     );
+    #[link_name = "buf_updates_send_changes"]
     fn nvim_buf_updates_send_changes(
         buf: *mut crate::BufHandle,
         lnum: c_int,

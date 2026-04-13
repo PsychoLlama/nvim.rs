@@ -222,7 +222,9 @@ extern "C" {
     fn nvim_ml_append_recovery(lnum: i64, line: *const c_char, is_new: bool) -> c_int;
     fn nvim_ml_get(lnum: i64) -> *mut c_char;
     fn nvim_ml_get_len(lnum: i64) -> i64;
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    #[link_name = "buf_inc_changedtick"]
     fn nvim_buf_inc_changedtick(buf: *mut c_void);
     fn nvim_check_cursor();
     fn redraw_curbuf_later(redraw_type: c_int);

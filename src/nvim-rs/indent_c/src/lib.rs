@@ -217,6 +217,7 @@ extern "C" {
 
     // Phase 6 accessors (for rs_get_c_indent)
     fn nvim_get_state() -> c_int;
+    #[link_name = "check_linecomment"]
     fn nvim_check_linecomment(line: *const c_char) -> c_int;
     fn vim_strsize(s: *const c_char) -> c_int;
     fn linewhite(lnum: c_int) -> bool;

@@ -18,6 +18,7 @@ use nvim_memutil::{rs_hash_hash, rs_hash_hash_len};
 static mut hash_removed: c_char = 0;
 
 extern "C" {
+    #[link_name = "siemsg"]
     fn nvim_siemsg_str(s: *const c_char, arg: *const c_char);
 }
 

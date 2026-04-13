@@ -21,6 +21,7 @@ extern "C" {
 extern "C" {
     // Other functions
     fn ml_setflags(buf: BufHandle);
+    #[link_name = "buf_inc_changedtick"]
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn redraw_buf_status_later(buf: BufHandle);
     // Memory functions
@@ -29,6 +30,7 @@ extern "C" {
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
     // Line access
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: crate::LinenrT) -> *mut c_char;
 }
 

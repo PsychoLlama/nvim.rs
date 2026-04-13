@@ -444,7 +444,9 @@ pub unsafe extern "C" fn rs_handle_restart_edit_cursor() -> c_int {
 
 extern "C" {
     // Phase 3: init_prompt_impl dependencies (not already declared above)
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace(lnum: LinenrT, line: *const std::ffi::c_char, copy: bool) -> c_int;
+    #[link_name = "ml_append"]
     fn nvim_ml_append(
         lnum: LinenrT,
         line: *const std::ffi::c_char,

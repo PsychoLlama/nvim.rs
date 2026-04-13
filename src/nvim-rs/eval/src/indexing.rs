@@ -267,6 +267,7 @@ extern "C" {
     fn nvim_check_cursor_moved_curwin();
 
     // Line length helpers (Phase 3)
+    #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: i32) -> c_int;
     fn nvim_mb_charlen_ml(lnum: i32) -> c_int;
     fn nvim_get_cursor_line_len() -> c_int;

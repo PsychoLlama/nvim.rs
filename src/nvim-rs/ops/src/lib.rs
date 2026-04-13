@@ -616,8 +616,10 @@ use std::ffi::c_char;
 
 extern "C" {
     /// Get offset of last comment leader in line (wrapper around get_last_leader_offset).
+    #[link_name = "get_last_leader_offset"]
     fn nvim_get_last_leader_offset(line: *const c_char, flags: *mut *mut c_char) -> c_int;
     /// Get leader length for line (wrapper around get_leader_len).
+    #[link_name = "get_leader_len"]
     fn nvim_get_leader_len(
         line: *const c_char,
         flags: *mut *mut c_char,

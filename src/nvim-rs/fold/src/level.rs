@@ -17,6 +17,7 @@ const MAX_LEVEL: c_int = 20;
 // C accessor functions
 extern "C" {
     /// Get a line from a buffer.
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LineNr) -> *const c_char;
 
     /// Get the line count of the window's buffer.

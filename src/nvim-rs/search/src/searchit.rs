@@ -70,6 +70,7 @@ extern "C" {
     fn nvim_regmatch_rmm_matchcol(regmatch: RegmmatchHandle) -> ColnrT;
 
     // Buffer / line accessors
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;

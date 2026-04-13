@@ -66,6 +66,7 @@ extern "C" {
     fn fex_format(lnum: LinenrT, count: c_long, c: c_int) -> c_int;
 
     // -- format option checks --
+    #[link_name = "has_format_option"]
     fn nvim_has_format_option(c: c_int) -> bool;
 
     // -- formatexpr availability --

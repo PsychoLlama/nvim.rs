@@ -105,6 +105,7 @@ extern "C" {
         second_line_indent: c_int,
         did_do_comment: *mut bool,
     ) -> bool;
+    #[link_name = "has_format_option"]
     fn nvim_has_format_option(c: c_int) -> bool;
     fn nvim_get_old_indent() -> c_int;
     fn nvim_set_old_indent(val: c_int);

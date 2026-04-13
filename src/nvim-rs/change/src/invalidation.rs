@@ -28,8 +28,10 @@ extern "C" {
     fn nvim_win_set_lines_wl_lastlnum(win: WinHandle, idx: c_int, val: LinenrT);
 
     // Window state functions
+    #[link_name = "changed_line_abv_curs_win"]
     fn nvim_changed_line_abv_curs_win(win: WinHandle);
     fn changed_cline_bef_curs(win: WinHandle);
+    #[link_name = "approximate_botline_win"]
     fn nvim_approximate_botline_win(win: WinHandle);
     #[link_name = "rs_find_wl_entry"]
     fn nvim_find_wl_entry(win: WinHandle, lnum: LinenrT) -> c_int;
@@ -40,6 +42,7 @@ extern "C" {
     // Window iteration
     fn nvim_for_all_tab_windows_start() -> *mut c_void;
     fn nvim_for_all_tab_windows_next(iter: *mut c_void) -> WinHandle;
+    #[link_name = "xfree"]
     fn nvim_for_all_tab_windows_end(iter: *mut c_void);
 }
 

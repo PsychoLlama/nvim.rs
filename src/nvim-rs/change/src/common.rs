@@ -39,14 +39,18 @@ extern "C" {
 
     // Visual active + check visual pos
     fn nvim_get_VIsual_active_bool() -> bool;
+    #[link_name = "check_visual_pos"]
     fn nvim_change_check_visual_pos();
 
     // Global state
     fn nvim_get_redraw_not_allowed() -> bool;
 
     // linetabsize_eol / sms_marker_overlap / set_topline wrappers
+    #[link_name = "linetabsize_eol"]
     fn nvim_change_linetabsize_eol(wp: WinHandle, lnum: LinenrT) -> c_int;
+    #[link_name = "sms_marker_overlap"]
     fn nvim_change_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int;
+    #[link_name = "set_topline"]
     fn nvim_change_set_topline(wp: WinHandle, topline: LinenrT);
 
     // redraw_later
@@ -73,6 +77,7 @@ extern "C" {
     // all-tab window iteration
     fn nvim_for_all_tab_windows_start() -> *mut c_void;
     fn nvim_for_all_tab_windows_next(iter: *mut c_void) -> WinHandle;
+    #[link_name = "xfree"]
     fn nvim_for_all_tab_windows_end(iter: *mut c_void);
 
     // curwin/curbuf accessors
@@ -83,6 +88,7 @@ extern "C" {
     fn nvim_set_search_hl_has_cursor_lnum(val: LinenrT);
 
     // set_must_redraw
+    #[link_name = "set_must_redraw"]
     fn nvim_change_set_must_redraw(typ: c_int);
 
     // last_cursormoved reset check

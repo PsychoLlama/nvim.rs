@@ -38,7 +38,9 @@ extern "C" {
 
     // Buffer operations
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: LinenrT) -> ColnrT;
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace(lnum: LinenrT, line: *mut c_char, copy: bool) -> c_int;
     fn nvim_curbuf_get_ml_line_ptr() -> *mut c_char;
 
@@ -73,6 +75,7 @@ extern "C" {
     fn nvim_indent_get_curbuf() -> BufHandle;
 
     // Extmarks
+    #[link_name = "extmark_splice_cols"]
     fn nvim_extmark_splice_cols(
         buf: BufHandle,
         start_row: c_int,

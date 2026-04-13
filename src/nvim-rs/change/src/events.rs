@@ -26,9 +26,11 @@ extern "C" {
     fn nvim_buf_meta_total(buf: BufHandle, meta_type: c_int) -> c_int;
 
     // Buffer updates
+    #[link_name = "buf_updates_send_changes"]
     fn nvim_buf_updates_send_changes(buf: BufHandle, lnum: LinenrT, added: i64, removed: i64);
 
     // Extmark operations
+    #[link_name = "extmark_splice_cols"]
     fn nvim_extmark_splice_cols(
         buf: BufHandle,
         lnum: c_int,
@@ -39,6 +41,7 @@ extern "C" {
     );
 
     // Mark adjustment
+    #[link_name = "mark_adjust"]
     fn nvim_mark_adjust(
         lnum: LinenrT,
         lnume: LinenrT,
@@ -46,6 +49,7 @@ extern "C" {
         amount_after: LinenrT,
         op: c_int,
     );
+    #[link_name = "extmark_adjust"]
     fn nvim_extmark_adjust(
         buf: BufHandle,
         lnum: LinenrT,

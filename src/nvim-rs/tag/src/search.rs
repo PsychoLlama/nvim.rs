@@ -2192,6 +2192,7 @@ extern "C" {
     fn nvim_findtags_prepare_pats(st: FindTagsStateHandle, has_re: bool);
 
     // Memory
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // String functions

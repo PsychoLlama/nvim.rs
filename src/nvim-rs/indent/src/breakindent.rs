@@ -48,6 +48,7 @@ extern "C" {
         out_width: *mut c_int,
     ) -> c_int;
 
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 }
 

@@ -56,6 +56,7 @@ extern "C" {
     // --- memline ---
     fn nvim_buf_is_empty(buf: *mut c_void) -> c_int;
     fn nvim_ml_open_buf(buf: *mut c_void) -> c_int;
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: *mut c_void, lnum: c_int) -> *mut c_char;
     fn nvim_ml_append_curbuf(lnum: c_int, line: *const c_char) -> c_int;
     fn nvim_ml_delete_in_buf(buf: *mut c_void, lnum: c_int) -> c_int;
@@ -96,6 +97,7 @@ extern "C" {
     // --- tab/window iteration (from change_ffi.c) ---
     fn nvim_for_all_tab_windows_start() -> *mut c_void;
     fn nvim_for_all_tab_windows_next(handle: *mut c_void) -> *mut c_void;
+    #[link_name = "xfree"]
     fn nvim_for_all_tab_windows_end(handle: *mut c_void);
 
     // --- win / buf accessor ---

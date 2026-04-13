@@ -64,12 +64,15 @@ extern "C" {
     fn changed_cline_bef_curs(wp: *mut c_void);
 
     // Memory
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
 
     // Replace mode
+    #[link_name = "replace_push_nul"]
     fn nvim_replace_push_nul();
+    #[link_name = "ins_bytes"]
     fn nvim_ins_bytes(p: *const c_char);
     fn nvim_ins_str(ptr: *mut c_char, len: usize);
 
@@ -80,6 +83,7 @@ extern "C" {
     fn nvim_get_curwin() -> *mut c_void;
 
     // Extmark splice
+    #[link_name = "extmark_splice_cols"]
     fn nvim_extmark_splice_cols(
         buf: BufHandle,
         start_row: c_int,

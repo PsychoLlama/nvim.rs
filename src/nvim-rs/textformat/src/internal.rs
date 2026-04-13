@@ -95,12 +95,15 @@ extern "C" {
     fn nvim_curbuf_get_b_p_cin() -> c_int;
     fn nvim_get_Insstart_lnum() -> c_int;
     fn nvim_get_Insstart_col() -> c_int;
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
+    #[link_name = "ins_bytes"]
     fn nvim_ins_bytes(p: *const c_char);
     fn nvim_ins_str(p: *const c_char, len: usize);
     fn nvim_textfmt_get_leader_len_simple(line: *const c_char) -> c_int;
+    #[link_name = "check_linecomment"]
     fn nvim_check_linecomment(line: *const c_char) -> c_int;
     fn nvim_textfmt_get_number_indent(lnum: c_int) -> c_int;
     fn nvim_textfmt_redraw_curbuf_later(typ: c_int);

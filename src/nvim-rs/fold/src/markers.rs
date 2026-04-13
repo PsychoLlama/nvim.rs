@@ -49,6 +49,7 @@ extern "C" {
     fn nvim_win_get_p_fmr(wp: WinHandle) -> *const c_char;
 
     /// Get a line from a buffer.
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LineNr) -> *const c_char;
 
     // ---- Phase 3: new accessors for marker manipulation ----
@@ -87,6 +88,7 @@ extern "C" {
     fn nvim_fold_emsg_modifiable();
 
     /// Notify changed lines.
+    #[link_name = "changed_lines"]
     fn nvim_changed_lines(
         buf: BufHandle,
         first: LineNr,
@@ -97,6 +99,7 @@ extern "C" {
     );
 
     /// Send buffer update events.
+    #[link_name = "buf_updates_send_changes"]
     fn nvim_buf_updates_send_changes(
         buf: BufHandle,
         firstlnum: LineNr,

@@ -29,6 +29,7 @@ extern "C" {
     fn nvim_get_autocmd_busy() -> bool;
     fn nvim_get_highlight_match() -> c_int;
     fn nvim_set_highlight_match(val: c_int);
+    #[link_name = "curbufIsChanged"]
     fn nvim_curbufIsChanged() -> c_int;
 
     // Message functions
@@ -53,6 +54,7 @@ extern "C" {
     // Other functions
     fn ml_setflags(buf: BufHandle);
     fn ml_open_file(buf: BufHandle);
+    #[link_name = "buf_inc_changedtick"]
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn apply_autocmds_filechangedro(buf: BufHandle);
     fn showmode();

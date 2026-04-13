@@ -287,7 +287,9 @@ extern "C" {
     fn nvim_get_curbuf_b_p_fp_nonempty() -> bool;
     fn nvim_get_p_fp_nonempty() -> bool;
     fn nvim_get_curbuf_b_p_inde_nonempty() -> bool;
+    #[link_name = "use_indentexpr_for_lisp"]
     fn nvim_use_indentexpr_for_lisp() -> bool;
+    #[link_name = "has_format_option"]
     fn nvim_has_format_option(opt: c_int) -> bool;
     fn nvim_get_KeyTyped() -> bool;
 

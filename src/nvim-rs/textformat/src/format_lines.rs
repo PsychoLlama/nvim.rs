@@ -73,6 +73,7 @@ extern "C" {
 
     // Existing accessors
     fn insertchar(c: c_int, flags: c_int, second_indent: c_int);
+    #[link_name = "mark_col_adjust"]
     fn nvim_mark_col_adjust(
         lnum: c_int,
         col: c_int,
@@ -80,6 +81,7 @@ extern "C" {
         amount_col: c_int,
         spaces_removed: c_int,
     );
+    #[link_name = "check_linecomment"]
     fn nvim_check_linecomment(line: *const c_char) -> c_int;
     fn ui_cursor_shape();
     fn nvim_curbuf_get_b_p_lisp() -> c_int;

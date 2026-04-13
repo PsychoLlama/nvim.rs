@@ -18,7 +18,9 @@ extern "C" {
 
     // Line access
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: LinenrT) -> ColnrT;
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace(lnum: LinenrT, line: *mut c_char, copy: bool) -> c_int;
     #[link_name = "rs_ml_line_alloced"]
     fn nvim_ml_line_alloced() -> bool;
@@ -48,6 +50,7 @@ extern "C" {
     fn utf_ptr2len(ptr: *const c_char) -> c_int;
     #[link_name = "utf_head_off"]
     fn nvim_utf_head_off(base: *const c_char, ptr: *const c_char) -> c_int;
+    #[link_name = "utf_composinglike"]
     fn nvim_utf_composinglike(p0: *const c_char, p1: *const c_char, state: *mut u64) -> bool;
 
     // Replace mode functions
@@ -74,6 +77,7 @@ extern "C" {
         cursor: *mut ColnrT,
         end: *mut ColnrT,
     );
+    #[link_name = "win_chartabsize"]
     fn nvim_win_chartabsize(win: WinHandle, ptr: *const c_char, vcol: ColnrT) -> ColnrT;
     fn nvim_vim_strchr_cpo_listwm() -> bool;
 
@@ -81,6 +85,7 @@ extern "C" {
     fn nvim_p_deco() -> bool;
 
     // Error message
+    #[link_name = "siemsg"]
     fn nvim_siemsg(s: *const c_char, arg: i64);
 
     // Changed notification

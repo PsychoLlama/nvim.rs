@@ -135,6 +135,7 @@ extern "C" {
     fn xfree(ptr: *mut c_void);
 
     fn nvim_get_ins_need_undo() -> c_int;
+    #[link_name = "has_format_option"]
     fn nvim_has_format_option(c: c_int) -> bool;
     fn dec_cursor() -> c_int;
     fn inc_cursor() -> c_int;

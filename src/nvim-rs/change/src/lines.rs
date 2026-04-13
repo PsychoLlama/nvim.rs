@@ -18,7 +18,9 @@ extern "C" {
 
     // Line access
     fn nvim_ml_get(lnum: LinenrT) -> *mut c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: LinenrT) -> ColnrT;
+    #[link_name = "ml_replace"]
     fn nvim_ml_replace(lnum: LinenrT, line: *mut c_char, copy: bool) -> c_int;
     #[link_name = "ml_delete_flags"]
     fn nvim_ml_delete_flags(lnum: LinenrT, flags: c_int) -> c_int;
@@ -29,6 +31,7 @@ extern "C" {
     #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
     // Undo

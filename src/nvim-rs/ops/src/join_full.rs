@@ -73,6 +73,7 @@ extern "C" {
     );
 
     // Mark adjustment
+    #[link_name = "mark_col_adjust"]
     fn nvim_mark_col_adjust(
         lnum: c_int,
         col: c_int,

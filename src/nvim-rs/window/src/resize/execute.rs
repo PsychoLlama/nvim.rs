@@ -409,6 +409,7 @@ extern "C" {
     fn rs_win_comp_scroll(wp: WinHandle);
     #[link_name = "validate_cursor"]
     fn nvim_validate_cursor_win(wp: WinHandle);
+    #[link_name = "changed_line_abv_curs_win"]
     fn nvim_changed_line_abv_curs_win(wp: WinHandle);
     #[link_name = "invalidate_botline"]
     fn nvim_invalidate_botline(wp: WinHandle);

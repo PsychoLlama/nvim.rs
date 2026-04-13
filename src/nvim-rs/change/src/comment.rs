@@ -53,6 +53,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     // String functions
+    #[link_name = "copy_option_part"]
     fn nvim_change_copy_option_part(
         src: *mut *mut c_char,
         dest: *mut c_char,

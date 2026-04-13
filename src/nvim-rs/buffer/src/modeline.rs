@@ -35,7 +35,9 @@ extern "C" {
     static p_mls: i64;
 
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: c_int) -> c_int;
+    #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     fn skipwhite(s: *const c_char) -> *mut c_char;
     fn nvim_get_min_vim_version() -> c_int;

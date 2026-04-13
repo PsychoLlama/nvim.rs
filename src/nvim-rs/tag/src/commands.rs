@@ -961,6 +961,7 @@ extern "C" {
     static mut msg_didout: bool;
     fn nvim_get_p_verbose() -> c_int;
     fn ui_has(ext: c_int) -> bool;
+    #[link_name = "ptr2cells"]
     fn nvim_ptr2cells(p: *const c_char) -> c_int;
     fn nvim_get_curbuf_fnum() -> c_int;
 

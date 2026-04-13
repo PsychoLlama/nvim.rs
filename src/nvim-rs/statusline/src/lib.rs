@@ -222,6 +222,7 @@ extern "C" {
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
 
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> c_int;
+    #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
     fn rs_ml_find_line_or_offset(
         buf: BufHandle,

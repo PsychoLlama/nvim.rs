@@ -556,6 +556,7 @@ extern "C" {
     fn nvim_set_did_cursorhold(val: bool);
     fn nvim_set_ins_at_eol(val: bool);
     fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
+    #[link_name = "utf_ptr2len"]
     fn nvim_utf_ptr2len(p: *const std::ffi::c_char) -> c_int;
     fn rs_ctrl_x_mode_line_or_eval() -> c_int;
     fn plain_vgetc() -> c_int;
