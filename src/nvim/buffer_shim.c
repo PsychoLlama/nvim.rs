@@ -97,7 +97,6 @@ int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
 const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
 const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
 int nvim_buf_get_b_p_ro(buf_T *buf) { return buf->b_p_ro; }
-void nvim_buf_set_b_p_ml(buf_T *buf, int val) { if (buf) { buf->b_p_ml = val != 0; } }
 int nvim_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
 uint64_t *nvim_buf_get_chartab(buf_T *buf) { return buf->b_chartab; }
 int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
@@ -292,12 +291,6 @@ void nvim_buf_set_b_p_bkc_empty(buf_T *buf) { buf->b_p_bkc = empty_string_option
 void nvim_buf_set_b_p_tc_empty(buf_T *buf) { buf->b_p_tc = empty_string_option; buf->b_tc_flags = 0; }
 void nvim_buf_set_b_p_cot_empty(buf_T *buf) { buf->b_p_cot = empty_string_option; buf->b_cot_flags = 0; }
 void nvim_buf_set_b_s_syn_isk_empty(buf_T *buf) { buf->b_s.b_syn_isk = empty_string_option; }
-void nvim_buf_set_b_p_ai_nopaste(buf_T *buf, int v) { buf->b_p_ai_nopaste = v != 0; }
-void nvim_buf_set_b_p_et_nobin(buf_T *buf, int v) { buf->b_p_et_nobin = v != 0; }
-void nvim_buf_set_b_p_et_nopaste(buf_T *buf, int v) { buf->b_p_et_nopaste = v != 0; }
-void nvim_buf_set_b_p_ml_nobin(buf_T *buf, int v) { buf->b_p_ml_nobin = v != 0; }
-int nvim_buf_get_b_p_ai_nopaste(buf_T *buf) { return (int)buf->b_p_ai_nopaste; }
-int nvim_buf_get_b_p_et_nopaste(buf_T *buf) { return (int)buf->b_p_et_nopaste; }
 char *nvim_buf_get_b_p_vsts(buf_T *buf) { return buf->b_p_vsts; }
 char *nvim_buf_get_b_p_vsts_nopaste(buf_T *buf) { return buf->b_p_vsts_nopaste; }
 void nvim_buf_set_b_p_vsts_raw(buf_T *buf, char *val) { buf->b_p_vsts = val; }

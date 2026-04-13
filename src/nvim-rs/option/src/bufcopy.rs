@@ -127,12 +127,7 @@ extern "C" {
     fn nvim_buf_set_bool_field(buf: *mut core::ffi::c_void, offset: isize, val: c_int);
     fn nvim_buf_set_optint_field(buf: *mut core::ffi::c_void, offset: isize, val: OptInt);
 
-    // Scalar field setters (variants / substructure not in offset table):
-    fn nvim_buf_set_b_p_ai_nopaste(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_et_nobin(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_et_nopaste(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_ml(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_ml_nobin(buf: *mut core::ffi::c_void, v: c_int);
+    // Scalar field setters (variants / substructure not in offset table): none remain
 
     fn nvim_buf_copy_opt_sctx(buf: *mut core::ffi::c_void, bv: c_int);
     fn nvim_buf_set_b_s_spo_flags_from_global(buf: *mut core::ffi::c_void);
@@ -197,7 +192,7 @@ fn field_offset(opt_idx: crate::index::OptIndex) -> isize {
 unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_set_bool_field(buf, field_offset(K_OPT_AUTOINDENT), p_ai);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_AUTOINDENT);
-    nvim_buf_set_b_p_ai_nopaste(buf, c_int::from(nvim_get_p_ai_nopaste()));
+    bref_raw_mut(buf).b_p_ai_nopaste = c_int::from(nvim_get_p_ai_nopaste());
 
     nvim_buf_set_optint_field(buf, field_offset(K_OPT_SHIFTWIDTH), p_sw);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SHIFTWIDTH);
@@ -231,12 +226,12 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     );
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_FIXENDOFLINE);
 
-    nvim_buf_set_b_p_et_nobin(buf, nvim_get_p_et_nobin());
-    nvim_buf_set_b_p_et_nopaste(buf, c_int::from(nvim_get_p_et_nopaste()));
+    bref_raw_mut(buf).b_p_et_nobin = nvim_get_p_et_nobin();
+    bref_raw_mut(buf).b_p_et_nopaste = c_int::from(nvim_get_p_et_nopaste());
 
-    nvim_buf_set_b_p_ml(buf, p_ml);
+    bref_raw_mut(buf).b_p_ml = c_int::from(p_ml != 0);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_MODELINE);
-    nvim_buf_set_b_p_ml_nobin(buf, nvim_get_p_ml_nobin());
+    bref_raw_mut(buf).b_p_ml_nobin = nvim_get_p_ml_nobin();
 
     nvim_buf_set_bool_field(buf, field_offset(K_OPT_INFERCASE), nvim_get_p_inf());
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_INFERCASE);

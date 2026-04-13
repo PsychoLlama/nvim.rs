@@ -1043,16 +1043,12 @@ extern "C" {
     // per-buffer field readers (used by buf paste functions)
     fn nvim_buf_get_optint_field(buf: *mut c_void, offset: isize) -> crate::OptInt;
     fn nvim_buf_get_bool_field(buf: *mut c_void, offset: isize) -> c_int;
-    fn nvim_buf_get_b_p_ai_nopaste(buf: *mut c_void) -> c_int;
-    fn nvim_buf_get_b_p_et_nopaste(buf: *mut c_void) -> c_int;
     fn nvim_buf_get_b_p_vsts(buf: *mut c_void) -> *mut c_char;
     fn nvim_buf_get_b_p_vsts_nopaste(buf: *mut c_void) -> *mut c_char;
     fn nvim_buf_get_b_p_vsts_array_ptr(buf: *mut c_void) -> *mut *mut c_int;
     // per-buffer field setters
     fn nvim_buf_set_optint_field(buf: *mut c_void, offset: isize, val: crate::OptInt);
     fn nvim_buf_set_bool_field(buf: *mut c_void, offset: isize, val: c_int);
-    fn nvim_buf_set_b_p_ai_nopaste(buf: *mut c_void, v: c_int);
-    fn nvim_buf_set_b_p_et_nopaste(buf: *mut c_void, v: c_int);
     fn nvim_buf_set_b_p_vsts_nopaste_dup(buf: *mut c_void, s: *const c_char);
     fn nvim_buf_set_b_p_vsts_raw(buf: *mut c_void, val: *mut c_char);
     // set_option_sctx_from_sid for didset_options_sctx replacement
@@ -1109,14 +1105,8 @@ pub unsafe extern "C" fn nvim_buf_paste_save_scalars(buf: *mut c_void) {
     bp.b_p_tw_nopaste = nvim_buf_get_optint_field(buf, offsets[K_OPT_TEXTWIDTH as usize]);
     bp.b_p_wm_nopaste = nvim_buf_get_optint_field(buf, offsets[K_OPT_WRAPMARGIN as usize]);
     bp.b_p_sts_nopaste = nvim_buf_get_optint_field(buf, offsets[K_OPT_SOFTTABSTOP as usize]);
-    nvim_buf_set_b_p_ai_nopaste(
-        buf,
-        nvim_buf_get_bool_field(buf, offsets[K_OPT_AUTOINDENT as usize]),
-    );
-    nvim_buf_set_b_p_et_nopaste(
-        buf,
-        nvim_buf_get_bool_field(buf, offsets[K_OPT_EXPANDTAB as usize]),
-    );
+    bp.b_p_ai_nopaste = nvim_buf_get_bool_field(buf, offsets[K_OPT_AUTOINDENT as usize]);
+    bp.b_p_et_nopaste = nvim_buf_get_bool_field(buf, offsets[K_OPT_EXPANDTAB as usize]);
 }
 
 /// Save buf->b_p_vsts into buf->b_p_vsts_nopaste (frees old nopaste first).
@@ -1179,16 +1169,8 @@ pub unsafe extern "C" fn nvim_buf_paste_restore_scalars(buf: *mut c_void) {
     nvim_buf_set_optint_field(buf, offsets[K_OPT_TEXTWIDTH as usize], bp.b_p_tw_nopaste);
     nvim_buf_set_optint_field(buf, offsets[K_OPT_WRAPMARGIN as usize], bp.b_p_wm_nopaste);
     nvim_buf_set_optint_field(buf, offsets[K_OPT_SOFTTABSTOP as usize], bp.b_p_sts_nopaste);
-    nvim_buf_set_bool_field(
-        buf,
-        offsets[K_OPT_AUTOINDENT as usize],
-        nvim_buf_get_b_p_ai_nopaste(buf),
-    );
-    nvim_buf_set_bool_field(
-        buf,
-        offsets[K_OPT_EXPANDTAB as usize],
-        nvim_buf_get_b_p_et_nopaste(buf),
-    );
+    nvim_buf_set_bool_field(buf, offsets[K_OPT_AUTOINDENT as usize], bp.b_p_ai_nopaste);
+    nvim_buf_set_bool_field(buf, offsets[K_OPT_EXPANDTAB as usize], bp.b_p_et_nopaste);
 }
 
 /// Restore buf->b_p_vsts from nopaste: free current, dup from nopaste, run tabstop_set.
