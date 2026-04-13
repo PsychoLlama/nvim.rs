@@ -12,6 +12,19 @@
 use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::ptr;
 
+/// Access `WinStruct` fields from a raw `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref<'a>(wp: WinHandle) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+
+/// Access `WinStruct` fields mutably from a raw `win_T` pointer.
+#[inline]
+unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 /// Column number type (matches `colnr_T` in Neovim).
 type ColnrT = i32;
 
@@ -41,8 +54,6 @@ extern "C" {
     fn nvim_curwin_set_w_set_curswant(val: bool);
 
     // Window-parameterized cursor access
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
     fn nvim_win_get_buf_line_count(wp: WinHandle) -> LinenrT;
 
     // Current window handle
@@ -289,7 +300,7 @@ pub unsafe extern "C" fn rs_oneleft() -> c_int {
 /// Takes care of closed folds. Skips over concealed lines when
 /// `skip_conceal` is true.
 unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool) {
-    let mut lnum = nvim_win_get_cursor_lnum(wp);
+    let mut lnum = win_ref(wp).w_cursor.lnum;
 
     if n >= lnum {
         lnum = 1;
@@ -340,7 +351,7 @@ unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool
         lnum -= n;
     }
 
-    nvim_win_set_cursor_lnum(wp, lnum);
+    win_mut(wp).w_cursor.lnum = lnum;
 }
 
 /// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.
@@ -390,7 +401,7 @@ pub unsafe extern "C" fn rs_cursor_up(n: LinenrT, upd_topline: bool) -> c_int {
 /// Takes care of closed folds. Skips over concealed lines when
 /// `skip_conceal` is true.
 unsafe fn cursor_down_inner_impl(wp: WinHandle, mut n: c_int, skip_conceal: bool) {
-    let mut lnum = nvim_win_get_cursor_lnum(wp);
+    let mut lnum = win_ref(wp).w_cursor.lnum;
     let line_count = nvim_win_get_buf_line_count(wp);
 
     if lnum + n as LinenrT >= line_count {
@@ -422,7 +433,7 @@ unsafe fn cursor_down_inner_impl(wp: WinHandle, mut n: c_int, skip_conceal: bool
         lnum += n as LinenrT;
     }
 
-    nvim_win_set_cursor_lnum(wp, lnum);
+    win_mut(wp).w_cursor.lnum = lnum;
 }
 
 /// Exported as the canonical C symbol, replacing the thin wrapper in `edit.c`.

@@ -129,10 +129,6 @@ extern "C" {
     /// Call the C simplify_key function.
     fn simplify_key(key: c_int, modp: *mut c_int) -> c_int;
 
-    // Window accessors
-    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-
     // plines function
     fn plines_m_win_fill(wp: WinHandle, first: c_int, last: c_int) -> c_int;
 
@@ -338,6 +334,19 @@ pub type WinHandle = *mut std::ffi::c_void;
 
 /// Opaque handle to a buffer (buf_T*).
 pub type BufHandle = *mut std::ffi::c_void;
+
+/// Access `WinStruct` fields from a raw `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref<'a>(wp: WinHandle) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+
+/// Access `WinStruct` fields mutably from a raw `win_T` pointer.
+#[inline]
+unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
 
 /// Opaque handle to operator arguments (oparg_T*).
 pub type OapHandle = *mut crate::types::OpargT;
@@ -732,8 +741,8 @@ pub unsafe extern "C" fn rs_find_ident_at_pos(
 /// `wp` must be a valid window pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_vtopline(wp: WinHandle) -> c_int {
-    let topline = nvim_win_get_topline(wp);
-    let topfill = nvim_win_get_topfill(wp);
+    let topline = win_ref(wp).w_topline;
+    let topfill = win_ref(wp).w_topfill;
     plines_m_win_fill(wp, 1, topline) - topfill
 }
 
@@ -4428,16 +4437,11 @@ extern "C" {
     fn nvim_validate_botline(wp: WinHandle);
     #[link_name = "cursor_correct"]
     fn nvim_cursor_correct(wp: WinHandle);
-    fn nvim_win_get_botline(wp: WinHandle) -> c_int;
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
     fn nvim_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int;
     fn nvim_plines_win(wp: WinHandle, lnum: c_int, limit: c_int) -> c_int;
     fn nvim_win_lines_concealed(wp: WinHandle) -> c_int;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
     fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: c_int);
     fn nvim_buf_get_line_count(buf: BufHandle) -> c_int;
     fn nvim_get_curbuf() -> BufHandle;
 
@@ -4798,11 +4802,11 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
         n if n == b'^' as c_int => {
             if (*cap).count0 != 0 {
                 scroll_cursor_bot(nvim_get_curwin(), 0, true);
-                nvim_set_cursor_lnum(nvim_win_get_topline(curwin));
-            } else if nvim_win_get_topline(curwin) == 1 {
+                nvim_set_cursor_lnum(win_ref(curwin).w_topline);
+            } else if win_ref(curwin).w_topline == 1 {
                 nvim_set_cursor_lnum(1);
             } else {
-                nvim_set_cursor_lnum(nvim_win_get_topline(curwin) - 1);
+                nvim_set_cursor_lnum(win_ref(curwin).w_topline - 1);
             }
             // FALLTHROUGH to '-' -> 'b'
             beginline(BL_WHITE | BL_FIX);
@@ -5203,14 +5207,14 @@ unsafe fn rs_nv_scroll_impl(cap: CapHandle) {
         nv_scroll_bottom(curwin, count1);
     } else if cmdchar == c_int::from(b'M') {
         let n = nv_scroll_middle(curwin, line_count);
-        let new_lnum = (nvim_win_get_topline(curwin) + n).min(line_count);
-        nvim_win_set_cursor_lnum(curwin, new_lnum);
+        let new_lnum = (win_ref(curwin).w_topline + n).min(line_count);
+        win_mut(curwin).w_cursor.lnum = new_lnum;
     } else {
         // H: move to top of window
         let n = nv_scroll_top(curwin, count1);
-        let topline = nvim_win_get_topline(curwin);
+        let topline = win_ref(curwin).w_topline;
         let new_lnum = (topline + n).min(line_count);
-        nvim_win_set_cursor_lnum(curwin, new_lnum);
+        win_mut(curwin).w_cursor.lnum = new_lnum;
     }
 
     // Correct for 'so', except when an operator is pending.
@@ -5223,42 +5227,42 @@ unsafe fn rs_nv_scroll_impl(cap: CapHandle) {
 /// L command: move cursor to bottom of window (with optional count from bottom).
 unsafe fn nv_scroll_bottom(curwin: WinHandle, count1: c_int) {
     nvim_validate_botline(curwin);
-    let botline = nvim_win_get_botline(curwin);
-    nvim_win_set_cursor_lnum(curwin, botline - 1);
-    let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+    let botline = win_ref(curwin).w_botline;
+    win_mut(curwin).w_cursor.lnum = botline - 1;
+    let cursor_lnum = win_ref(curwin).w_cursor.lnum;
     if count1 > cursor_lnum {
-        nvim_win_set_cursor_lnum(curwin, 1);
+        win_mut(curwin).w_cursor.lnum = 1;
     } else if nvim_win_lines_concealed(curwin) != 0 {
         // Count a fold for one screen line.
         let mut remaining = count1 - 1;
-        let topline = nvim_win_get_topline(curwin);
-        while remaining > 0 && nvim_win_get_cursor_lnum(curwin) > topline {
+        let topline = win_ref(curwin).w_topline;
+        while remaining > 0 && win_ref(curwin).w_cursor.lnum > topline {
             let mut fold_first: c_int = 0;
             nvim_hasFolding(
                 curwin,
-                nvim_win_get_cursor_lnum(curwin),
+                win_ref(curwin).w_cursor.lnum,
                 &raw mut fold_first,
                 std::ptr::null_mut(),
             );
-            let conceal = nvim_decor_conceal_line(curwin, nvim_win_get_cursor_lnum(curwin), 1);
+            let conceal = nvim_decor_conceal_line(curwin, win_ref(curwin).w_cursor.lnum, 1);
             remaining -= conceal + 1;
-            if nvim_win_get_cursor_lnum(curwin) > topline {
-                nvim_win_set_cursor_lnum(curwin, nvim_win_get_cursor_lnum(curwin) - 1);
+            if win_ref(curwin).w_cursor.lnum > topline {
+                win_mut(curwin).w_cursor.lnum -= 1;
             }
         }
     } else {
-        nvim_win_set_cursor_lnum(curwin, nvim_win_get_cursor_lnum(curwin) - (count1 - 1));
+        win_mut(curwin).w_cursor.lnum -= count1 - 1;
     }
 }
 
 /// M command: compute line offset from topline for middle of window.
 unsafe fn nv_scroll_middle(curwin: WinHandle, line_count: c_int) -> c_int {
-    let topline = nvim_win_get_topline(curwin);
-    let topfill = nvim_win_get_topfill(curwin);
+    let topline = win_ref(curwin).w_topline;
+    let topfill = win_ref(curwin).w_topfill;
     let mut used: c_int = -(nvim_win_get_fill(curwin, topline) - topfill);
     nvim_validate_botline(curwin);
-    let view_height = nvim_win_get_view_height(curwin);
-    let empty_rows = nvim_win_get_empty_rows(curwin);
+    let view_height = win_ref(curwin).w_view_height;
+    let empty_rows = win_ref(curwin).w_empty_rows;
     let half = (view_height - empty_rows + 1) / 2;
     let mut n_val: c_int = 0;
     loop {
@@ -5298,8 +5302,8 @@ unsafe fn nv_scroll_top(curwin: WinHandle, count1: c_int) -> c_int {
     let mut n_val = count1 - 1;
     if nvim_win_lines_concealed(curwin) != 0 {
         // Count a fold for one screen line.
-        let mut lnum = nvim_win_get_topline(curwin);
-        let botline = nvim_win_get_botline(curwin);
+        let mut lnum = win_ref(curwin).w_topline;
+        let botline = win_ref(curwin).w_botline;
         loop {
             let conceal = nvim_decor_conceal_line(curwin, lnum - 1, 1);
             if conceal == 0 && n_val <= 0 {
@@ -5313,7 +5317,7 @@ unsafe fn nv_scroll_top(curwin: WinHandle, count1: c_int) -> c_int {
             lnum = fold_last + 1;
             n_val -= conceal + 1;
         }
-        lnum - nvim_win_get_topline(curwin)
+        lnum - win_ref(curwin).w_topline
     } else {
         n_val
     }
@@ -5553,7 +5557,7 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
             nvim_set_cmdwin_result(CAR_CHAR);
         } else if nvim_bt_prompt_curbuf()
             && cmdchar == CAR_CHAR
-            && nvim_win_get_cursor_lnum(nvim_get_curwin()) == nvim_get_line_count()
+            && win_ref(nvim_get_curwin()).w_cursor.lnum == nvim_get_line_count()
         {
             // In a prompt buffer a <CR> in the last line invokes the callback.
             prompt_invoke_callback();

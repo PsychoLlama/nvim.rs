@@ -314,6 +314,19 @@ pub type WinHandle = *mut std::ffi::c_void;
 /// Opaque handle to a buffer (buf_T*).
 pub type BufHandle = *mut std::ffi::c_void;
 
+/// Access `WinStruct` fields from a raw `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+pub(crate) unsafe fn win_ref<'a>(wp: WinHandle) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+
+/// Access `WinStruct` fields mutably from a raw `win_T` pointer.
+#[inline]
+pub(crate) unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 // =============================================================================
 // C Accessor Functions (FFI)
 // =============================================================================

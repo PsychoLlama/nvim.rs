@@ -8,6 +8,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use super::{callback_ok, CallbackResult};
+use crate::{win_mut, win_ref};
 
 // =============================================================================
 // C Function Declarations
@@ -19,12 +20,6 @@ extern "C" {
     fn nvim_optset_get_win(args: *const c_void) -> crate::WinHandle;
     fn nvim_optset_get_varp_ptr(args: *const c_void) -> *const c_void;
 
-    // Window winhighlight field accessors
-    fn nvim_win_get_ns_hl_winhl(win: crate::WinHandle) -> c_int;
-    fn nvim_win_set_ns_hl_winhl(win: crate::WinHandle, val: c_int);
-    fn nvim_win_get_ns_hl(win: crate::WinHandle) -> c_int;
-    fn nvim_win_set_ns_hl(win: crate::WinHandle, val: c_int);
-    fn nvim_win_set_hl_needs_update(win: crate::WinHandle, val: bool);
     fn nvim_win_get_p_winhl_addr(win: crate::WinHandle) -> *const c_void;
 
     // Namespace / highlight operations
@@ -79,7 +74,7 @@ pub unsafe extern "C" fn rs_parse_winhl_opt(winhl: *const c_char, win: crate::Wi
 
     // If w_ns_hl_winhl < 0, 'winhighlight' shouldn't be used for this window.
     // Only validate; do not apply side effects.
-    let win_effective: crate::WinHandle = if !win.is_null() && nvim_win_get_ns_hl_winhl(win) < 0 {
+    let win_effective: crate::WinHandle = if !win.is_null() && win_ref(win).w_ns_hl_winhl < 0 {
         std::ptr::null_mut()
     } else {
         win
@@ -88,11 +83,11 @@ pub unsafe extern "C" fn rs_parse_winhl_opt(winhl: *const c_char, win: crate::Wi
     // Empty string: clear the namespace link and mark update needed
     if *p_start == 0 {
         if !win_effective.is_null() {
-            let ns_hl_winhl = nvim_win_get_ns_hl_winhl(win_effective);
-            let ns_hl = nvim_win_get_ns_hl(win_effective);
+            let ns_hl_winhl = win_ref(win_effective).w_ns_hl_winhl;
+            let ns_hl = win_ref(win_effective).w_ns_hl;
             if ns_hl_winhl > 0 && ns_hl == ns_hl_winhl {
-                nvim_win_set_ns_hl(win_effective, 0);
-                nvim_win_set_hl_needs_update(win_effective, true);
+                win_mut(win_effective).w_ns_hl = 0;
+                win_mut(win_effective).w_hl_needs_update = 1;
             }
         }
         return true;
@@ -103,8 +98,8 @@ pub unsafe extern "C" fn rs_parse_winhl_opt(winhl: *const c_char, win: crate::Wi
         0
     } else {
         let ns_id = nvim_winhl_ns_prepare(win_effective);
-        nvim_win_set_ns_hl(win_effective, ns_id);
-        nvim_win_set_ns_hl_winhl(win_effective, ns_id);
+        win_mut(win_effective).w_ns_hl = ns_id;
+        win_mut(win_effective).w_ns_hl_winhl = ns_id;
         ns_id
     };
 
@@ -163,7 +158,7 @@ pub unsafe extern "C" fn rs_parse_winhl_opt(winhl: *const c_char, win: crate::Wi
     }
 
     if !win_effective.is_null() {
-        nvim_win_set_hl_needs_update(win_effective, true);
+        win_mut(win_effective).w_hl_needs_update = 1;
     }
     true
 }

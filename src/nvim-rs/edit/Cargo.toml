@@ -13,3 +13,4 @@ crate-type = ["rlib"]
 workspace = true
 
 [dependencies]
+nvim-window = { path = "../window" }
