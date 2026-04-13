@@ -392,7 +392,6 @@ void *nvim_get_callback_if_cpt_func_impl(const char *p, int idx)
   return NULL;
 }
 int nvim_buf_get_b_scanned(buf_T *buf) { return buf->b_scanned; }
-int nvim_buf_get_b_p_inf_void(void *buf) { return ((buf_T *)buf)->b_p_inf ? 1 : 0; }
 win_T *nvim_win_get_w_next(win_T *wp) { return wp->w_next; }
 int nvim_win_get_focusable(win_T *wp) { return wp->w_config.focusable ? 1 : 0; }
 buf_T *nvim_win_get_w_buffer_raw(win_T *wp) { return wp->w_buffer; }

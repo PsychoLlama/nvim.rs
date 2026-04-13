@@ -274,7 +274,6 @@ extern "C" {
     fn buf_spname_void(buf: nvim_buffer::BufHandle) -> *mut std::ffi::c_char;
 
     // helpers for inlined nvim_compl_p_scs_save_set (Phase 18)
-    fn nvim_buf_get_b_p_inf_void(buf: *mut core::ffi::c_void) -> c_int;
 
     // helpers for inlined nvim_ins_compl_st_set_dot_source (Phase 19)
     fn dec(lp: *mut crate::vars::PosT) -> c_int;
@@ -335,8 +334,9 @@ unsafe fn ins_compl_st_msg_scanning() {
 /// Requires valid ins_compl_st state.
 unsafe fn compl_p_scs_save_set() -> c_int {
     let save = p_scs_expand;
-    if !crate::vars::ins_compl_st.ins_buf.is_null()
-        && nvim_buf_get_b_p_inf_void(crate::vars::ins_compl_st.ins_buf) != 0
+    let buf_ptr = crate::vars::ins_compl_st.ins_buf;
+    if !buf_ptr.is_null()
+        && unsafe { &*(buf_ptr.cast::<nvim_buffer::buf_struct::BufStruct>()) }.b_p_inf != 0
     {
         p_scs_expand = 0;
     }

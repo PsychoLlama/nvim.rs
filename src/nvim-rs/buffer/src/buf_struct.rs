@@ -358,8 +358,12 @@ pub struct BufStruct {
     // offset 10392: char* b_p_ft  (FileType)
     pub b_p_ft: *const c_char,
 
-    // offset 10400..10423: gap (24 bytes, opaque)
-    _pad32: [u8; 24],
+    // offset 10400..10415: b_p_fo (8B pointer), b_p_flp (8B pointer) = 16 bytes, opaque
+    _pad32a: [u8; 16],
+    // offset 10416: int b_p_inf (InferCase)
+    pub b_p_inf: c_int,
+    // offset 10420..10423: gap (4 bytes, opaque)
+    _pad32b: [u8; 4],
 
     // offset 10424: char* b_p_isk (IsKeyword)
     pub b_p_isk: *const c_char,

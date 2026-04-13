@@ -121,6 +121,7 @@ _Static_assert(offsetof(buf_T, b_p_et_nopaste) == 10372, "b_p_et_nopaste offset 
 _Static_assert(offsetof(buf_T, b_p_fenc) == 10376, "b_p_fenc offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_ff) == 10384, "b_p_ff offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_ft) == 10392, "b_p_ft offset mismatch");
+_Static_assert(offsetof(buf_T, b_p_inf) == 10416, "b_p_inf offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_isk) == 10424, "b_p_isk offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_inex) == 10448, "b_p_inex offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_inde) == 10464, "b_p_inde offset mismatch");

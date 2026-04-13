@@ -52,9 +52,6 @@ size_t nvim_buf_get_update_callbacks_size(buf_T *buf) { return kv_size(buf->upda
 
 // Accessor and helper functions for Rust FFI (buffer_updates crate)
 
-/// Get the current changedtick value for a buffer.
-int64_t nvim_buf_get_changedtick_value(buf_T *buf) { return buf_get_changedtick(buf); }
-
 /// Returns true if buf->b_ml.ml_mfp is NULL (buffer not loaded).
 bool nvim_buf_get_ml_mfp_is_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
 

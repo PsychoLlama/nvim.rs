@@ -532,7 +532,6 @@ int32_t nvim_fileinfo_get_mode(const FileInfo *fi) { return (int32_t)fi->stat.st
 // (nvim_buf_get_b_p_fenc, nvim_buf_get_b_p_bin already in change_ffi.c)
 // (nvim_buf_set_b_orig_mode already in memline_shim.c)
 int nvim_buf_get_b_bad_char(const buf_T *buf) { return buf->b_bad_char; }
-int nvim_buf_get_b_p_ff_char(const buf_T *buf) { return (unsigned char)buf->b_p_ff[0]; }
 
 // set_option_direct wrapper for fileencoding
 void nvim_set_fileencoding_local(const char *fenc) {
