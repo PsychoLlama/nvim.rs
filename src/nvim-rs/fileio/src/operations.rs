@@ -784,8 +784,6 @@ pub unsafe extern "C" fn rs_filemess(buf: *const c_void, name: *const c_char, s:
 // =============================================================================
 
 extern "C" {
-    /// Get buf->b_bad_char -- from buffer_shim.c.
-    fn nvim_buf_get_b_bad_char(buf: *const c_void) -> c_int;
     /// Set eap->cmd (takes ownership of the pointer).
     fn nvim_exarg_set_cmd(eap: *mut c_void, cmd: *mut c_char);
     /// Set eap->force_enc.
@@ -832,7 +830,7 @@ pub unsafe extern "C" fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void) {
 
     unsafe { nvim_exarg_set_cmd(eap, cmd) };
     unsafe { nvim_exarg_set_force_enc(eap, 8) };
-    unsafe { nvim_exarg_set_bad_char(eap, nvim_buf_get_b_bad_char(buf)) };
+    unsafe { nvim_exarg_set_bad_char(eap, bref_void(buf).b_bad_char) };
     unsafe { nvim_exarg_set_force_ff(eap, c_int::from(bref_void(buf).fileformat_char0())) };
     let bin = unsafe { bref_void(buf).b_p_bin != 0 };
     let force_bin = if bin { FORCE_BIN } else { FORCE_NOBIN };

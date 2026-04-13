@@ -528,8 +528,8 @@ pub struct BufStruct {
     _pad53a: [u8; 4],
     // offset 11096: char* b_start_fenc  ('fileencoding' when edit started or NULL)
     pub b_start_fenc: *const c_char,
-    // offset 11104..11107: gap (4 bytes, opaque)
-    _pad53b: [u8; 4],
+    // offset 11104: int b_bad_char ("++bad=" argument when edit started or 0)
+    pub b_bad_char: c_int,
 
     // offset 11108: int b_start_bomb
     pub b_start_bomb: c_int,

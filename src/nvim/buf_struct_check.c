@@ -165,6 +165,7 @@ _Static_assert(offsetof(buf_T, b_start_eof) == 11080, "b_start_eof offset mismat
 _Static_assert(offsetof(buf_T, b_start_eol) == 11084, "b_start_eol offset mismatch");
 _Static_assert(offsetof(buf_T, b_start_ffc) == 11088, "b_start_ffc offset mismatch");
 _Static_assert(offsetof(buf_T, b_start_fenc) == 11096, "b_start_fenc offset mismatch");
+_Static_assert(offsetof(buf_T, b_bad_char) == 11104, "b_bad_char offset mismatch");
 _Static_assert(offsetof(buf_T, b_start_bomb) == 11108, "b_start_bomb offset mismatch");
 _Static_assert(offsetof(buf_T, b_bufvar) == 11112, "b_bufvar offset mismatch");
 _Static_assert(offsetof(buf_T, b_vars) == 11136, "b_vars offset mismatch");

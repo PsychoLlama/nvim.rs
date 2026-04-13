@@ -526,11 +526,6 @@ int64_t nvim_fileinfo_get_mtime_ns(const FileInfo *fi) { return (int64_t)fi->sta
 uint64_t nvim_fileinfo_get_size(const FileInfo *fi) { return os_fileinfo_size(fi); }
 int32_t nvim_fileinfo_get_mode(const FileInfo *fi) { return (int32_t)fi->stat.st_mode; }
 
-// Buffer option field accessors for prep_exarg
-// (nvim_buf_get_b_p_fenc, nvim_buf_get_b_p_bin already in change_ffi.c)
-// (nvim_buf_set_b_orig_mode already in memline_shim.c)
-int nvim_buf_get_b_bad_char(const buf_T *buf) { return buf->b_bad_char; }
-
 // set_option_direct wrapper for fileencoding
 void nvim_set_fileencoding_local(const char *fenc) {
   set_option_direct(kOptFileencoding, CSTR_AS_OPTVAL((char *)fenc), OPT_LOCAL, 0);
