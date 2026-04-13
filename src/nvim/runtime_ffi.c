@@ -90,6 +90,13 @@ _Static_assert(DOSO_VIMRC == 1, "DOSO_VIMRC must be 1");
 _Static_assert(FAIL == 0, "FAIL must be 0");
 _Static_assert(OK == 1, "OK must be 1");
 
+// Phase 2: validate sctx_T layout for Rust repr(C) mirror (globals.rs)
+_Static_assert(sizeof(sctx_T) == 24, "sctx_T must be 24 bytes");
+_Static_assert(offsetof(sctx_T, sc_sid) == 0, "sctx_T.sc_sid offset must be 0");
+_Static_assert(offsetof(sctx_T, sc_seq) == 4, "sctx_T.sc_seq offset must be 4");
+_Static_assert(offsetof(sctx_T, sc_lnum) == 8, "sctx_T.sc_lnum offset must be 8");
+_Static_assert(offsetof(sctx_T, sc_chan) == 16, "sctx_T.sc_chan offset must be 16");
+
 // Phase 1: validate constants inlined into Rust (constants.rs)
 _Static_assert(IOSIZE == 1025, "IOSIZE must be 1025");
 _Static_assert(MAXPATHL == 4096, "MAXPATHL must be 4096");
@@ -345,8 +352,6 @@ void nvim_rt_do_exedit(void *eap) { do_exedit((exarg_T *)eap, NULL); }
 
 void nvim_rt_emsg_invarg(void) { emsg(_(e_invarg)); }
 
-bool nvim_rt_got_int(void) { return got_int; }
-
 char *nvim_rt_get_namebuff(void) { return NameBuff; }
 
 char *nvim_rt_get_iobuff(void) { return IObuff; }
@@ -525,12 +530,6 @@ bool nvim_rt_vim_ispathsep(int c) { return vim_ispathsep(c); }
 _Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
 _Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
 
-bool nvim_rt_pkg_get_did_source_packages(void) { return did_source_packages; }
-
-void nvim_rt_pkg_set_did_source_packages(bool val) { did_source_packages = val; }
-
-bool nvim_rt_pkg_get_p_lpl(void) { return p_lpl; }
-
 bool nvim_rt_pkg_exarg_get_forceit(void *eap) { return ((exarg_T *)eap)->forceit; }
 
 /// Call fix_fname (returns allocated string).
@@ -702,45 +701,6 @@ const char *nvim_rt_get_sourcing_name(void) { return HAVE_SOURCING_INFO ? SOURCI
 /// Get SOURCING_LNUM.
 int nvim_rt_get_sourcing_lnum(void) { return SOURCING_LNUM; }
 
-/// Get p_verbose.
-int nvim_rt_get_p_verbose(void) { return (int)p_verbose; }
-
-/// Get current_sctx fields.
-int nvim_rt_get_current_sctx_sid(void) { return current_sctx.sc_sid; }
-int nvim_rt_get_current_sctx_seq(void) { return current_sctx.sc_seq; }
-int nvim_rt_get_current_sctx_lnum(void) { return current_sctx.sc_lnum; }
-uint64_t nvim_rt_get_current_sctx_chan(void) { return current_sctx.sc_chan; }
-
-/// Set current_sctx fields.
-void nvim_rt_set_current_sctx_sid(int sid) { current_sctx.sc_sid = sid; }
-void nvim_rt_set_current_sctx_seq(int seq) { current_sctx.sc_seq = seq; }
-void nvim_rt_set_current_sctx_lnum(int lnum) { current_sctx.sc_lnum = lnum; }
-
-/// Save and restore current_sctx (returns allocated copy, call xfree when done).
-sctx_T *nvim_rt_save_current_sctx(void)
-{
-  sctx_T *saved = xmalloc(sizeof(sctx_T));
-  *saved = current_sctx;
-  return saved;
-}
-void nvim_rt_restore_current_sctx(sctx_T *saved) { current_sctx = *saved; xfree(saved); }
-
-/// Get debug_break_level.
-int nvim_rt_get_debug_break_level(void) { return debug_break_level; }
-/// Set debug_break_level.
-void nvim_rt_set_debug_break_level(int val) { debug_break_level = val; }
-/// Increment debug_break_level.
-void nvim_rt_inc_debug_break_level(void) { debug_break_level++; }
-
-/// Get debug_tick.
-int nvim_rt_get_debug_tick(void) { return debug_tick; }
-
-/// Get ex_nesting_level.
-int nvim_rt_get_ex_nesting_level(void) { return ex_nesting_level; }
-
-/// Get do_profiling.
-int nvim_rt_get_do_profiling(void) { return do_profiling; }
-
 /// Get time_fd.
 void *nvim_rt_get_time_fd(void) { return time_fd; }
 
@@ -819,9 +779,6 @@ void nvim_rt_si_set_sn_name(void *si, char *name) { ((scriptitem_T *)si)->sn_nam
 /// emsg for E_INTERR.
 void nvim_rt_emsg_interr(void) { emsg(_(e_interr)); }
 
-/// Get got_int.
-bool nvim_rt_src_got_int(void) { return got_int; }
-
 /// curbuf accessor.
 void *nvim_rt_get_curbuf(void) { return curbuf; }
 
@@ -878,10 +835,6 @@ void nvim_rt_os_setenv(const char *name, const char *val, int overwrite) { os_se
 const char *nvim_rt_SYS_OPTWIN_FILE(void) { return SYS_OPTWIN_FILE; }
 
 // nvim_rt_openscript deleted: openscript now exported directly from Rust (typebuf.rs, Phase 2)
-
-/// global_busy / listcmd_busy accessors.
-int nvim_rt_get_global_busy(void) { return global_busy; }
-int nvim_rt_get_listcmd_busy(void) { return listcmd_busy; }
 
 /// exarg_T: get eap->nextcmd.
 const char *nvim_rt_exarg_get_nextcmd(const void *eap) { return ((exarg_T *)eap)->nextcmd; }

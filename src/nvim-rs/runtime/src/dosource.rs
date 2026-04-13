@@ -21,6 +21,7 @@ use crate::constants::{
     DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, DOSO_VIMRC, IOSIZE, PROF_YES, SID_STR,
 };
 use crate::doso;
+use crate::globals;
 
 // =============================================================================
 // Type aliases
@@ -75,7 +76,6 @@ extern "C" {
     // Verbose messages
     fn nvim_rt_verbose_enter();
     fn nvim_rt_verbose_leave();
-    fn nvim_rt_get_p_verbose() -> c_int;
     fn nvim_rt_get_sourcing_name() -> *const c_char;
     fn nvim_rt_get_sourcing_lnum() -> c_int;
     fn nvim_rt_smsg_cannot_source(fname: *const c_char);
@@ -88,18 +88,8 @@ extern "C" {
 
     // Debug/breakpoints
     fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LinenrT) -> LinenrT;
-    fn nvim_rt_get_debug_tick() -> c_int;
-    fn nvim_rt_get_debug_break_level() -> c_int;
-    fn nvim_rt_inc_debug_break_level();
-    fn nvim_rt_get_ex_nesting_level() -> c_int;
 
     // Execution context
-    fn nvim_rt_get_current_sctx_sid() -> ScidT;
-    fn nvim_rt_set_current_sctx_sid(sid: ScidT);
-    fn nvim_rt_set_current_sctx_seq(seq: c_int);
-    fn nvim_rt_set_current_sctx_lnum(lnum: c_int);
-    fn nvim_rt_save_current_sctx() -> *mut c_void;
-    fn nvim_rt_restore_current_sctx(saved: *mut c_void);
     fn nvim_rt_next_script_seq() -> c_int;
 
     // Estack
@@ -107,7 +97,6 @@ extern "C" {
     fn estack_pop();
 
     // Profiling
-    fn nvim_rt_get_do_profiling() -> c_int;
     fn nvim_rt_get_time_fd() -> *mut c_void;
     fn nvim_rt_time_push(rel_time: *mut u64, start_time: *mut u64);
     fn nvim_rt_time_pop(rel_time: u64);
@@ -166,7 +155,6 @@ extern "C" {
 
     // IObuff / getsourceline passthrough
     fn nvim_rt_src_get_iobuff() -> *mut c_char;
-    fn nvim_rt_src_got_int() -> bool;
     fn nvim_rt_emsg_interr();
 
     // Buffer init helpers
@@ -193,8 +181,6 @@ extern "C" {
     fn nvim_rt_emsg_argreq();
     fn nvim_rt_semsg_notopen(fname: *const c_char);
     fn openscript(fname: *const c_char, directly: bool);
-    fn nvim_rt_get_global_busy() -> c_int;
-    fn nvim_rt_get_listcmd_busy() -> c_int;
     fn nvim_rt_exarg_get_nextcmd(eap: *mut c_void) -> *const c_char;
     fn nvim_rt_exarg_get_cstack_idx(eap: *mut c_void) -> c_int;
     fn nvim_rt_exarg_get_forceit(eap: *mut c_void) -> bool;
@@ -319,7 +305,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
     let cookie = nvim_rt_cookie_alloc();
     let mut firstline: *mut c_char = ptr::null_mut();
     let mut retval = FAIL;
-    let save_debug_break_level = nvim_rt_get_debug_break_level();
+    let save_debug_break_level = globals::debug_break_level;
     let mut si: *mut c_void = ptr::null_mut();
     let mut wait_start: u64 = 0;
     let mut trigger_source_post = false;
@@ -436,7 +422,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
     }
 
     if nvim_rt_cookie_get_fp(cookie).is_null() && !nvim_rt_cookie_get_src_from_buf_or_str(cookie) {
-        if nvim_rt_get_p_verbose() > 1 {
+        if globals::get_p_verbose() > 1 {
             nvim_rt_verbose_enter();
             let sname = nvim_rt_get_sourcing_name();
             if sname.is_null() {
@@ -452,7 +438,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
     }
 
     // The file exists.
-    if nvim_rt_get_p_verbose() > 1 {
+    if globals::get_p_verbose() > 1 {
         nvim_rt_verbose_enter();
         let sname = nvim_rt_get_sourcing_name();
         if sname.is_null() {
@@ -472,8 +458,8 @@ pub unsafe extern "C" fn rs_do_source_ext(
     nvim_rt_cookie_set_breakpoint(cookie, breakpoint);
     nvim_rt_cookie_set_fname(cookie, fname_exp);
     // Note: fname_exp is now owned by cookie, don't free it separately
-    nvim_rt_cookie_set_dbg_tick(cookie, nvim_rt_get_debug_tick());
-    nvim_rt_cookie_set_level(cookie, nvim_rt_get_ex_nesting_level());
+    nvim_rt_cookie_set_dbg_tick(cookie, globals::debug_tick);
+    nvim_rt_cookie_set_level(cookie, globals::ex_nesting_level);
 
     // Profiling / timing
     let mut rel_time: u64 = 0;
@@ -483,7 +469,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
         nvim_rt_time_push(&raw mut rel_time, &raw mut start_time);
     }
 
-    let l_do_profiling = nvim_rt_get_do_profiling();
+    let l_do_profiling = globals::do_profiling;
     if l_do_profiling == PROF_YES {
         nvim_rt_prof_child_enter(&raw mut wait_start);
     }
@@ -491,11 +477,11 @@ pub unsafe extern "C" fn rs_do_source_ext(
     let funccalp_entry = nvim_rt_save_funccal();
 
     // Save current_sctx
-    let save_current_sctx = nvim_rt_save_current_sctx();
+    let save_current_sctx = globals::save_current_sctx();
 
     // Always use a new sequence number
     let new_seq = nvim_rt_next_script_seq();
-    nvim_rt_set_current_sctx_seq(new_seq);
+    globals::set_current_sctx_seq(new_seq);
 
     if sid > 0 {
         // Loading the same script again
@@ -520,9 +506,9 @@ pub unsafe extern "C" fn rs_do_source_ext(
     }
 
     // Don't change sc_sid to SID_STR when sourcing a string from a Lua script
-    if str_arg.is_null() || !crate::script::rs_script_is_lua(nvim_rt_get_current_sctx_sid()) {
-        nvim_rt_set_current_sctx_sid(sid);
-        nvim_rt_set_current_sctx_lnum(0);
+    if str_arg.is_null() || !crate::script::rs_script_is_lua(globals::get_current_sctx_sid()) {
+        globals::set_current_sctx_sid(sid);
+        globals::set_current_sctx_lnum(0);
     }
 
     // Push to execution stack
@@ -601,18 +587,18 @@ pub unsafe extern "C" fn rs_do_source_ext(
     // Post-execution profiling
     if l_do_profiling == PROF_YES && !si.is_null() {
         // Re-fetch si as script_items may have been reallocated
-        si = nvim_rt_script_item_get(nvim_rt_get_current_sctx_sid());
+        si = nvim_rt_script_item_get(globals::get_current_sctx_sid());
         if nvim_rt_si_get_sn_prof_on(si) {
             nvim_rt_si_update_profile(si, wait_start);
         }
     }
 
-    if nvim_rt_src_got_int() {
+    if globals::got_int {
         nvim_rt_emsg_interr();
     }
     estack_pop();
 
-    if nvim_rt_get_p_verbose() > 1 {
+    if globals::get_p_verbose() > 1 {
         nvim_rt_verbose_enter();
         nvim_rt_smsg_finished_sourcing(fname);
         let cont_name = nvim_rt_get_sourcing_name();
@@ -628,18 +614,18 @@ pub unsafe extern "C" fn rs_do_source_ext(
         nvim_rt_time_pop(rel_time);
     }
 
-    if !nvim_rt_src_got_int() {
+    if !globals::got_int {
         trigger_source_post = true;
     }
 
     // After "finish" in debug mode, need to break at first command of next sourced file.
-    if save_debug_break_level > nvim_rt_get_ex_nesting_level()
-        && nvim_rt_get_debug_break_level() == nvim_rt_get_ex_nesting_level()
+    if save_debug_break_level > globals::ex_nesting_level
+        && globals::debug_break_level == globals::ex_nesting_level
     {
-        nvim_rt_inc_debug_break_level();
+        globals::inc_debug_break_level();
     }
 
-    nvim_rt_restore_current_sctx(save_current_sctx);
+    globals::restore_current_sctx(save_current_sctx);
     nvim_rt_restore_funccal(funccalp_entry);
     if l_do_profiling == PROF_YES {
         nvim_rt_prof_child_exit(&raw mut wait_start);
@@ -754,8 +740,8 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
         }
     } else if !eap.is_null() && nvim_rt_exarg_get_forceit(eap) {
         // ":source!": read Normal mode commands
-        let directly = nvim_rt_get_global_busy() != 0
-            || nvim_rt_get_listcmd_busy() != 0
+        let directly = globals::global_busy != 0
+            || globals::listcmd_busy
             || !nvim_rt_exarg_get_nextcmd(eap).is_null()
             || nvim_rt_exarg_get_cstack_idx(eap) >= 0;
         openscript(fname, directly);

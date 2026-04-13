@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::constants::{EW_DIR, EW_FILE, EW_NOBREAK, MAXPATHL};
 use crate::dip;
+use crate::globals;
 
 // =============================================================================
 // Type aliases
@@ -32,7 +33,6 @@ extern "C" {
     // Verbose messaging
     fn nvim_rt_verbose_enter();
     fn nvim_rt_verbose_leave();
-    fn nvim_rt_get_p_verbose() -> c_int;
 
     // Smsg wrappers for search messages
     fn nvim_rt_smsg_searching_prefix(
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn rs_do_in_path(
     let mut buf = xmallocz(MAXPATHL).cast::<c_char>();
 
     {
-        if nvim_rt_get_p_verbose() > 10 && !name.is_null() {
+        if globals::get_p_verbose() > 10 && !name.is_null() {
             nvim_rt_verbose_enter();
             if unsafe { *prefix } != 0 {
                 nvim_rt_smsg_searching_prefix(name, prefix, path);
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn rs_do_in_path(
                     let remaining = MAXPATHL - tail_offset;
                     nvim_rt_copy_option_part(&raw mut np, tail, remaining, c"\t ".as_ptr());
 
-                    if nvim_rt_get_p_verbose() > 10 {
+                    if globals::get_p_verbose() > 10 {
                         nvim_rt_verbose_enter();
                         nvim_rt_smsg_searching(buf);
                         nvim_rt_verbose_leave();
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn rs_do_in_path(
 
         if (flags & dip::ERR) != 0 {
             nvim_rt_semsg_dirnotf(basepath, name);
-        } else if nvim_rt_get_p_verbose() > 1 {
+        } else if globals::get_p_verbose() > 1 {
             nvim_rt_verbose_enter();
             nvim_rt_smsg_notfound_in(basepath, name);
             nvim_rt_verbose_leave();
@@ -240,7 +240,7 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
 ) -> c_int {
     let mut did_one = false;
 
-    if nvim_rt_get_p_verbose() > 10 && !name.is_null() {
+    if globals::get_p_verbose() > 10 && !name.is_null() {
         nvim_rt_verbose_enter();
         nvim_rt_smsg_searching_rtp(name);
         nvim_rt_verbose_leave();
@@ -293,7 +293,7 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
                 let remaining = MAXPATHL - tail_offset;
                 nvim_rt_copy_option_part(&raw mut np, tail, remaining, c"\t ".as_ptr());
 
-                if nvim_rt_get_p_verbose() > 10 {
+                if globals::get_p_verbose() > 10 {
                     nvim_rt_verbose_enter();
                     nvim_rt_smsg_searching(buf);
                     nvim_rt_verbose_leave();
@@ -326,7 +326,7 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
     if !did_one && !name.is_null() {
         if (flags & dip::ERR) != 0 {
             nvim_rt_semsg_dirnotf(c"runtime path".as_ptr(), name);
-        } else if nvim_rt_get_p_verbose() > 1 {
+        } else if globals::get_p_verbose() > 1 {
             nvim_rt_verbose_enter();
             nvim_rt_smsg_notfound_rtp(name);
             nvim_rt_verbose_leave();

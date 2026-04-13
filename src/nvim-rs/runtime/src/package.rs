@@ -8,6 +8,7 @@ use std::ptr;
 use crate::constants::MAXPATHL;
 use crate::dip;
 use crate::do_in_path::rs_do_in_path;
+use crate::globals;
 
 // =============================================================================
 // External C functions
@@ -67,9 +68,6 @@ extern "C" {
     fn xstrlcat(dst: *mut c_char, src: *const c_char, maxlen: usize) -> usize;
 
     // Package management accessors (in runtime_ffi.c)
-    fn nvim_rt_pkg_get_did_source_packages() -> bool;
-    fn nvim_rt_pkg_set_did_source_packages(val: bool);
-    fn nvim_rt_pkg_get_p_lpl() -> bool;
     fn nvim_rt_pkg_exarg_get_forceit(eap: *mut c_void) -> bool;
     fn nvim_rt_pkg_fix_fname(fname: *const c_char) -> *mut c_char;
     fn nvim_rt_pkg_snprintf(
@@ -703,7 +701,7 @@ pub unsafe extern "C" fn rs_add_pack_start_dirs() {
 /// Accesses global C state.
 #[export_name = "load_start_packages"]
 pub unsafe extern "C" fn rs_load_start_packages() {
-    nvim_rt_pkg_set_did_source_packages(true);
+    globals::did_source_packages = true;
 
     let app_load = (&raw const APP_LOAD).cast_mut().cast::<c_void>();
 
@@ -732,7 +730,7 @@ pub unsafe extern "C" fn rs_load_start_packages() {
 /// `eap` must be a valid exarg_T pointer.
 #[export_name = "ex_packloadall"]
 pub unsafe extern "C" fn rs_ex_packloadall(eap: *mut c_void) {
-    let did_source = nvim_rt_pkg_get_did_source_packages();
+    let did_source = globals::did_source_packages;
     let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
 
     if !did_source || forceit {
@@ -751,13 +749,13 @@ pub unsafe extern "C" fn rs_ex_packloadall(eap: *mut c_void) {
 /// Accesses global C state (p_lpl, p_rtp, did_source_packages).
 #[export_name = "load_plugins"]
 pub unsafe extern "C" fn rs_load_plugins() {
-    if !nvim_rt_pkg_get_p_lpl() {
+    if !globals::p_lpl != 0 {
         return;
     }
 
     let mut rtp_copy: *mut c_char = p_rtp;
     let plugin_pattern = c"plugin/**/*".as_ptr().cast_mut();
-    let did_source = nvim_rt_pkg_get_did_source_packages();
+    let did_source = globals::did_source_packages;
 
     if !did_source {
         rtp_copy = xstrdup(p_rtp);
@@ -805,7 +803,7 @@ pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
     };
 
     // Only look under "start" when loading packages wasn't done yet.
-    if !nvim_rt_pkg_get_did_source_packages() {
+    if !globals::did_source_packages {
         build_packadd_pattern(pat, len, c"start".as_ptr(), arg);
 
         res = rs_do_in_path(

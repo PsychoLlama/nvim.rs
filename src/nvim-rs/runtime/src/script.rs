@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::constants::MAXPATHL;
+use crate::globals;
 use crate::{LinenrT, ScidT, ScriptItemHandle};
 
 // =============================================================================
@@ -54,7 +55,6 @@ extern "C" {
     fn nvim_rt_expand_env(src: *mut c_char, dst: *mut c_char, dstlen: c_int);
     fn nvim_rt_do_exedit(eap: *mut c_void);
     fn nvim_rt_emsg_invarg();
-    fn nvim_rt_got_int() -> bool;
     fn nvim_rt_get_namebuff() -> *mut c_char;
     fn nvim_rt_get_iobuff() -> *mut c_char;
     fn nvim_rt_home_replace(name: *const c_char, buf: *mut c_char, len: usize);
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
     let iobuff = nvim_rt_get_iobuff();
 
     let mut i: c_int = 1;
-    while i <= count && !nvim_rt_got_int() {
+    while i <= count && !globals::got_int {
         let si = nvim_script_item_get(i);
         let sn_name = nvim_scriptitem_get_name(si);
 

@@ -52,6 +52,7 @@ pub mod do_in_path;
 pub mod dosource;
 pub mod expand;
 pub mod getsourceline;
+pub mod globals;
 pub mod package;
 pub mod path;
 pub mod pathsearch;

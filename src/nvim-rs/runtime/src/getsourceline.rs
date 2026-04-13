@@ -9,6 +9,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::constants::{CONV_NONE, CPO_CONCAT, PROF_YES};
+use crate::globals;
 
 // =============================================================================
 // Type aliases
@@ -64,12 +65,10 @@ extern "C" {
     fn nvim_rt_vim_strchr(buf: *const c_char, c: c_int) -> *mut c_char;
 
     // Debugger
-    fn nvim_rt_get_debug_tick() -> c_int;
     fn nvim_rt_dbg_find_breakpoint(file: bool, fname: *const c_char, after: c_int) -> c_int;
     fn nvim_rt_dbg_breakpoint(fname: *const c_char, lnum: c_int);
 
     // Profiling
-    fn nvim_rt_get_do_profiling() -> c_int;
     fn nvim_rt_script_line_start();
     fn nvim_rt_script_line_end();
 
@@ -280,16 +279,16 @@ pub unsafe extern "C" fn rs_getsourceline(
     do_concat: bool,
 ) -> *mut c_char {
     // If breakpoints have been added/deleted since last check, refresh.
-    if nvim_rt_cookie_get_dbg_tick(cookie) < nvim_rt_get_debug_tick()
+    if nvim_rt_cookie_get_dbg_tick(cookie) < globals::debug_tick
         && !nvim_rt_cookie_get_src_from_buf_or_str(cookie)
     {
         let fname = nvim_rt_cookie_get_fname(cookie);
         let new_bp = nvim_rt_dbg_find_breakpoint(true, fname, nvim_rt_get_sourcing_lnum());
         nvim_rt_cookie_set_breakpoint(cookie, new_bp);
-        nvim_rt_cookie_set_dbg_tick(cookie, nvim_rt_get_debug_tick());
+        nvim_rt_cookie_set_dbg_tick(cookie, globals::debug_tick);
     }
 
-    if nvim_rt_get_do_profiling() == PROF_YES {
+    if globals::do_profiling == PROF_YES {
         nvim_rt_script_line_end();
     }
 
@@ -312,7 +311,7 @@ pub unsafe extern "C" fn rs_getsourceline(
         nl
     };
 
-    if !line.is_null() && nvim_rt_get_do_profiling() == PROF_YES {
+    if !line.is_null() && globals::do_profiling == PROF_YES {
         nvim_rt_script_line_start();
     }
 
@@ -378,7 +377,7 @@ pub unsafe extern "C" fn rs_getsourceline(
             // Find next breakpoint.
             let new_bp = nvim_rt_dbg_find_breakpoint(true, fname, nvim_rt_get_sourcing_lnum());
             nvim_rt_cookie_set_breakpoint(cookie, new_bp);
-            nvim_rt_cookie_set_dbg_tick(cookie, nvim_rt_get_debug_tick());
+            nvim_rt_cookie_set_dbg_tick(cookie, globals::debug_tick);
         }
     }
 
