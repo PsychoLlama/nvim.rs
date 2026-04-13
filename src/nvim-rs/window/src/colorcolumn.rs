@@ -31,7 +31,6 @@ extern "C" {
     fn nvim_win_has_buffer(wp: WinHandle) -> c_int;
 
     /// Set wp->w_p_cc_cols.
-    fn nvim_win_set_p_cc_cols(wp: WinHandle, cols: *mut c_int);
 
     /// Get the empty_string_option pointer.
     fn nvim_get_empty_string_option() -> *const c_char;
@@ -162,7 +161,7 @@ unsafe fn check_colorcolumn_impl(cc: *const c_char, wp: WinHandle) -> *const c_c
     w.w_p_cc_cols = std::ptr::null_mut();
 
     if color_cols.is_empty() {
-        nvim_win_set_p_cc_cols(wp, std::ptr::null_mut());
+        win_mut(wp).w_p_cc_cols = std::ptr::null_mut();
     } else {
         // Sort and deduplicate.
         color_cols.sort_unstable();
@@ -175,7 +174,7 @@ unsafe fn check_colorcolumn_impl(cc: *const c_char, wp: WinHandle) -> *const c_c
             *ptr.add(i) = val;
         }
         *ptr.add(count) = -1; // end marker
-        nvim_win_set_p_cc_cols(wp, ptr);
+        win_mut(wp).w_p_cc_cols = ptr;
     }
 
     std::ptr::null() // no error

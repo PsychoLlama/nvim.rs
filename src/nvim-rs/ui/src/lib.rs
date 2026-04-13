@@ -442,10 +442,6 @@ extern "C" {
     fn nvim_win_set_config_width(wp: *mut c_void, val: c_int);
     /// Set window config height (drop-in from nvim-window crate)
     fn nvim_win_set_config_height(wp: *mut c_void, val: c_int);
-    /// Set window width_request
-    fn nvim_win_set_width_request(wp: *mut c_void, val: c_int);
-    /// Set window height_request
-    fn nvim_win_set_height_request(wp: *mut c_void, val: c_int);
     /// Call win_config_float(wp, wp->w_config)
     fn nvim_win_config_float(wp: *mut c_void);
     /// Call win_set_inner_size(wp, valid_cursor)
@@ -1234,8 +1230,9 @@ pub unsafe extern "C" fn rs_ui_grid_resize_win(wp: *mut c_void, width: c_int, he
         // non-positive indicates no request
         let req_h = if height > 0 { height } else { 0 };
         let req_w = if width > 0 { width } else { 0 };
-        nvim_win_set_height_request(wp, req_h);
-        nvim_win_set_width_request(wp, req_w);
+        let cw = nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp));
+        cw.w_height_request = req_h;
+        cw.w_width_request = req_w;
         nvim_win_set_inner_size(wp, true);
     }
 }

@@ -388,9 +388,6 @@ extern "C" {
     /// Init fold state for window.
     fn rs_foldInitWin(wp: WinHandle);
 
-    /// Set w_next_match_id = 1000.
-    fn nvim_win_set_next_match_id(wp: WinHandle);
-
     /// Free a WinInfo (compound: clear_winopt + deleteFoldRecurse + xfree).
     fn nvim_free_wininfo_raw(wip: *mut std::ffi::c_void, bp: crate::BufHandle);
 }
@@ -453,7 +450,7 @@ unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
 
     rs_foldInitWin(wp);
     nvim_unblock_autocmds();
-    nvim_win_set_next_match_id(wp);
+    crate::win_struct::win_mut(wp).w_next_match_id = 1000;
 
     wp
 }

@@ -81,7 +81,6 @@ char *nvim_win_get_p_sbr(win_T *wp) { return wp->w_p_sbr; }
 char *nvim_win_get_p_cc(win_T *wp) { return wp->w_p_cc; }
 int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
 int nvim_win_has_buffer(win_T *wp) { return wp->w_buffer != NULL; }
-void nvim_win_set_p_cc_cols(win_T *wp, int *cols) { wp->w_p_cc_cols = cols; }
 int nvim_first_tabpage_has_next(void) { return first_tabpage != NULL && first_tabpage->tp_next != NULL; }
 int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
 void *nvim_win_get_w_grid(win_T *wp) { return &wp->w_grid; }
@@ -182,7 +181,6 @@ void nvim_win_init_vars(win_T *wp) { wp->w_vars = tv_dict_alloc(); init_var_dict
 void nvim_win_init_ns_set(win_T *wp) { wp->w_ns_hl = -1; Set(uint32_t) ns_set = SET_INIT; wp->w_ns_set = ns_set; }
 void nvim_win_init_global_local_opts(win_T *wp) { wp->w_allbuf_opt.wo_so = wp->w_p_so = -1; wp->w_allbuf_opt.wo_siso = wp->w_p_siso = -1; }
 void nvim_win_set_config_init(win_T *wp) { WinConfig init = WIN_CONFIG_INIT; wp->w_config = init; }
-void nvim_win_set_next_match_id(win_T *wp) { wp->w_next_match_id = 1000; }
 void nvim_free_wininfo_raw(WinInfo *wip, buf_T *bp) { if (wip->wi_optset) { clear_winopt(&wip->wi_opt); deleteFoldRecurse(bp, &wip->wi_folds); } xfree(wip); }
 void nvim_win_pmap_del(win_T *wp) { pmap_del(int)(&window_handles, wp->handle, NULL); }
 void nvim_win_alist_unlink(win_T *wp) { alist_unlink(wp->w_alist); }
@@ -683,12 +681,6 @@ void nvim_redraw_later_not_valid(void) { redraw_later(curwin, UPD_NOT_VALID); }
 //       nvim_tabpage_set_ch_used, nvim_get_exiting are already defined as Rust drop-ins
 //       in the nvim-window crate (window/src/win_struct.rs, globals.rs, tabpage_struct.rs).
 // =============================================================================
-
-/// Set window width_request (w_width_request)
-void nvim_win_set_width_request(win_T *wp, int val) { if (wp) { wp->w_width_request = val; } }
-
-/// Set window height_request (w_height_request)
-void nvim_win_set_height_request(win_T *wp, int val) { if (wp) { wp->w_height_request = val; } }
 
 /// Call win_set_inner_size on the window
 void nvim_win_set_inner_size(win_T *wp, bool valid_cursor) { win_set_inner_size(wp, valid_cursor); }
