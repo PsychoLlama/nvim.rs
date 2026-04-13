@@ -108,9 +108,6 @@ void nvim_buf_set_bkc_flags(buf_T *buf, unsigned val) { buf->b_bkc_flags = val; 
 const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
-int nvim_win_get_ns_hl_winhl(win_T *win) { return win->w_ns_hl_winhl; }
-void nvim_win_set_ns_hl_winhl(win_T *win, int val) { win->w_ns_hl_winhl = val; }
-void nvim_win_set_ns_hl(win_T *win, int val) { win->w_ns_hl = val; }
 const char *nvim_win_get_p_winhl(win_T *win) { return win ? win->w_p_winhl : NULL; }
 const void *nvim_win_get_p_winhl_addr(win_T *win) { return win ? (const void *)&win->w_p_winhl : NULL; }
 int nvim_winhl_ns_prepare(win_T *wp)
@@ -266,7 +263,6 @@ int nvim_get_secure(void) { return secure; }
 void nvim_set_secure(int val) { secure = val; }
 char *nvim_buf_get_b_p_keymap(buf_T *buf) { return buf ? buf->b_p_keymap : NULL; }
 // get/set ru_wid (for rulerformat)
-int nvim_get_ru_wid(void) { return ru_wid; }
 void nvim_set_ru_wid(int val) { ru_wid = val; }
 // encoding helpers
 int nvim_optset_varp_is_p_fenc(const void *args) { char **gvarp = (char **)get_option_varp_scope_from(((const optset_T *)args)->os_idx, OPT_GLOBAL, (buf_T *)((const optset_T *)args)->os_buf, NULL); return gvarp == &p_fenc ? 1 : 0; }

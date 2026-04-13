@@ -379,8 +379,6 @@ bool nvim_win_get_w_p_stc_nul(win_T *wp) { return *wp->w_p_stc != NUL; }
 
 // --- w_lines[] / wline_T setters (getters already in window_shim.c) ---
 
-/// Get &wp->w_grid as a GridView* (opaque pointer for Rust).
-void *nvim_win_get_grid_view(win_T *wp) { return &wp->w_grid; }
 
 
 // --- Global variable accessors ---
@@ -554,12 +552,6 @@ bool nvim_win_get_w_p_fdt_nul(win_T *wp) { return *wp->w_p_fdt == NUL; }
 /// Return raw pointer to wp->w_lines array (unchecked).
 /// The caller must bounds-check using w_lines_size/w_view_height.
 wline_T *nvim_win_get_wlines_ptr(win_T *wp) { return wp->w_lines; }
-
-/// Return wp->w_lines_valid.
-int nvim_win_get_lines_valid2(win_T *wp) { return wp->w_lines_valid; }
-
-/// Set wp->w_lines_valid.
-void nvim_win_set_lines_valid2(win_T *wp, int val) { wp->w_lines_valid = (linenr_T)val; }
 
 /// Send win_extmarks if needed (kv_size/kv_A loop + ui_call_win_extmark).
 void nvim_win_send_extmarks(win_T *wp)

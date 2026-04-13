@@ -88,7 +88,6 @@ int nvim_buf_get_handle(buf_T *buf) { return buf ? buf->b_fnum : 0; }
 int nvim_buf_get_help(buf_T *buf) { return buf->b_help; }
 int nvim_buf_get_terminal(buf_T *buf) { return buf->terminal != NULL; }
 buf_T *nvim_get_lastbuf(void) { return lastbuf; }
-buf_T *nvim_buf_get_prev(buf_T *buf) { return buf->b_prev; }
 buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
 uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0; }
 uint32_t nvim_buf_meta_total_sign_text(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignText) : 0; }

@@ -263,7 +263,6 @@ char *nvim_fpip_get_curbuf_fname(void) { return curbuf->b_fname; }
 char *nvim_fpip_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 char *nvim_fpip_get_curbuf_b_p_inc(void) { return curbuf->b_p_inc; }
 char *nvim_fpip_get_curbuf_b_p_def(void) { return curbuf->b_p_def; }
-int nvim_fpip_get_curbuf_b_fnum(void) { return curbuf->b_fnum; }
 char *nvim_fpip_get_p_inc(void) { return p_inc; }
 char *nvim_fpip_get_p_def(void) { return p_def; }
 int nvim_fpip_get_p_js(void) { return p_js ? 1 : 0; }

@@ -377,7 +377,6 @@ void *nvim_tv_list_item_next(const void *list, const void *li) { return (list ==
 void *nvim_tv_list_item_dict(const void *li) { if (li == NULL) { return NULL; } const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type != VAR_DICT ? NULL : tv->vval.v_dict; }
 void nvim_xfree_char(char *ptr) { xfree(ptr); }
 bool nvim_tv_list_item_is_first(const void *list, const void *li) { return (list != NULL && li != NULL) && li == tv_list_first((const list_T *)list); }
-void *nvim_qfl_get_qftf_cb_ptr(void *qfl_void) { return qfl_void == NULL ? NULL : (void *)&((qf_list_T *)qfl_void)->qf_qftf_cb; }
 void *nvim_qf_get_global_qftf_cb_ptr(void) { return (void *)&qftf_cb; }
 void *nvim_qf_win_get_llist_mut(void *win_void) { return win_void == NULL ? NULL : ((win_T *)win_void)->w_llist; }
 void *nvim_qf_win_get_llist_ref_mut(void *win_void) { return win_void == NULL ? NULL : ((win_T *)win_void)->w_llist_ref; }

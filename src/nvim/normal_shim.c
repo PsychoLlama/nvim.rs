@@ -573,16 +573,6 @@ void nvim_opfunc_set_op_marks(oparg_T *oap)
   }
 }
 
-/// Restore curbuf->b_op_start and b_op_end from saved values (for lockmarks).
-void nvim_opfunc_restore_op_marks(oparg_T *oap, int s_lnum, int s_col, int e_lnum, int e_col)
-{
-  curbuf->b_op_start.lnum = (linenr_T)s_lnum;
-  curbuf->b_op_start.col = (colnr_T)s_col;
-  curbuf->b_op_end.lnum = (linenr_T)e_lnum;
-  curbuf->b_op_end.col = (colnr_T)e_col;
-  (void)oap;
-}
-
 /// Emit "E774: 'operatorfunc' is empty" error.
 void nvim_emsg_e774_operatorfunc(void) { emsg(_("E774: 'operatorfunc' is empty")); }
 
