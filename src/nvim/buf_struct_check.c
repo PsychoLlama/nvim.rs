@@ -111,6 +111,7 @@ _Static_assert(offsetof(buf_T, b_p_bomb) == 10116, "b_p_bomb offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_bh) == 10120, "b_p_bh offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_bt) == 10128, "b_p_bt offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_busy) == 10136, "b_p_busy offset mismatch");
+_Static_assert(offsetof(buf_T, b_has_qf_entry) == 10144, "b_has_qf_entry offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_bl) == 10148, "b_p_bl offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_channel) == 10152, "b_p_channel offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_cin) == 10160, "b_p_cin offset mismatch");

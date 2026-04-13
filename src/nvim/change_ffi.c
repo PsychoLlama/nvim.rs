@@ -93,7 +93,6 @@ bool nvim_utf_composinglike(const char *p0, const char *p1, uint64_t *state)
 int nvim_ptr2cells(const char *p) { return ptr2cells(p); }
 
 char *nvim_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
-void nvim_replace_push(const char *ptr, size_t len) { replace_push(ptr, len); }
 bool nvim_use_indentexpr_for_lisp(void) { return use_indentexpr_for_lisp(); }
 
 // Curwin cursor accessors (used by open_line.rs)
@@ -130,7 +129,6 @@ colnr_T nvim_curbuf_get_ml_line_len(void) { return curbuf->b_ml.ml_line_len; }
 void nvim_curbuf_set_ml_line_len(colnr_T len) { curbuf->b_ml.ml_line_len = len; }
 char *nvim_curbuf_get_ml_line_ptr(void) { return curbuf->b_ml.ml_line_ptr; }
 linenr_T nvim_curbuf_get_b_ml_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
-bool nvim_curbuf_get_b_p_ci(void) { return curbuf->b_p_ci; }
 bool nvim_curbuf_get_b_p_cin(void) { return curbuf->b_p_cin; }
 bool nvim_curbuf_get_b_p_lisp(void) { return curbuf->b_p_lisp; }
 bool nvim_curbuf_get_b_p_pi(void) { return curbuf->b_p_pi; }

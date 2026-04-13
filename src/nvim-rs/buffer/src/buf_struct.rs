@@ -323,8 +323,8 @@ pub struct BufStruct {
     // offset 10136: int64_t b_p_busy
     pub b_p_busy: OptInt,
 
-    // offset 10144..10147: gap (4 bytes to align b_p_bl to int boundary)
-    _pad23: [u8; 4],
+    // offset 10144: int b_has_qf_entry (quickfix exists for buffer)
+    pub b_has_qf_entry: c_int,
 
     // offset 10148: int b_p_bl  (BufListed)
     pub b_p_bl: c_int,

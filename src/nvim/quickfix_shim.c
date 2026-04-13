@@ -119,7 +119,6 @@ int nvim_qf_get_qi_type(const void *qi_void) { return ((const qf_info_T *)qi_voi
 void *nvim_get_ql_info(void) { return (void *)ql_info; }
 void nvim_set_ql_info(void *qi) { ql_info = (qf_info_T *)qi; }
 int nvim_get_p_chi(void) { return (int)p_chi; }
-int nvim_buf_get_has_qf_entry(const void *buf_void) { return ((const buf_T *)buf_void)->b_has_qf_entry; }
 int nvim_qf_buf_get_fnum(const void *buf_void) { return ((const buf_T *)buf_void)->b_fnum; }
 void *nvim_buf_win_get_llist(const void *win_void) { return ((const win_T *)win_void)->w_llist; }
 #include "quickfix_shim.c.generated.h"

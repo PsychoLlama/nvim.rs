@@ -456,9 +456,6 @@ void nvim_tv_dict_add_nr(dict_T *dict, const char *key, size_t key_len, varnumbe
   tv_dict_add_nr(dict, key, key_len, nr);
 }
 
-/// Check position validity
-void nvim_check_pos(buf_T *buf, pos_T *pos) { check_pos(buf, pos); }
-
 /// Current window handle accessor
 win_T *nvim_undo_get_curwin(void) { return curwin; }
 

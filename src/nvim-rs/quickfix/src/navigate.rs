@@ -4,6 +4,7 @@
 //! finding entries by various criteria, and calculating jump targets.
 
 use crate::ffi_types::QfListPtr;
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_int, c_void};
 
 /// Line number type (matches `linenr_T` in Neovim)
@@ -2327,7 +2328,6 @@ const BUF_HAS_LL_ENTRY_P2: c_int = 2;
 const FAIL_VAL: c_int = 0;
 
 extern "C" {
-    fn nvim_buf_get_has_qf_entry(buf: BufHandle) -> c_int;
     fn nvim_qf_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_buf_win_get_llist(wp: WinHandleP2) -> QfInfoHandleMut;
     fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
@@ -2366,7 +2366,7 @@ pub unsafe extern "C" fn rs_qf_mark_adjust_entry(
         BUF_HAS_LL_ENTRY_P2
     };
 
-    if (nvim_buf_get_has_qf_entry(buf) & buf_has_flag) == 0 {
+    if ((*buf.cast::<BufStruct>()).b_has_qf_entry & buf_has_flag) == 0 {
         return false;
     }
 
