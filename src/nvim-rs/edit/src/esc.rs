@@ -11,6 +11,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::similar_names)]
 
 use std::ffi::{c_int, c_uint, c_void};
 
@@ -116,14 +117,52 @@ extern "C" {
     // Autocmds
     fn nvim_ins_apply_autocmds_insertleavepre();
 
-    // `stop_insert(end_insert_pos, esc, nomove)` -- unified stop_insert
-    fn nvim_edit_stop_insert(end_insert_pos: *mut c_void, esc: c_int, nomove: c_int);
-
-    // curwin->w_cursor pointer
+    // curwin->w_cursor pointer (used by esc caller)
     fn nvim_curwin_get_cursor_ptr() -> *const c_void;
 
     // `undisplay_dollar`
     fn undisplay_dollar();
+
+    // -- stop_insert dependencies (Phase 3 migration) --
+    fn stop_redo_ins();
+    fn rs_replace_stack_clear();
+
+    // get_inserted: splits String into (data, size) to avoid FFI String layout
+    fn nvim_stop_insert_get_inserted(data_out: *mut *mut u8, size_out: *mut usize);
+    fn nvim_get_new_insert_skip() -> c_int;
+    fn nvim_get_did_restart_edit() -> c_int;
+    fn nvim_clear_last_insert();
+    fn nvim_set_last_insert(data: *mut std::ffi::c_char, size: usize);
+    fn nvim_set_last_insert_skip(val: c_int);
+    fn xfree(ptr: *mut c_void);
+
+    fn nvim_get_ins_need_undo() -> c_int;
+    fn nvim_has_format_option(c: c_int) -> bool;
+    fn dec_cursor() -> c_int;
+    fn inc_cursor() -> c_int;
+    fn auto_format(trailblank: bool, prev_line: bool);
+    fn check_auto_format(end_insert: bool);
+    fn nvim_get_did_ai() -> bool;
+    fn nvim_p_cpo_has_indent() -> bool;
+    fn nvim_stop_insert_pos_get_lnum(pos: *mut c_void) -> i32;
+    fn nvim_stop_insert_pos_get_col(pos: *mut c_void) -> i32;
+    fn nvim_curbuf_get_ml_line_count() -> i32;
+    fn check_cursor_col(wp: *mut c_void);
+    fn nvim_get_curwin() -> *mut c_void;
+    fn nvim_curwin_get_cursor_lnum() -> i32;
+    fn nvim_save_cursor_pos(lnum: *mut i32, col: *mut i32, coladd: *mut i32);
+    fn nvim_restore_cursor_pos(lnum: i32, col: i32, coladd: i32);
+    fn del_char(fixpos: c_int) -> c_int;
+    fn nvim_gchar_pos_lnum_col_coladd(lnum: i32, col: i32, coladd: i32) -> c_int;
+    fn nvim_get_VIsual_active() -> c_int;
+    fn check_visual_pos();
+    fn nvim_set_did_ai(val: bool);
+    fn nvim_set_did_si(val: bool);
+    fn nvim_set_can_si(val: bool);
+    fn nvim_set_can_si_back(val: bool);
+    fn nvim_stop_insert_set_b_op_start_insstart();
+    fn nvim_stop_insert_set_b_op_start_orig_insstart_orig();
+    fn nvim_stop_insert_set_b_op_end_from_pos(pos: *mut c_void);
 }
 
 // ============================================================================
@@ -139,6 +178,154 @@ static mut DISABLED_REDRAW: bool = false;
 // ============================================================================
 
 const ESC_STR: &[u8; 2] = b"\x1b\0";
+
+// -- stop_insert constants --
+
+/// `FO_AUTO` format option — automatic formatting (from `option_vars.h`)
+const FO_AUTO: c_int = b'a' as c_int;
+
+/// `FAIL` from `vim_defs.h`
+const FAIL: c_int = 0;
+
+// ============================================================================
+// stop_insert — full Rust implementation (Phase 3 migration)
+// ============================================================================
+
+/// Returns true if `c` is an ASCII whitespace character.
+#[inline]
+fn ascii_iswhite(c: c_int) -> bool {
+    c == c_int::from(b' ') || c == c_int::from(b'\t')
+}
+
+/// Stop insert mode: save inserted text, auto-format, strip trailing whitespace.
+///
+/// Ported from `nvim_edit_stop_insert` in `edit_shim.c`.
+///
+/// # Safety
+/// Accesses global state via C accessor functions.
+/// `end_insert_pos` must be NULL or a valid `pos_T*`.
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "nvim_edit_stop_insert")]
+pub unsafe extern "C" fn rs_stop_insert(end_insert_pos: *mut c_void, esc: c_int, nomove: c_int) {
+    stop_redo_ins();
+    rs_replace_stack_clear();
+
+    // Save inserted text for redo (^@ / CTRL-A).
+    let mut data_ptr: *mut u8 = std::ptr::null_mut();
+    let mut size: usize = 0;
+    nvim_stop_insert_get_inserted(&raw mut data_ptr, &raw mut size);
+    let added = if data_ptr.is_null() {
+        0
+    } else {
+        size as c_int - nvim_get_new_insert_skip()
+    };
+    if nvim_get_did_restart_edit() == 0 || added > 0 {
+        nvim_clear_last_insert();
+        nvim_set_last_insert(data_ptr.cast::<std::ffi::c_char>(), size);
+        nvim_set_last_insert_skip(if added < 0 {
+            0
+        } else {
+            nvim_get_new_insert_skip()
+        });
+    } else {
+        xfree(data_ptr.cast::<c_void>());
+    }
+
+    if nvim_get_arrow_used() == 0 && !end_insert_pos.is_null() {
+        let pos = end_insert_pos;
+        let mut cc: c_int;
+        if nvim_get_ins_need_undo() == 0 && nvim_has_format_option(FO_AUTO) {
+            // Save current cursor position.
+            let mut tpos_lnum: i32 = 0;
+            let mut tpos_col: i32 = 0;
+            let mut tpos_coladd: i32 = 0;
+            nvim_save_cursor_pos(&raw mut tpos_lnum, &raw mut tpos_col, &raw mut tpos_coladd);
+            cc = c_int::from(b'x');
+            if nvim_curwin_get_cursor_col() > 0 && gchar_cursor() == 0 {
+                dec_cursor();
+                cc = gchar_cursor();
+                if !ascii_iswhite(cc) {
+                    nvim_restore_cursor_pos(tpos_lnum, tpos_col, tpos_coladd);
+                }
+            }
+            auto_format(true, false);
+            if ascii_iswhite(cc) {
+                if gchar_cursor() != 0 {
+                    inc_cursor();
+                }
+                if gchar_cursor() == 0
+                    && nvim_curwin_get_cursor_lnum() == tpos_lnum
+                    && nvim_curwin_get_cursor_col() == tpos_col
+                {
+                    nvim_restore_cursor_pos(tpos_lnum, tpos_col, tpos_coladd);
+                }
+            }
+        }
+        check_auto_format(true);
+        let pos_lnum = nvim_stop_insert_pos_get_lnum(pos);
+        let pos_col = nvim_stop_insert_pos_get_col(pos);
+        if nomove == 0
+            && nvim_get_did_ai()
+            && (esc != 0 || (!nvim_p_cpo_has_indent() && nvim_curwin_get_cursor_lnum() != pos_lnum))
+            && pos_lnum <= nvim_curbuf_get_ml_line_count()
+        {
+            // Save current cursor.
+            let mut tpos_lnum: i32 = 0;
+            let mut tpos_col: i32 = 0;
+            let mut tpos_coladd: i32 = 0;
+            nvim_save_cursor_pos(&raw mut tpos_lnum, &raw mut tpos_col, &raw mut tpos_coladd);
+            let prev_col = pos_col;
+            // Move cursor to pos.
+            nvim_restore_cursor_pos(pos_lnum, pos_col, 0);
+            check_cursor_col(nvim_get_curwin());
+            // Strip trailing whitespace.
+            loop {
+                if gchar_cursor() == 0 && nvim_curwin_get_cursor_col() > 0 {
+                    nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() - 1);
+                }
+                cc = gchar_cursor();
+                if !ascii_iswhite(cc) {
+                    break;
+                }
+                if del_char(1) == FAIL {
+                    break;
+                }
+            }
+            if nvim_curwin_get_cursor_lnum() != tpos_lnum {
+                nvim_restore_cursor_pos(tpos_lnum, tpos_col, tpos_coladd);
+            } else if nvim_curwin_get_cursor_col() < prev_col {
+                let mut tpos2_lnum: i32 = 0;
+                let mut tpos2_col: i32 = 0;
+                let mut tpos2_coladd: i32 = 0;
+                nvim_save_cursor_pos(
+                    &raw mut tpos2_lnum,
+                    &raw mut tpos2_col,
+                    &raw mut tpos2_coladd,
+                );
+                let tpos2_col_plus1 = tpos2_col + 1;
+                if cc != 0
+                    && nvim_gchar_pos_lnum_col_coladd(tpos2_lnum, tpos2_col_plus1, tpos2_coladd)
+                        == 0
+                {
+                    nvim_curwin_set_cursor_col(tpos2_col + 1);
+                }
+            }
+            if nvim_get_VIsual_active() != 0 {
+                check_visual_pos();
+            }
+        }
+    }
+
+    nvim_set_did_ai(false);
+    nvim_set_did_si(false);
+    nvim_set_can_si(false);
+    nvim_set_can_si_back(false);
+    if !end_insert_pos.is_null() {
+        nvim_stop_insert_set_b_op_start_insstart();
+        nvim_stop_insert_set_b_op_start_orig_insstart_orig();
+        nvim_stop_insert_set_b_op_end_from_pos(end_insert_pos);
+    }
+}
 
 // ============================================================================
 // Implementation
@@ -197,7 +384,7 @@ pub unsafe extern "C" fn rs_ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c
             return 0; // repeat the insert
         }
 
-        nvim_edit_stop_insert(nvim_curwin_get_cursor_ptr().cast_mut(), 1, nomove);
+        rs_stop_insert(nvim_curwin_get_cursor_ptr().cast_mut(), 1, nomove);
         undisplay_dollar();
     }
 

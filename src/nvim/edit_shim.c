@@ -269,97 +269,56 @@ void nvim_update_o_lnum_if_at_eol(void) { if (ins_at_eol) { nvim_set_o_lnum(curw
 const char *nvim_get_vim_var_char(void) { return get_vim_var_str(VV_CHAR); }
 
 // ============================================================================
+// Accessors for nvim_edit_stop_insert (migrated to Rust in Phase 3)
+// ============================================================================
+
+/// Get inserted text (caller must xfree the result).
+/// Splits String into data pointer and size for FFI.
+void nvim_stop_insert_get_inserted(char **data_out, size_t *size_out)
+{
+  String inserted = get_inserted();
+  *data_out = inserted.data;
+  *size_out = inserted.size;
+}
+
+/// Get lnum from an opaque pos_T pointer.
+linenr_T nvim_stop_insert_pos_get_lnum(void *pos) { return ((pos_T *)pos)->lnum; }
+
+/// Get col from an opaque pos_T pointer.
+colnr_T nvim_stop_insert_pos_get_col(void *pos) { return ((pos_T *)pos)->col; }
+
+/// Check if p_cpo contains CPO_INDENT.
+bool nvim_p_cpo_has_indent(void) { return vim_strchr(p_cpo, CPO_INDENT) != NULL; }
+
+/// Set curbuf->b_op_start from Insstart (lnum, col, coladd).
+void nvim_stop_insert_set_b_op_start_insstart(void)
+{
+  curbuf->b_op_start = Insstart;
+}
+
+/// Set curbuf->b_op_start_orig from Insstart_orig (lnum, col, coladd).
+void nvim_stop_insert_set_b_op_start_orig_insstart_orig(void)
+{
+  curbuf->b_op_start_orig = Insstart_orig;
+}
+
+/// Set curbuf->b_op_end from an opaque pos_T pointer.
+void nvim_stop_insert_set_b_op_end_from_pos(void *pos)
+{
+  curbuf->b_op_end = *(pos_T *)pos;
+}
+
+/// gchar_pos wrapper taking lnum/col/coladd (so Rust doesn't need pos_T layout).
+int nvim_gchar_pos_lnum_col_coladd(linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  pos_T p = { .lnum = lnum, .col = col, .coladd = coladd };
+  return gchar_pos(&p);
+}
+
+// ============================================================================
 // Phase 3: functions moved from edit.c
 // ============================================================================
 
-/// Stop insert mode: save inserted text, auto-format, strip trailing whitespace.
-/// Moved from edit.c; identical logic.
-void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
-{
-  pos_T *pos = (pos_T *)end_insert_pos;
-  stop_redo_ins();
-  rs_replace_stack_clear();
-
-  // Save inserted text for redo (^@ / CTRL-A).
-  String inserted = get_inserted();
-  int added = inserted.data == NULL ? 0 : (int)inserted.size - nvim_get_new_insert_skip();
-  if (nvim_get_did_restart_edit() == 0 || added > 0) {
-    nvim_clear_last_insert();
-    nvim_set_last_insert(inserted.data, inserted.size);
-    nvim_set_last_insert_skip(added < 0 ? 0 : nvim_get_new_insert_skip());
-  } else {
-    xfree(inserted.data);
-  }
-
-  if (!arrow_used && pos != NULL) {
-    int cc;
-    if (!nvim_get_ins_need_undo() && has_format_option(FO_AUTO)) {
-      pos_T tpos = curwin->w_cursor;
-      cc = 'x';
-      if (curwin->w_cursor.col > 0 && gchar_cursor() == NUL) {
-        dec_cursor();
-        cc = gchar_cursor();
-        if (!ascii_iswhite(cc)) {
-          curwin->w_cursor = tpos;
-        }
-      }
-      auto_format(true, false);
-      if (ascii_iswhite(cc)) {
-        if (gchar_cursor() != NUL) {
-          inc_cursor();
-        }
-        if (gchar_cursor() == NUL
-            && curwin->w_cursor.lnum == tpos.lnum
-            && curwin->w_cursor.col == tpos.col) {
-          curwin->w_cursor.coladd = tpos.coladd;
-        }
-      }
-    }
-    check_auto_format(true);
-    if (!nomove && did_ai && (esc || (vim_strchr(p_cpo, CPO_INDENT) == NULL
-                                      && curwin->w_cursor.lnum != pos->lnum))
-        && pos->lnum <= curbuf->b_ml.ml_line_count) {
-      pos_T tpos = curwin->w_cursor;
-      colnr_T prev_col = pos->col;
-      curwin->w_cursor = *pos;
-      check_cursor_col(curwin);
-      while (true) {
-        if (gchar_cursor() == NUL && curwin->w_cursor.col > 0) {
-          curwin->w_cursor.col--;
-        }
-        cc = gchar_cursor();
-        if (!ascii_iswhite(cc)) {
-          break;
-        }
-        if (del_char(true) == FAIL) {
-          break;
-        }
-      }
-      if (curwin->w_cursor.lnum != tpos.lnum) {
-        curwin->w_cursor = tpos;
-      } else if (curwin->w_cursor.col < prev_col) {
-        tpos = curwin->w_cursor;
-        tpos.col++;
-        if (cc != NUL && gchar_pos(&tpos) == NUL) {
-          curwin->w_cursor.col++;
-        }
-      }
-      if (VIsual_active) {
-        check_visual_pos();
-      }
-    }
-  }
-
-  did_ai = false;
-  did_si = false;
-  can_si = false;
-  can_si_back = false;
-  if (pos != NULL) {
-    curbuf->b_op_start = Insstart;
-    curbuf->b_op_start_orig = Insstart_orig;
-    curbuf->b_op_end = *pos;
-  }
-}
 
 
 /// Handle Ctrl-Y/Ctrl-E (copy char above/below) in insert mode.  Moved from edit.c.
