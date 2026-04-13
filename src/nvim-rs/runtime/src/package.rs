@@ -759,7 +759,7 @@ pub unsafe extern "C" fn rs_ex_packloadall(eap: *mut c_void) {
 /// Accesses global C state (p_lpl, p_rtp, did_source_packages).
 #[export_name = "load_plugins"]
 pub unsafe extern "C" fn rs_load_plugins() {
-    if !globals::p_lpl != 0 {
+    if globals::p_lpl == 0 {
         return;
     }
 
