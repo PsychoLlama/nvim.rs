@@ -1043,14 +1043,10 @@ extern "C" {
     // per-buffer field readers (used by buf paste functions)
     fn nvim_buf_get_optint_field(buf: *mut c_void, offset: isize) -> crate::OptInt;
     fn nvim_buf_get_bool_field(buf: *mut c_void, offset: isize) -> c_int;
-    fn nvim_buf_get_b_p_vsts(buf: *mut c_void) -> *mut c_char;
-    fn nvim_buf_get_b_p_vsts_nopaste(buf: *mut c_void) -> *mut c_char;
-    fn nvim_buf_get_b_p_vsts_array_ptr(buf: *mut c_void) -> *mut *mut c_int;
     // per-buffer field setters
     fn nvim_buf_set_optint_field(buf: *mut c_void, offset: isize, val: crate::OptInt);
     fn nvim_buf_set_bool_field(buf: *mut c_void, offset: isize, val: c_int);
     fn nvim_buf_set_b_p_vsts_nopaste_dup(buf: *mut c_void, s: *const c_char);
-    fn nvim_buf_set_b_p_vsts_raw(buf: *mut c_void, val: *mut c_char);
     // set_option_sctx_from_sid for didset_options_sctx replacement
     fn nvim_set_option_sctx_from_sid(opt_idx: c_int, opt_flags: c_int, set_sid: c_int);
 }
@@ -1112,15 +1108,14 @@ pub unsafe extern "C" fn nvim_buf_paste_save_scalars(buf: *mut c_void) {
 /// Save buf->b_p_vsts into buf->b_p_vsts_nopaste (frees old nopaste first).
 #[no_mangle]
 pub unsafe extern "C" fn nvim_buf_paste_save_vsts(buf: *mut c_void) {
-    let old_nopaste = nvim_buf_get_b_p_vsts_nopaste(buf);
-    if !old_nopaste.is_null() {
-        xfree(old_nopaste);
+    let bp = &mut *buf.cast::<BufStruct>();
+    if !bp.b_p_vsts_nopaste.is_null() {
+        xfree(bp.b_p_vsts_nopaste);
     }
-    let vsts = nvim_buf_get_b_p_vsts(buf);
     let empty = nvim_get_empty_string_option();
     // nvim_buf_set_b_p_vsts_nopaste_dup dups src if non-null, sets NULL otherwise
-    let src = if !vsts.is_null() && vsts != empty {
-        vsts
+    let src = if !bp.b_p_vsts.is_null() && bp.b_p_vsts != empty {
+        bp.b_p_vsts
     } else {
         std::ptr::null_mut()
     };
@@ -1144,17 +1139,16 @@ pub unsafe extern "C" fn nvim_buf_paste_activate_scalars(buf: *mut c_void) {
 /// Activate paste for buf->b_p_vsts: free and set to empty_string_option, clear array.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_buf_paste_activate_vsts(buf: *mut c_void) {
-    let vsts = nvim_buf_get_b_p_vsts(buf);
-    if !vsts.is_null() {
-        free_string_option(vsts);
+    let bp = &mut *buf.cast::<BufStruct>();
+    if !bp.b_p_vsts.is_null() {
+        free_string_option(bp.b_p_vsts);
     }
     let empty = nvim_get_empty_string_option();
-    nvim_buf_set_b_p_vsts_raw(buf, empty);
+    bp.b_p_vsts = empty;
     // XFREE_CLEAR(buf->b_p_vsts_array)
-    let array_ptr = nvim_buf_get_b_p_vsts_array_ptr(buf);
-    if !(*array_ptr).is_null() {
-        xfree((*array_ptr).cast::<c_char>());
-        *array_ptr = std::ptr::null_mut();
+    if !bp.b_p_vsts_array.is_null() {
+        xfree(bp.b_p_vsts_array.cast::<c_char>());
+        bp.b_p_vsts_array = std::ptr::null_mut();
     }
 }
 
@@ -1176,26 +1170,24 @@ pub unsafe extern "C" fn nvim_buf_paste_restore_scalars(buf: *mut c_void) {
 /// Restore buf->b_p_vsts from nopaste: free current, dup from nopaste, run tabstop_set.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_buf_paste_restore_vsts(buf: *mut c_void) {
-    let vsts = nvim_buf_get_b_p_vsts(buf);
-    if !vsts.is_null() {
-        free_string_option(vsts);
+    let bp = &mut *buf.cast::<BufStruct>();
+    if !bp.b_p_vsts.is_null() {
+        free_string_option(bp.b_p_vsts);
     }
     let empty = nvim_get_empty_string_option();
-    let vsts_nopaste = nvim_buf_get_b_p_vsts_nopaste(buf);
-    let new_vsts = if vsts_nopaste.is_null() {
+    let new_vsts = if bp.b_p_vsts_nopaste.is_null() {
         empty
     } else {
-        xstrdup(vsts_nopaste)
+        xstrdup(bp.b_p_vsts_nopaste)
     };
-    nvim_buf_set_b_p_vsts_raw(buf, new_vsts);
+    bp.b_p_vsts = new_vsts;
     // xfree and rebuild the vsts_array
-    let array_ptr = nvim_buf_get_b_p_vsts_array_ptr(buf);
-    if !(*array_ptr).is_null() {
-        xfree((*array_ptr).cast::<c_char>());
-        *array_ptr = std::ptr::null_mut();
+    if !bp.b_p_vsts_array.is_null() {
+        xfree(bp.b_p_vsts_array.cast::<c_char>());
+        bp.b_p_vsts_array = std::ptr::null_mut();
     }
     if !new_vsts.is_null() && new_vsts != empty {
-        tabstop_set(new_vsts, array_ptr);
+        tabstop_set(new_vsts, std::ptr::addr_of_mut!(bp.b_p_vsts_array).cast());
     }
 }
 

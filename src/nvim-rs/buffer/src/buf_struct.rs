@@ -474,14 +474,16 @@ pub struct BufStruct {
     // offset 10720: OptInt b_p_wm_nopaste (int64_t)
     pub b_p_wm_nopaste: OptInt,
 
-    // offset 10728..10735: gap (8 bytes, opaque)
-    _pad46: [u8; 8],
+    // offset 10728: char* b_p_vsts (VarSofTStop)
+    pub b_p_vsts: *mut c_char,
 
     // offset 10736: int* b_p_vsts_array (pointer)
     pub b_p_vsts_array: *mut c_int,
 
-    // offset 10744..10759: gap (16 bytes, opaque)
-    _pad47: [u8; 16],
+    // offset 10744: char* b_p_vsts_nopaste
+    pub b_p_vsts_nopaste: *mut c_char,
+    // offset 10752..10759: gap (8 bytes, opaque)
+    _pad47: [u8; 8],
 
     // offset 10760: int* b_p_vts_array (pointer)
     pub b_p_vts_array: *mut c_int,

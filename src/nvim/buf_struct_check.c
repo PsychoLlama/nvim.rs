@@ -214,3 +214,7 @@ _Static_assert(offsetof(visualinfo_T, vi_curswant) == 28,
 
 // FileID size check
 _Static_assert(sizeof(FileID) == 16, "FileID size mismatch");
+
+// b_p_vsts and b_p_vsts_nopaste offset checks
+_Static_assert(offsetof(buf_T, b_p_vsts) == 10728, "b_p_vsts offset mismatch");
+_Static_assert(offsetof(buf_T, b_p_vsts_nopaste) == 10744, "b_p_vsts_nopaste offset mismatch");
