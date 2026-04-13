@@ -113,55 +113,19 @@ _Static_assert(EW_NOBREAK == 0x40000, "EW_NOBREAK must be 0x40000");
 _Static_assert(CPO_CONCAT == 'C', "CPO_CONCAT must be 'C'");
 _Static_assert(CONV_NONE == 0, "CONV_NONE must be 0");
 
-/// Grow the execution stack garray by n entries.
-void nvim_exestack_ga_grow(int n) { ga_grow(&exestack, n); }
+// Phase 3: validate estack_T layout mirrored in Rust (globals.rs EstackT)
+_Static_assert(sizeof(estack_T) == 32, "estack_T size must be 32");
+_Static_assert(offsetof(estack_T, es_lnum) == 0, "estack_T.es_lnum must be at offset 0");
+_Static_assert(offsetof(estack_T, es_name) == 8, "estack_T.es_name must be at offset 8");
+_Static_assert(offsetof(estack_T, es_type) == 16, "estack_T.es_type must be at offset 16");
+_Static_assert(offsetof(estack_T, es_info) == 24, "estack_T.es_info must be at offset 24");
 
-estack_T *nvim_exestack_get_entry(int idx)
-{
-  assert(idx >= 0 && idx < exestack.ga_len);
-  return &((estack_T *)exestack.ga_data)[idx];
-}
-
-estack_T *nvim_exestack_get_next_slot(void) { return &((estack_T *)exestack.ga_data)[exestack.ga_len]; }
-
-/// Increment the exestack ga_len.
-void nvim_exestack_inc_len(void) { exestack.ga_len++; }
-
-/// Decrement the exestack ga_len (if > 1).
-void nvim_exestack_dec_len(void)
-{
-  if (exestack.ga_len > 1) {
-    exestack.ga_len--;
-  }
-}
-
-bool nvim_exestack_has_data(void) { return exestack.ga_data != NULL && exestack.ga_len > 0; }
-
-linenr_T nvim_estack_get_lnum(estack_T *entry) { return entry->es_lnum; }
-
-void nvim_estack_set_lnum(estack_T *entry, linenr_T lnum) { entry->es_lnum = lnum; }
-
-const char *nvim_estack_get_name(estack_T *entry) { return entry->es_name; }
-
-void nvim_estack_set_name(estack_T *entry, char *name) { entry->es_name = name; }
-
-int nvim_estack_get_type(estack_T *entry) { return (int)entry->es_type; }
-
-void nvim_estack_set_type(estack_T *entry, int type) { entry->es_type = (etype_T)type; }
-
-void nvim_estack_set_entry(estack_T *entry, int type, char *name, linenr_T lnum)
-{
-  entry->es_type = (etype_T)type;
-  entry->es_name = name;
-  entry->es_lnum = lnum;
-  entry->es_info.ufunc = NULL;
-}
-
-ufunc_T *nvim_estack_get_info_ufunc(estack_T *entry) { return entry->es_info.ufunc; }
-
-void nvim_estack_set_info_ufunc(estack_T *entry, ufunc_T *ufunc) { entry->es_info.ufunc = ufunc; }
-
-AutoPatCmd *nvim_estack_get_info_aucmd(estack_T *entry) { return entry->es_info.aucmd; }
+// Deleted: nvim_exestack_ga_grow, nvim_exestack_get_entry, nvim_exestack_get_next_slot,
+//          nvim_exestack_inc_len, nvim_exestack_dec_len, nvim_exestack_has_data,
+//          nvim_estack_get_lnum, nvim_estack_set_lnum, nvim_estack_get_name,
+//          nvim_estack_set_name, nvim_estack_get_type, nvim_estack_set_type,
+//          nvim_estack_set_entry, nvim_estack_get_info_ufunc, nvim_estack_set_info_ufunc,
+//          nvim_estack_get_info_aucmd — replaced by direct EstackT field access in Rust.
 
 const char *nvim_ufunc_get_name(ufunc_T *fp) { return fp->uf_name; }
 

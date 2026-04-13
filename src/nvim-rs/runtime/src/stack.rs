@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use nvim_memory::xstrdup;
 
+use crate::globals::{self, EstackT};
 use crate::{EstackArgT, EstackHandle, EtypeT, LinenrT, ScidT};
 
 // =============================================================================
@@ -46,49 +47,46 @@ pub struct DictHandle(*mut c_void);
 pub struct ListHandle(*mut c_void);
 
 // =============================================================================
-// C Accessor Extern Declarations
+// EstackHandle helpers
+// =============================================================================
+
+/// Convert a raw EstackT pointer to an EstackHandle.
+#[inline]
+fn handle_from_ptr(p: *mut EstackT) -> EstackHandle {
+    EstackHandle(p.cast::<c_void>())
+}
+
+impl EstackHandle {
+    /// Cast to a *mut EstackT for direct field access.
+    #[inline]
+    fn as_estackt(self) -> *mut EstackT {
+        self.0.cast::<EstackT>()
+    }
+}
+
+// =============================================================================
+// C Accessor Extern Declarations (still needed: opaque struct internals)
 // =============================================================================
 
 #[allow(dead_code)]
 extern "C" {
-    // Execution stack garray operations
+    // Execution stack length (from ex_docmd.c)
     fn nvim_get_exestack_len() -> c_int;
-    fn nvim_exestack_ga_grow(n: c_int);
-    fn nvim_exestack_get_entry(idx: c_int) -> EstackHandle;
-    fn nvim_exestack_get_next_slot() -> EstackHandle;
-    fn nvim_exestack_inc_len();
-    fn nvim_exestack_dec_len();
-    fn nvim_exestack_has_data() -> bool;
 
-    // estack_T field accessors
-    fn nvim_estack_get_lnum(entry: EstackHandle) -> LinenrT;
-    fn nvim_estack_set_lnum(entry: EstackHandle, lnum: LinenrT);
-    fn nvim_estack_get_name(entry: EstackHandle) -> *const c_char;
-    fn nvim_estack_set_name(entry: EstackHandle, name: *mut c_char);
-    fn nvim_estack_get_type(entry: EstackHandle) -> c_int;
-    fn nvim_estack_set_type(entry: EstackHandle, etype: c_int);
-    fn nvim_estack_set_entry(entry: EstackHandle, etype: c_int, name: *mut c_char, lnum: LinenrT);
-
-    // estack_T union field accessors
-    fn nvim_estack_get_info_ufunc(entry: EstackHandle) -> UfuncHandle;
-    fn nvim_estack_set_info_ufunc(entry: EstackHandle, ufunc: UfuncHandle);
-    fn nvim_estack_get_info_aucmd(entry: EstackHandle) -> AucmdHandle;
-
-    // ufunc_T field accessors
+    // ufunc_T field accessors (opaque)
     fn nvim_ufunc_get_name(fp: UfuncHandle) -> *const c_char;
     fn nvim_ufunc_get_name_exp(fp: UfuncHandle) -> *const c_char;
     fn nvim_ufunc_get_script_ctx_sid(fp: UfuncHandle) -> c_int;
     fn nvim_ufunc_get_script_ctx_lnum(fp: UfuncHandle) -> LinenrT;
 
-    // AutoPatCmd field accessors
+    // AutoPatCmd field accessors (opaque)
     fn nvim_aucmd_get_script_ctx_sid(apc: AucmdHandle) -> c_int;
     fn nvim_aucmd_get_script_ctx_lnum(apc: AucmdHandle) -> LinenrT;
 
-    // Source context accessors
+    // Source context via sctx_T* in union (dereferences sctx pointer)
     fn nvim_estack_get_sctx_sid(entry: EstackHandle) -> ScidT;
 
-    // estack_sfile helpers
-    fn nvim_get_sourcing_lnum_direct() -> LinenrT;
+    // Format a stack entry (calls vim_snprintf with PRIdLINENR)
     fn nvim_estack_format_entry(
         buf: *mut c_char,
         buflen: usize,
@@ -98,12 +96,12 @@ extern "C" {
         dots: *const c_char,
     ) -> c_int;
 
-    // Script item accessors
+    // Script item accessors (accesses script_items garray)
     fn nvim_script_items_get_len() -> c_int;
     fn nvim_script_item_get(id: ScidT) -> *mut c_void;
     fn nvim_scriptitem_get_name(si: *mut c_void) -> *const c_char;
 
-    // estack_sfile: def context helpers
+    // estack_sfile: def context helpers (accesses ufunc/aucmd deeply)
     fn nvim_estack_get_def_ctx_sid(entry: EstackHandle) -> c_int;
     fn nvim_estack_get_def_script_name(entry: EstackHandle) -> *mut c_char;
 
@@ -128,6 +126,73 @@ extern "C" {
 }
 
 // =============================================================================
+// Direct estack_T field helpers
+// =============================================================================
+
+/// Get `es_lnum` from an entry.
+#[inline]
+unsafe fn estack_get_lnum(entry: *mut EstackT) -> LinenrT {
+    (*entry).es_lnum
+}
+
+/// Set `es_lnum` on an entry.
+#[inline]
+unsafe fn estack_set_lnum(entry: *mut EstackT, lnum: LinenrT) {
+    (*entry).es_lnum = lnum;
+}
+
+/// Get `es_name` from an entry.
+#[inline]
+unsafe fn estack_get_name(entry: *mut EstackT) -> *const c_char {
+    (*entry).es_name
+}
+
+/// Set `es_name` on an entry.
+#[inline]
+unsafe fn estack_set_name(entry: *mut EstackT, name: *mut c_char) {
+    (*entry).es_name = name;
+}
+
+/// Get `es_type` from an entry.
+#[inline]
+unsafe fn estack_get_type(entry: *mut EstackT) -> c_int {
+    (*entry).es_type
+}
+
+/// Set `es_type` on an entry.
+#[inline]
+unsafe fn estack_set_type(entry: *mut EstackT, etype: c_int) {
+    (*entry).es_type = etype;
+}
+
+/// Initialize an entry: set type, name, lnum, es_info = NULL.
+#[inline]
+unsafe fn estack_set_entry(entry: *mut EstackT, etype: c_int, name: *mut c_char, lnum: LinenrT) {
+    estack_set_type(entry, etype);
+    estack_set_name(entry, name);
+    estack_set_lnum(entry, lnum);
+    (*entry).es_info = EstackT::null_info();
+}
+
+/// Get `es_info` interpreted as a `UfuncHandle`.
+#[inline]
+unsafe fn estack_get_info_ufunc(entry: *mut EstackT) -> UfuncHandle {
+    UfuncHandle((*entry).es_info)
+}
+
+/// Set `es_info` to a `UfuncHandle`.
+#[inline]
+unsafe fn estack_set_info_ufunc(entry: *mut EstackT, ufunc: UfuncHandle) {
+    (*entry).es_info = ufunc.0;
+}
+
+/// Get `es_info` interpreted as an `AucmdHandle`.
+#[inline]
+unsafe fn estack_get_info_aucmd(entry: *mut EstackT) -> AucmdHandle {
+    AucmdHandle((*entry).es_info)
+}
+
+// =============================================================================
 // Phase 1: Execution Stack Functions
 // =============================================================================
 
@@ -136,10 +201,10 @@ extern "C" {
 /// Grows the exestack garray and pushes an initial ETYPE_TOP entry.
 #[export_name = "estack_init"]
 pub unsafe extern "C" fn rs_estack_init() {
-    nvim_exestack_ga_grow(10);
-    let entry = nvim_exestack_get_next_slot();
-    nvim_estack_set_entry(entry, EtypeT::Top as c_int, std::ptr::null_mut(), 0);
-    nvim_exestack_inc_len();
+    globals::exestack_ga_grow(10);
+    let entry = globals::exestack_get_next_slot();
+    estack_set_entry(entry, EtypeT::Top as c_int, std::ptr::null_mut(), 0);
+    globals::exestack_inc_len();
 }
 
 /// Add an item to the execution stack.
@@ -151,11 +216,11 @@ pub unsafe extern "C" fn rs_estack_push(
     name: *mut c_char,
     lnum: LinenrT,
 ) -> EstackHandle {
-    nvim_exestack_ga_grow(1);
-    let entry = nvim_exestack_get_next_slot();
-    nvim_estack_set_entry(entry, etype, name, lnum);
-    nvim_exestack_inc_len();
-    entry
+    globals::exestack_ga_grow(1);
+    let entry = globals::exestack_get_next_slot();
+    estack_set_entry(entry, etype, name, lnum);
+    globals::exestack_inc_len();
+    handle_from_ptr(entry)
 }
 
 /// Add a user function to the execution stack.
@@ -168,16 +233,16 @@ pub unsafe extern "C" fn rs_estack_push_ufunc(ufunc: UfuncHandle, lnum: LinenrT)
     } else {
         name_exp
     };
-    let entry = rs_estack_push(EtypeT::Ufunc as c_int, name.cast_mut(), lnum);
-    if !entry.is_null() {
-        nvim_estack_set_info_ufunc(entry, ufunc);
+    let entry_handle = rs_estack_push(EtypeT::Ufunc as c_int, name.cast_mut(), lnum);
+    if !entry_handle.is_null() {
+        estack_set_info_ufunc(entry_handle.as_estackt(), ufunc);
     }
 }
 
 /// Take an item off of the execution stack.
 #[export_name = "estack_pop"]
 pub unsafe extern "C" fn rs_estack_pop() {
-    nvim_exestack_dec_len();
+    globals::exestack_dec_len();
 }
 
 /// Get the current value for <sfile> in allocated memory.
@@ -195,13 +260,13 @@ pub unsafe extern "C" fn rs_estack_sfile(which: c_int) -> *mut c_char {
         return std::ptr::null_mut();
     };
 
-    let top_entry = nvim_exestack_get_entry(len - 1);
+    let top_entry = globals::exestack_get_entry(len - 1);
 
     // ESTACK_SFILE: if not in a ufunc, return the top entry's name
     if which_enum == EstackArgT::Sfile {
-        let entry_type = nvim_estack_get_type(top_entry);
+        let entry_type = estack_get_type(top_entry);
         if entry_type != EtypeT::Ufunc as c_int {
-            let name = nvim_estack_get_name(top_entry);
+            let name = estack_get_name(top_entry);
             if name.is_null() {
                 return std::ptr::null_mut();
             }
@@ -212,17 +277,17 @@ pub unsafe extern "C" fn rs_estack_sfile(which: c_int) -> *mut c_char {
     // ESTACK_SCRIPT: walk backwards to find defining script
     if which_enum == EstackArgT::Script {
         for idx in (0..len).rev() {
-            let entry = nvim_exestack_get_entry(idx);
-            let entry_type = nvim_estack_get_type(entry);
+            let entry = globals::exestack_get_entry(idx);
+            let entry_type = estack_get_type(entry);
 
             if entry_type == EtypeT::Ufunc as c_int || entry_type == EtypeT::Aucmd as c_int {
-                let def_sid = nvim_estack_get_def_ctx_sid(entry);
+                let def_sid = nvim_estack_get_def_ctx_sid(handle_from_ptr(entry));
                 if def_sid > 0 {
-                    return nvim_estack_get_def_script_name(entry);
+                    return nvim_estack_get_def_script_name(handle_from_ptr(entry));
                 }
                 return std::ptr::null_mut();
             } else if entry_type == EtypeT::Script as c_int {
-                let name = nvim_estack_get_name(entry);
+                let name = estack_get_name(entry);
                 if name.is_null() {
                     return std::ptr::null_mut();
                 }
@@ -241,13 +306,13 @@ pub unsafe extern "C" fn rs_estack_sfile(which: c_int) -> *mut c_char {
     let mut last_type = EtypeT::Script as c_int;
 
     for idx in 0..len {
-        let entry = nvim_exestack_get_entry(idx);
-        let name = nvim_estack_get_name(entry);
+        let entry = globals::exestack_get_entry(idx);
+        let name = estack_get_name(entry);
         if name.is_null() {
             continue;
         }
 
-        let entry_type = nvim_estack_get_type(entry);
+        let entry_type = estack_get_type(entry);
         let name_len = strlen(name);
 
         // Determine type prefix
@@ -279,12 +344,12 @@ pub unsafe extern "C" fn rs_estack_sfile(which: c_int) -> *mut c_char {
         // Determine line number
         let lnum = if idx == len - 1 {
             if which_enum == EstackArgT::Stack {
-                nvim_get_sourcing_lnum_direct()
+                globals::get_sourcing_lnum_direct()
             } else {
                 0
             }
         } else {
-            nvim_estack_get_lnum(entry)
+            estack_get_lnum(entry)
         };
 
         let dots: &[u8] = if idx == len - 1 { b"\0" } else { b"..\0" };
@@ -343,23 +408,23 @@ pub unsafe extern "C" fn rs_stacktrace_create() -> ListHandle {
     let l = nvim_rt_list_alloc(len);
 
     for i in 0..len {
-        let entry = nvim_exestack_get_entry(i);
-        let entry_type = nvim_estack_get_type(entry);
-        let mut lnum = nvim_estack_get_lnum(entry);
+        let entry = globals::exestack_get_entry(i);
+        let entry_type = estack_get_type(entry);
+        let mut lnum = estack_get_lnum(entry);
 
         if entry_type == EtypeT::Script as c_int {
-            let name = nvim_estack_get_name(entry);
+            let name = estack_get_name(entry);
             stacktrace_push_item(l, UfuncHandle::null(), std::ptr::null(), lnum, name);
         } else if entry_type == EtypeT::Ufunc as c_int {
-            let fp = nvim_estack_get_info_ufunc(entry);
+            let fp = estack_get_info_ufunc(entry);
             let filepath = nvim_ufunc_get_scriptname(fp);
             lnum += nvim_ufunc_get_script_ctx_lnum(fp);
             stacktrace_push_item(l, fp, std::ptr::null(), lnum, filepath);
         } else if entry_type == EtypeT::Aucmd as c_int {
-            let apc = nvim_estack_get_info_aucmd(entry);
+            let apc = estack_get_info_aucmd(entry);
             let filepath = nvim_aucmd_get_scriptname(apc);
             lnum += nvim_aucmd_get_script_ctx_lnum(apc);
-            let name = nvim_estack_get_name(entry);
+            let name = estack_get_name(entry);
             stacktrace_push_item(l, UfuncHandle::null(), name, lnum, filepath);
         }
     }
@@ -391,7 +456,7 @@ pub unsafe extern "C" fn rs_estack_top() -> EstackHandle {
     if len <= 0 {
         return EstackHandle::null();
     }
-    nvim_exestack_get_entry(len - 1)
+    handle_from_ptr(globals::exestack_get_entry(len - 1))
 }
 
 /// Get an entry from the execution stack by index.
@@ -404,7 +469,7 @@ pub unsafe extern "C" fn rs_estack_get(idx: c_int) -> EstackHandle {
     if idx < 0 || idx >= len {
         return EstackHandle::null();
     }
-    nvim_exestack_get_entry(idx)
+    handle_from_ptr(globals::exestack_get_entry(idx))
 }
 
 /// Get the line number from an execution stack entry.
@@ -413,7 +478,7 @@ pub unsafe extern "C" fn rs_estack_entry_lnum(entry: EstackHandle) -> LinenrT {
     if entry.is_null() {
         return 0;
     }
-    nvim_estack_get_lnum(entry)
+    estack_get_lnum(entry.as_estackt())
 }
 
 /// Get the name from an execution stack entry.
@@ -422,7 +487,7 @@ pub unsafe extern "C" fn rs_estack_entry_name(entry: EstackHandle) -> *const c_c
     if entry.is_null() {
         return std::ptr::null();
     }
-    nvim_estack_get_name(entry)
+    estack_get_name(entry.as_estackt())
 }
 
 /// Get the type from an execution stack entry.
@@ -431,7 +496,7 @@ pub unsafe extern "C" fn rs_estack_entry_type(entry: EstackHandle) -> c_int {
     if entry.is_null() {
         return EtypeT::Top as c_int;
     }
-    nvim_estack_get_type(entry)
+    estack_get_type(entry.as_estackt())
 }
 
 /// Get the script ID from an execution stack entry (for Script/Modeline types).
@@ -456,10 +521,8 @@ pub unsafe extern "C" fn rs_estack_find_script() -> c_int {
 
     // Search from top to bottom
     for i in (0..len).rev() {
-        let entry = nvim_exestack_get_entry(i);
-        let entry_type = nvim_estack_get_type(entry);
-
-        if entry_type == EtypeT::Script as c_int {
+        let entry = globals::exestack_get_entry(i);
+        if estack_get_type(entry) == EtypeT::Script as c_int {
             return i;
         }
     }
@@ -476,10 +539,8 @@ pub unsafe extern "C" fn rs_estack_find_type(etype: c_int) -> c_int {
 
     // Search from top to bottom
     for i in (0..len).rev() {
-        let entry = nvim_exestack_get_entry(i);
-        let entry_type = nvim_estack_get_type(entry);
-
-        if entry_type == etype {
+        let entry = globals::exestack_get_entry(i);
+        if estack_get_type(entry) == etype {
             return i;
         }
     }
@@ -510,8 +571,7 @@ pub unsafe extern "C" fn rs_estack_type_at_depth(depth: c_int) -> c_int {
         return EtypeT::Top as c_int;
     }
 
-    let entry = nvim_exestack_get_entry(idx);
-    nvim_estack_get_type(entry)
+    estack_get_type(globals::exestack_get_entry(idx))
 }
 
 /// Count how many entries of a given type are on the stack.
@@ -521,8 +581,8 @@ pub unsafe extern "C" fn rs_estack_count_type(etype: c_int) -> c_int {
     let mut count = 0;
 
     for i in 0..len {
-        let entry = nvim_exestack_get_entry(i);
-        if nvim_estack_get_type(entry) == etype {
+        let entry = globals::exestack_get_entry(i);
+        if estack_get_type(entry) == etype {
             count += 1;
         }
     }

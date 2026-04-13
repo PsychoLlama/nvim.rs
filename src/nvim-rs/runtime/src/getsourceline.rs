@@ -10,37 +10,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::constants::{CONV_NONE, CPO_CONCAT, PROF_YES};
 use crate::globals;
-
-// =============================================================================
-// Type aliases
-// =============================================================================
-
-// =============================================================================
-// Repr(C) garray_T for stack allocation
-// =============================================================================
-
-/// C-compatible garray_T struct for stack use in Rust.
-#[repr(C)]
-#[allow(clippy::struct_field_names)]
-struct GarrayT {
-    ga_len: c_int,
-    ga_maxlen: c_int,
-    ga_itemsize: c_int,
-    ga_growsize: c_int,
-    ga_data: *mut c_void,
-}
-
-impl GarrayT {
-    const fn zeroed() -> Self {
-        Self {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: std::ptr::null_mut(),
-        }
-    }
-}
+use crate::globals::GarrayT;
 
 // =============================================================================
 // External C functions
