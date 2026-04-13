@@ -12,8 +12,11 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::io::Write;
+
+/// Column number type (matches `colnr_T` in Neovim).
+type ColnrT = i32;
 
 /// Line number type (matches `linenr_T` in Neovim).
 type LinenrT = i32;
@@ -26,7 +29,6 @@ extern "C" {
     static mut got_int: bool;
     static mut State: c_int;
     // -- Delegated wrappers for complex functions --
-    fn nvim_edit_ins_eol(c: c_int) -> c_int;
     fn nvim_ins_copychar(lnum: LinenrT) -> c_int;
     fn nvim_edit_ins_ctrl_ey(tc: c_int) -> c_int;
     // -- ins_ctrl_v / ins_digraph dependencies --
@@ -83,6 +85,31 @@ extern "C" {
     fn nvim_digraph_dec_no_mapping();
     fn nvim_get_K_ZERO() -> c_int;
     fn rs_clear_showcmd();
+
+    // -- ins_eol dependencies (Phase 2 migration) --
+    fn echeck_abbr(c: c_int) -> c_int;
+    fn undisplay_dollar();
+    fn replace_push_nul();
+    fn virtual_active(wp: *mut c_void) -> bool;
+    fn nvim_get_curwin() -> *mut c_void;
+    fn nvim_curwin_get_cursor_coladd() -> ColnrT;
+    fn nvim_coladvance(col: ColnrT);
+    fn getviscol() -> c_int;
+    fn nvim_get_revins_on() -> c_int;
+    fn nvim_curwin_get_cursor_col() -> ColnrT;
+    fn nvim_curwin_set_cursor_col(col: ColnrT);
+    fn get_cursor_pos_len() -> ColnrT;
+    fn open_line(
+        dir: c_int,
+        flags: c_int,
+        second_line_indent: c_int,
+        did_do_comment: *mut bool,
+    ) -> bool;
+    fn nvim_has_format_option(c: c_int) -> bool;
+    fn nvim_get_old_indent() -> c_int;
+    fn nvim_set_old_indent(val: c_int);
+    fn nvim_set_can_cindent(val: c_int);
+    fn rs_foldOpenCursor();
 }
 
 // ============================================================================
@@ -125,6 +152,29 @@ const MODE_CMDLINE: c_int = 0x08;
 /// `Ctrl_C` from `ascii_defs.h`
 const CTRL_C: c_int = 3;
 
+// -- ins_eol constants (Phase 2 migration) --
+
+/// `ABBR_OFF` from `edit.h` — added to trigger char in abbreviation check
+const ABBR_OFF: c_int = 0x100;
+
+/// `REPLACE_FLAG` from `state_defs.h`
+const REPLACE_FLAG: c_int = 0x100;
+
+/// `VREPLACE_FLAG` from `state_defs.h`
+const VREPLACE_FLAG: c_int = 0x200;
+
+/// `FORWARD` direction constant
+const FORWARD: c_int = 1;
+
+/// `FO_RET_COMS` format option (from `option_vars.h`)
+const FO_RET_COMS: c_int = b'r' as c_int;
+
+/// `OPENLINE_DO_COM` flag — format comments on new line
+const OPENLINE_DO_COM: c_int = 0x02;
+
+/// NL string for redo buffer
+const NL_STR: &[u8; 2] = b"\n\0";
+
 // ============================================================================
 // NvimString (matches helpers.rs definition)
 // ============================================================================
@@ -137,13 +187,54 @@ struct NvimString {
 }
 
 // ============================================================================
-// ins_eol — delegated to C helper
+// ins_eol — full Rust implementation (Phase 2 migration)
 // ============================================================================
+
+/// Handle CR/NL insertion in insert mode.
+///
+/// Ported from `nvim_edit_ins_eol` in `edit_shim.c`.
+unsafe fn ins_eol_impl(c: c_int) -> bool {
+    if echeck_abbr(c + ABBR_OFF) != 0 {
+        return true;
+    }
+    if stop_arrow() == FAIL {
+        return false;
+    }
+    undisplay_dollar();
+
+    if (State & REPLACE_FLAG) != 0 && (State & VREPLACE_FLAG) == 0 {
+        replace_push_nul();
+    }
+
+    let curwin = nvim_get_curwin();
+    if virtual_active(curwin) && nvim_curwin_get_cursor_coladd() > 0 {
+        nvim_coladvance(getviscol());
+    }
+
+    if nvim_get_revins_on() != 0 {
+        let col = nvim_curwin_get_cursor_col();
+        nvim_curwin_set_cursor_col(col + get_cursor_pos_len());
+    }
+
+    AppendToRedobuff(NL_STR.as_ptr().cast());
+    let flags = if nvim_has_format_option(FO_RET_COMS) {
+        OPENLINE_DO_COM
+    } else {
+        0
+    };
+    let old_indent = nvim_get_old_indent();
+    let result = open_line(FORWARD, flags, old_indent, std::ptr::null_mut());
+    nvim_set_old_indent(0);
+    nvim_set_can_cindent(1);
+    rs_foldOpenCursor();
+
+    result
+}
 
 #[must_use]
 #[unsafe(export_name = "ins_eol")]
 pub unsafe extern "C" fn rs_ins_eol(c: c_int) -> bool {
-    nvim_edit_ins_eol(c) != 0
+    ins_eol_impl(c)
 }
 
 // ============================================================================

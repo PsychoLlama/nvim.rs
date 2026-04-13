@@ -361,39 +361,6 @@ void nvim_edit_stop_insert(void *end_insert_pos, int esc, int nomove)
   }
 }
 
-/// Handle CR/NL insertion in insert mode.  Moved from edit.c.
-int nvim_edit_ins_eol(int c)
-{
-  if (echeck_abbr(c + ABBR_OFF)) {
-    return true;
-  }
-  if (stop_arrow() == FAIL) {
-    return false;
-  }
-  undisplay_dollar();
-
-  if ((State & REPLACE_FLAG) && !(State & VREPLACE_FLAG)) {
-    replace_push_nul();
-  }
-
-  if (virtual_active(curwin) && curwin->w_cursor.coladd > 0) {
-    coladvance(curwin, getviscol());
-  }
-
-  if (nvim_get_revins_on()) {
-    curwin->w_cursor.col += get_cursor_pos_len();
-  }
-
-  AppendToRedobuff(NL_STR);
-  bool i = open_line(FORWARD,
-                     has_format_option(FO_RET_COMS) ? OPENLINE_DO_COM : 0,
-                     old_indent, NULL);
-  old_indent = 0;
-  nvim_set_can_cindent(1);
-  rs_foldOpenCursor();
-
-  return i;
-}
 
 /// Handle Ctrl-Y/Ctrl-E (copy char above/below) in insert mode.  Moved from edit.c.
 int nvim_edit_ins_ctrl_ey(int tc)
