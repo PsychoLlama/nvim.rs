@@ -114,7 +114,6 @@ int nvim_curbuf_b_next_null(void) { return curbuf->b_next == NULL ? 1 : 0; }
 const char *nvim_curbuf_get_path(void) { return curbuf->b_p_path; }
 const char *nvim_curbuf_get_inex(void) { return curbuf->b_p_inex; }
 char *nvim_get_namebuff(void) { return NameBuff; }
-OptInt nvim_buf_get_p_sts(buf_T *buf) { return buf ? buf->b_p_sts : 0; }
 const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w_cursor.lnum); }
 void nvim_buf_set_name_body(buf_T *buf, char *name)
 {
@@ -335,8 +334,6 @@ void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags
 MarkTree *nvim_buf_get_marktree(buf_T *buf) { return buf->b_marktree; }
 bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf) { return buf->deleted_bytes2; }
 void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val) { buf->deleted_bytes2 = val; }
-int nvim_buf_get_prev_line_count(buf_T *buf) { return buf->b_prev_line_count; }
-void nvim_buf_set_prev_line_count(buf_T *buf, int val) { buf->b_prev_line_count = val; }
 bool nvim_buf_signcols_get_autom(buf_T *buf) { return buf->b_signcols.autom; }
 void nvim_buf_signcols_set_autom(buf_T *buf, bool val) { buf->b_signcols.autom = val; }
 int nvim_buf_signcols_get_max(buf_T *buf) { return buf->b_signcols.max; }

@@ -160,12 +160,6 @@ void nvim_fileio_curbuf_set_b_op_end(int lnum, int col) {
   curbuf->b_op_end.col = (colnr_T)col;
 }
 
-// Store mtime/mtime_ns/mtime_read/mtime_read_ns from buf_store_file_info result
-void nvim_fileio_curbuf_copy_b_mtime_from_read(void) {
-  curbuf->b_mtime_read = curbuf->b_mtime;
-  curbuf->b_mtime_read_ns = curbuf->b_mtime_ns;
-}
-
 // =============================================================================
 // curbuf identity checks (needed for autocmd safety guards)
 // =============================================================================

@@ -56,10 +56,6 @@ int nvim_buf_get_b_flags(buf_T *buf) { return buf->b_flags; }
 void nvim_buf_set_b_flags(buf_T *buf, int val) { buf->b_flags = val; }
 linenr_T nvim_buf_get_b_ml_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 
-linenr_T nvim_buf_get_b_mod_top(buf_T *buf) { return buf->b_mod_top; }
-linenr_T nvim_buf_get_b_mod_bot(buf_T *buf) { return buf->b_mod_bot; }
-linenr_T nvim_buf_get_b_mod_xlines(buf_T *buf) { return buf->b_mod_xlines; }
-
 bool nvim_buf_get_b_p_bin(buf_T *buf) { return buf->b_p_bin; }
 bool nvim_buf_get_b_p_fixeol(buf_T *buf) { return buf->b_p_fixeol; }
 const char *nvim_buf_get_b_p_fenc(buf_T *buf) { return buf->b_p_fenc; }
@@ -138,7 +134,6 @@ bool nvim_curbuf_get_b_p_ci(void) { return curbuf->b_p_ci; }
 bool nvim_curbuf_get_b_p_cin(void) { return curbuf->b_p_cin; }
 bool nvim_curbuf_get_b_p_lisp(void) { return curbuf->b_p_lisp; }
 bool nvim_curbuf_get_b_p_pi(void) { return curbuf->b_p_pi; }
-void nvim_curbuf_set_b_p_pi(bool val) { curbuf->b_p_pi = val; }
 colnr_T nvim_curbuf_get_b_p_ts(void) { return curbuf->b_p_ts; }
 int64_t nvim_curbuf_get_b_p_sw(void) { return curbuf->b_p_sw; }
 const colnr_T *nvim_curbuf_get_b_p_vts_array(void) { return curbuf->b_p_vts_array; }
@@ -307,14 +302,6 @@ int nvim_get_last_leader_offset(const char *line, char **flags) { return get_las
 // =============================================================================
 // Phase 1: Accessors for changed_common migration
 // =============================================================================
-
-// Window last_cursor_lnum_rnu accessors (not yet in Rust window crate)
-linenr_T nvim_win_get_last_cursor_lnum_rnu(win_T *wp) { return wp->w_last_cursor_lnum_rnu; }
-void nvim_win_set_last_cursor_lnum_rnu(win_T *wp, linenr_T val) { wp->w_last_cursor_lnum_rnu = val; }
-
-// Window last_cursorline accessors (not yet in Rust window crate)
-linenr_T nvim_win_get_last_cursorline(win_T *wp) { return wp->w_last_cursorline; }
-void nvim_win_set_last_cursorline(win_T *wp, linenr_T val) { wp->w_last_cursorline = val; }
 
 // Wrappers for functions that need window context
 int nvim_change_linetabsize_eol(win_T *wp, linenr_T lnum) { return linetabsize_eol(wp, lnum); }

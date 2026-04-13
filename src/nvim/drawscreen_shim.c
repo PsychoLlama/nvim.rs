@@ -424,12 +424,6 @@ colnr_T nvim_curwin_get_curswant(void) { return curwin->w_curswant; }
 /// Return true if buf == curwin->w_buffer.
 bool nvim_buf_is_curwin_buf(buf_T *buf) { return buf == curwin->w_buffer; }
 
-/// Return ml_get_buf_len(buf, lnum).
-colnr_T nvim_buf_ml_get_len(buf_T *buf, linenr_T lnum)
-{
-  return ml_get_buf_len(buf, lnum);
-}
-
 // =============================================================================
 // Phase 3: win_redraw_signcols accessors
 // =============================================================================
@@ -600,12 +594,6 @@ linenr_T nvim_buf_get_syn_sync_linebreaks(buf_T *buf)
   return buf->b_s.b_syn_sync_linebreaks;
 }
 
-/// Get wp->w_upd_rows.
-int nvim_win_get_upd_rows(win_T *wp)
-{
-  return wp->w_upd_rows;
-}
-
 /// Get wp->w_lines[idx].wl_lnum.
 linenr_T nvim_win_get_wlines_lnum(win_T *wp, int idx)
 {
@@ -647,32 +635,14 @@ int nvim_number_width(win_T *wp)
 // Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize accessors
 // =============================================================================
 
-/// Get wp->w_old_topfill.
-int nvim_win_get_old_topfill(win_T *wp) { return wp->w_old_topfill; }
-
-/// Set wp->w_old_topfill.
-void nvim_win_set_old_topfill(win_T *wp, int val) { wp->w_old_topfill = val; }
-
-/// Get wp->w_old_botfill.
-bool nvim_win_get_old_botfill(win_T *wp) { return wp->w_old_botfill; }
-
-/// Set wp->w_old_botfill.
-void nvim_win_set_old_botfill(win_T *wp, bool val) { wp->w_old_botfill = val; }
-
 /// Get wp->w_redr_statuscol.
 bool nvim_win_get_redr_statuscol(win_T *wp) { return wp->w_redr_statuscol; }
-
-/// Get wp->w_valid.
-int nvim_win_get_w_valid(win_T *wp) { return (int)wp->w_valid; }
 
 /// Set wp->w_valid &= ~mask.
 void nvim_win_and_w_valid(win_T *wp, int mask) { wp->w_valid &= (unsigned)mask; }
 
 /// Set wp->w_valid |= mask.
 void nvim_win_or_w_valid(win_T *wp, int mask) { wp->w_valid |= (unsigned)mask; }
-
-// nvim_win_get_last_cursorline / nvim_win_set_last_cursorline are in change_ffi.c
-// nvim_win_get_last_cursor_lnum_rnu / nvim_win_set_last_cursor_lnum_rnu are in change_ffi.c
 
 /// Return true if wp->w_match_head != NULL.
 bool nvim_win_get_match_head_nonnull(win_T *wp) { return wp->w_match_head != NULL; }
