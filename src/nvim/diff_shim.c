@@ -213,23 +213,14 @@ void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
 void nvim_diff_call_nv_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
 bool nvim_win_get_w_p_diff_saved(win_T *wp) { return wp->w_p_diff_saved != 0; }
 void nvim_win_set_w_p_diff_saved(win_T *wp, bool val) { wp->w_p_diff_saved = val ? 1 : 0; }
-bool nvim_win_get_w_p_scb(win_T *wp) { return wp->w_p_scb != 0; }
-void nvim_win_set_w_p_scb(win_T *wp, bool val) { wp->w_p_scb = val ? 1 : 0; }
 bool nvim_win_get_w_p_scb_save(win_T *wp) { return wp->w_p_scb_save != 0; }
 void nvim_win_set_w_p_scb_save(win_T *wp, bool val) { wp->w_p_scb_save = val ? 1 : 0; }
-bool nvim_win_get_w_p_crb(win_T *wp) { return wp->w_p_crb != 0; }
-void nvim_win_set_w_p_crb(win_T *wp, bool val) { wp->w_p_crb = val ? 1 : 0; }
 bool nvim_win_get_w_p_crb_save(win_T *wp) { return wp->w_p_crb_save != 0; }
 void nvim_win_set_w_p_crb_save(win_T *wp, bool val) { wp->w_p_crb_save = val ? 1 : 0; }
-bool nvim_win_get_w_p_wrap(win_T *wp) { return wp->w_p_wrap != 0; }
-void nvim_win_set_w_p_wrap(win_T *wp, bool val) { wp->w_p_wrap = val ? 1 : 0; }
 bool nvim_win_get_w_p_wrap_save(win_T *wp) { return wp->w_p_wrap_save != 0; }
 void nvim_win_set_w_p_wrap_save(win_T *wp, bool val) { wp->w_p_wrap_save = val ? 1 : 0; }
-bool nvim_win_get_w_p_fen(win_T *wp) { return wp->w_p_fen != 0; }
-void nvim_win_set_w_p_fen(win_T *wp, bool val) { wp->w_p_fen = val ? 1 : 0; }
 bool nvim_win_get_w_p_fen_save(win_T *wp) { return wp->w_p_fen_save != 0; }
 void nvim_win_set_w_p_fen_save(win_T *wp, bool val) { wp->w_p_fen_save = val ? 1 : 0; }
-bool nvim_win_get_w_p_diff(win_T *wp) { return wp->w_p_diff; }
 linenr_T nvim_win_get_w_p_fdl(win_T *wp) { return (linenr_T)wp->w_p_fdl; }
 void nvim_win_set_w_p_fdl(win_T *wp, linenr_T val) { wp->w_p_fdl = (OptInt)val; }
 linenr_T nvim_win_get_w_p_fdl_save(win_T *wp) { return (linenr_T)wp->w_p_fdl_save; }

@@ -215,7 +215,6 @@ void nvim_redrawcmd(void) { redrawcmd(); }
 // =============================================================================
 
 void nvim_stuffcharReadbuff_cmdwin(int c) { stuffcharReadbuff(c); }
-void nvim_stuffReadbuff_cmdwin(const char *s) { stuffReadbuff(s); }
 
 // =============================================================================
 // Clipboard batch count
@@ -236,9 +235,6 @@ void nvim_dealloc_cmdbuff(void) { dealloc_cmdbuff(); }
 
 /// Set ccline cmdpos to curwin->w_cursor.col.
 void nvim_set_ccline_cmdpos_from_cursor(void) { nvim_set_ccline_cmdpos((int)curwin->w_cursor.col); }
-
-/// Get curwin->w_cursor.col.
-int nvim_curwin_get_cursor_col_int(void) { return (int)curwin->w_cursor.col; }
 
 /// Set the error message for cmdwin state corruption.
 void nvim_emsg_cmdwin_changed(void)
@@ -285,9 +281,6 @@ void nvim_stuff_qa_into_readbuff(int with_bang)
   stuffReadbuff(with_bang ? "qa!" : "qa");
   stuffcharReadbuff(CAR);
 }
-
-/// Get size of winsizes garray (for allocation).
-size_t nvim_sizeof_garray_T(void) { return sizeof(garray_T); }
 
 /// Allocate and return a zeroed garray_T on the heap.
 void *nvim_alloc_garray(void) { return xcalloc(1, sizeof(garray_T)); }

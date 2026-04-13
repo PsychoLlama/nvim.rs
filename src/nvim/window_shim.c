@@ -62,7 +62,6 @@ extern int rs_tabpage_index(tabpage_T *ftp);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern int rs_win_close_othertab(win_T *win, int free_buf, tabpage_T *tp, int force);
 
-int *nvim_win_get_ns_hl_attr(win_T *wp) { return wp->w_ns_hl_attr; }
 int nvim_win_get_p_winbl(win_T *wp) { return (int)wp->w_p_winbl; }
 ScreenGrid *nvim_get_curwin_grid_alloc(void) { return curwin ? &curwin->w_grid_alloc : NULL; }
 void nvim_get_curwin_cursor_pos(void *pos) { int32_t *p = (int32_t *)pos; p[0] = (int32_t)curwin->w_cursor.lnum; p[1] = (int32_t)curwin->w_cursor.col; p[2] = (int32_t)curwin->w_cursor.coladd; }
@@ -393,7 +392,6 @@ int nvim_one_window_and_locked_split(void) { return (ONE_WINDOW && curwin && cur
 wline_T *nvim_win_get_wl_entry(win_T *wp, int idx) { return (idx < 0 || idx >= wp->w_lines_valid) ? NULL : &wp->w_lines[idx]; }
 
 // Accessors for w_lines array management (used by rs_win_grid_alloc)
-wline_T *nvim_win_get_w_lines(win_T *wp) { return wp ? wp->w_lines : NULL; }
 size_t nvim_wline_T_size(void) { return sizeof(wline_T); }
 linenr_T nvim_wline_get_lnum(wline_T *wl) { return wl->wl_lnum; }
 linenr_T nvim_wline_get_foldend(wline_T *wl) { return wl->wl_foldend; }
@@ -715,12 +713,6 @@ int32_t nvim_curwin_get_col(void)
   return (int32_t)curwin->w_cursor.col;
 }
 
-/// Get current window's buffer pointer (for ml_get_buf etc.)
-void *nvim_curwin_get_buf(void)
-{
-  return (void *)curwin->w_buffer;
-}
-
 /// Get the window's buffer pointer for spell check_need_cap use.
 void *nvim_win_get_buf_ptr_void(const win_T *wp)
 {
@@ -902,9 +894,6 @@ int nvim_win_get_p_wbr_not_null(win_T *wp) { return (wp && wp->w_p_wbr) ? 1 : 0;
 int nvim_win_p_wbr_is_empty_string_option(win_T *wp) { return (wp && wp->w_p_wbr == empty_string_option) ? 1 : 0; }
 void nvim_win_free_and_set_p_wbr_empty(win_T *wp)
 { if (!wp) { return; } if (wp->w_p_wbr && wp->w_p_wbr != empty_string_option) { free_string_option(wp->w_p_wbr); } wp->w_p_wbr = empty_string_option; }
-
-// empty_string_option accessor
-char *nvim_get_empty_string_opt(void) { return empty_string_option; }
 
 // wp->w_p_stl is_empty_string_option check
 int nvim_win_p_stl_is_empty_string_option(win_T *wp) { return (wp && wp->w_p_stl == empty_string_option) ? 1 : 0; }

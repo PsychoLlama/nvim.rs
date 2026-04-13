@@ -399,9 +399,6 @@ char *nvim_spell_eap_get_arg(const exarg_T *eap) { return eap->arg; }
 /// Get eap->forceit for spell commands.
 bool nvim_spell_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
 
-/// Get eap->cmdidx as int for spell commands.
-int nvim_spell_eap_get_cmdidx(const exarg_T *eap) { return (int)eap->cmdidx; }
-
 /// Get eap->line2 as int for spell commands.
 int nvim_spell_eap_get_line2(const exarg_T *eap) { return (int)eap->line2; }
 

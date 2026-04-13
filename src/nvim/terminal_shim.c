@@ -434,7 +434,6 @@ void nvim_term_treqbuf_printf_osc(void *term, int command) { kv_printf(((Termina
 void nvim_term_treqbuf_printf_dcs(void *term, const char *command, int cmdlen) { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1bP%*s", cmdlen, command); }
 void nvim_term_treqbuf_printf_apc(void *term) { kv_printf(((Terminal *)term)->termrequest_buffer, "\x1b_"); }
 int nvim_terminal_has_termrequest_event(void) { return (int)has_event(EVENT_TERMREQUEST); }
-void *nvim_terminal_treqbuf_ptr(void *term) { return &((Terminal *)term)->termrequest_buffer; }
 void *nvim_terminal_get_vt(void *term) { return ((Terminal *)term)->vt; }
 void nvim_term_set_osc8_attr(void *vt, int attr) { VTermValue v = { .number = attr }; vterm_state_set_penattr(vterm_obtain_state((VTerm *)vt), VTERM_ATTR_URI, VTERM_VALUETYPE_INT, &v); }
 void nvim_set_got_int(int v) { got_int = (bool)v; }
@@ -469,10 +468,6 @@ extern void rs_unset_terminal_winopts(void *s);
 void nvim_terminal_set_winopts(void *s) { rs_set_terminal_winopts(s); }
 void nvim_terminal_unset_winopts(void *s) { rs_unset_terminal_winopts(s); }
 win_T *nvim_curwin_ptr(void) { return curwin; }
-void nvim_win_set_p_cul(win_T *wp, bool v) { wp->w_p_cul = v; }
-void nvim_win_set_p_cuc(win_T *wp, bool v) { wp->w_p_cuc = v; }
-void nvim_win_set_p_so(win_T *wp, int64_t v) { wp->w_p_so = v; }
-void nvim_win_set_p_siso(win_T *wp, int64_t v) { wp->w_p_siso = v; }
 void nvim_win_redraw_later_some_valid(win_T *wp) { redraw_later(wp, UPD_SOME_VALID); }
 void nvim_win_redraw_later_valid(win_T *wp) { redraw_later(wp, UPD_VALID); }
 void nvim_free_string_option(char *str) { free_string_option(str); }

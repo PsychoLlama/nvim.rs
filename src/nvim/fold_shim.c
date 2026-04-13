@@ -35,7 +35,6 @@ void nvim_fold_rettv_init_string(typval_T *rettv, char *s) { rettv->v_type = VAR
 void nvim_emsg_fold_cannot_create(void) { emsg(_("E350: Cannot create fold with current 'foldmethod'")); }
 void nvim_emsg_fold_cannot_delete(void) { emsg(_("E351: Cannot delete fold with current 'foldmethod'")); }
 int nvim_win_get_p_fdl(win_T *wp) { return (int)wp->w_p_fdl; }
-int nvim_win_get_w_fold_manual(win_T *wp) { return wp->w_fold_manual; }
 garray_T *nvim_win_get_folds(win_T *wp) { return &wp->w_folds; }
 int nvim_ga_len(garray_T *gap) { return gap->ga_len; }
 
@@ -46,8 +45,6 @@ linenr_T nvim_fold_get_fd_top(fold_T *fp) { return fp->fd_top; }
 linenr_T nvim_fold_get_fd_len(fold_T *fp) { return fp->fd_len; }
 garray_T *nvim_fold_get_fd_nested(fold_T *fp) { return &fp->fd_nested; }
 int nvim_fold_get_fd_flags(fold_T *fp) { return (int)fp->fd_flags; }
-bool nvim_win_get_w_foldinvalid(win_T *wp) { return wp->w_foldinvalid; }
-void nvim_win_set_w_foldinvalid(win_T *wp, bool val) { wp->w_foldinvalid = val; }
 void nvim_fold_set_fd_flags(fold_T *fp, int flags) { fp->fd_flags = (char)flags; }
 int nvim_fold_get_fd_small(fold_T *fp) { return (int)fp->fd_small; }
 void nvim_fold_set_fd_small(fold_T *fp, int small) { fp->fd_small = (TriState)small; }
@@ -82,7 +79,6 @@ void nvim_fold_copy(fold_T *dst, const fold_T *src) { *dst = *src; }
 void nvim_ga_free_data(garray_T *gap) { xfree(gap->ga_data); gap->ga_data = NULL; gap->ga_len = 0; }
 
 void nvim_ga_clear(garray_T *gap) { ga_clear(gap); }
-void nvim_win_set_w_fold_manual(win_T *wp, bool val) { wp->w_fold_manual = val; }
 void nvim_emsg_nofold(void) { emsg(_(N_("E490: No fold found"))); }
 win_T *nvim_get_first_win_in_tab(void) { return curtab->tp_firstwin; }
 void nvim_win_set_p_fdl(win_T *wp, int fdl) { wp->w_p_fdl = fdl; }
