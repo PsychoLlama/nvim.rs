@@ -524,6 +524,21 @@ const unsafe fn read_optint_at(ws: &WinStruct, abs_offset: usize) -> OptInt {
     ptr.read_unaligned()
 }
 
+/// Write an OptInt (i64) at `abs_offset` bytes from the start of a WinStruct.
+///
+/// # Safety
+/// The caller must ensure `abs_offset` is a valid field offset for the
+/// `win_T` struct, as validated by `_Static_assert` in window_struct_check.c.
+#[inline]
+#[allow(clippy::cast_ptr_alignment)]
+const unsafe fn write_optint_at(ws: &mut WinStruct, abs_offset: usize, val: OptInt) {
+    let ptr = std::ptr::addr_of_mut!(*ws)
+        .cast::<u8>()
+        .add(abs_offset)
+        .cast::<OptInt>();
+    ptr.write_unaligned(val);
+}
+
 impl WinStruct {
     /// `w_p_pvw` (preview window) - at absolute offset 972
     #[must_use]
@@ -686,6 +701,18 @@ impl WinStruct {
     #[inline]
     pub const fn w_p_siso(&self) -> OptInt {
         unsafe { read_optint_at(self, 1128) }
+    }
+
+    /// Set `w_p_so` (scrolloff) - at absolute offset 1136 (OptInt = i64).
+    #[inline]
+    pub unsafe fn set_w_p_so(&mut self, val: OptInt) {
+        write_optint_at(self, 1136, val);
+    }
+
+    /// Set `w_p_siso` (sidescrolloff) - at absolute offset 1128 (OptInt = i64).
+    #[inline]
+    pub unsafe fn set_w_p_siso(&mut self, val: OptInt) {
+        write_optint_at(self, 1128, val);
     }
 
     /// `w_p_wrap` - at absolute offset 1084
@@ -1136,16 +1163,6 @@ pub const unsafe extern "C" fn win_get_p_nu(wp: WinHandle) -> c_int {
     win_ref(wp).w_p_nu()
 }
 
-/// Returns `wp->w_p_nuw` (numberwidth).
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_p_nuw"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_p_nuw(wp: WinHandle) -> OptInt {
-    win_ref(wp).w_p_nuw()
-}
-
 /// Returns `wp->w_p_list`.
 ///
 /// # Safety
@@ -1174,26 +1191,6 @@ pub const unsafe extern "C" fn win_get_p_cul(wp: WinHandle) -> c_int {
 #[must_use]
 pub const unsafe extern "C" fn win_get_p_cole(wp: WinHandle) -> OptInt {
     win_ref(wp).w_p_cole()
-}
-
-/// Returns `wp->w_p_so` (scrolloff).
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_p_so"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_p_so(wp: WinHandle) -> OptInt {
-    win_ref(wp).w_p_so()
-}
-
-/// Returns `wp->w_p_siso` (sidescrolloff).
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_p_siso"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_p_siso(wp: WinHandle) -> OptInt {
-    win_ref(wp).w_p_siso()
 }
 
 /// Returns `wp->w_p_wrap`.
@@ -1256,29 +1253,6 @@ pub const unsafe extern "C" fn win_get_p_scb(wp: WinHandle) -> bool {
     win_ref(wp).w_p_scb() != 0
 }
 
-/// Returns `wp->w_p_sms` (smoothscroll). Returns 0 if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_p_sms"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_p_sms(wp: WinHandle) -> c_int {
-    if wp.as_ptr().is_null() {
-        return 0;
-    }
-    win_ref(wp).w_p_sms()
-}
-
-/// Returns `wp->w_ns_hl`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_ns_hl"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_ns_hl(wp: WinHandle) -> c_int {
-    win_ref(wp).w_ns_hl
-}
-
 /// Returns `wp->w_ns_hl_active`.
 ///
 /// # Safety
@@ -1313,16 +1287,6 @@ pub const unsafe extern "C" fn win_get_hl_attr_normalnc(wp: WinHandle) -> c_int 
         return 0;
     }
     win_ref(wp).w_hl_attr_normalnc
-}
-
-/// Returns `wp->w_hl_needs_update`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_hl_needs_update"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_hl_needs_update(wp: WinHandle) -> bool {
-    win_ref(wp).w_hl_needs_update != 0
 }
 
 /// Returns `wp->w_cursor.lnum`.
@@ -1532,23 +1496,6 @@ pub const unsafe extern "C" fn win_get_redr_status(wp: WinHandle) -> c_int {
     }
 }
 
-/// Returns `wp->w_redr_border` or 0 if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_get_redr_border"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_redr_border(wp: WinHandle) -> c_int {
-    if wp.as_ptr().is_null() {
-        return 0;
-    }
-    if win_ref(wp).w_redr_border {
-        1
-    } else {
-        0
-    }
-}
-
 /// Returns `wp->w_lines_valid` or 0 if wp is null.
 ///
 /// # Safety
@@ -1652,26 +1599,6 @@ pub const unsafe extern "C" fn win_get_maxscwidth(wp: WinHandle) -> c_int {
     win_ref(wp).w_maxscwidth
 }
 
-/// Returns `wp->w_nrwidth_width`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_nrwidth_width"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_nrwidth_width(wp: WinHandle) -> c_int {
-    win_ref(wp).w_nrwidth_width
-}
-
-/// Returns `wp->w_nrwidth_line_count`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_nrwidth_line_count"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_nrwidth_line_count(wp: WinHandle) -> LineNr {
-    win_ref(wp).w_nrwidth_line_count
-}
-
 /// Returns `wp->w_alt_fnum` or 0 if wp is null.
 ///
 /// # Safety
@@ -1693,76 +1620,6 @@ pub const unsafe extern "C" fn win_get_alt_fnum(wp: WinHandle) -> c_int {
 #[must_use]
 pub const unsafe extern "C" fn win_get_float_is_info(wp: WinHandle) -> c_int {
     win_ref(wp).w_float_is_info as c_int
-}
-
-/// Returns `wp->w_old_cursor_fcol`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_old_cursor_fcol"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_old_cursor_fcol(wp: WinHandle) -> ColNr {
-    win_ref(wp).w_old_cursor_fcol
-}
-
-/// Returns `wp->w_old_cursor_lcol`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_old_cursor_lcol"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_old_cursor_lcol(wp: WinHandle) -> ColNr {
-    win_ref(wp).w_old_cursor_lcol
-}
-
-/// Returns `wp->w_old_cursor_lnum`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_old_cursor_lnum"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_old_cursor_lnum(wp: WinHandle) -> LineNr {
-    win_ref(wp).w_old_cursor_lnum
-}
-
-/// Returns `wp->w_old_visual_lnum`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_old_visual_lnum"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_old_visual_lnum(wp: WinHandle) -> LineNr {
-    win_ref(wp).w_old_visual_lnum
-}
-
-/// Returns `wp->w_old_visual_col`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_old_visual_col"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_old_visual_col(wp: WinHandle) -> ColNr {
-    win_ref(wp).w_old_visual_col
-}
-
-/// Returns `wp->w_old_curswant`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_old_curswant"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_old_curswant(wp: WinHandle) -> ColNr {
-    win_ref(wp).w_old_curswant
-}
-
-/// Returns `wp->w_botfill`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_get_botfill"]
-#[must_use]
-pub const unsafe extern "C" fn win_get_botfill(wp: WinHandle) -> c_int {
-    win_ref(wp).w_botfill as c_int
 }
 
 // =============================================================================
@@ -1787,51 +1644,6 @@ pub unsafe extern "C" fn win_set_next(wp: WinHandle, next: WinHandle) {
 #[export_name = "nvim_win_set_prev"]
 pub unsafe extern "C" fn win_set_prev(wp: WinHandle, prev: WinHandle) {
     win_mut(wp).w_prev = prev;
-}
-
-/// Sets `wp->w_ns_hl_active`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_ns_hl_active"]
-pub unsafe extern "C" fn win_set_ns_hl_active(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_ns_hl_active = val;
-}
-
-/// Sets `wp->w_ns_hl_attr`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_ns_hl_attr"]
-pub unsafe extern "C" fn win_set_ns_hl_attr(wp: WinHandle, val: *mut c_int) {
-    win_mut(wp).w_ns_hl_attr = val;
-}
-
-/// Sets `wp->w_hl_needs_update`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_hl_needs_update"]
-pub unsafe extern "C" fn win_set_hl_needs_update(wp: WinHandle, val: bool) {
-    win_mut(wp).w_hl_needs_update = c_int::from(val);
-}
-
-/// Sets `wp->w_hl_attr_normal`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_hl_attr_normal"]
-pub unsafe extern "C" fn win_set_hl_attr_normal(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_hl_attr_normal = val;
-}
-
-/// Sets `wp->w_hl_attr_normalnc`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_hl_attr_normalnc"]
-pub unsafe extern "C" fn win_set_hl_attr_normalnc(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_hl_attr_normalnc = val;
 }
 
 /// Sets `wp->w_valid`.
@@ -1901,15 +1713,6 @@ pub unsafe extern "C" fn win_set_redr_type(wp: WinHandle, val: c_int) {
         return;
     }
     win_mut(wp).w_redr_type = val;
-}
-
-/// Sets `wp->w_redr_statuscol`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_redr_statuscol"]
-pub unsafe extern "C" fn win_set_redr_statuscol(wp: WinHandle, val: bool) {
-    win_mut(wp).w_redr_statuscol = val;
 }
 
 /// Sets `wp->w_redraw_top`. Does nothing if wp is null.
@@ -2003,43 +1806,6 @@ pub unsafe extern "C" fn win_set_leftcol(wp: WinHandle, val: c_int) {
 #[export_name = "nvim_win_set_skipcol"]
 pub unsafe extern "C" fn win_set_skipcol(wp: WinHandle, val: ColNr) {
     win_mut(wp).w_skipcol = val;
-}
-
-/// Sets `wp->w_topline_was_set`. Does nothing if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_set_topline_was_set"]
-pub unsafe extern "C" fn win_set_topline_was_set(wp: WinHandle, val: c_int) {
-    if wp.as_ptr().is_null() {
-        return;
-    }
-    win_mut(wp).w_topline_was_set = u8::from(val != 0);
-}
-
-/// Returns `wp->w_topline_was_set`. Returns 0 if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[must_use]
-#[export_name = "nvim_win_get_topline_was_set"]
-pub unsafe extern "C" fn win_get_topline_was_set(wp: WinHandle) -> c_int {
-    if wp.as_ptr().is_null() {
-        return 0;
-    }
-    c_int::from(win_ref(wp).w_topline_was_set != 0)
-}
-
-/// Sets `wp->w_virtcol`. Does nothing if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_set_virtcol"]
-pub unsafe extern "C" fn win_set_virtcol(wp: WinHandle, val: ColNr) {
-    if wp.as_ptr().is_null() {
-        return;
-    }
-    win_mut(wp).w_virtcol = val;
 }
 
 /// Sets `wp->w_wcol`.
@@ -2335,15 +2101,6 @@ pub unsafe extern "C" fn win_set_empty_rows(wp: WinHandle, val: c_int) {
     win_mut(wp).w_empty_rows = val;
 }
 
-/// Sets `wp->w_nrwidth_width`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_nrwidth_width"]
-pub unsafe extern "C" fn win_set_nrwidth_width(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_nrwidth_width = val;
-}
-
 /// Sets `wp->w_nrwidth_line_count`.
 ///
 /// # Safety
@@ -2351,42 +2108,6 @@ pub unsafe extern "C" fn win_set_nrwidth_width(wp: WinHandle, val: c_int) {
 #[export_name = "nvim_win_set_nrwidth_line_count"]
 pub unsafe extern "C" fn win_set_nrwidth_line_count(wp: WinHandle, val: LineNr) {
     win_mut(wp).w_nrwidth_line_count = val;
-}
-
-/// Sets `wp->w_scwidth`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_scwidth"]
-pub unsafe extern "C" fn win_set_scwidth(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_scwidth = val;
-}
-
-/// Sets `wp->w_minscwidth`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_minscwidth"]
-pub unsafe extern "C" fn win_set_minscwidth(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_minscwidth = val;
-}
-
-/// Sets `wp->w_maxscwidth`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_maxscwidth"]
-pub unsafe extern "C" fn win_set_maxscwidth(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_maxscwidth = val;
-}
-
-/// Sets `wp->w_statuscol_line_count`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_statuscol_line_count"]
-pub unsafe extern "C" fn win_set_statuscol_line_count(wp: WinHandle, val: LineNr) {
-    win_mut(wp).w_statuscol_line_count = val;
 }
 
 /// Sets `wp->w_p_crb`. Calls through to winopt_T setter.
@@ -2408,18 +2129,6 @@ pub unsafe extern "C" fn win_set_p_rl(wp: WinHandle, val: c_int) {
         return;
     }
     win_mut(wp).set_w_p_rl(val);
-}
-
-/// Sets `wp->w_p_sms`. Does nothing if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_set_p_sms"]
-pub unsafe extern "C" fn win_set_p_sms(wp: WinHandle, val: c_int) {
-    if wp.as_ptr().is_null() {
-        return;
-    }
-    win_mut(wp).set_w_p_sms(val);
 }
 
 /// Sets `wp->w_floating`. Does nothing if wp is null.
@@ -2506,30 +2215,6 @@ pub unsafe extern "C" fn win_set_scbind_pos(wp: WinHandle, val: c_int) {
     win_mut(wp).w_scbind_pos = val;
 }
 
-/// Sets `wp->w_filler_rows`. Does nothing if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_set_filler_rows"]
-pub unsafe extern "C" fn win_set_filler_rows(wp: WinHandle, val: c_int) {
-    if wp.as_ptr().is_null() {
-        return;
-    }
-    win_mut(wp).w_filler_rows = val;
-}
-
-/// Sets `wp->w_botfill`. Does nothing if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_set_botfill"]
-pub unsafe extern "C" fn win_set_botfill(wp: WinHandle, val: c_int) {
-    if wp.as_ptr().is_null() {
-        return;
-    }
-    win_mut(wp).w_botfill = val != 0;
-}
-
 /// Sets `wp->w_locked`. Does nothing if wp is null.
 ///
 /// # Safety
@@ -2540,81 +2225,6 @@ pub unsafe extern "C" fn win_set_locked(wp: WinHandle, val: c_int) {
         return;
     }
     win_mut(wp).w_locked = val != 0;
-}
-
-/// Sets `wp->w_old_visual_mode`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_old_visual_mode"]
-pub unsafe extern "C" fn win_set_old_visual_mode(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_old_visual_mode = (val & 0xff) as i8;
-}
-
-/// Sets `wp->w_old_cursor_lnum`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_old_cursor_lnum"]
-pub unsafe extern "C" fn win_set_old_cursor_lnum(wp: WinHandle, val: LineNr) {
-    win_mut(wp).w_old_cursor_lnum = val;
-}
-
-/// Sets `wp->w_old_visual_lnum`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_old_visual_lnum"]
-pub unsafe extern "C" fn win_set_old_visual_lnum(wp: WinHandle, val: LineNr) {
-    win_mut(wp).w_old_visual_lnum = val;
-}
-
-/// Sets `wp->w_old_visual_col`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_old_visual_col"]
-pub unsafe extern "C" fn win_set_old_visual_col(wp: WinHandle, val: ColNr) {
-    win_mut(wp).w_old_visual_col = val;
-}
-
-/// Sets `wp->w_old_cursor_fcol`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_old_cursor_fcol"]
-pub unsafe extern "C" fn win_set_old_cursor_fcol(wp: WinHandle, val: ColNr) {
-    win_mut(wp).w_old_cursor_fcol = val;
-}
-
-/// Sets `wp->w_old_cursor_lcol`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_old_cursor_lcol"]
-pub unsafe extern "C" fn win_set_old_cursor_lcol(wp: WinHandle, val: ColNr) {
-    win_mut(wp).w_old_cursor_lcol = val;
-}
-
-/// Sets `wp->w_old_curswant`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_old_curswant"]
-pub unsafe extern "C" fn win_set_old_curswant(wp: WinHandle, val: ColNr) {
-    win_mut(wp).w_old_curswant = val;
-}
-
-/// Sets `wp->w_cursorline`. Does nothing if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_set_w_cursorline"]
-pub unsafe extern "C" fn win_set_w_cursorline(wp: WinHandle, val: LineNr) {
-    if wp.as_ptr().is_null() {
-        return;
-    }
-    win_mut(wp).w_cursorline = val;
 }
 
 /// Sets `wp->w_alt_fnum`.
@@ -2638,15 +2248,6 @@ pub unsafe extern "C" fn win_set_changelistidx(wp: WinHandle, val: c_int) {
     win_mut(wp).w_changelistidx = val;
 }
 
-/// Sets `wp->w_nrwidth`.
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_nrwidth"]
-pub unsafe extern "C" fn win_set_nrwidth(wp: WinHandle, val: c_int) {
-    win_mut(wp).w_nrwidth = val;
-}
-
 /// Sets `wp->w_frame`. Does nothing if wp is null.
 ///
 /// # Safety
@@ -2666,18 +2267,6 @@ pub unsafe extern "C" fn win_set_frame(wp: WinHandle, frp: *mut Frame) {
 #[export_name = "nvim_win_set_buffer_raw"]
 pub unsafe extern "C" fn win_set_buffer_raw(wp: WinHandle, buf: *mut c_void) {
     win_mut(wp).w_buffer = buf;
-}
-
-/// Sets `wp->w_redr_border`. Does nothing if wp is null.
-///
-/// # Safety
-/// `wp` must be a valid `win_T*` (may be null).
-#[export_name = "nvim_win_set_redr_border"]
-pub unsafe extern "C" fn win_set_redr_border(wp: WinHandle, val: c_int) {
-    if wp.as_ptr().is_null() {
-        return;
-    }
-    win_mut(wp).w_redr_border = val != 0;
 }
 
 // =============================================================================
@@ -2920,23 +2509,6 @@ pub unsafe extern "C" fn win_set_prev_pcmark(wp: WinHandle, lnum: LineNr, col: C
     ws.w_prev_pcmark.col = col;
 }
 
-/// Sets `wp->w_cursor` fields (lnum, col, coladd).
-///
-/// # Safety
-/// `wp` must be a valid non-null `win_T*`.
-#[export_name = "nvim_win_set_cursor_pos"]
-pub unsafe extern "C" fn win_set_cursor_pos(
-    wp: WinHandle,
-    lnum: LineNr,
-    col: ColNr,
-    coladd: ColNr,
-) {
-    let ws = win_mut(wp);
-    ws.w_cursor.lnum = lnum;
-    ws.w_cursor.col = col;
-    ws.w_cursor.coladd = coladd;
-}
-
 /// Bulk-get all `w_last_*` snapshot fields into a `WinSnapshot` struct.
 ///
 /// # Safety
@@ -3160,11 +2732,6 @@ pub unsafe extern "C" fn win_lcs_eol(wp: WinHandle) -> ScharT {
     lcs_get_u32(wp, 0)
 }
 #[must_use]
-#[export_name = "nvim_win_lcs_ext"]
-pub unsafe extern "C" fn win_lcs_ext(wp: WinHandle) -> ScharT {
-    lcs_get_u32(wp, 4)
-}
-#[must_use]
 #[export_name = "nvim_win_get_lcs_prec"]
 pub unsafe extern "C" fn win_lcs_prec(wp: WinHandle) -> ScharT {
     lcs_get_u32(wp, 8)
@@ -3215,18 +2782,6 @@ pub unsafe extern "C" fn win_lcs_ext_v2(wp: WinHandle) -> ScharT {
     lcs_get_u32(wp, 4)
 }
 
-#[must_use]
-#[export_name = "nvim_win_lcs_has_multispace"]
-pub unsafe extern "C" fn win_lcs_has_multispace(wp: WinHandle) -> c_int {
-    c_int::from(!lcs_get_ptr(wp, 40).is_null())
-}
-
-#[must_use]
-#[export_name = "nvim_win_lcs_has_leadmultispace"]
-pub unsafe extern "C" fn win_lcs_has_leadmultispace(wp: WinHandle) -> c_int {
-    c_int::from(!lcs_get_ptr(wp, 48).is_null())
-}
-
 // -------------------------------------------------------------------------
 // fcs_chars_T accessors
 // -------------------------------------------------------------------------
@@ -3275,11 +2830,6 @@ pub unsafe extern "C" fn win_fcs_vertright(wp: WinHandle) -> ScharT {
 #[export_name = "nvim_win_get_fcs_verthoriz"]
 pub unsafe extern "C" fn win_fcs_verthoriz(wp: WinHandle) -> ScharT {
     fcs_get_u32(wp, 36)
-}
-#[must_use]
-#[export_name = "nvim_win_fcs_fold"]
-pub unsafe extern "C" fn win_fcs_fold(wp: WinHandle) -> ScharT {
-    fcs_get_u32(wp, 40)
 }
 #[must_use]
 #[export_name = "nvim_win_get_fcs_foldopen"]

@@ -168,15 +168,12 @@ void nvim_qf_free_lists_array(void *qi_void) { if (qi_void != NULL) { xfree(((qf
 void *nvim_curwin_get_buffer(void) { return (void *)curwin->w_buffer; }
 void nvim_curwin_set_buffer(void *buf) { curwin->w_buffer = (buf_T *)buf; }
 void nvim_close_buffer_wipe(void *buf_void) { if (buf_void != NULL) close_buffer(NULL, (buf_T *)buf_void, DOBUF_WIPE, false, false); }
-void *nvim_win_take_llist(void *wp_void) { if (wp_void == NULL) { return NULL; } void *old = ((win_T *)wp_void)->w_llist; ((win_T *)wp_void)->w_llist = NULL; return old; }
-void *nvim_win_take_llist_ref(void *wp_void) { if (wp_void == NULL) { return NULL; } void *old = ((win_T *)wp_void)->w_llist_ref; ((win_T *)wp_void)->w_llist_ref = NULL; return old; }
 void *nvim_get_ql_info_actual(void) { return (void *)&ql_info_actual; }
 void nvim_qf_set_qi_type(void *qi_void, int qfltype) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qfl_type = (qfltype_T)qfltype; }
 void nvim_qf_set_maxcount(void *qi_void, int n) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_maxcount = n; }
 void nvim_qf_set_new_lists(void *qi_void, int n) { if (qi_void != NULL) ((qf_info_T *)qi_void)->qf_lists = xcalloc((size_t)n, sizeof(qf_list_T)); }
 void nvim_qf_resize_lists_array(void *qi_void, int n) { if (qi_void == NULL) { return; } qf_info_T *qi = (qf_info_T *)qi_void; size_t lsz = sizeof(*qi->qf_lists); int old_maxcount = qi->qf_maxcount; qf_list_T *new = xrealloc(qi->qf_lists, lsz * (size_t)n); if (n > old_maxcount) { memset(new + old_maxcount, 0, lsz * (size_t)(n - old_maxcount)); } qi->qf_lists = new; qi->qf_maxcount = n; }
 int nvim_win_get_p_lhi(const void *wp_void) { return wp_void == NULL ? 0 : (int)((const win_T *)wp_void)->w_p_lhi; }
-void nvim_win_set_llist_ref(void *wp_void, void *qi_void) { if (wp_void != NULL) ((win_T *)wp_void)->w_llist_ref = (qf_info_T *)qi_void; }
 static char *qf_last_bufname = NULL;
 static bufref_T qf_last_bufref = { NULL, 0, 0 };
 static Callback qftf_cb;
@@ -341,7 +338,6 @@ bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == 
 void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
 void nvim_qf_snprintf_iobuff(const char *title, const char *sfname) { vim_snprintf(IObuff, IOSIZE, "%s (%s)", title, sfname); }
 void *nvim_win_get_llist_or_ref(const void *from_win) { const win_T *from = (const win_T *)from_win; return (void *)(IS_LL_WINDOW(from) ? from->w_llist_ref : from->w_llist); }
-void nvim_win_set_llist(void *to_win, void *qi) { ((win_T *)to_win)->w_llist = (qf_info_T *)qi; }
 void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
 bool nvim_qf_curwin_is_ll(void) { return IS_LL_WINDOW(curwin); }
 bool nvim_qf_is_ll_window(const void *wp_void) { return wp_void != NULL && IS_LL_WINDOW((const win_T *)wp_void); }
@@ -383,7 +379,6 @@ void *nvim_tv_list_first(const void *list) { return list == NULL ? NULL : tv_lis
 void *nvim_tv_list_item_next(const void *list, const void *li) { return (list == NULL || li == NULL) ? NULL : TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li); }
 void *nvim_tv_list_item_dict(const void *li) { if (li == NULL) { return NULL; } const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type != VAR_DICT ? NULL : tv->vval.v_dict; }
 void nvim_xfree_char(char *ptr) { xfree(ptr); }
-void nvim_qf_get_ptr_position(const void *qfl_void, int *fnum, int *lnum, int *col) { const qf_list_T *qfl = (const qf_list_T *)qfl_void; if (qfl == NULL || qfl->qf_ptr == NULL) { *fnum = 0; *lnum = 0; *col = 0; return; } *fnum = qfl->qf_ptr->qf_fnum; *lnum = qfl->qf_ptr->qf_lnum; *col = qfl->qf_ptr->qf_col; }
 bool nvim_tv_list_item_is_first(const void *list, const void *li) { return (list != NULL && li != NULL) && li == tv_list_first((const list_T *)list); }
 void *nvim_qfl_get_qftf_cb_ptr(void *qfl_void) { return qfl_void == NULL ? NULL : (void *)&((qf_list_T *)qfl_void)->qf_qftf_cb; }
 void *nvim_qf_get_global_qftf_cb_ptr(void) { return (void *)&qftf_cb; }
