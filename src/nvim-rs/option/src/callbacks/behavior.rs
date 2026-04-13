@@ -8,6 +8,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::callbacks::{callback_ok, CallbackResult};
 use crate::{BufHandle, OptInt, WinHandle};
+use nvim_buffer::buf_struct::BufStruct;
 
 // =============================================================================
 // C Global Variable Declarations
@@ -74,8 +75,6 @@ extern "C" {
     fn nvim_buf_set_b_p_ul(buf: BufHandle, val: OptInt);
     fn nvim_u_sync(force: bool);
 
-    // State accessors
-    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
     fn nvim_ses_win_get_height(wp: WinHandle) -> c_int;
     // Buffer accessors
     fn nvim_buf_get_p_swf(buf: BufHandle) -> c_int;
@@ -280,7 +279,7 @@ fn is_one_window() -> bool {
 /// Check if current buffer is help buffer.
 #[inline]
 fn is_curbuf_help() -> bool {
-    unsafe { nvim_buf_get_help(curbuf) != 0 }
+    unsafe { (*curbuf.cast::<BufStruct>()).b_help != 0 }
 }
 
 /// Get current window height.

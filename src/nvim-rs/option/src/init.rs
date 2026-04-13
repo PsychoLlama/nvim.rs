@@ -8,6 +8,7 @@
 #![allow(clippy::cast_possible_wrap)] // FFI with C char types
 
 use libc;
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int};
 
 use crate::opt_index::{
@@ -854,7 +855,6 @@ extern "C" {
         escape_commas: bool,
     ) -> *mut c_char;
     fn runtimepath_default(clean_arg: bool) -> *mut c_char;
-    fn nvim_buf_set_b_p_initialized(buf: *mut core::ffi::c_void, val: c_int);
     fn nvim_buf_set_b_p_ac_minus1(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_ar_minus1(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_ul_no_local(buf: *mut core::ffi::c_void);
@@ -925,7 +925,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     // Set all options (except terminal options) to their default value.
     crate::defaults::rs_set_options_default(0);
 
-    nvim_buf_set_b_p_initialized(curbuf, 1);
+    unsafe { (*curbuf.cast::<BufStruct>()).b_p_initialized = 1 };
     nvim_buf_set_b_p_ac_minus1(curbuf);
     nvim_buf_set_b_p_ar_minus1(curbuf);
     nvim_buf_set_b_p_ul_no_local(curbuf);

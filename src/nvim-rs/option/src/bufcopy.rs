@@ -40,6 +40,7 @@ use crate::opt_index::{
 };
 use crate::OptInt;
 use crate::{BCO_ALWAYS, BCO_ENTER, BCO_NOHELP, CMOD_NOSWAPFILE, CPO_BUFOPT, CPO_BUFOPTGLOB};
+use nvim_buffer::buf_struct::BufStruct;
 
 // =============================================================================
 // C FFI declarations
@@ -78,15 +79,9 @@ extern "C" {
     #[link_name = "nvim_get_cmdmod_cmod_flags"]
     fn nvim_cmdmod_get_cmod_flags() -> c_int;
 
-    fn nvim_buf_get_b_p_initialized(buf: *mut core::ffi::c_void) -> c_int;
-    fn nvim_buf_set_b_p_initialized(buf: *mut core::ffi::c_void, val: c_int);
-    fn nvim_buf_get_help(buf: *mut core::ffi::c_void) -> c_int;
-    fn nvim_buf_set_b_help(buf: *mut core::ffi::c_void, val: c_int);
     fn nvim_buf_clear_b_p_script_ctx(buf: *mut core::ffi::c_void);
     fn nvim_buf_save_and_clear_b_p_isk(buf: *mut core::ffi::c_void) -> *mut c_char;
     fn nvim_buf_restore_b_p_isk(buf: *mut core::ffi::c_void, saved: *mut c_char);
-    fn nvim_buf_clear_b_p_ro(buf: *mut core::ffi::c_void);
-    fn nvim_buf_get_b_p_bt_is_help(buf: *mut core::ffi::c_void) -> c_int;
 
     fn free_buf_options(buf: *mut core::ffi::c_void, free_flags: bool);
     fn check_buf_options(buf: *mut core::ffi::c_void);
@@ -95,7 +90,6 @@ extern "C" {
 
     fn nvim_call_tabstop_set_vsts(buf: *mut core::ffi::c_void, s: *const c_char);
     fn nvim_call_tabstop_set_vts(buf: *mut core::ffi::c_void, s: *const c_char);
-    fn nvim_buf_get_b_p_vts_array_is_null(buf: *mut core::ffi::c_void) -> c_int;
 
     fn set_buflocal_cpt_callbacks(buf: *mut core::ffi::c_void);
     fn set_buflocal_cfu_callback(buf: *mut core::ffi::c_void);
@@ -169,6 +163,22 @@ extern "C" {
 
 // NUL character
 const NUL: u8 = 0;
+
+/// Cast a `*mut c_void` buf pointer to `&BufStruct`.
+///
+/// # Safety
+/// `buf` must be a non-null, valid `buf_T *` cast to `c_void`.
+unsafe fn bref_raw(buf: *mut core::ffi::c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
+/// Cast a `*mut c_void` buf pointer to `&mut BufStruct`.
+///
+/// # Safety
+/// `buf` must be a non-null, valid, exclusively-accessible `buf_T *`.
+unsafe fn bref_raw_mut(buf: *mut core::ffi::c_void) -> &'static mut BufStruct {
+    &mut *(buf.cast::<BufStruct>())
+}
 
 /// Check if a C string is non-null and non-empty.
 unsafe fn cstr_nonempty(s: *const c_char) -> bool {
@@ -492,7 +502,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     if dont_do_help {
         // b_p_isk was saved and NULLed by caller; here we handle vts_array only
         let vts_global = crate::p_vts.cast_const();
-        if cstr_nonempty(vts_global) && nvim_buf_get_b_p_vts_array_is_null(buf) != 0 {
+        if cstr_nonempty(vts_global) && unsafe { bref_raw(buf) }.b_p_vts_array.is_null() {
             nvim_call_tabstop_set_vts(buf, vts_global);
         } else {
             nvim_call_tabstop_set_vts(buf, core::ptr::null());
@@ -516,15 +526,18 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
         nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_VARTABSTOP);
 
         let vts_global = crate::p_vts.cast_const();
-        if cstr_nonempty(vts_global) && nvim_buf_get_b_p_vts_array_is_null(buf) != 0 {
+        if cstr_nonempty(vts_global) && unsafe { bref_raw(buf) }.b_p_vts_array.is_null() {
             nvim_call_tabstop_set_vts(buf, vts_global);
         } else {
             nvim_call_tabstop_set_vts(buf, core::ptr::null());
         }
 
-        nvim_buf_set_b_help(buf, 0);
+        unsafe { bref_raw_mut(buf) }.b_help = 0;
 
-        if nvim_buf_get_b_p_bt_is_help(buf) != 0 {
+        if unsafe {
+            let bp = bref_raw(buf);
+            !bp.b_p_bt.is_null() && *bp.b_p_bt == b'h' as c_char
+        } {
             // clear b_p_bt: xfree(b_p_bt); b_p_bt = empty_string_option
             // The field is properly aligned in buf_T; suppress alignment lint.
             #[allow(clippy::cast_ptr_alignment)]
@@ -562,7 +575,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
     let cpo_s = CPO_BUFOPT;
     let cpo_cap_s = CPO_BUFOPTGLOB;
 
-    let initialized = nvim_buf_get_b_p_initialized(buf) != 0;
+    let initialized = unsafe { bref_raw(buf) }.b_p_initialized != 0;
 
     // Determine should_copy.
     //
@@ -583,7 +596,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
         // given or the options were initialized already (jumping back to a help
         // file with CTRL-T or CTRL-O).
         let dont_do_help =
-            ((flags & bco_nohelp) != 0 && nvim_buf_get_help(buf) != 0) || initialized;
+            ((flags & bco_nohelp) != 0 && unsafe { bref_raw(buf) }.b_help != 0) || initialized;
 
         // If dont_do_help, save b_p_isk before free_buf_options
         let save_p_isk: *mut c_char = if dont_do_help {
@@ -597,7 +610,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
             free_buf_options(buf, false);
         } else {
             free_buf_options(buf, true);
-            nvim_buf_clear_b_p_ro(buf);
+            unsafe { bref_raw_mut(buf) }.b_p_ro = 0;
             nvim_buf_set_b_p_fenc_dup(buf);
             // Set b_p_ff from first char of p_ffs, falling back to p_ff.
             let ff_str: *const c_char = match (*p_ffs) as u8 {
@@ -622,7 +635,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
 
     // Set initialized flag
     if should_copy {
-        nvim_buf_set_b_p_initialized(buf, 1);
+        unsafe { bref_raw_mut(buf) }.b_p_initialized = 1;
     }
 
     check_buf_options(buf);
@@ -639,7 +652,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
     // For the dont_do_help path, b_help is unchanged, so re-evaluation matches original.
     let did_copy = should_copy || (flags & bco_always) != 0;
     let dont_do_help_recomputed =
-        ((flags & bco_nohelp) != 0 && nvim_buf_get_help(buf) != 0) || initialized;
+        ((flags & bco_nohelp) != 0 && unsafe { bref_raw(buf) }.b_help != 0) || initialized;
     let did_isk = did_copy && !dont_do_help_recomputed;
 
     if did_isk {

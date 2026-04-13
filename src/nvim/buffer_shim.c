@@ -272,19 +272,13 @@ void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
   out[kOptVartabstop]    = offsetof(buf_T, b_p_vts);
   out[kOptKeymap]        = offsetof(buf_T, b_p_keymap);
 }
-int nvim_buf_get_b_p_initialized(buf_T *buf) { return buf->b_p_initialized ? 1 : 0; }
-void nvim_buf_set_b_p_initialized(buf_T *buf, int val) { buf->b_p_initialized = val != 0; }
-void nvim_buf_set_b_help(buf_T *buf, int val) { buf->b_help = val != 0; }
 void nvim_buf_clear_b_p_script_ctx(buf_T *buf) { CLEAR_FIELD(buf->b_p_script_ctx); }
-int nvim_buf_get_b_p_bt_is_help(buf_T *buf) { return (buf->b_p_bt && buf->b_p_bt[0] == 'h') ? 1 : 0; }
 char *nvim_buf_save_and_clear_b_p_isk(buf_T *buf)
 { char *saved = buf->b_p_isk; buf->b_p_isk = NULL; return saved; }
 void nvim_buf_restore_b_p_isk(buf_T *buf, char *saved) { buf->b_p_isk = saved; }
-void nvim_buf_clear_b_p_ro(buf_T *buf) { buf->b_p_ro = false; }
 void nvim_call_compile_cap_prog_buf(buf_T *buf) { compile_cap_prog(&buf->b_s); }
 void nvim_call_tabstop_set_vsts(buf_T *buf, const char *str) { tabstop_set(str, &buf->b_p_vsts_array); }
 void nvim_call_tabstop_set_vts(buf_T *buf, const char *str) { tabstop_set(str, &buf->b_p_vts_array); }
-int nvim_buf_get_b_p_vts_array_is_null(buf_T *buf) { return buf->b_p_vts_array == NULL ? 1 : 0; }
 void nvim_buf_kmap_state_set_init(buf_T *buf) { buf->b_kmap_state |= KEYMAP_INIT; }
 void nvim_buf_set_string_field(buf_T *buf, ptrdiff_t offset, const char *s)
 { *(char **)(((char *)buf) + offset) = xstrdup(s); }
