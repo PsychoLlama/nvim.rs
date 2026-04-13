@@ -103,7 +103,6 @@ int nvim_call_briopt_check_win(const char *val, win_T *win) { return briopt_chec
 const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)&win->w_p_briopt : NULL; }
 const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
 const char *nvim_optset_get_newval_str(const void *args) { return ((const optset_T *)args)->os_newval.string.data; }
-unsigned nvim_buf_get_bkc_flags(buf_T *buf) { return buf->b_bkc_flags; }
 const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
@@ -151,10 +150,7 @@ int nvim_curbuf_get_b_p_et(void) { return curbuf->b_p_et; }
 void nvim_curbuf_set_b_p_et(int v) { curbuf->b_p_et = v != 0; }
 const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
 const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
-const char *nvim_buf_get_p_flp(buf_T *buf) { return buf->b_p_flp; }
 unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }
-OptInt nvim_buf_get_b_p_iminsert(buf_T *buf) { return buf->b_p_iminsert; }
-OptInt nvim_buf_get_b_p_imsearch(buf_T *buf) { return buf->b_p_imsearch; }
 OptInt *nvim_get_curbuf_b_p_iminsert_ptr(void) { return &curbuf->b_p_iminsert; }
 int nvim_curbuf_get_b_p_ma(void) { return curbuf->b_p_ma; }
 void nvim_curbuf_set_b_p_ma(int v) { curbuf->b_p_ma = v != 0; }
@@ -239,10 +235,6 @@ int nvim_option_has_expand_cb(OptIndex opt_idx) { return (opt_idx < 0 || (size_t
 // Phase 1: os_restore_chartab accessor for did_set_isopt
 void nvim_optset_set_restore_chartab(void *args, int val) { ((optset_T *)args)->os_restore_chartab = (val != 0); }
 // buf field accessors for did_set_* callbacks
-char *nvim_buf_get_p_cot(buf_T *buf) { return buf ? buf->b_p_cot : NULL; }
-unsigned *nvim_buf_get_cot_flags_ptr(buf_T *buf) { return buf ? &buf->b_cot_flags : NULL; }
-char *nvim_buf_get_p_tc(buf_T *buf) { return buf ? buf->b_p_tc : NULL; }
-unsigned *nvim_buf_get_tc_flags_ptr(buf_T *buf) { return buf ? &buf->b_tc_flags : NULL; }
 char *nvim_win_get_p_ve(win_T *wp) { return wp ? wp->w_p_ve : NULL; }
 unsigned *nvim_win_get_ve_flags_ptr(win_T *wp) { return wp ? &wp->w_ve_flags : NULL; }
 // signcolumn helpers (nvim_win_get_virtcol, nvim_win_get_minscwidth, nvim_win_set_nrwidth_line_count are in window/src/win_struct.rs)
@@ -260,7 +252,6 @@ void nvim_buf_buftype_prompt_init(buf_T *buf) { set_option_direct(kOptComments, 
 // keymap helpers
 int nvim_get_secure(void) { return secure; }
 void nvim_set_secure(int val) { secure = val; }
-char *nvim_buf_get_b_p_keymap(buf_T *buf) { return buf ? buf->b_p_keymap : NULL; }
 // get/set ru_wid (for rulerformat)
 void nvim_set_ru_wid(int val) { ru_wid = val; }
 // encoding helpers
@@ -313,7 +304,6 @@ dict_T *get_winbuf_options(const int bufopt)
 void nvim_apply_syntax_autocmd(buf_T *buf, bool force)
   { apply_autocmds(EVENT_SYNTAX, buf->b_p_syn, buf->b_fname, force, buf); }
 const char *nvim_win_get_b_p_spl(win_T *win) { return (win && win->w_s) ? win->w_s->b_p_spl : NULL; }
-int nvim_buf_get_b_p_ff_first(const buf_T *buf) { return (buf && buf->b_p_ff) ? (unsigned char)(*buf->b_p_ff) : 0; }
 void *nvim_get_varp_by_idx(OptIndex opt_idx) { return get_varp_from(&options[opt_idx], curbuf, curwin); }
 int nvim_varp_is_curbuf_b_changed(const void *varp) { return (const int *)varp == &curbuf->b_changed ? 1 : 0; }
 extern char *rs_escape_option_str_cmdline(const char *var);

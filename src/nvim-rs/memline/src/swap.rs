@@ -1564,9 +1564,6 @@ extern "C" {
     /// Set buf->b_p_ro = true
     fn nvim_buf_set_b_p_ro_true(buf: *mut BufHandle);
 
-    /// Get buf->b_flags
-    fn nvim_buf_get_b_flags(buf: *mut BufHandle) -> c_int;
-
     /// Get buf->b_help
     fn nvim_buf_get_help(buf: *mut BufHandle) -> c_int;
 
@@ -1735,6 +1732,7 @@ extern "C" {
 }
 
 use crate::types::{BF_DUMMY, SEA_NONE, SEA_QUIT, SEA_READONLY, SEA_RECOVER};
+use nvim_buffer::buf_struct::BufStruct;
 // BF_RECOVERED imported at top; B0_SAME_DIR imported in Phase 2 section above
 
 /// Trigger the SwapExists autocommands.
@@ -1931,7 +1929,7 @@ pub unsafe extern "C" fn rs_findswapname(
             if nvim_get_recoverymode() == 0
                 && !buf_fname.is_null()
                 && nvim_buf_get_help(buf) == 0
-                && (nvim_buf_get_b_flags(buf) & BF_DUMMY) == 0
+                && ((*buf.cast::<BufStruct>()).b_flags & BF_DUMMY) == 0
             {
                 let mut differ = false;
 
@@ -2002,7 +2000,9 @@ pub unsafe extern "C" fn rs_findswapname(
                     *p != 0
                 };
 
-                if !differ && (nvim_buf_get_b_flags(buf) & BF_RECOVERED) == 0 && !shm_has_attention
+                if !differ
+                    && ((*buf.cast::<BufStruct>()).b_flags & BF_RECOVERED) == 0
+                    && !shm_has_attention
                 {
                     let mut choice = crate::types::SEA_CHOICE_NONE;
 

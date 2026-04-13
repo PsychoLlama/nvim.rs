@@ -112,10 +112,6 @@ extern "C" {
     fn nvim_buf_set_b_s_spo_dup(buf: *mut core::ffi::c_void, s: *const c_char);
     fn nvim_buf_set_b_s_syn_isk_empty(buf: *mut core::ffi::c_void);
 
-    // Global-local setters with flag side-effects (cannot use generic helper):
-    fn nvim_buf_set_b_p_tc_empty(buf: *mut core::ffi::c_void);
-    fn nvim_buf_set_b_p_cot_empty(buf: *mut core::ffi::c_void);
-
     // Sentinel-value global-local setters: none remain
 
     // Generic offset-based field writers:
@@ -452,7 +448,11 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_KEYWORDPRG));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_PATH));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_TAGS));
-    nvim_buf_set_b_p_tc_empty(buf);
+    {
+        let bp = bref_raw_mut(buf);
+        bp.b_p_tc = empty_string_option.as_ptr().cast_mut();
+        bp.b_tc_flags = 0;
+    }
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_DEFINE));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_INCLUDE));
 
@@ -463,7 +463,11 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     );
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_INCLUDEEXPR);
 
-    nvim_buf_set_b_p_cot_empty(buf);
+    {
+        let bp = bref_raw_mut(buf);
+        bp.b_p_cot = empty_string_option.as_ptr().cast_mut();
+        bp.b_cot_flags = 0;
+    }
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_DICTIONARY));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_DIFFANCHORS));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_THESAURUS));

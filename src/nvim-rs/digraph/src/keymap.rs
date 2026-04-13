@@ -4,6 +4,7 @@
 //! located in `digraph.c` but logically distinct from digraph operations.
 
 use libc::{c_char, c_int, c_void, size_t};
+use nvim_buffer::buf_struct::BufStruct;
 
 /// Opaque handle for a buffer (`buf_T*`).
 #[repr(transparent)]
@@ -31,10 +32,7 @@ extern "C" {
     fn nvim_kmap_entry_get_to(entry: *mut c_void) -> *mut c_char;
     fn nvim_kmap_entry_size() -> size_t;
 
-    // Buffer field accessors (for get_keymap_str)
-    fn nvim_buf_get_b_p_iminsert(buf: BufHandle) -> i64;
-    fn nvim_buf_get_b_kmap_state(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_keymap(buf: BufHandle) -> *const c_char;
+    // Buffer field accessors (for get_keymap_str) - only non-BufStruct ones remain
 
     // Window field accessor
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
@@ -293,7 +291,7 @@ pub unsafe extern "C" fn rs_get_keymap_str(
     len: c_int,
 ) -> c_int {
     let win_buf = nvim_win_get_buffer(wp);
-    if nvim_buf_get_b_p_iminsert(win_buf) != B_IMODE_LMAP {
+    if (*win_buf.0.cast::<BufStruct>()).b_p_iminsert != B_IMODE_LMAP {
         return 0;
     }
 
@@ -314,9 +312,9 @@ pub unsafe extern "C" fn rs_get_keymap_str(
 
     // Choose which name to display.
     let p: *const c_char = if s.is_null() || *s == 0 {
-        let kmap_state = nvim_buf_get_b_kmap_state(win_buf);
-        if kmap_state & KEYMAP_LOADED != 0 {
-            nvim_buf_get_b_p_keymap(win_buf)
+        let bp = &*win_buf.0.cast::<BufStruct>();
+        if c_int::from(bp.b_kmap_state) & KEYMAP_LOADED != 0 {
+            bp.b_p_keymap
         } else {
             c"lang".as_ptr()
         }

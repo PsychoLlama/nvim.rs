@@ -829,18 +829,6 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_optset_set_value_checked(args: *mut c_void, val: c_int);
 
-    /// buf->b_p_cot (local completeopt)
-    fn nvim_buf_get_p_cot(buf: *mut c_void) -> *mut c_char;
-
-    /// &buf->b_cot_flags
-    fn nvim_buf_get_cot_flags_ptr(buf: *mut c_void) -> *mut c_uint;
-
-    /// buf->b_p_tc (local tagcase)
-    fn nvim_buf_get_p_tc(buf: *mut c_void) -> *mut c_char;
-
-    /// &buf->b_tc_flags
-    fn nvim_buf_get_tc_flags_ptr(buf: *mut c_void) -> *mut c_uint;
-
     /// win->w_p_ve (local virtualedit)
     fn nvim_win_get_p_ve(wp: *mut c_void) -> *mut c_char;
 
@@ -928,16 +916,21 @@ pub unsafe extern "C" fn did_set_completeopt(args: *const c_void) -> *const c_ch
     let opt_flags = nvim_optset_get_flags(args);
 
     let (cot, flags): (*const c_char, *mut c_uint) = if opt_flags & OPT_LOCAL != 0 {
-        (nvim_buf_get_p_cot(buf), nvim_buf_get_cot_flags_ptr(buf))
+        if buf.is_null() {
+            (std::ptr::null(), std::ptr::null_mut())
+        } else {
+            let bp = bref_raw_mut(buf);
+            (
+                bp.b_p_cot.cast_const(),
+                std::ptr::addr_of_mut!(bp.b_cot_flags),
+            )
+        }
     } else if opt_flags & OPT_GLOBAL != 0 {
         (p_cot, std::ptr::addr_of_mut!(cot_flags))
     } else {
         // :set clears local flags
         if !buf.is_null() {
-            let local_flags = nvim_buf_get_cot_flags_ptr(buf);
-            if !local_flags.is_null() {
-                *local_flags = 0;
-            }
+            bref_raw_mut(buf).b_cot_flags = 0;
         }
         (p_cot, std::ptr::addr_of_mut!(cot_flags))
     };
@@ -966,7 +959,15 @@ pub unsafe extern "C" fn did_set_tagcase(args: *const c_void) -> *const c_char {
     let opt_flags = nvim_optset_get_flags(args);
 
     let (p, flags): (*const c_char, *mut c_uint) = if opt_flags & OPT_LOCAL != 0 {
-        (nvim_buf_get_p_tc(buf), nvim_buf_get_tc_flags_ptr(buf))
+        if buf.is_null() {
+            (std::ptr::null(), std::ptr::null_mut())
+        } else {
+            let bp = bref_raw_mut(buf);
+            (
+                bp.b_p_tc.cast_const(),
+                std::ptr::addr_of_mut!(bp.b_tc_flags),
+            )
+        }
     } else {
         (p_tc, std::ptr::addr_of_mut!(tc_flags))
     };
@@ -1530,7 +1531,6 @@ extern "C" {
     fn nvim_get_secure() -> c_int;
     fn nvim_set_secure(val: c_int);
     fn keymap_init() -> *const c_char;
-    fn nvim_buf_get_b_p_keymap(buf: *mut c_void) -> *mut c_char;
     fn set_iminsert_global(buf: *mut c_void);
     fn set_imsearch_global(buf: *mut c_void);
     fn status_redraw_buf(buf: *mut c_void);
@@ -1726,7 +1726,7 @@ pub unsafe extern "C" fn did_set_keymap(args: *const c_void) -> *const c_char {
     nvim_optset_set_value_checked(args.cast_mut(), 1);
 
     if errmsg.is_null() {
-        let keymap = nvim_buf_get_b_p_keymap(buf);
+        let keymap = bref_raw(buf).b_p_keymap;
         let keymap_set = !keymap.is_null() && *keymap != 0;
 
         if keymap_set {

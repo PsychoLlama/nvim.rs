@@ -11,5 +11,6 @@ workspace = true
 
 [dependencies]
 libc = "0.2"
+nvim-buffer = { path = "../buffer" }
 
 [dev-dependencies]

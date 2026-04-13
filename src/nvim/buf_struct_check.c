@@ -222,3 +222,18 @@ _Static_assert(offsetof(buf_T, b_p_vsts_nopaste) == 10744, "b_p_vsts_nopaste off
 // b_p_bkc and b_bkc_flags offset checks
 _Static_assert(offsetof(buf_T, b_p_bkc) == 10096, "b_p_bkc offset mismatch");
 _Static_assert(offsetof(buf_T, b_bkc_flags) == 10104, "b_bkc_flags offset mismatch");
+
+// b_p_cot and b_cot_flags offset checks
+_Static_assert(offsetof(buf_T, b_p_cot) == 10216, "b_p_cot offset mismatch");
+_Static_assert(offsetof(buf_T, b_cot_flags) == 10224, "b_cot_flags offset mismatch");
+
+// b_p_fo and b_p_flp offset checks
+_Static_assert(offsetof(buf_T, b_p_fo) == 10400, "b_p_fo offset mismatch");
+_Static_assert(offsetof(buf_T, b_p_flp) == 10408, "b_p_flp offset mismatch");
+
+// b_p_keymap offset check
+_Static_assert(offsetof(buf_T, b_p_keymap) == 10768, "b_p_keymap offset mismatch");
+
+// b_p_tc and b_tc_flags offset checks
+_Static_assert(offsetof(buf_T, b_p_tc) == 10840, "b_p_tc offset mismatch");
+_Static_assert(offsetof(buf_T, b_tc_flags) == 10848, "b_tc_flags offset mismatch");

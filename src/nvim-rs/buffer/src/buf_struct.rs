@@ -350,8 +350,14 @@ pub struct BufStruct {
     _pad25a: [u8; 36],
     // offset 10200: char* b_p_com  (Comments)
     pub b_p_com: *const c_char,
-    // offset 10208..10351: remaining option fields (144 bytes, opaque)
-    _pad25b: [u8; 144],
+    // offset 10208..10215: char* b_p_cms (CommentString, opaque)
+    _pad25b_a: [u8; 8],
+    // offset 10216: char* b_p_cot (CompleteOpt local value)
+    pub b_p_cot: *mut c_char,
+    // offset 10224: uint b_cot_flags
+    pub b_cot_flags: c_uint,
+    // offset 10228..10351: remaining option fields (124 bytes, opaque)
+    _pad25b_b: [u8; 124],
 
     // offset 10352: int b_p_eof
     pub b_p_eof: c_int,
@@ -373,8 +379,10 @@ pub struct BufStruct {
     // offset 10392: char* b_p_ft  (FileType)
     pub b_p_ft: *const c_char,
 
-    // offset 10400..10415: b_p_fo (8B pointer), b_p_flp (8B pointer) = 16 bytes, opaque
-    _pad32a: [u8; 16],
+    // offset 10400: char* b_p_fo (FormatOptions)
+    pub b_p_fo: *const c_char,
+    // offset 10408: char* b_p_flp (FormatListPat)
+    pub b_p_flp: *const c_char,
     // offset 10416: int b_p_inf (InferCase)
     pub b_p_inf: c_int,
     // offset 10420..10423: gap (4 bytes, opaque)
@@ -492,8 +500,10 @@ pub struct BufStruct {
     // offset 10760: int* b_p_vts_array (pointer)
     pub b_p_vts_array: *mut c_int,
 
-    // offset 10768..10799: gap (32 bytes, opaque)
-    _pad48: [u8; 32],
+    // offset 10768: char* b_p_keymap (KeyMap)
+    pub b_p_keymap: *const c_char,
+    // offset 10776..10799: b_p_gefm, b_p_gp, b_p_mp (opaque, 24 bytes)
+    _pad48: [u8; 24],
 
     // offset 10800: char* b_p_efm  (ErrorFormatMsg)
     pub b_p_efm: *const c_char,
@@ -507,8 +517,16 @@ pub struct BufStruct {
     // offset 10824: int b_p_ar    (AutoRead, int not int64_t)
     pub b_p_ar: c_int,
 
-    // offset 10828..10903: gap (76 bytes, opaque)
-    _pad50: [u8; 76],
+    // offset 10828..10831: alignment gap (4 bytes)
+    _pad50_a: [u8; 4],
+    // offset 10832..10839: char* b_p_tags (opaque)
+    _pad50_tags: [u8; 8],
+    // offset 10840: char* b_p_tc (TagCase local value)
+    pub b_p_tc: *mut c_char,
+    // offset 10848: uint b_tc_flags
+    pub b_tc_flags: c_uint,
+    // offset 10852..10903: remaining (52 bytes, opaque)
+    _pad50_b: [u8; 52],
 
     // offset 10904: OptInt b_p_ul  (UndoLevels, int64_t)
     pub b_p_ul: OptInt,

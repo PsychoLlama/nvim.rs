@@ -160,9 +160,6 @@ void nvim_kmap_entry_set_to(void *entry, char *val) { ((kmap_T *)entry)->to = va
 /// Get sizeof(kmap_T) (for Rust FFI).
 size_t nvim_kmap_entry_size(void) { return sizeof(kmap_T); }
 
-/// Get the b_kmap_state field of a buffer (for Rust FFI).
-int nvim_buf_get_b_kmap_state(buf_T *buf) { return buf ? (int)buf->b_kmap_state : 0; }
-
 // curbuf kmap state accessors for keymap_unload / keymap_init (Rust)
 
 /// Get curbuf->b_kmap_state (for Rust FFI).

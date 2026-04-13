@@ -10,6 +10,7 @@
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::useless_let_if_seq)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -40,12 +41,6 @@ extern "C" {
     // get_findfunc
     fn nvim_curbuf_get_b_p_ffu() -> *const c_char;
 
-    // get_bkc_flags
-    fn nvim_buf_get_bkc_flags(buf: BufHandle) -> c_uint;
-
-    // get_flp_value
-    fn nvim_buf_get_p_flp(buf: BufHandle) -> *const c_char;
-
     // get_ve_flags
     fn nvim_win_get_ve_flags(wp: WinHandle) -> c_uint;
 
@@ -58,8 +53,6 @@ extern "C" {
     // set_iminsert_global / set_imsearch_global
     static mut p_iminsert: i64;
     static mut p_imsearch: i64;
-    fn nvim_buf_get_b_p_iminsert(buf: BufHandle) -> i64;
-    fn nvim_buf_get_b_p_imsearch(buf: BufHandle) -> i64;
 
     // reset_modifiable
     static mut p_ma: c_int;
@@ -144,7 +137,7 @@ pub unsafe extern "C" fn rs_get_findfunc() -> *const c_char {
 #[allow(clippy::must_use_candidate)]
 #[export_name = "get_bkc_flags"]
 pub unsafe extern "C" fn rs_get_bkc_flags(buf: BufHandle) -> c_uint {
-    let local = nvim_buf_get_bkc_flags(buf);
+    let local = (*buf.cast::<BufStruct>()).b_bkc_flags;
     if local != 0 {
         local
     } else {
@@ -156,7 +149,7 @@ pub unsafe extern "C" fn rs_get_bkc_flags(buf: BufHandle) -> c_uint {
 #[allow(clippy::must_use_candidate)]
 #[export_name = "get_flp_value"]
 pub unsafe extern "C" fn rs_get_flp_value(buf: BufHandle) -> *const c_char {
-    let b_p_flp = nvim_buf_get_p_flp(buf);
+    let b_p_flp = (*buf.cast::<BufStruct>()).b_p_flp;
     if !b_p_flp.is_null() && *b_p_flp != 0 {
         b_p_flp
     } else {
@@ -212,13 +205,13 @@ pub unsafe extern "C" fn rs_vimrc_found(fname: *const c_char, envname: *const c_
 /// Set the global value for 'iminsert' to the local value.
 #[export_name = "set_iminsert_global"]
 pub unsafe extern "C" fn rs_set_iminsert_global(buf: BufHandle) {
-    p_iminsert = nvim_buf_get_b_p_iminsert(buf);
+    p_iminsert = (*buf.cast::<BufStruct>()).b_p_iminsert;
 }
 
 /// Set the global value for 'imsearch' to the local value.
 #[export_name = "set_imsearch_global"]
 pub unsafe extern "C" fn rs_set_imsearch_global(buf: BufHandle) {
-    p_imsearch = nvim_buf_get_b_p_imsearch(buf);
+    p_imsearch = (*buf.cast::<BufStruct>()).b_p_imsearch;
 }
 
 /// Reset the 'modifiable' option and its default value.
@@ -408,8 +401,6 @@ extern "C" {
     fn nvim_win_set_grid_blending(wp: WinHandle, val: bool);
 
     // do_syntax_autocmd
-    fn nvim_buf_get_b_flags(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_flags(buf: BufHandle, val: c_int);
     fn nvim_apply_syntax_autocmd(buf: BufHandle, force: bool);
 
     // do_spelllang_source
@@ -419,7 +410,6 @@ extern "C" {
 
     // get_fileformat_force (nvim_eap_get_force_ff/bin are in ex_docmd.c)
     fn nvim_option_buf_get_b_p_bin(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ff_first(buf: BufHandle) -> c_int;
 }
 
 /// EOL constants matching option_vars.h
@@ -457,7 +447,7 @@ pub unsafe extern "C" fn rs_do_syntax_autocmd(buf: BufHandle, value_changed: c_i
     SYN_RECURSIVE += 1;
     let force = value_changed != 0 || SYN_RECURSIVE == 1;
     nvim_apply_syntax_autocmd(buf, force);
-    nvim_buf_set_b_flags(buf, nvim_buf_get_b_flags(buf) | BF_SYN_SET);
+    (*buf.cast::<BufStruct>()).b_flags |= BF_SYN_SET;
     SYN_RECURSIVE -= 1;
 }
 
@@ -531,7 +521,12 @@ pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const ExA
         if is_bin {
             return EOL_UNIX;
         }
-        nvim_buf_get_b_p_ff_first(buf)
+        let ff = (*buf.cast::<BufStruct>()).b_p_ff;
+        if ff.is_null() {
+            0
+        } else {
+            c_int::from(*ff as u8)
+        }
     };
 
     match c as u8 {
