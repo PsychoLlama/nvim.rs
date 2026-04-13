@@ -612,14 +612,17 @@ extern "C" {
     /// `rs_loop_get_events(loop)` -- get the events queue from a loop.
     fn rs_loop_get_events(lp: *mut c_void) -> *mut c_void;
     /// `ui_flush()` -- flush UI output.
+    #[link_name = "ui_flush"]
     fn nvim_ui_flush();
     /// `must_redraw` -- nonzero if screen needs redraw.
     fn nvim_must_redraw() -> c_int;
     /// `need_wait_return` -- true if waiting for user to press Enter.
     fn nvim_get_need_wait_return() -> bool;
     /// `update_screen()` -- update the screen.
+    #[link_name = "update_screen"]
     fn nvim_update_screen_c();
     /// `setcursor()` -- put cursor at correct position.
+    #[link_name = "setcursor"]
     fn nvim_setcursor();
     /// `input_get(...)` -- block for input.
     fn input_get(

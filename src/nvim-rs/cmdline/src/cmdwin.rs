@@ -607,6 +607,7 @@ unsafe extern "C" {
     fn nvim_emsg_cmdwin_changed();
     fn may_trigger_modechanged();
     fn setmouse();
+    #[link_name = "setcursor"]
     fn nvim_setcursor();
 
     // Result extraction helpers

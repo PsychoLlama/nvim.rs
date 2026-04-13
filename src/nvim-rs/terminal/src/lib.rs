@@ -1262,28 +1262,34 @@ extern "C" {
     fn nvim_unshowmode();
     #[link_name = "ui_cursor_shape"]
     fn nvim_ui_cursor_shape();
+    #[link_name = "setcursor"]
     fn nvim_setcursor();
     fn nvim_parse_shape_opt(scope: c_int);
     fn nvim_show_cursor_info_later();
     fn nvim_refresh_cursor_c(term: *mut c_void, cursor_visible: *mut c_int);
     fn nvim_validate_cursor_cw();
+    #[link_name = "update_screen"]
     fn nvim_update_screen_c();
+    #[link_name = "redraw_statuslines"]
     fn nvim_redraw_statuslines();
     fn nvim_must_redraw() -> c_int;
     fn nvim_clear_cmdline() -> c_int;
     fn nvim_redraw_cmdline() -> c_int;
     fn nvim_redraw_mode() -> c_int;
+    #[link_name = "ui_flush"]
     fn nvim_ui_flush();
     fn nvim_apply_termenter_autocmd();
     fn nvim_apply_termleave_autocmd();
     fn nvim_apply_textchangedt_autocmd();
     fn may_trigger_modechanged();
+    #[link_name = "may_trigger_win_scrolled_resized"]
     fn nvim_may_trigger_win_scrolled_resized();
     fn nvim_has_event_textchangedt() -> c_int;
     fn nvim_curbuf_update_changedtick_i();
     fn nvim_curbuf_update_changedtick();
     fn nvim_curbuf_last_changedtick_i() -> c_int;
     fn nvim_state_enter_c(state: *mut c_void);
+    #[link_name = "merge_modifiers"]
     fn nvim_merge_modifiers_c(key: c_int, tmp_mod_mask: *mut c_int) -> c_int;
     fn nvim_paste_repeat_c();
     fn state_handle_k_event();
@@ -1308,6 +1314,7 @@ extern "C" {
     fn nvim_get_vgetc_mod_mask() -> c_int;
     fn nvim_key_typed() -> c_int;
     fn nvim_ins_char_typebuf_c(c: c_int, mod_mask_val: c_int) -> c_int;
+    #[link_name = "ungetchars"]
     fn nvim_ungetchars(len: c_int);
     fn nvim_do_mousescroll_c(term: *mut c_void, mouse_win: *mut c_void, c: c_int) -> c_int;
     fn nvim_buf_get_changedtick_curbuf() -> c_int;
@@ -3072,8 +3079,11 @@ extern "C" {
     fn nvim_terminal_sb_get(term: *mut c_void, idx: usize) -> *mut c_void;
     fn nvim_terminal_sb_buffer_resize(term: *mut c_void, new_size: usize);
     fn nvim_terminal_is_active(term: *mut c_void) -> c_int;
+    #[link_name = "ui_busy_start"]
     fn nvim_ui_busy_start();
+    #[link_name = "ui_busy_stop"]
     fn nvim_ui_busy_stop();
+    #[link_name = "ui_mode_info_set"]
     fn nvim_term_ui_mode_info_set();
     fn nvim_shape_table_set_cursor(blink: c_int, shape: c_int, percentage: c_int);
     fn nvim_terminal_foreach_invalidated(
@@ -3082,7 +3092,9 @@ extern "C" {
     );
     fn nvim_is_exiting() -> c_int;
     // Phase 9: terminal_paste helpers
+    #[link_name = "utf_ptr2len"]
     fn nvim_term_utf_ptr2len(s: *const i8) -> c_int;
+    #[link_name = "utf_ptr2char"]
     fn nvim_term_utf_ptr2char(s: *const i8) -> c_int;
     fn nvim_terminal_get_tpf_flags() -> c_int;
     fn nvim_curbuf_terminal() -> *mut c_void;
@@ -4382,6 +4394,7 @@ extern "C" {
     fn nvim_curwin_ptr() -> *mut c_void;
     fn nvim_win_redraw_later_some_valid(wp: *mut c_void);
     fn nvim_win_redraw_later_valid(wp: *mut c_void);
+    #[link_name = "free_string_option"]
     fn nvim_free_string_option(str: *mut i8);
     fn nvim_win_set_p_culopt(wp: *mut c_void, s: *mut i8);
     fn nvim_xstrdup(s: *const i8) -> *mut i8;
