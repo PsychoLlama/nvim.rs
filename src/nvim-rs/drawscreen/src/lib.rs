@@ -5323,37 +5323,8 @@ extern "C" {
     fn nvim_curwin_cursor_line_is_nul() -> c_int;
     /// Get VIsual position (lnum, col, coladd) as three i32 values.
     fn nvim_get_VIsual_pos_fields(lnum: *mut i32, col: *mut i32, coladd: *mut i32);
-    /// Individual stl snapshot getters.
-    fn nvim_curwin_get_stl_cursor_lnum() -> i32;
-    fn nvim_curwin_get_stl_cursor_col() -> i32;
-    fn nvim_curwin_get_stl_cursor_coladd() -> i32;
-    fn nvim_curwin_get_stl_virtcol() -> i32;
-    fn nvim_curwin_get_stl_topline() -> i32;
-    fn nvim_curwin_get_stl_line_count() -> i32;
-    fn nvim_curwin_get_stl_topfill() -> i32;
-    fn nvim_curwin_get_stl_empty() -> i32;
-    fn nvim_curwin_get_stl_recording() -> i32;
-    fn nvim_curwin_get_stl_state() -> i32;
-    fn nvim_curwin_get_stl_visual_mode() -> i32;
-    fn nvim_curwin_get_stl_vis_lnum() -> i32;
-    fn nvim_curwin_get_stl_vis_col() -> i32;
-    fn nvim_curwin_get_stl_vis_coladd() -> i32;
-    /// Write curwin's w_stl_* state from current window values.
-    fn nvim_curwin_set_stl_from_cursor(
-        state: i32,
-        empty_line: i32,
-        visual_active: i32,
-        visual_mode: i32,
-        vis_lnum: i32,
-        vis_col: i32,
-        vis_coladd: i32,
-    );
-    /// Get w_virtcol for the window.
-    /// Get w_topfill for the window.
     /// Get b_ml.ml_line_count for window's buffer.
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
-    /// Get w_cursor.col for window.
-    /// Get w_cursor.coladd for window.
     /// Return 1 if global p_wbr is empty/NUL.
     fn nvim_get_p_wbr_empty() -> c_int;
     /// Return 1 if window's w_p_wbr is empty/NUL.
@@ -5378,21 +5349,21 @@ pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
 
     nvim_validate_virtcol_curwin();
 
-    // Read the saved stl snapshot (14 individual fields):
-    let stl_cursor_lnum = nvim_curwin_get_stl_cursor_lnum();
-    let stl_cursor_col = nvim_curwin_get_stl_cursor_col();
-    let stl_cursor_coladd = nvim_curwin_get_stl_cursor_coladd();
-    let stl_virtcol = nvim_curwin_get_stl_virtcol();
-    let stl_topline = nvim_curwin_get_stl_topline();
-    let stl_line_count = nvim_curwin_get_stl_line_count();
-    let stl_topfill = nvim_curwin_get_stl_topfill();
-    let stl_empty = nvim_curwin_get_stl_empty();
-    let stl_recording = nvim_curwin_get_stl_recording();
-    let stl_state = nvim_curwin_get_stl_state();
-    let stl_visual_mode = nvim_curwin_get_stl_visual_mode();
-    let stl_vis_lnum = nvim_curwin_get_stl_vis_lnum();
-    let stl_vis_col = nvim_curwin_get_stl_vis_col();
-    let stl_vis_coladd = nvim_curwin_get_stl_vis_coladd();
+    // Read the saved stl snapshot via direct WinStruct field access:
+    let stl_cursor_lnum = win_ref(curwin).w_stl_cursor.lnum;
+    let stl_cursor_col = win_ref(curwin).w_stl_cursor.col;
+    let stl_cursor_coladd = win_ref(curwin).w_stl_cursor.coladd;
+    let stl_virtcol = win_ref(curwin).w_stl_virtcol;
+    let stl_topline = win_ref(curwin).w_stl_topline;
+    let stl_line_count = win_ref(curwin).w_stl_line_count;
+    let stl_topfill = win_ref(curwin).w_stl_topfill;
+    let stl_empty = c_int::from(win_ref(curwin).w_stl_empty);
+    let stl_recording = win_ref(curwin).w_stl_recording;
+    let stl_state = win_ref(curwin).w_stl_state;
+    let stl_visual_mode = win_ref(curwin).w_stl_visual_mode;
+    let stl_vis_lnum = win_ref(curwin).w_stl_visual_pos.lnum;
+    let stl_vis_col = win_ref(curwin).w_stl_visual_pos.col;
+    let stl_vis_coladd = win_ref(curwin).w_stl_visual_pos.coladd;
 
     let vis_active = nvim_VIsual_active() != 0;
     let cur_lnum = win_ref(curwin).w_cursor.lnum;
@@ -5443,15 +5414,27 @@ pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
         rs_redraw_custom_title_later();
     }
 
-    nvim_curwin_set_stl_from_cursor(
-        state,
-        empty_line,
-        c_int::from(vis_active),
-        VIsual_mode,
-        vis_lnum,
-        vis_col,
-        vis_coladd,
-    );
+    // Write the stl snapshot directly via WinStruct field access:
+    {
+        let w = win_mut(curwin);
+        w.w_stl_cursor = w.w_cursor;
+        w.w_stl_virtcol = w.w_virtcol;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            w.w_stl_empty = empty_line as c_char;
+        }
+        w.w_stl_topline = w.w_topline;
+        w.w_stl_line_count = cur_line_count;
+        w.w_stl_topfill = w.w_topfill;
+        w.w_stl_recording = reg_recording;
+        w.w_stl_state = state;
+        if vis_active {
+            w.w_stl_visual_mode = VIsual_mode;
+            w.w_stl_visual_pos.lnum = vis_lnum;
+            w.w_stl_visual_pos.col = vis_col;
+            w.w_stl_visual_pos.coladd = vis_coladd;
+        }
+    }
 }
 
 #[cfg(test)]
