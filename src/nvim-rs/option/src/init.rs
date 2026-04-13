@@ -857,7 +857,6 @@ extern "C" {
     fn runtimepath_default(clean_arg: bool) -> *mut c_char;
     fn nvim_buf_set_b_p_ac_minus1(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_ar_minus1(buf: *mut core::ffi::c_void);
-    fn nvim_buf_set_b_p_ul_no_local(buf: *mut core::ffi::c_void);
     static mut curwin: *mut core::ffi::c_void;
     #[link_name = "check_options"]
     fn rs_check_options();
@@ -928,7 +927,7 @@ pub unsafe extern "C" fn rs_set_init_1(clean_arg: c_int) {
     unsafe { (*curbuf.cast::<BufStruct>()).b_p_initialized = 1 };
     nvim_buf_set_b_p_ac_minus1(curbuf);
     nvim_buf_set_b_p_ar_minus1(curbuf);
-    nvim_buf_set_b_p_ul_no_local(curbuf);
+    unsafe { (*curbuf.cast::<BufStruct>()).b_p_ul = -123_456 }; // NO_LOCAL_UNDOLEVEL sentinel
     check_buf_options(curbuf);
     // check_win_options(curwin): call rs_check_winopt for w_onebuf_opt (offset 784)
     // and w_allbuf_opt (offset 2424), validated by window_struct_check.c _Static_asserts.

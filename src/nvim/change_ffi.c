@@ -49,7 +49,6 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
-void nvim_buf_set_b_changed(buf_T *buf, bool val) { buf->b_changed = val; }
 bool nvim_buf_get_b_may_swap(buf_T *buf) { return buf->b_may_swap; }
 bool nvim_buf_get_b_p_eol(buf_T *buf) { return buf->b_p_eol; }
 int nvim_buf_get_b_flags(buf_T *buf) { return buf->b_flags; }

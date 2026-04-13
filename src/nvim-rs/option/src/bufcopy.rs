@@ -100,10 +100,9 @@ extern "C" {
     fn clear_string_option(pp: *mut *mut c_char);
 
     fn nvim_buf_set_b_p_fenc_dup(buf: *mut core::ffi::c_void);
-    fn nvim_buf_set_b_p_bh_empty(buf: *mut core::ffi::c_void);
     static mut p_ff: *mut c_char;
     static mut p_ffs: *mut c_char;
-    fn nvim_buf_set_b_p_bt_empty(buf: *mut core::ffi::c_void);
+    static empty_string_option: [c_char; 1];
 
     // b_s substructure setters (not in the offset table):
     fn nvim_buf_set_b_p_vsts_nopaste_dup(buf: *mut core::ffi::c_void, s: *const c_char);
@@ -121,7 +120,6 @@ extern "C" {
     // Sentinel-value global-local setters:
     fn nvim_buf_set_b_p_ac_minus1(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_ar_minus1(buf: *mut core::ffi::c_void);
-    fn nvim_buf_set_b_p_ul_no_local(buf: *mut core::ffi::c_void);
 
     // Generic offset-based field writers:
     fn nvim_buf_set_string_field(buf: *mut core::ffi::c_void, offset: isize, s: *const c_char);
@@ -131,15 +129,10 @@ extern "C" {
 
     // Scalar field setters (variants / substructure not in offset table):
     fn nvim_buf_set_b_p_ai_nopaste(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_tw_nopaste(buf: *mut core::ffi::c_void, v: OptInt);
-    fn nvim_buf_set_b_p_tw_nobin(buf: *mut core::ffi::c_void, v: OptInt);
-    fn nvim_buf_set_b_p_wm_nopaste(buf: *mut core::ffi::c_void, v: OptInt);
-    fn nvim_buf_set_b_p_wm_nobin(buf: *mut core::ffi::c_void, v: OptInt);
     fn nvim_buf_set_b_p_et_nobin(buf: *mut core::ffi::c_void, v: c_int);
     fn nvim_buf_set_b_p_et_nopaste(buf: *mut core::ffi::c_void, v: c_int);
     fn nvim_buf_set_b_p_ml(buf: *mut core::ffi::c_void, v: c_int);
     fn nvim_buf_set_b_p_ml_nobin(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_sts_nopaste(buf: *mut core::ffi::c_void, v: OptInt);
 
     fn nvim_buf_copy_opt_sctx(buf: *mut core::ffi::c_void, bv: c_int);
     fn nvim_buf_set_b_s_spo_flags_from_global(buf: *mut core::ffi::c_void);
@@ -214,13 +207,13 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
 
     nvim_buf_set_optint_field(buf, field_offset(K_OPT_TEXTWIDTH), p_tw);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_TEXTWIDTH);
-    nvim_buf_set_b_p_tw_nopaste(buf, nvim_get_p_tw_nopaste());
-    nvim_buf_set_b_p_tw_nobin(buf, nvim_get_p_tw_nobin());
+    bref_raw_mut(buf).b_p_tw_nopaste = nvim_get_p_tw_nopaste();
+    bref_raw_mut(buf).b_p_tw_nobin = nvim_get_p_tw_nobin();
 
     nvim_buf_set_optint_field(buf, field_offset(K_OPT_WRAPMARGIN), p_wm);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_WRAPMARGIN);
-    nvim_buf_set_b_p_wm_nopaste(buf, nvim_get_p_wm_nopaste());
-    nvim_buf_set_b_p_wm_nobin(buf, nvim_get_p_wm_nobin());
+    bref_raw_mut(buf).b_p_wm_nopaste = nvim_get_p_wm_nopaste();
+    bref_raw_mut(buf).b_p_wm_nobin = nvim_get_p_wm_nobin();
 
     nvim_buf_set_bool_field(buf, field_offset(K_OPT_BINARY), c_int::from(p_bin != 0));
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_BINARY);
@@ -278,7 +271,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
 
     nvim_buf_set_optint_field(buf, field_offset(K_OPT_SOFTTABSTOP), p_sts);
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_SOFTTABSTOP);
-    nvim_buf_set_b_p_sts_nopaste(buf, nvim_get_p_sts_nopaste());
+    bref_raw_mut(buf).b_p_sts_nopaste = nvim_get_p_sts_nopaste();
 
     let p_vsts = crate::p_vsts.cast_const();
     nvim_buf_set_string_field(buf, field_offset(K_OPT_VARSOFTTABSTOP), p_vsts);
@@ -452,7 +445,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     // Global-local options: use global value (no local copy)
     nvim_buf_set_b_p_ac_minus1(buf);
     nvim_buf_set_b_p_ar_minus1(buf);
-    nvim_buf_set_b_p_ul_no_local(buf);
+    bref_raw_mut(buf).b_p_ul = -123_456; // NO_LOCAL_UNDOLEVEL sentinel
     nvim_buf_set_b_p_bkc_empty(buf);
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_GREPFORMAT));
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_GREPPRG));
@@ -615,8 +608,8 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
                 _ => p_ff,
             };
             nvim_buf_set_string_field(buf, field_offset(K_OPT_FILEFORMAT), ff_str);
-            nvim_buf_set_b_p_bh_empty(buf);
-            nvim_buf_set_b_p_bt_empty(buf);
+            bref_raw_mut(buf).b_p_bh = empty_string_option.as_ptr();
+            bref_raw_mut(buf).b_p_bt = empty_string_option.as_ptr();
         }
 
         // Perform the mechanical bulk copy
