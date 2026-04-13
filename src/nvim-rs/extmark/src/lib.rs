@@ -30,6 +30,7 @@ pub mod helpers;
 use std::ffi::{c_int, c_void};
 
 // Re-exports from dependencies for convenience
+use nvim_buffer::buf_struct::{buf_mut, buf_ref};
 pub use nvim_buffer::BufHandle;
 pub use nvim_marktree::{
     flags::*, marktree_itr_valid, DecorInlineData, MTKey, MTPair, MTPos, MarkTreeHandle,
@@ -550,15 +551,6 @@ extern "C" {
 
     /// Clear buffer signcols max and count.
     fn nvim_buf_signcols_clear(buf: BufHandle);
-
-    /// Get ml_line_count from buffer.
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
-
-    /// Get prev_line_count from buffer.
-    fn nvim_buf_get_prev_line_count(buf: BufHandle) -> c_int;
-
-    /// Set prev_line_count on buffer.
-    fn nvim_buf_set_prev_line_count(buf: BufHandle, val: c_int);
 
     // ========================================================================
     // Memline operations
@@ -1314,15 +1306,15 @@ pub fn extmark_splice_impl(
 
     // Remove signs inside edited region from "b_signcols.count", add after splicing
     if old_row > 0 || new_row > 0 {
-        let prev_count = unsafe { nvim_buf_get_prev_line_count(buf) };
+        let prev_count = unsafe { buf_ref(buf).b_prev_line_count };
         let count = if prev_count > 0 {
             prev_count
         } else {
-            unsafe { nvim_buf_get_ml_line_count(buf) as c_int }
+            unsafe { buf_ref(buf).ml_line_count }
         };
         let row2 = (count - 1).min(start_row + old_row);
         unsafe { nvim_buf_signcols_count_range(buf, start_row, row2, 0, 1) }; // kTrue = 1
-        unsafe { nvim_buf_set_prev_line_count(buf, 0) };
+        unsafe { buf_mut(buf).b_prev_line_count = 0 };
     }
 
     let tree = unsafe { nvim_buf_get_marktree(buf) };
@@ -1333,7 +1325,7 @@ pub fn extmark_splice_impl(
     };
 
     if old_row > 0 || new_row > 0 {
-        let line_count = unsafe { nvim_buf_get_ml_line_count(buf) as c_int };
+        let line_count = unsafe { buf_ref(buf).ml_line_count };
         let row2 = (line_count - 1).min(start_row + new_row);
         unsafe { nvim_buf_signcols_count_range(buf, start_row, row2, 0, 0) }; // kNone = 0
     }
@@ -1657,7 +1649,7 @@ fn extmark_setraw(buf: BufHandle, mark_id: u64, row: c_int, col: ColnrT, invalid
     {
         row1 = alt.pos.row.min(key.pos.row.min(row));
         row2 = alt.pos.row.max(key.pos.row.max(row));
-        let line_count = unsafe { nvim_buf_get_ml_line_count(buf) as c_int };
+        let line_count = unsafe { buf_ref(buf).ml_line_count };
         unsafe { nvim_buf_signcols_count_range(buf, row1, (line_count - 1).min(row2), 0, 1) };
         // kTrue = 1
     }
@@ -1681,7 +1673,7 @@ fn extmark_setraw(buf: BufHandle, mark_id: u64, row: c_int, col: ColnrT, invalid
         && (key.flags & MT_FLAG_DECOR_SIGNTEXT != 0)
         && unsafe { nvim_buf_signcols_get_autom(buf) }
     {
-        let line_count = unsafe { nvim_buf_get_ml_line_count(buf) as c_int };
+        let line_count = unsafe { buf_ref(buf).ml_line_count };
         unsafe { nvim_buf_signcols_count_range(buf, row1, (line_count - 1).min(row2), 0, 0) };
         // kNone = 0
     }

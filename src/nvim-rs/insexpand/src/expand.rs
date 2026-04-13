@@ -270,10 +270,6 @@ extern "C" {
     static mut IObuff_expand: [std::ffi::c_char; 1025];
 
     // helpers for inlined nvim_ins_compl_st_msg_scanning (Phase 18)
-    #[link_name = "nvim_buf_get_b_fname"]
-    fn nvim_buf_get_b_fname_void(buf: nvim_buffer::BufHandle) -> *const std::ffi::c_char;
-    #[link_name = "nvim_buf_get_b_sfname"]
-    fn nvim_buf_get_b_sfname_void(buf: nvim_buffer::BufHandle) -> *const std::ffi::c_char;
     #[link_name = "rs_buf_spname"]
     fn buf_spname_void(buf: nvim_buffer::BufHandle) -> *mut std::ffi::c_char;
 
@@ -309,11 +305,11 @@ unsafe fn ins_compl_st_msg_scanning() {
         msg_ext_set_kind(c"completion".as_ptr());
         let ins_buf = nvim_buffer::BufHandle::from_ptr(crate::vars::ins_compl_st.ins_buf);
         let name_ptr: *const std::ffi::c_char = {
-            let fname = nvim_buf_get_b_fname_void(ins_buf);
+            let fname = nvim_buffer::buf_struct::buf_ref(ins_buf).b_fname;
             if fname.is_null() {
                 buf_spname_void(ins_buf).cast_const()
             } else {
-                let sfname = nvim_buf_get_b_sfname_void(ins_buf);
+                let sfname = nvim_buffer::buf_struct::buf_ref(ins_buf).b_sfname;
                 if sfname.is_null() {
                     fname
                 } else {

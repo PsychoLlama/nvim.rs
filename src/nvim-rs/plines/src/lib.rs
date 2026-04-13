@@ -16,7 +16,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use nvim_buffer::BufHandle;
+use nvim_buffer::{buf_struct::buf_ref, BufHandle};
 use nvim_mark::PosT;
 use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
@@ -55,10 +55,6 @@ extern "C" {
 
     // String utilities
     fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
-
-    // Buffer properties for charsize
-    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
-    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
 
     // Window properties for win_may_fill
     fn nvim_win_buf_meta_total_lines(wp: WinHandle) -> c_int;
@@ -350,8 +346,8 @@ fn charsize_nowrap_impl(
 
     unsafe {
         if cur_char == TAB && use_tabstop {
-            let ts = nvim_buf_get_p_ts(buf);
-            let vts = nvim_buf_get_p_vts_array(buf);
+            let ts = buf_ref(buf).b_p_ts;
+            let vts = buf_ref(buf).b_p_vts_array;
             rs_tabstop_padding(vcol, ts, vts)
         } else if cur_char < 0 {
             K_INVALID_BYTE_CELLS
@@ -776,8 +772,8 @@ pub unsafe extern "C" fn rs_win_chartabsize(wp: WinHandle, p: *const c_char, col
         let tab1 = nvim_win_get_lcs_tab1(wp);
 
         if !list || tab1 != 0 {
-            let ts = nvim_buf_get_p_ts(buf);
-            let vts = nvim_buf_get_p_vts_array(buf);
+            let ts = buf_ref(buf).b_p_ts;
+            let vts = buf_ref(buf).b_p_vts_array;
             return rs_tabstop_padding(col, ts, vts);
         }
     }
@@ -939,8 +935,8 @@ fn charsize_fast_impl(
         // A tab gets expanded, depending on the current column
         if cur_char == TAB && use_tabstop {
             let buf = BufHandle::from_ptr(win_ref(wp).w_buffer);
-            let ts = nvim_buf_get_p_ts(buf);
-            let vts = nvim_buf_get_p_vts_array(buf);
+            let ts = buf_ref(buf).b_p_ts;
+            let vts = buf_ref(buf).b_p_vts_array;
             return CharSize {
                 width: rs_tabstop_padding(vcol, ts, vts),
                 head: 0,
@@ -1209,8 +1205,8 @@ fn charsize_regular_impl(
 
         // Get buffer info for tabstop calculation
         let buf = BufHandle::from_ptr(win_ref(wp).w_buffer);
-        let ts = nvim_buf_get_p_ts(buf);
-        let vts = nvim_buf_get_p_vts_array(buf);
+        let ts = buf_ref(buf).b_p_ts;
+        let vts = buf_ref(buf).b_p_vts_array;
 
         // First get normal size, without 'linebreak' or inline virtual text
         let mut size: c_int;

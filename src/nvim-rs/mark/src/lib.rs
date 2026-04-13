@@ -4,7 +4,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use nvim_buffer::BufHandle;
+use nvim_buffer::{buf_struct::buf_ref, BufHandle};
 use nvim_window::WinHandle;
 
 /// Opaque handle to a tabpage (tab_T*).
@@ -86,11 +86,6 @@ extern "C" {
 extern "C" {
     // Memory management (kept for Phase 4+ migration)
 
-    // Buffer accessors
-    fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
-
     // Window jumplist accessors
     fn nvim_mark_win_get_jumplistlen(win: WinHandle) -> c_int;
     fn nvim_mark_win_set_jumplistlen(win: WinHandle, len: c_int);
@@ -129,9 +124,6 @@ extern "C" {
     fn nvim_mark_get_e_umark() -> *const c_char;
     fn nvim_mark_get_e_marknotset() -> *const c_char;
     fn nvim_mark_get_e_markinval() -> *const c_char;
-
-    // Cross-function callbacks (nvim_mark_fname2fnum replaced by rs_fname2fnum in Rust)
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
 
     // Phase 1: fname2fnum path/env accessors
     fn nvim_mark_get_namebuff() -> *mut c_char;
@@ -2203,7 +2195,7 @@ pub unsafe extern "C" fn rs_setpcmark(win: WinHandle, buf: BufHandle) {
     let new_pcmark_val = nvim_mark_win_get_pcmark(win);
     let topline = nvim_mark_win_get_topline(win);
     let view = rs_mark_view_make(topline, new_pcmark_val.lnum);
-    let fnum = nvim_buf_get_fnum(buf);
+    let fnum = buf_ref(buf).handle;
     nvim_mark_win_set_jumplist_xfmark(win, jumplistlen - 1, new_pcmark_val, fnum, view);
 }
 
@@ -2255,7 +2247,7 @@ pub unsafe extern "C" fn rs_get_jumplist(
             // Resolve the fnum (buff number) in the mark before returning it (shada)
             rs_fname2fnum(jmp);
         }
-        let curbuf_fnum = nvim_buf_get_fnum(curbuf_ptr);
+        let curbuf_fnum = buf_ref(curbuf_ptr).handle;
         if (*jmp).fmark.fnum != curbuf_fnum {
             // Needs to switch buffer, if it can't find it skip the mark
             let found_buf = nvim_mark_buflist_findnr((*jmp).fmark.fnum);
@@ -2292,7 +2284,7 @@ pub unsafe extern "C" fn rs_get_changelist(
     nvim_mark_win_set_changelistidx(win, new_n);
     let fm = nvim_mark_buf_get_changelist(buf, new_n);
     // Changelist marks are always buffer local
-    let buf_handle = nvim_buf_get_handle(buf);
+    let buf_handle = buf_ref(buf).handle;
     (*fm).fnum = buf_handle;
     fm
 }
@@ -2375,7 +2367,7 @@ pub unsafe extern "C" fn rs_cleanup_jumplist(wp: WinHandle, loadfiles: c_int) {
     let new_idx = nvim_mark_win_get_jumplistidx(wp);
     if loadfiles && new_len > 0 && new_idx == new_len {
         let curbuf_ptr = g_curbuf;
-        let curbuf_fnum = nvim_buf_get_fnum(curbuf_ptr);
+        let curbuf_fnum = buf_ref(curbuf_ptr).handle;
         let cursor_lnum = nvim_mark_win_get_cursor(wp).lnum;
         let last_fnum = nvim_mark_win_get_jumplist_fnum(wp, new_len - 1);
         let last_lnum = nvim_mark_win_get_jumplist_lnum(wp, new_len - 1);
@@ -2633,7 +2625,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
     mode: c_int,
     op: c_int,
 ) {
-    let fnum = nvim_buf_get_fnum(buf);
+    let fnum = buf_ref(buf).handle;
     let initpos = PosT {
         lnum: 1,
         col: 0,
@@ -2706,7 +2698,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
         if !(lc_pos.lnum == initpos.lnum
             && lc_pos.col == initpos.col
             && lc_pos.coladd == initpos.coladd)
-            && (!by_term || (*last_cursor).mark.lnum < nvim_buf_get_ml_line_count(buf))
+            && (!by_term || (*last_cursor).mark.lnum < buf_ref(buf).ml_line_count)
         {
             one_adjust(
                 &mut (*last_cursor).mark.lnum,
@@ -2838,7 +2830,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
                 }
 
                 // topline and cursor position
-                let line_count = nvim_buf_get_ml_line_count(buf);
+                let line_count = buf_ref(buf).ml_line_count;
                 let cursor_lnum = (*nvim_mark_win_get_cursor_ptr(win)).lnum;
                 if by_api
                     || (if by_term {
@@ -2871,7 +2863,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
                 }
                 if !by_api
                     && (if by_term {
-                        cursor_lnum < nvim_buf_get_ml_line_count(buf)
+                        cursor_lnum < buf_ref(buf).ml_line_count
                     } else {
                         win != curwin
                     })
@@ -2897,7 +2889,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
     let winfo_count = nvim_mark_buf_get_wininfo_count(buf);
     for i in 0..winfo_count {
         let wmark = nvim_mark_buf_get_wininfo_mark(buf, i);
-        if !by_term || (*wmark).lnum < nvim_buf_get_ml_line_count(buf) {
+        if !by_term || (*wmark).lnum < buf_ref(buf).ml_line_count {
             one_adjust_cursor(wmark, line1, line2, amount, amount_after);
         }
     }
@@ -2916,7 +2908,7 @@ pub unsafe extern "C" fn rs_mark_col_adjust_all(
     spaces_removed: c_int,
 ) {
     let curbuf_ptr = g_curbuf;
-    let fnum = nvim_buf_get_fnum(curbuf_ptr);
+    let fnum = buf_ref(curbuf_ptr).handle;
 
     if (col_amount == 0 && lnum_amount == 0) || (nvim_mark_get_cmod_flags() & CMOD_LOCKMARKS) != 0 {
         return; // nothing to do
@@ -3499,7 +3491,7 @@ const GETF_SETMARK: c_int = 0x01; // set pcmark before jumping
 /// # Safety
 /// `fm` must be a valid pointer to a `FmarkT`.
 unsafe fn switch_to_mark_buf(fm: *const FmarkT, pcmark_on_switch: bool) -> c_int {
-    let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+    let curbuf_fnum = buf_ref(g_curbuf).handle;
     if (*fm).fnum != curbuf_fnum {
         // Switch to another file.
         let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };
@@ -3549,7 +3541,7 @@ pub unsafe extern "C" fn exported_mark_move_to(fm: *mut FmarkT, flags: c_int) ->
         return mark_move_res::FAILED;
     }
 
-    let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+    let curbuf_fnum = buf_ref(g_curbuf).handle;
     let fm_ref = if (*fm).fnum != curbuf_fnum {
         // Need to change buffer: copy for autocommand safety
         FM_COPY = *fm;
@@ -4470,7 +4462,7 @@ pub unsafe extern "C" fn rs_pos_to_mark(
     } else {
         fmp
     };
-    (*fm).fnum = nvim_buf_get_handle(buf);
+    (*fm).fnum = buf_ref(buf).handle;
     (*fm).mark = pos;
     fm
 }
@@ -4501,7 +4493,7 @@ pub unsafe extern "C" fn rs_mark_check_line_bounds(
     errormsg: *mut *const c_char,
     e_markinval_str: *const c_char,
 ) -> c_int {
-    if !buf.is_null() && fm_mark_lnum > nvim_buf_get_ml_line_count(buf) {
+    if !buf.is_null() && fm_mark_lnum > buf_ref(buf).ml_line_count {
         if !errormsg.is_null() {
             *errormsg = e_markinval_str;
         }
@@ -4523,7 +4515,7 @@ pub unsafe extern "C" fn rs_fmarks_check_one(
     buf: BufHandle,
 ) {
     if (*fm).fmark.fnum == 0 && !(*fm).fname.is_null() && path_fnamecmp(name, (*fm).fname) == 0 {
-        (*fm).fmark.fnum = nvim_buf_get_fnum(buf);
+        (*fm).fmark.fnum = buf_ref(buf).handle;
         // XFREE_CLEAR: free and null the pointer
         xfree((*fm).fname as *mut c_void);
         (*fm).fname = std::ptr::null_mut();
@@ -4684,7 +4676,7 @@ pub unsafe extern "C" fn rs_mark_check(
         return 0;
     }
     // Only check for valid line number if the buffer is loaded.
-    let curbuf_handle = nvim_buf_get_handle(curbuf);
+    let curbuf_handle = buf_ref(curbuf).handle;
     if (*fm).fnum == curbuf_handle {
         let e_markinval_str = nvim_mark_get_e_markinval();
         if rs_mark_check_line_bounds(curbuf, lnum, errormsg, e_markinval_str) == 0 {
@@ -4755,7 +4747,7 @@ pub unsafe extern "C" fn rs_mark_get_local(
     }
 
     if !mark.is_null() {
-        (*mark).fnum = nvim_buf_get_fnum(buf);
+        (*mark).fnum = buf_ref(buf).handle;
     }
 
     mark
@@ -4808,7 +4800,7 @@ pub unsafe extern "C" fn rs_mark_get(
         let resolve = if flag != MARK_ALL_NO_RESOLVE { 1 } else { 0 };
         let xfm = rs_mark_get_global(resolve, name);
         fm = &raw mut (*xfm).fmark;
-        if flag == MARK_BUF_LOCAL && (*xfm).fmark.fnum != nvim_buf_get_handle(buf) {
+        if flag == MARK_BUF_LOCAL && (*xfm).fmark.fnum != buf_ref(buf).handle {
             let zero_pos = PosT {
                 lnum: 0,
                 col: 0,
@@ -4926,7 +4918,7 @@ pub unsafe extern "C" fn rs_fm_getname(
     lead_len: c_int,
     curbuf_ptr: BufHandle,
 ) -> *mut c_char {
-    if (*fmark).fnum == nvim_buf_get_fnum(curbuf_ptr) {
+    if (*fmark).fnum == buf_ref(curbuf_ptr).handle {
         return rs_mark_line(&raw mut (*fmark).mark, lead_len);
     }
     nvim_mark_buflist_nr2name((*fmark).fnum, 0, 1)
@@ -4982,7 +4974,7 @@ pub unsafe fn rs_fname2fnum(fm: *mut XfmarkT) {
 /// `buf` must be a valid buffer handle.
 #[unsafe(export_name = "fmarks_check_names")]
 pub unsafe extern "C" fn rs_fmarks_check_names(buf: BufHandle) {
-    let name = nvim_buf_get_b_ffname(buf);
+    let name = buf_ref(buf).b_ffname;
     if name.is_null() {
         return;
     }
@@ -5069,7 +5061,7 @@ pub unsafe extern "C" fn rs_setmark_pos(
         let last_cursor = nvim_mark_buf_get_last_cursor(buf);
         // RESET_FMARK: free old, set new
         rs_free_fmark(*last_cursor);
-        let buf_fnum = nvim_buf_get_fnum(buf);
+        let buf_fnum = buf_ref(buf).handle;
         *last_cursor = FmarkT {
             mark: *pos,
             fnum: buf_fnum,
@@ -5107,7 +5099,7 @@ pub unsafe extern "C" fn rs_setmark_pos(
 
     if c == c_int::from(b':') && nvim_mark_bt_prompt(buf) != 0 {
         let prompt_start = nvim_mark_buf_get_prompt_start(buf);
-        let buf_fnum = nvim_buf_get_fnum(buf);
+        let buf_fnum = buf_ref(buf).handle;
         rs_free_fmark(*prompt_start);
         *prompt_start = FmarkT {
             mark: *pos,
@@ -5505,7 +5497,7 @@ pub unsafe extern "C" fn exported_setmark(c: c_int) -> c_int {
     let cursor = nvim_mark_win_get_cursor(g_curwin);
     let view = rs_mark_view_make(topline, cursor.lnum);
     let cursor_ptr = nvim_mark_win_get_cursor_ptr(g_curwin);
-    let fnum = nvim_buf_get_fnum(g_curbuf);
+    let fnum = buf_ref(g_curbuf).handle;
     rs_setmark_pos(c, cursor_ptr, fnum, &view)
 }
 
@@ -5519,7 +5511,7 @@ pub unsafe extern "C" fn exported_setmark(c: c_int) -> c_int {
 pub unsafe extern "C" fn rs_mark_line(mp: *mut PosT, lead_len: c_int) -> *mut c_char {
     const INVALID: &[u8] = b"-invalid-\0";
     let lnum = (*mp).lnum;
-    let line_count = nvim_buf_get_ml_line_count(g_curbuf);
+    let line_count = buf_ref(g_curbuf).ml_line_count;
     if lnum == 0 || lnum > line_count {
         return xstrdup(INVALID.as_ptr() as *const c_char);
     }
@@ -5691,7 +5683,7 @@ pub unsafe extern "C" fn exported_ex_marks(eap: *mut c_void) {
                 } else {
                     i + b'A' as c_int
                 };
-                let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+                let curbuf_fnum = buf_ref(g_curbuf).handle;
                 show_one_mark(
                     mark_char,
                     arg,
@@ -5841,7 +5833,7 @@ pub unsafe extern "C" fn exported_ex_jumps(_eap: *mut c_void) {
 
     let jumplistlen = nvim_mark_win_get_jumplistlen(g_curwin);
     let jumplistidx = nvim_mark_win_get_jumplistidx(g_curwin);
-    let curbuf_fnum = nvim_buf_get_fnum(g_curbuf);
+    let curbuf_fnum = buf_ref(g_curbuf).handle;
 
     for i in 0..jumplistlen {
         if got_int {
@@ -6211,7 +6203,7 @@ unsafe fn rs_add_mark(
 /// `buf` and `l` must be valid pointers.
 #[unsafe(export_name = "get_buf_local_marks")]
 pub unsafe extern "C" fn exported_get_buf_local_marks(buf: BufHandle, l: *mut c_void) {
-    let fnum = nvim_buf_get_fnum(buf);
+    let fnum = buf_ref(buf).handle;
     let mut mname = [0u8; 3];
     mname[0] = b'\'';
     mname[2] = 0;
@@ -6233,7 +6225,7 @@ pub unsafe extern "C" fn exported_get_buf_local_marks(buf: BufHandle, l: *mut c_
     let curwin = g_curwin;
     let pcmark = nvim_mark_win_get_pcmark(curwin);
     let curbuf = g_curbuf;
-    let curbuf_fnum = nvim_buf_get_fnum(curbuf);
+    let curbuf_fnum = buf_ref(curbuf).handle;
     rs_add_mark(l, c"''".as_ptr(), &pcmark, curbuf_fnum, std::ptr::null());
 
     // Mark '"' (b_last_cursor)

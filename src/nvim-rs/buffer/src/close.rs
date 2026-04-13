@@ -10,7 +10,10 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{buf_struct::buf_ref, BufHandle};
+use crate::{
+    buf_struct::{buf_mut, buf_ref},
+    BufHandle,
+};
 
 // =============================================================================
 // Constants (from buffer.h / buffer_defs.h)
@@ -81,9 +84,6 @@ extern "C" {
 
     fn nvim_buf_lock(buf: BufHandle);
     fn nvim_buf_unlock(buf: BufHandle);
-    fn nvim_buf_set_nwindows(buf: BufHandle, val: c_int);
-    fn nvim_buf_flags_and(buf: BufHandle, mask: c_int);
-    fn nvim_buf_set_ml_line_count(buf: BufHandle, val: c_int);
 
     fn set_bufref(bufref: *mut BufRef, buf: BufHandle);
     #[link_name = "rs_bufref_valid"]
@@ -129,14 +129,12 @@ extern "C" {
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_entered_free_all_mem() -> c_int;
     fn end_visual_mode();
-    fn nvim_buf_set_flags(buf: BufHandle, flags: c_int);
     fn nvim_win_set_buffer_null(win: *mut c_void);
     fn nvim_mark_forget_file_all_tabs(fnum: c_int);
     fn nvim_buf_wipe_free(buf: BufHandle);
     fn nvim_buf_free_stuff_del(buf: BufHandle);
     fn set_last_cursor(win: *mut c_void);
     fn nvim_buf_b_ffname_is_null(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_p_initialized(buf: BufHandle, val: c_int);
     fn can_unload_buffer(buf: BufHandle) -> bool;
 
     fn rs_buf_effective_action(buf: BufHandle, action: c_int) -> c_int;
@@ -255,14 +253,14 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     nvim_buf_clearFolding_all_windows(buf);
 
     ml_close(buf, true); // close and delete the memline/memfile
-    nvim_buf_set_ml_line_count(buf, 0_i32); // no lines in buffer
+    buf_mut(buf).ml_line_count = 0; // no lines in buffer
 
     if (flags & BFA_KEEP_UNDO) == 0 {
         u_clearallandblockfree(buf);
     }
 
     nvim_syntax_clear_buf(buf); // reset syntax info
-    nvim_buf_flags_and(buf, !BF_READERR); // a read error is no longer relevant
+    buf_mut(buf).b_flags &= !BF_READERR; // a read error is no longer relevant
 }
 
 // =============================================================================
@@ -420,7 +418,7 @@ pub unsafe extern "C" fn rs_close_buffer(
         end_visual_mode();
     }
 
-    nvim_buf_set_nwindows(buf, nwindows);
+    buf_mut(buf).b_nwindows = nwindows;
 
     buf_freeall(
         buf,
@@ -468,10 +466,10 @@ pub unsafe extern "C" fn rs_close_buffer(
             nvim_buf_free_stuff_del(buf);
 
             // Make it look like a new buffer.
-            nvim_buf_set_flags(buf, BF_CHECK_RO | BF_NEVERLOADED);
+            buf_mut(buf).b_flags = BF_CHECK_RO | BF_NEVERLOADED;
 
             // Init the options when loaded again.
-            nvim_buf_set_b_p_initialized(buf, 0);
+            buf_mut(buf).b_p_initialized = 0;
         }
         crate::state::rs_buf_clear_file(buf);
         if clear_w_buf {

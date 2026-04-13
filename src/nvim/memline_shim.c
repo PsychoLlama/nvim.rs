@@ -414,7 +414,6 @@ bool nvim_curbuf_get_b_p_eol(void) { return curbuf->b_p_eol; }
 bool nvim_curbuf_get_b_p_fixeol(void) { return curbuf->b_p_fixeol; }
 void nvim_ml_setname(buf_T *buf) { ml_setname(buf); }
 void nvim_ml_timestamp(buf_T *buf) { ml_timestamp(buf); }
-int nvim_buf_get_no_eol_lnum(buf_T *buf) { return (int)buf->b_no_eol_lnum; }
 void nvim_sb_push_byte(void *sb, char byte) { kv_push(*(StringBuilder *)sb, byte); }
 void nvim_sb_concat_len(void *sb, const char *ptr, size_t len) { kv_concat_len(*(StringBuilder *)sb, ptr, len); }
 

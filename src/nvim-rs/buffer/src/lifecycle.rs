@@ -12,7 +12,10 @@
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
-use crate::{buf_struct::buf_ref, errors, win_mut_raw, win_ref_raw, BufHandle};
+use crate::{
+    buf_struct::{buf_mut, buf_ref},
+    errors, win_mut_raw, win_ref_raw, BufHandle,
+};
 
 // =============================================================================
 // External C Statics
@@ -31,10 +34,6 @@ extern "C" {
     fn nvim_get_lastbuf() -> BufHandle;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> *mut c_void;
-    fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_b_next(buf: BufHandle) -> BufHandle;
-
     // Jump list accessors (implemented in mark.c)
     fn nvim_mark_win_get_jumplistlen(win: *mut c_void) -> c_int;
     fn nvim_mark_win_set_jumplistidx(win: *mut c_void, idx: c_int);
@@ -590,13 +589,13 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
     // 3. Walk forward then backward through buffer list.
     if result.is_null() {
         let mut forward = true;
-        let mut buf = nvim_buf_get_b_next(curbuf);
+        let mut buf = BufHandle::from_ptr(buf_ref(curbuf).b_next);
         loop {
             if buf.is_null() {
                 if !forward {
                     break; // tried both directions
                 }
-                buf = nvim_buf_get_prev(curbuf);
+                buf = BufHandle::from_ptr(buf_ref(curbuf).b_prev);
                 forward = false;
                 continue;
             }
@@ -614,9 +613,9 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
                 }
             }
             buf = if forward {
-                nvim_buf_get_b_next(buf)
+                BufHandle::from_ptr(buf_ref(buf).b_next)
             } else {
-                nvim_buf_get_prev(buf)
+                BufHandle::from_ptr(buf_ref(buf).b_prev)
             };
         }
     }
@@ -634,14 +633,14 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
                 result = buf;
                 break;
             }
-            buf = nvim_buf_get_b_next(buf);
+            buf = BufHandle::from_ptr(buf_ref(buf).b_next);
         }
     }
 
     // 6. Last resort: adjacent buffer (even if quickfix).
     if result.is_null() {
-        let next = nvim_buf_get_b_next(curbuf);
-        let prev = nvim_buf_get_prev(curbuf);
+        let next = BufHandle::from_ptr(buf_ref(curbuf).b_next);
+        let prev = BufHandle::from_ptr(buf_ref(curbuf).b_prev);
         result = if !next.is_null() && !rs_bt_quickfix(next) {
             next
         } else if !prev.is_null() && !rs_bt_quickfix(prev) {
@@ -662,14 +661,14 @@ pub unsafe fn find_buffer_for_delete(buf_fnum: c_int, update_jumplist: *mut c_in
 /// Advance `buf` one step forward or backward, wrapping at list ends.
 unsafe fn nav_step(buf: BufHandle, dir: c_int) -> BufHandle {
     if dir == FORWARD {
-        let next = nvim_buf_get_b_next(buf);
+        let next = BufHandle::from_ptr(buf_ref(buf).b_next);
         if next.is_null() {
             nvim_get_firstbuf()
         } else {
             next
         }
     } else {
-        let prev = nvim_buf_get_prev(buf);
+        let prev = BufHandle::from_ptr(buf_ref(buf).b_prev);
         if prev.is_null() {
             nvim_get_lastbuf()
         } else {
@@ -716,7 +715,7 @@ unsafe fn find_and_validate_buffer(
         let mut remaining = count;
         while remaining > 0 {
             loop {
-                let next = nvim_buf_get_b_next(buf);
+                let next = BufHandle::from_ptr(buf_ref(buf).b_next);
                 buf = if next.is_null() {
                     nvim_get_firstbuf()
                 } else {
@@ -735,7 +734,7 @@ unsafe fn find_and_validate_buffer(
     } else if start == DOBUF_FIRST && count != 0 {
         // Find buffer by number.
         while !buf.is_null() && buf_ref(buf).handle != count {
-            buf = nvim_buf_get_b_next(buf);
+            buf = BufHandle::from_ptr(buf_ref(buf).b_next);
         }
     } else {
         // Navigate count steps forward/backward through listed buffers.
@@ -1615,7 +1614,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
                 bp = iter;
                 break;
             }
-            iter = nvim_buf_get_next(iter);
+            iter = BufHandle::from_ptr(buf_ref(iter).b_next);
         }
         if bp.is_null() && buf == nvim_get_curbuf() {
             return empty_curbuf(true, flags & DOBUF_FORCEIT, action);
@@ -1719,7 +1718,6 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
 extern "C" {
     fn nvim_curwin_set_buffer2(buf: BufHandle);
     fn nvim_set_curbuf_ptr(buf: BufHandle);
-    fn nvim_buf_set_nwindows(buf: BufHandle, val: c_int);
     fn buf_copy_options(buf: BufHandle, flags: c_int);
     fn get_winopts(buf: BufHandle);
     fn rs_clearFolding(win: *mut c_void);
@@ -1824,7 +1822,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     nvim_curwin_set_buffer2(buf);
     nvim_set_curbuf_ptr(buf);
     let nwindows = buf_ref(buf).b_nwindows;
-    nvim_buf_set_nwindows(buf, nwindows + 1);
+    buf_mut(buf).b_nwindows = nwindows + 1;
 
     // Copy buffer and window local option values.  Not for a help buffer.
     buf_copy_options(buf, BCO_ENTER | BCO_NOHELP);
@@ -2115,7 +2113,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
     while !buf.is_null() && open_wins < count {
         // Check if this buffer needs a window.
         if (!all && buf_ref(buf).ml_mfp_is_null()) || buf_ref(buf).b_p_bl == 0 {
-            buf = nvim_buf_get_b_next(buf);
+            buf = BufHandle::from_ptr(buf_ref(buf).b_next);
             continue;
         }
 
@@ -2160,7 +2158,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
             open_wins += 1;
             nvim_al_set_p_ea(p_ea_save);
             if split_ret == FAIL {
-                buf = nvim_buf_get_b_next(buf);
+                buf = BufHandle::from_ptr(buf_ref(buf).b_next);
                 continue;
             }
 
@@ -2204,7 +2202,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
             nvim_al_set_cmdmod_cmod_tab(9999);
         }
 
-        buf = nvim_buf_get_b_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
     }
 
     let ane = nvim_al_get_autocmd_no_enter();

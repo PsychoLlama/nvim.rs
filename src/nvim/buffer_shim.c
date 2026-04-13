@@ -142,14 +142,7 @@ linenr_T nvim_buflist_findlnum(buf_T *buf) { return buflist_findfmark(buf)->mark
 int nvim_get_argcount(void) { return ARGCOUNT; }
 buf_T *nvim_get_cmdwin_buf(void) { return cmdwin_buf; }
 void nvim_buf_set_ml_line_count(buf_T *buf, linenr_T val) { buf->b_ml.ml_line_count = val; }
-void nvim_buf_set_ml_mfp_null(buf_T *buf) { buf->b_ml.ml_mfp = NULL; }
 int64_t nvim_buf_get_changedtick_direct(buf_T *buf) { return buf_get_changedtick(buf); }
-void nvim_buf_set_p_eof(buf_T *buf, int val) { buf->b_p_eof = val; }
-void nvim_buf_set_start_eof(buf_T *buf, int val) { buf->b_start_eof = val; }
-void nvim_buf_set_p_eol(buf_T *buf, int val) { buf->b_p_eol = val; }
-void nvim_buf_set_start_eol(buf_T *buf, int val) { buf->b_start_eol = val; }
-void nvim_buf_set_p_bomb(buf_T *buf, int val) { buf->b_p_bomb = val; }
-void nvim_buf_set_start_bomb(buf_T *buf, int val) { buf->b_start_bomb = val; }
 int nvim_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 buf_T *nvim_handle_get_buffer(handle_T handle) { return handle_get_buffer(handle); }
 int nvim_buf_terminal_running(buf_T *buf)
@@ -438,7 +431,6 @@ void nvim_buf_changedtick_di_tv_copy(buf_T *buf, void *out)
 { memcpy(out, &buf->changedtick_di.di_tv, sizeof(typval_T)); }
 void nvim_buf_changedtick_di_set_number(buf_T *buf, int64_t val)
 { buf->changedtick_di.di_tv.vval.v_number = (varnumber_T)val; }
-dict_T *nvim_buf_get_b_vars(buf_T *buf) { return buf->b_vars; }
 void nvim_tv_dict_watcher_notify(dict_T *dict, const char *key, void *newtv, void *oldtv)
 { tv_dict_watcher_notify(dict, (char *)key, (typval_T *)newtv, (typval_T *)oldtv); }
 const char *nvim_buf_changedtick_di_key(buf_T *buf) { return (const char *)buf->changedtick_di.di_key; }
@@ -506,8 +498,6 @@ int do_buffer_ext(int action, int start, int dir, int count, int flags)
 { return rs_do_buffer_ext(action, start, dir, count, flags); }
 void nvim_buf_lock(buf_T *buf) { buf->b_locked++; buf->b_locked_split++; }
 void nvim_buf_unlock(buf_T *buf) { buf->b_locked--; buf->b_locked_split--; }
-void nvim_buf_set_nwindows(buf_T *buf, int val) { buf->b_nwindows = val; }
-void nvim_buf_flags_and(buf_T *buf, int mask) { buf->b_flags &= mask; }
 void nvim_syntax_clear_buf(buf_T *buf) { syntax_clear(&buf->b_s); }
 void nvim_buf_clearFolding_all_windows(buf_T *buf)
 { FOR_ALL_TAB_WINDOWS(tp, win) { if (win->w_buffer == buf) { rs_clearFolding(win); } } }
@@ -529,7 +519,6 @@ int nvim_get_entered_free_all_mem(void)
   return 0;
 #endif
 }
-void nvim_buf_set_flags(buf_T *buf, int flags) { buf->b_flags = flags; }
 void nvim_win_set_buffer_null(win_T *win) { win->w_buffer = NULL; }
 void nvim_mark_forget_file_all_tabs(int fnum)
 { FOR_ALL_TAB_WINDOWS(tp, wp) { mark_forget_file(wp, fnum); } }

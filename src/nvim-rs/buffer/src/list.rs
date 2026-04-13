@@ -33,10 +33,6 @@ extern "C" {
     fn nvim_get_firstbuf() -> BufHandle;
     fn nvim_get_lastbuf() -> BufHandle;
     fn nvim_get_curbuf() -> BufHandle;
-    fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
-
     // Phase 2 accessors
     fn nvim_curwin_get_alt_fnum() -> c_int;
     fn nvim_handle_get_buffer(handle: c_int) -> BufHandle;
@@ -184,7 +180,7 @@ pub unsafe fn get_next_buf(buf: BufHandle) -> BufHandle {
     if buf.is_null() {
         return BufHandle::from_ptr(std::ptr::null_mut());
     }
-    nvim_buf_get_next(buf)
+    BufHandle::from_ptr(buf_ref(buf).b_next)
 }
 
 /// Get the previous buffer from the given buffer.
@@ -197,7 +193,7 @@ pub unsafe fn get_prev_buf(buf: BufHandle) -> BufHandle {
     if buf.is_null() {
         return BufHandle::from_ptr(std::ptr::null_mut());
     }
-    nvim_buf_get_prev(buf)
+    BufHandle::from_ptr(buf_ref(buf).b_prev)
 }
 
 /// Navigate to the next/previous buffer in the given direction.
@@ -228,7 +224,7 @@ pub unsafe fn count_buffers() -> usize {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
         count += 1;
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
     }
     count
 }
@@ -248,7 +244,7 @@ where
         if predicate(buf) {
             count += 1;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
     }
     count
 }
@@ -269,7 +265,7 @@ pub unsafe fn find_buf_by_fnum(fnum: c_int) -> BufHandle {
         if buf_ref(buf).handle == fnum {
             return buf;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
     }
     BufHandle::from_ptr(std::ptr::null_mut())
 }
@@ -288,7 +284,7 @@ where
         if predicate(buf) {
             return buf;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
     }
     BufHandle::from_ptr(std::ptr::null_mut())
 }
@@ -306,7 +302,7 @@ pub unsafe fn find_buf_at_index(index: usize) -> BufHandle {
         if i == index {
             return buf;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
         i += 1;
     }
     BufHandle::from_ptr(std::ptr::null_mut())
@@ -330,7 +326,7 @@ pub unsafe fn get_buf_index(target: BufHandle) -> c_int {
         if buf == target {
             return i;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
         i += 1;
     }
     -1
@@ -385,7 +381,7 @@ pub unsafe fn get_buf_list_info(target: BufHandle) -> BufListInfo {
         if buf == target {
             info.index = i;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
         i += 1;
     }
     info.total = i;
@@ -567,7 +563,7 @@ unsafe fn buflist_findname_file_id_impl(
         {
             return buf;
         }
-        buf = nvim_buf_get_prev(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_prev);
     }
     BufHandle(std::ptr::null_mut())
 }
@@ -686,7 +682,7 @@ pub unsafe fn buflist_list_impl(eap: *const ExArg) {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
         bufs.push(buf);
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
     }
 
     // Optionally sort by last used time
@@ -1008,13 +1004,13 @@ pub unsafe fn buflist_findpat_impl(
                     if match_fnum >= 0 {
                         // Multiple matches
                         match_fnum = -2;
-                        buf = nvim_buf_get_prev(buf);
+                        buf = BufHandle::from_ptr(buf_ref(buf).b_prev);
                         continue;
                     }
                     match_fnum = buf_ref(buf).handle;
                 }
 
-                buf = nvim_buf_get_prev(buf);
+                buf = BufHandle::from_ptr(buf_ref(buf).b_prev);
             }
 
             nvim_bufname_regex_free(regex_handle);

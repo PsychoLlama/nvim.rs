@@ -2,7 +2,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use nvim_buffer::BufHandle;
+use nvim_buffer::{buf_struct::buf_ref, BufHandle};
 use nvim_memory::xfree;
 
 use crate::{rs_indent_size_no_ts, rs_indent_size_ts, WinHandle};
@@ -36,9 +36,6 @@ extern "C" {
     fn nvim_win_get_briopt_shift(wp: WinHandle) -> c_int;
     fn nvim_win_get_briopt_min(wp: WinHandle) -> c_int;
     fn nvim_win_get_briopt_vcol(wp: WinHandle) -> c_int;
-    fn nvim_buf_get_b_fnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
-    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
     fn nvim_indent_buf_get_changedtick(buf: BufHandle) -> i64;
     fn nvim_get_flp_value(buf: BufHandle) -> *const c_char;
     fn nvim_get_dy_flags_uhex() -> u32;
@@ -113,9 +110,9 @@ pub unsafe extern "C" fn rs_get_breakindent_win(wp: WinHandle, line: *const c_ch
     // In list mode, if 'listchars' "tab" isn't set, a TAB is displayed as ^I.
     let no_ts = nvim_win_get_p_list(wp) != 0 && nvim_win_get_lcs_tab1(wp) == 0;
 
-    let b_p_ts = nvim_buf_get_p_ts(buf);
-    let b_p_vts = nvim_buf_get_p_vts_array(buf);
-    let b_fnum = nvim_buf_get_b_fnum(buf);
+    let b_p_ts = buf_ref(buf).b_p_ts;
+    let b_p_vts = buf_ref(buf).b_p_vts_array;
+    let b_fnum = buf_ref(buf).handle;
     let tick = nvim_indent_buf_get_changedtick(buf);
     let listopt = nvim_win_get_briopt_list(wp);
     let dy_uhex = nvim_get_dy_flags_uhex();

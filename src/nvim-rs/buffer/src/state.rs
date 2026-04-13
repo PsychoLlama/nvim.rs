@@ -13,7 +13,10 @@
 use std::ffi::{c_char, c_int};
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use crate::{buf_struct::buf_ref, BufHandle};
+use crate::{
+    buf_struct::{buf_mut, buf_ref},
+    BufHandle,
+};
 
 // =============================================================================
 // Global counters (migrated from C static variables in buffer.c)
@@ -118,17 +121,6 @@ extern "C" {
     fn nvim_buf_get_changedtick(buf: BufHandle) -> c_int;
     fn ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
 
-    // Phase 1 accessors: buffer ml and file state fields
-    fn nvim_buf_set_ml_line_count(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_ml_mfp_null(buf: BufHandle);
-    fn nvim_buf_set_ml_flags(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_p_eof(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_start_eof(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_p_eol(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_start_eol(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_p_bomb(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_start_bomb(buf: BufHandle, val: c_int);
-
     // Phase 1: unchanged, changedtick, autocmd, close_buffer
     fn unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool);
     fn nvim_buf_get_changedtick_direct(buf: BufHandle) -> i64;
@@ -145,7 +137,6 @@ extern "C" {
     // Phase 2: changedtick_di watcher machinery
     fn nvim_buf_changedtick_di_tv_copy(buf: BufHandle, out: *mut u8);
     fn nvim_buf_changedtick_di_set_number(buf: BufHandle, val: i64);
-    fn nvim_buf_get_b_vars(buf: BufHandle) -> *mut std::ffi::c_void;
     fn nvim_tv_dict_is_watched(dict: *const std::ffi::c_void) -> bool;
     fn nvim_tv_dict_watcher_notify(
         dict: *mut std::ffi::c_void,
@@ -466,16 +457,16 @@ pub unsafe extern "C" fn rs_buf_clear_file(buf: BufHandle) {
     if buf.is_null() {
         return;
     }
-    nvim_buf_set_ml_line_count(buf, 1);
+    buf_mut(buf).ml_line_count = 1;
     unchanged(buf, true, true);
-    nvim_buf_set_p_eof(buf, 0);
-    nvim_buf_set_start_eof(buf, 0);
-    nvim_buf_set_p_eol(buf, 1);
-    nvim_buf_set_start_eol(buf, 1);
-    nvim_buf_set_p_bomb(buf, 0);
-    nvim_buf_set_start_bomb(buf, 0);
-    nvim_buf_set_ml_mfp_null(buf);
-    nvim_buf_set_ml_flags(buf, ML_EMPTY);
+    buf_mut(buf).b_p_eof = 0;
+    buf_mut(buf).b_start_eof = 0;
+    buf_mut(buf).b_p_eol = 1;
+    buf_mut(buf).b_start_eol = 1;
+    buf_mut(buf).b_p_bomb = 0;
+    buf_mut(buf).b_start_bomb = 0;
+    buf_mut(buf).ml_mfp = std::ptr::null_mut();
+    buf_mut(buf).ml_flags = ML_EMPTY;
 }
 
 /// Size of typval_T in bytes (asserted in testing.c).
@@ -501,7 +492,7 @@ pub unsafe extern "C" fn rs_buf_set_changedtick(buf: BufHandle, changedtick: i64
     nvim_buf_changedtick_di_set_number(buf, changedtick);
 
     // Notify dict watchers if any.
-    let b_vars = nvim_buf_get_b_vars(buf);
+    let b_vars = buf_ref(buf).b_vars;
     if nvim_tv_dict_is_watched(b_vars.cast_const()) {
         // Increment b_locked around the notify to match C semantics.
         nvim_buf_b_locked_inc(buf);

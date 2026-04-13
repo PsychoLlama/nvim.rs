@@ -42,7 +42,6 @@ extern "C" {
     fn get_text_locked_msg() -> *const c_char;
 
     // For curbuf_locked / allbuf_locked
-    fn nvim_buf_get_b_ro_locked(buf: BufHandle) -> c_int;
     static allbuf_lock: c_int;
     static e_cannot_edit_other_buf: c_char;
 
@@ -232,7 +231,7 @@ pub unsafe extern "C" fn allbuf_locked() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn curbuf_locked() -> bool {
     let curbuf = nvim_get_curbuf();
-    if nvim_buf_get_b_ro_locked(curbuf) > 0 {
+    if buf_ref(curbuf).b_ro_locked > 0 {
         emsg(gettext(&raw const e_cannot_edit_other_buf));
         return true;
     }
@@ -419,9 +418,6 @@ extern "C" {
     // nvim_ml_get_buf_len: takes *mut c_void in quickfix_shim.c
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
     fn nvim_buf_ml_is_empty(buf: BufHandle) -> bool;
-    fn nvim_buf_get_no_eol_lnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_fixeol(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_eol(buf: BufHandle) -> bool;
     fn nvim_sb_push_byte(sb: *mut c_void, byte: c_char);
     fn nvim_sb_concat_len(sb: *mut c_void, ptr: *const c_char, len: usize);
 }
@@ -451,10 +447,10 @@ pub unsafe extern "C" fn rs_read_buffer_into(
     }
 
     let ml_line_count = buf_ref(buf).ml_line_count;
-    let no_eol_lnum = nvim_buf_get_no_eol_lnum(buf);
+    let no_eol_lnum = buf_ref(buf).b_no_eol_lnum;
     let bin = buf_ref(buf).b_p_bin != 0;
-    let fixeol = nvim_buf_get_b_p_fixeol(buf);
-    let eol = nvim_buf_get_b_p_eol(buf);
+    let fixeol = buf_ref(buf).b_p_fixeol != 0;
+    let eol = buf_ref(buf).b_p_eol != 0;
 
     let mut lnum = start;
     let mut lp = nvim_ml_get_buf(buf, lnum);

@@ -5,16 +5,12 @@
 
 use std::ffi::{c_char, c_int};
 
-use nvim_buffer::BufHandle;
+use nvim_buffer::{buf_struct::buf_ref, BufHandle};
 
 use crate::{rs_get_sw_value_col, rs_indent_size_ts};
 
 // External C accessor functions
 extern "C" {
-    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
-    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
-    fn nvim_buf_get_p_sts(buf: BufHandle) -> i64;
-
     // Line getters
     fn nvim_curbuf_get_line_ptr() -> *const c_char;
     #[link_name = "ml_get"]
@@ -77,7 +73,7 @@ pub unsafe extern "C" fn rs_get_sw_value_indent(buf: BufHandle, left: bool) -> c
 #[export_name = "get_sts_value"]
 pub unsafe extern "C" fn rs_get_sts_value() -> c_int {
     let buf = nvim_get_curbuf();
-    let sts = nvim_buf_get_p_sts(buf);
+    let sts = buf_ref(buf).b_p_sts;
     if sts < 0 {
         rs_get_sw_value(buf)
     } else {
@@ -98,8 +94,8 @@ pub unsafe extern "C" fn rs_get_sts_value() -> c_int {
 pub unsafe extern "C" fn rs_get_indent() -> c_int {
     let buf = nvim_get_curbuf();
     let line = nvim_curbuf_get_line_ptr();
-    let ts = nvim_buf_get_p_ts(buf);
-    let vts = nvim_buf_get_p_vts_array(buf);
+    let ts = buf_ref(buf).b_p_ts;
+    let vts = buf_ref(buf).b_p_vts_array;
     rs_indent_size_ts(line, ts, vts)
 }
 
@@ -112,8 +108,8 @@ pub unsafe extern "C" fn rs_get_indent() -> c_int {
 pub unsafe extern "C" fn rs_get_indent_lnum(lnum: LineNr) -> c_int {
     let buf = nvim_get_curbuf();
     let line = nvim_curbuf_get_line_at(lnum);
-    let ts = nvim_buf_get_p_ts(buf);
-    let vts = nvim_buf_get_p_vts_array(buf);
+    let ts = buf_ref(buf).b_p_ts;
+    let vts = buf_ref(buf).b_p_vts_array;
     rs_indent_size_ts(line, ts, vts)
 }
 
@@ -125,8 +121,8 @@ pub unsafe extern "C" fn rs_get_indent_lnum(lnum: LineNr) -> c_int {
 #[export_name = "get_indent_buf"]
 pub unsafe extern "C" fn rs_get_indent_buf(buf: BufHandle, lnum: LineNr) -> c_int {
     let line = nvim_buf_get_line_at(buf, lnum);
-    let ts = nvim_buf_get_p_ts(buf);
-    let vts = nvim_buf_get_p_vts_array(buf);
+    let ts = buf_ref(buf).b_p_ts;
+    let vts = buf_ref(buf).b_p_vts_array;
     rs_indent_size_ts(line, ts, vts)
 }
 

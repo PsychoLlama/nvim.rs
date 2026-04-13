@@ -23,7 +23,7 @@ use std::ffi::c_int;
 
 use std::ffi::c_void;
 
-use nvim_buffer::BufHandle;
+use nvim_buffer::{buf_struct::buf_ref, BufHandle};
 use nvim_memory::xmalloc;
 
 /// Opaque handle to a window (win_T*)
@@ -32,9 +32,6 @@ pub type WinHandle = *mut c_void;
 // C accessor functions for buffer properties
 extern "C" {
     static mut got_int: bool;
-    fn nvim_buf_get_p_sw(buf: BufHandle) -> i64;
-    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
-    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
     fn nvim_get_p_paste() -> c_int;
     fn nvim_curbuf_get_p_cin() -> c_int;
     fn nvim_curbuf_get_inde_nonempty() -> c_int;
@@ -857,14 +854,14 @@ pub unsafe extern "C" fn rs_get_sw_value_col(buf: BufHandle, col: c_int, left: b
         return 8; // Default shiftwidth
     }
 
-    let sw = nvim_buf_get_p_sw(buf);
+    let sw = buf_ref(buf).b_p_sw;
     if sw != 0 {
         return sw as c_int;
     }
 
     // Use tabstop_at when shiftwidth is 0
-    let ts = nvim_buf_get_p_ts(buf);
-    let vts = nvim_buf_get_p_vts_array(buf);
+    let ts = buf_ref(buf).b_p_ts;
+    let vts = buf_ref(buf).b_p_vts_array;
     rs_tabstop_at(col, ts, vts, left)
 }
 

@@ -77,7 +77,6 @@ int nvim_win_get_briopt_shift(win_T *wp) { return wp->w_briopt_shift; }
 int nvim_win_get_briopt_min(win_T *wp) { return wp->w_briopt_min; }
 int nvim_win_get_briopt_vcol(win_T *wp) { return wp->w_briopt_vcol; }
 
-int nvim_buf_get_b_fnum(buf_T *buf) { return buf->b_fnum; }
 int64_t nvim_indent_buf_get_changedtick(buf_T *buf) { return buf_get_changedtick(buf); }
 const char *nvim_get_flp_value(buf_T *buf) { return get_flp_value(buf); }
 

@@ -36,7 +36,6 @@ const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_firstbuf() -> BufHandle;
-    fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
     fn rs_diff_mode_buf(buf: BufHandle) -> bool;
 
     /// Check if pattern should use fuzzy matching.
@@ -235,13 +234,13 @@ pub unsafe fn expand_bufnames_impl(
     while !buf.is_null() {
         // Skip unlisted buffers
         if buf_ref(buf).b_p_bl == 0 {
-            buf = nvim_buf_get_next(buf);
+            buf = BufHandle::from_ptr(buf_ref(buf).b_next);
             continue;
         }
 
         // BUF_DIFF_FILTER: skip non-diff and curbuf
         if (options & BUF_DIFF_FILTER) != 0 && (buf == curbuf || !rs_diff_mode_buf(buf)) {
-            buf = nvim_buf_get_next(buf);
+            buf = BufHandle::from_ptr(buf_ref(buf).b_next);
             continue;
         }
 
@@ -266,7 +265,7 @@ pub unsafe fn expand_bufnames_impl(
                     str_ptr: p,
                     score,
                 });
-                buf = nvim_buf_get_next(buf);
+                buf = BufHandle::from_ptr(buf_ref(buf).b_next);
                 continue;
             }
             let ffname = b.b_ffname;
@@ -288,7 +287,7 @@ pub unsafe fn expand_bufnames_impl(
                     score,
                 });
             }
-            buf = nvim_buf_get_next(buf);
+            buf = BufHandle::from_ptr(buf_ref(buf).b_next);
             continue;
         } else {
             // Regex path: validity check to detect engine switch
@@ -301,7 +300,7 @@ pub unsafe fn expand_bufnames_impl(
         };
 
         if matched_name.is_null() {
-            buf = nvim_buf_get_next(buf);
+            buf = BufHandle::from_ptr(buf_ref(buf).b_next);
             continue;
         }
 
@@ -318,7 +317,7 @@ pub unsafe fn expand_bufnames_impl(
             str_matches.push(p);
         }
 
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle::from_ptr(buf_ref(buf).b_next);
     }
 
     nvim_bufname_regex_free(regex_handle);

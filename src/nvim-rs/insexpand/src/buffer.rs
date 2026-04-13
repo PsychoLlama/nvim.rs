@@ -7,7 +7,7 @@
 #![allow(dead_code, unused_imports)]
 use std::os::raw::{c_char, c_int, c_void};
 
-use nvim_buffer::BufHandle;
+use nvim_buffer::{buf_struct::buf_ref, BufHandle};
 
 // Win pointer: use *mut u8 to match ctrl_x.rs and entry.rs conventions.
 type WinPtr = *mut u8;
@@ -18,15 +18,10 @@ extern "C" {
     // nvim_get_next_bufname_token_impl: deleted (Phase 15), inlined below
 
     // ins_compl_next_buf buf accessors (Phase 14) - use BufHandle to match next.rs
-    fn nvim_buf_get_b_next(buf: BufHandle) -> BufHandle;
     fn nvim_buf_get_b_scanned(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
     fn nvim_buf_has_ml_mfp(buf: BufHandle) -> c_int;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_firstbuf_wrapper() -> BufHandle;
-
-    // Helpers for inlined nvim_get_next_bufname_token_impl
-    fn nvim_buf_get_b_sfname(buf: BufHandle) -> *const c_char;
     fn path_tail(path: *const c_char) -> *mut c_char;
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn strlen(s: *const c_char) -> usize;
@@ -83,8 +78,8 @@ pub unsafe extern "C" fn rs_get_next_bufname_token() {
     // FOR_ALL_BUFFERS: start from firstbuf, walk b_next until NULL
     let mut b = nvim_get_firstbuf_wrapper();
     while !b.is_null() {
-        if nvim_buf_get_b_p_bl(b) != 0 {
-            let sfname = nvim_buf_get_b_sfname(b);
+        if buf_ref(b).b_p_bl != 0 {
+            let sfname = buf_ref(b).b_sfname;
             if !sfname.is_null() {
                 let tail = path_tail(sfname);
                 let orig_data = crate::vars::compl_orig_text.data.cast_const();
@@ -115,7 +110,7 @@ pub unsafe extern "C" fn rs_get_next_bufname_token() {
                 }
             }
         }
-        b = nvim_buf_get_b_next(b);
+        b = BufHandle::from_ptr(buf_ref(b).b_next);
     }
 }
 
@@ -182,7 +177,7 @@ pub unsafe extern "C" fn rs_ins_compl_next_buf(buf: BufHandle, flag: c_int) -> B
     // Walk the buffer list
     let mut cur = buf;
     loop {
-        let next = nvim_buf_get_b_next(cur);
+        let next = BufHandle::from_ptr(buf_ref(cur).b_next);
         cur = if next.is_null() {
             nvim_get_firstbuf_wrapper()
         } else {
@@ -197,12 +192,12 @@ pub unsafe extern "C" fn rs_ins_compl_next_buf(buf: BufHandle, flag: c_int) -> B
         // Decide whether to skip this buffer based on flag
         let skip = if flag == c_int::from(b'U') {
             // 'U': unlisted buffers -- skip listed ones
-            nvim_buf_get_b_p_bl(cur) != 0
+            buf_ref(cur).b_p_bl != 0
         } else {
             // 'b': only listed loaded buffers
             // 'u': only listed unloaded buffers
             // skip if not listed, or loaded/unloaded mismatch
-            let is_listed = nvim_buf_get_b_p_bl(cur) != 0;
+            let is_listed = buf_ref(cur).b_p_bl != 0;
             let is_loaded = nvim_buf_has_ml_mfp(cur) != 0;
             let want_unloaded = flag == c_int::from(b'u');
             !is_listed || (is_loaded == want_unloaded)
