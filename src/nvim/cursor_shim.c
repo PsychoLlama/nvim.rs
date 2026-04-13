@@ -26,21 +26,6 @@ _Static_assert(sizeof(CharsizeArg) <= 320,
                "CharsizeArg size exceeds Rust CharsizeArgBuf (320 bytes) - "
                "update cursor crate");
 
-/// Wrapper for getvvcol() callable from Rust.
-/// Returns the start column in `scol`, cursor column in `ccol`, end column in `ecol`.
-/// Pass NULL for any column you don't need.
-void nvim_getvvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T *ecol)
-{
-  getvvcol(wp, pos, scol, ccol, ecol);
-}
-
-/// Wrapper for getvcol() callable from Rust.
-/// Returns the start column in `scol`, cursor column in `ccol`, end column in `ecol`.
-/// Pass NULL for any column you don't need.
-void nvim_getvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T *ecol)
-{
-  getvcol(wp, pos, scol, ccol, ecol);
-}
 
 /// Get window cursor pointer (wp->w_cursor).
 pos_T *nvim_win_get_cursor_ptr(win_T *wp) { return &wp->w_cursor; }

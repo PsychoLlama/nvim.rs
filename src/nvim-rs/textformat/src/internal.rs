@@ -96,6 +96,7 @@ extern "C" {
     fn nvim_get_Insstart_lnum() -> c_int;
     fn nvim_get_Insstart_col() -> c_int;
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
     fn nvim_ins_bytes(p: *const c_char);
     fn nvim_ins_str(p: *const c_char, len: usize);

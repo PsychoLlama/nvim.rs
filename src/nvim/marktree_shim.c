@@ -43,7 +43,7 @@ int nvim_mtitr_get_s_oldcol(MarkTreeIter *itr, int lvl) { return itr->s[lvl].old
 void nvim_mtitr_set_s_i(MarkTreeIter *itr, int lvl, int i) { itr->s[lvl].i = i; }
 void nvim_mtitr_set_s_oldcol(MarkTreeIter *itr, int lvl, int oldcol) { itr->s[lvl].oldcol = oldcol; }
 MarkTreeIter *nvim_marktree_itr_alloc(void) { return xcalloc(1, sizeof(MarkTreeIter)); }
-void nvim_marktree_itr_free(MarkTreeIter *itr) { xfree(itr); }
+
 void nvim_marktree_itr_copy(MarkTreeIter *dst, MarkTreeIter *src) { *dst = *src; }
 uint16_t nvim_mt_itr_rawkey_get_flags(MarkTreeIter *itr) { return rawkey(itr).flags; }
 void nvim_mt_itr_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags) { rawkey(itr).flags = flags; }
@@ -84,7 +84,7 @@ void nvim_marktree_inc_n_keys(MarkTree *b) { b->n_keys++; }
 void nvim_marktree_add_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] += val; }
 void nvim_marktree_set_meta_root(MarkTree *b, int m, uint32_t val) { b->meta_root[m] = val; }
 void nvim_kvi_destroy_intersect(MTNode *x) { kvi_destroy(x->intersect); }
-void nvim_xfree_node(MTNode *x) { xfree(x); }
+
 void nvim_marktree_dec_n_nodes(MarkTree *b) { b->n_nodes--; }
 void nvim_marktree_set_n_keys(MarkTree *b, size_t n) { b->n_keys = n; }
 void nvim_marktree_destroy_id2node(MarkTree *b) { map_destroy(uint64_t, b->id2node); }

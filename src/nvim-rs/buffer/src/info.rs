@@ -107,9 +107,9 @@ extern "C" {
     fn nvim_ui_call_set_title(s: *const c_char);
     fn nvim_ui_call_set_icon(s: *const c_char);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_xfree(p: *mut c_void);
     /// Get the `end_off` from `utf_cp_bounds(str, ptr)`.
     fn nvim_utf_cp_bounds_end_off(str_: *const c_char, ptr: *const c_char) -> c_int;
+    fn xfree(ptr: *mut std::ffi::c_void);
 }
 
 // =============================================================================
@@ -259,7 +259,7 @@ unsafe fn value_change_via_accessor(
     };
 
     if changed {
-        nvim_xfree(last.cast_mut().cast::<c_void>());
+        xfree(last.cast_mut().cast::<c_void>());
         if str_ptr.is_null() {
             set(std::ptr::null_mut());
             resettitle_impl();
@@ -412,12 +412,12 @@ pub unsafe fn resettitle_impl() {
 pub unsafe fn free_titles_impl() {
     let lasttitle = nvim_buf_get_lasttitle().cast_mut();
     if !lasttitle.is_null() {
-        nvim_xfree(lasttitle.cast::<c_void>());
+        xfree(lasttitle.cast::<c_void>());
         nvim_buf_set_lasttitle(std::ptr::null_mut());
     }
     let lasticon = nvim_buf_get_lasticon().cast_mut();
     if !lasticon.is_null() {
-        nvim_xfree(lasticon.cast::<c_void>());
+        xfree(lasticon.cast::<c_void>());
         nvim_buf_set_lasticon(std::ptr::null_mut());
     }
 }

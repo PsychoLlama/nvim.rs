@@ -196,8 +196,7 @@ extern "C" {
     // nvim_set_curswant_curwin removed: replaced by direct WinStruct field access
     /// nvim_xmemdupz: allocates a NUL-terminated copy of len bytes.
     fn nvim_xmemdupz(ptr: *const c_char, len: usize) -> *mut c_char;
-    /// nvim_xfree: free a C-allocated pointer.
-    fn nvim_xfree(ptr: *mut std::ffi::c_void);
+    fn xfree(ptr: *mut std::ffi::c_void);
     /// win_new_float external wrapper: -1=not applicable, 0=fail, 1=ok.
     fn nvim_win_new_float_external() -> c_int;
 
@@ -415,7 +414,7 @@ unsafe fn do_window_goto_file(nchar: c_int, prenum1: c_int) {
         nvim_beginline_sol_fix();
     }
 
-    nvim_xfree(ptr.cast());
+    xfree(ptr.cast());
 }
 
 /// Rust implementation of `nvim_do_window_find_in_path`.
@@ -443,7 +442,7 @@ unsafe fn do_window_find_in_path(nchar: c_int, prenum: c_int, prenum1: c_int) {
     let ptr = nvim_xmemdupz(raw_ptr, len);
     let whole = c_int::from(prenum == 0);
     nvim_find_pattern_in_path_split(ptr, len, type_, prenum1, whole);
-    nvim_xfree(ptr.cast());
+    xfree(ptr.cast());
     crate::win_struct::win_mut(nvim_get_curwin()).w_set_curswant = 1;
 }
 

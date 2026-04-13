@@ -196,6 +196,7 @@ pub unsafe extern "C" fn rs_file_count_path_components(path: *const c_char) -> c
 
 // Additional C accessor functions
 extern "C" {
+    fn xmalloc(size: usize) -> *mut c_char;
     fn nvim_get_cursor_col() -> c_int;
 }
 
@@ -433,7 +434,6 @@ extern "C" {
     // Completion state (nvim_get_compl_direction already declared above)
 
     // xmalloc / FreeWild
-    fn nvim_xmalloc(size: usize) -> *mut u8;
     #[link_name = "FreeWild"]
     fn FreeWild(count: c_int, files: *mut *mut c_char);
 }
@@ -502,7 +502,7 @@ pub unsafe extern "C" fn rs_get_next_filename_completion() {
             // Split leader into path + file parts: "path/*"
             let path_len = (last_sep as usize - leader as usize) + 1; // includes sep
             let buf_size = path_len + 2; // "path/*\0"
-            let buf: *mut c_char = nvim_xmalloc(buf_size).cast();
+            let buf: *mut c_char = xmalloc(buf_size).cast();
 
             // Build "path_prefix*" string: copy path_len bytes then append '*'
             std::ptr::copy_nonoverlapping(leader.cast::<u8>(), buf.cast::<u8>(), path_len);

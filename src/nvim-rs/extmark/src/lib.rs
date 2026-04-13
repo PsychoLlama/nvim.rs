@@ -421,6 +421,7 @@ extern "C" {
     fn nvim_marktree_itr_alloc() -> MarkTreeIterHandle;
 
     /// Free a heap-allocated MarkTreeIter.
+    #[link_name = "xfree"]
     fn nvim_marktree_itr_free(itr: MarkTreeIterHandle);
 
     /// Copy iterator contents.

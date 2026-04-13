@@ -206,10 +206,10 @@ pub unsafe extern "C" fn rs_menu_text(str: *const c_char) -> MenuTextResult {
 /// This calls into C to allocate memory.
 unsafe fn allocate_c_string(bytes: &[u8]) -> *mut c_char {
     extern "C" {
-        fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
+        fn xmalloc(size: usize) -> *mut std::ffi::c_void;
     }
 
-    let ptr = unsafe { nvim_xmalloc(bytes.len() + 1) } as *mut c_char;
+    let ptr = unsafe { xmalloc(bytes.len() + 1) } as *mut c_char;
     if ptr.is_null() {
         return std::ptr::null_mut();
     }

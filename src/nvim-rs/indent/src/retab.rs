@@ -83,6 +83,7 @@ extern "C" {
     );
 
     // Memory
+    #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
 }
 

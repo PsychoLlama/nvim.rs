@@ -46,6 +46,7 @@ type RegmmatchHandle = *mut c_void;
 // =============================================================================
 
 extern "C" {
+    fn xfree(ptr: *mut std::ffi::c_void);
     static mut got_int: bool;
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
@@ -370,7 +371,7 @@ unsafe fn vgr_display_fname_rust(fname: *mut c_char) {
         msg_outtrans(fname, 0, false);
     } else {
         msg_outtrans(p, 0, false);
-        nvim_xfree(p.cast());
+        xfree(p.cast());
     }
     msg_clr_eos();
     msg_didout = false;
@@ -646,7 +647,6 @@ extern "C" {
     fn skipwhite(s: *const c_char) -> *const c_char;
 
     // xstrdup / xfree
-    fn nvim_xfree(ptr: *mut c_void);
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // Pre-check inlining (Phase 2)
@@ -727,7 +727,7 @@ impl VgrArgs {
         let p = rs_skip_vimgrep_pat(arg, &raw mut spat, &raw mut flags);
         if p.is_null() {
             emsg(c"E682: Invalid search pattern or delimiter".as_ptr());
-            nvim_xfree(qf_title.cast());
+            xfree(qf_title.cast());
             return Err(());
         }
 
@@ -735,7 +735,7 @@ impl VgrArgs {
         let regmatch = nvim_vgr_regcomp_init(spat);
         if regmatch.is_null() {
             // error already emitted inside nvim_vgr_regcomp_init
-            nvim_xfree(qf_title.cast());
+            xfree(qf_title.cast());
             return Err(());
         }
 
@@ -744,7 +744,7 @@ impl VgrArgs {
         if *p == 0 {
             emsg(c"E683: File name missing or invalid pattern".as_ptr());
             nvim_vgr_regmatch_free(regmatch);
-            nvim_xfree(qf_title.cast());
+            xfree(qf_title.cast());
             return Err(());
         }
 
@@ -756,7 +756,7 @@ impl VgrArgs {
         {
             emsg(c"E479: No match".as_ptr());
             nvim_vgr_regmatch_free(regmatch);
-            nvim_xfree(qf_title.cast());
+            xfree(qf_title.cast());
             return Err(());
         }
 
@@ -788,7 +788,7 @@ impl VgrArgs {
             self.regmatch = std::ptr::null_mut();
         }
         if !self.qf_title.is_null() {
-            nvim_xfree(self.qf_title.cast());
+            xfree(self.qf_title.cast());
             self.qf_title = std::ptr::null_mut();
         }
         // Also free fnames if not yet freed
@@ -869,7 +869,7 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
         args.free_wild();
         nvim_decr_quickfix_busy();
         args.cleanup();
-        nvim_xfree(target_dir.cast());
+        xfree(target_dir.cast());
         return;
     }
 
@@ -907,7 +907,7 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
     if !rs_qflist_valid(wp, save_qfid) || rs_qf_restore_list(qi, save_qfid) == FAIL {
         nvim_decr_quickfix_busy();
         args.cleanup();
-        nvim_xfree(target_dir.cast());
+        xfree(target_dir.cast());
         return;
     }
 
@@ -944,5 +944,5 @@ pub unsafe extern "C" fn rs_ex_vimgrep(eap: EapHandle) {
 
     // theend cleanup
     args.cleanup();
-    nvim_xfree(target_dir.cast());
+    xfree(target_dir.cast());
 }

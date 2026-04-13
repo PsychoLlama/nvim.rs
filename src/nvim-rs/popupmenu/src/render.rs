@@ -353,7 +353,6 @@ extern "C" {
     /// Display text on popup grid at column with attribute.
     fn grid_line_puts(col: c_int, text: *const c_char, textlen: c_int, attr: c_int) -> c_int;
     /// Free memory allocated by C.
-    fn nvim_xfree(ptr: *mut u8);
     /// Get C strlen.
     fn strlen(s: *const c_char) -> c_ulong;
 }
@@ -444,7 +443,7 @@ pub unsafe extern "C" fn rs_pum_compute_text_attrs(
     let fuzzy_positions = if in_fuzzy {
         let positions = fuzzy_match_positions(text, leader, &mut fuzzy_len);
         if positions.is_null() {
-            nvim_xfree(attrs.cast());
+            xfree(attrs.cast());
             return std::ptr::null_mut();
         }
         positions

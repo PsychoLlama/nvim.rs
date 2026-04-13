@@ -32,6 +32,8 @@ use crate::match_list::{
 
 // C accessor functions
 extern "C" {
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn xfree(ptr: *mut u8);
     // Match node accessors
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
     fn nvim_compl_match_set_next(m: ComplMatch, next: ComplMatch);
@@ -68,8 +70,6 @@ extern "C" {
     fn rs_ins_compl_leader() -> *const c_char;
     fn rs_ins_compl_leader_len() -> usize;
     fn rs_ctrl_x_mode_whole_line() -> c_int;
-    fn nvim_xmalloc(size: usize) -> *mut u8;
-    fn nvim_xfree(ptr: *mut u8);
 }
 
 /// Set fuzzy score for all completion matches.
@@ -366,7 +366,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
     if !skip_insert {
         // xmemdupz(prefix, prefix_len)
         let dup_len = prefix_len as usize;
-        let dup = nvim_xmalloc(dup_len + 1).cast::<c_char>();
+        let dup = xmalloc(dup_len + 1).cast::<c_char>();
         std::ptr::copy_nonoverlapping(prefix, dup, dup_len);
         *dup.add(dup_len) = 0;
 
@@ -374,7 +374,7 @@ pub unsafe extern "C" fn rs_fuzzy_longest_match() {
         rs_ins_compl_delete(0);
         rs_ins_compl_insert_bytes(dup.add(compl_len), -1);
         nvim_ins_redraw(0);
-        nvim_xfree(dup.cast::<u8>());
+        xfree(dup.cast());
     }
 
     crate::vars::nvim_clear_compl_best_matches();

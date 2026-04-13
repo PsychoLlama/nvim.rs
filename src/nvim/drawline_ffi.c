@@ -109,8 +109,6 @@ int *nvim_win_get_p_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
 // Phase 1 accessors: needed by rs_c_win_line_pre_loop
 // ============================================================================
 
-/// Return true if virtual editing is active for the given window.
-bool nvim_win_virtual_active_drawline(win_T *wp) { return virtual_active(wp); }
 
 /// Return wp->w_buffer as opaque pointer.
 void *nvim_win_get_w_buffer_drawline(win_T *wp) { return wp->w_buffer; }
@@ -332,8 +330,6 @@ uint32_t nvim_win_get_fcs_fold(win_T *wp) { return (uint32_t)wp->w_p_fcs_chars.f
 // Phase 3 accessors: needed by rs_win_line_process_char
 // ============================================================================
 
-/// Return true if the character is printable (wraps vim_isprintc).
-bool nvim_vim_isprintc(int c) { return vim_isprintc(c); }
 
 /// Get decor_state.conceal field.
 int nvim_get_decor_state_conceal(void) { return decor_state.conceal; }
@@ -366,5 +362,3 @@ int nvim_c_win_charsize_for_lbr(win_T *wp, char *line,  // NOLINT(readability-no
 /// Destroy a VirtLines kvec (wraps kv_destroy).
 void nvim_c_kv_destroy_virt_lines(VirtLines *vl) { kv_destroy(*vl); }
 
-/// Free a heap-allocated pointer (wraps xfree).
-void nvim_c_xfree(void *ptr) { xfree(ptr); }

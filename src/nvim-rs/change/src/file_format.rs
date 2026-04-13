@@ -24,6 +24,7 @@ extern "C" {
     fn nvim_buf_inc_changedtick(buf: BufHandle);
     fn redraw_buf_status_later(buf: BufHandle);
     // Memory functions
+    #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut std::ffi::c_void);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 

@@ -10,6 +10,7 @@ use std::os::raw::{c_char, c_int, c_uint};
 
 // C accessor functions
 extern "C" {
+    fn xfree(ptr: *mut u8);
     fn nvim_curbuf_get_b_p_cpt() -> *const c_char;
     // (nvim_get_cpt_start_tv: inlined in vars.rs Phase 23)
     fn os_hrtime() -> u64;
@@ -301,7 +302,6 @@ extern "C" {
     #[link_name = "vim_strchr"]
     fn nvim_vim_strchr_ffi(s: *const c_char, c: c_int) -> *const c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_xfree(ptr: *mut u8);
 
     // Callback/function-source accessors
     fn nvim_get_callback_if_cpt_func_impl(p: *const c_char, idx: c_int) -> *mut c_void;
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn rs_prepare_cpt_compl_funcs() {
         idx += 1;
     }
 
-    nvim_xfree(cpt.cast::<u8>());
+    xfree(cpt.cast());
 }
 
 /// Retrieve completion matches from a specific 'cpt' function source.

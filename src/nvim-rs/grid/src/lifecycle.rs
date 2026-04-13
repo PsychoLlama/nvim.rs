@@ -96,6 +96,7 @@ extern "C" {
     /// Wrapper for ui_check_cursor_grid.
     fn nvim_win_ui_check_cursor_grid(grid_handle: c_int);
     /// Allocate zeroed memory.
+    #[link_name = "xcalloc"]
     fn nvim_xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
     /// Get sizeof(wline_T).
     fn nvim_wline_T_size() -> usize;

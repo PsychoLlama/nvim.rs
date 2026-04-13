@@ -515,7 +515,7 @@ pub unsafe extern "C" fn rs_get_buffcont_redobuff() -> *mut u8 {
         return std::ptr::null_mut();
     }
     // Allocate a NUL-terminated C string via xmalloc
-    let ptr = nvim_xmalloc(contents.len() + 1) as *mut u8;
+    let ptr = xmalloc(contents.len() + 1);
     std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, contents.len());
     *ptr.add(contents.len()) = 0;
     ptr
@@ -566,7 +566,7 @@ pub unsafe extern "C" fn rs_get_buffcont_recordbuff() -> *mut u8 {
     if contents.is_empty() {
         return std::ptr::null_mut();
     }
-    let ptr = nvim_xmalloc(contents.len() + 1) as *mut u8;
+    let ptr = xmalloc(contents.len() + 1);
     std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, contents.len());
     *ptr.add(contents.len()) = 0;
     ptr
@@ -768,7 +768,7 @@ pub unsafe extern "C" fn rs_get_recorded() -> *mut u8 {
 
     if contents.is_empty() {
         // Match C behavior: get_buffcont with dozero=true returns empty string
-        let ptr = nvim_xmalloc(1) as *mut u8;
+        let ptr = xmalloc(1);
         *ptr = 0;
         return ptr;
     }
@@ -786,7 +786,7 @@ pub unsafe extern "C" fn rs_get_recorded() -> *mut u8 {
         len -= 1;
     }
 
-    let ptr = nvim_xmalloc(len + 1) as *mut u8;
+    let ptr = xmalloc(len + 1);
     std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, len);
     *ptr.add(len) = 0;
     ptr
@@ -800,7 +800,7 @@ pub unsafe extern "C" fn rs_get_inserted() -> *mut u8 {
     if contents.is_empty() {
         return std::ptr::null_mut();
     }
-    let ptr = nvim_xmalloc(contents.len() + 1) as *mut u8;
+    let ptr = xmalloc(contents.len() + 1);
     std::ptr::copy_nonoverlapping(contents.as_ptr(), ptr, contents.len());
     *ptr.add(contents.len()) = 0;
     ptr
@@ -813,8 +813,8 @@ pub unsafe extern "C" fn rs_get_inserted_len() -> usize {
 }
 
 extern "C" {
-    fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
     static mut restart_edit: c_int;
+    fn xmalloc(size: usize) -> *mut u8;
 }
 
 /// Neovim API `String` type: `{ char *data; size_t size; }`.

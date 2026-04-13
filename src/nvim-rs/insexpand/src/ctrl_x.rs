@@ -124,6 +124,7 @@ const K_OPT_COT_FLAG_LONGEST: u32 = 0x04;
 // =============================================================================
 
 extern "C" {
+    fn xfree(ptr: *mut u8);
     // Phase 1 accessors
     fn nvim_set_edit_submode_scroll(is_replace: c_int);
     #[link_name = "edit_submode"]
@@ -168,7 +169,6 @@ extern "C" {
     // nvim_set_edit_submode_null_if_set: inlined below (Phase 33)
     fn nvim_get_curwin() -> *mut u8; // opaque curwin pointer
     fn nvim_get_curwin_cursor_lnum() -> c_int;
-    fn nvim_xfree(ptr: *mut u8);
 
     // Phase 3 C functions called (not pure accessors)
     fn rs_ins_compl_preinsert_effect() -> c_int;
@@ -574,7 +574,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     // Trigger the CompleteDone event to give scripts a chance to act upon the
     // end of completion.
     rs_do_autocmd_completedone(c, prev_mode, word.cast::<c_char>());
-    nvim_xfree(word);
+    xfree(word.cast());
 
     c_int::from(retval)
 }

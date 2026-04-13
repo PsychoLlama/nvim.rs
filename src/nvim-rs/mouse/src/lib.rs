@@ -1422,6 +1422,7 @@ extern "C" {
     fn rs_getvcols(wp: WinHandle, pos1: PosT, pos2: PosT, left: *mut colnr_T, right: *mut colnr_T);
 
     /// `getvcol(wp, pos, scol, ccol, ecol)`.
+    #[link_name = "getvcol"]
     fn nvim_getvcol(
         wp: WinHandle,
         pos: *mut PosT,

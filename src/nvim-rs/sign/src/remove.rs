@@ -27,6 +27,7 @@ extern "C" {
     // Marktree iteration
     fn nvim_buf_get_marktree(buf: SignBufHandle) -> *mut std::ffi::c_void;
     fn nvim_marktree_itr_alloc() -> *mut std::ffi::c_void;
+    #[link_name = "xfree"]
     fn nvim_marktree_itr_free(itr: *mut std::ffi::c_void);
     fn nvim_mtitr_has_x(itr: *const std::ffi::c_void) -> bool;
     fn rs_marktree_itr_get_overlap(

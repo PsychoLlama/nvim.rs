@@ -3876,6 +3876,7 @@ extern "C" {
     fn nvim_get_search_match_lines() -> c_int;
     fn nvim_get_search_match_endcol() -> c_int;
     fn nvim_get_p_sel_first() -> c_char;
+    #[link_name = "getvvcol"]
     fn nvim_getvvcol(
         wp: WinHandle,
         pos: *mut PosT,
@@ -3883,6 +3884,7 @@ extern "C" {
         ccol: *mut ColnrT,
         ecol: *mut ColnrT,
     );
+    #[link_name = "getvcol"]
     fn nvim_getvcol(
         wp: WinHandle,
         pos: *mut PosT,
@@ -5780,6 +5782,7 @@ extern "C" {
     ) -> AdvanceToStartVcolResult;
 
     /// Return true if virtual editing is active for the given window.
+    #[link_name = "virtual_active"]
     fn nvim_win_virtual_active_drawline(wp: WinHandle) -> bool;
     /// Return true if wp->w_buffer->terminal is non-NULL.
     fn nvim_win_buf_has_terminal_drawline(wp: WinHandle) -> bool;
@@ -6325,6 +6328,7 @@ const HLF_0: c_int = 59; // Whitespace (listchars)
 // FFI for Phase 3
 extern "C" {
     /// vim_isprintc: return true if c is printable.
+    #[link_name = "vim_isprintc"]
     fn nvim_vim_isprintc(c: c_int) -> bool;
     /// vim_isbreak: return true if c is in 'breakat'.
     fn nvim_vim_isbreak(c: c_int) -> c_int;
@@ -7193,6 +7197,7 @@ extern "C" {
     /// kv_destroy for VirtLines (destroys the inner VirtLines kvec).
     fn nvim_c_kv_destroy_virt_lines(vl: *mut c_void);
     /// xfree a heap-allocated pointer.
+    #[link_name = "xfree"]
     fn nvim_c_xfree(ptr: *mut c_void);
 }
 

@@ -123,7 +123,7 @@ pos_T *nvim_textobj_alloc_pos(void)
   clearpos(p);
   return p;
 }
-void nvim_textobj_free_pos(pos_T *pos) { xfree(pos); }
+
 void nvim_textobj_set_cursor_from_pos(pos_T *pos) { curwin->w_cursor = *pos; }
 
 static char *saved_p_cpo = NULL;
@@ -171,5 +171,3 @@ int nvim_textobj_do_searchpair(const char *spat, const char *mpat, const char *e
   return do_searchpair(spat, mpat, epat, dir, NULL, 0, NULL, 0, 0);
 }
 
-/// Returns get_cursor_pos_ptr() for reading chars. Caller must check for NUL.
-const char *nvim_textobj_get_cursor_pos_ptr(void) { return get_cursor_pos_ptr(); }

@@ -76,6 +76,7 @@ extern "C" {
     // ----- error messages: now in crate::errors -----
 
     // ----- memory -----
+    #[link_name = "xcalloc"]
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
     fn nvim_xstrdup(str: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);

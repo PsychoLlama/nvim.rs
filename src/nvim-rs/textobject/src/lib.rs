@@ -1312,6 +1312,7 @@ extern "C" {
     fn nvim_textobj_alloc_pos() -> PosHandle;
 
     /// Free a temporary pos_T.
+    #[link_name = "xfree"]
     fn nvim_textobj_free_pos(pos: PosHandle);
 
     /// Set cursor from position.
@@ -2550,6 +2551,7 @@ extern "C" {
     fn nvim_textobj_get_cursor_char() -> c_int;
 
     /// Returns a pointer to the current cursor char (for reading chars).
+    #[link_name = "get_cursor_pos_ptr"]
     fn nvim_textobj_get_cursor_pos_ptr() -> *const std::ffi::c_char;
 
     /// Wrapper for do_searchpair with NULL skip/match_pos.

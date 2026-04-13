@@ -24,8 +24,8 @@ extern "C" {
     /// Get the global topframe pointer.
     fn nvim_get_topframe() -> *mut Frame;
 
-    /// Free a frame_T (calls xfree).
-    fn nvim_xfree(ptr: *mut std::ffi::c_void);
+    /// Free memory (calls libc free via xfree).
+    fn xfree(ptr: *mut std::ffi::c_void);
 }
 
 // =============================================================================
@@ -83,7 +83,7 @@ unsafe fn frame_flatten_impl(frp: *mut Frame) {
     if !topframe.is_null() && (*topframe).fr_child == frp {
         (*topframe).fr_child = frp2;
     }
-    nvim_xfree(frp.cast());
+    xfree(frp.cast());
 
     // Check if parent and grandparent share the same layout (merge lists).
     let frp = (*frp2).fr_parent;
@@ -119,7 +119,7 @@ unsafe fn frame_flatten_impl(frp: *mut Frame) {
         if !topframe.is_null() && (*topframe).fr_child == frp2 {
             (*topframe).fr_child = frp;
         }
-        nvim_xfree(frp2.cast());
+        xfree(frp2.cast());
     }
 }
 

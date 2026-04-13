@@ -17,6 +17,7 @@ use crate::match_list::{
 
 // C accessor functions
 extern "C" {
+    fn xfree(ptr: *mut u8);
     // Match node accessors
     fn nvim_compl_match_get_next(m: ComplMatch) -> ComplMatch;
 
@@ -302,7 +303,6 @@ extern "C" {
     // (nvim_compl_leader_eq_orig_text and nvim_set_compl_shown_to_first_or_next: inlined in match_list.rs)
     fn nvim_build_pum_fill_array(match_head: ComplMatch, count: c_int) -> c_int;
     // (nvim_cpt_sources_array_exists, nvim_get_cpt_source_cs_max_matches: inlined in vars.rs Phase 23)
-    fn nvim_xfree(ptr: *mut u8);
     #[allow(clashing_extern_declarations)]
     fn xmalloc(size: usize) -> *mut c_int;
 
@@ -399,7 +399,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
     let first = nvim_compl_get_first_match();
     if first.is_null() {
         if !match_count_ptr.is_null() {
-            nvim_xfree(match_count_ptr.cast::<u8>());
+            xfree(match_count_ptr.cast());
         }
         return -1;
     }
@@ -502,7 +502,7 @@ pub unsafe extern "C" fn rs_ins_compl_build_pum() -> c_int {
     }
 
     if !match_count_ptr.is_null() {
-        nvim_xfree(match_count_ptr.cast::<u8>());
+        xfree(match_count_ptr.cast());
     }
 
     if array_size == 0 {

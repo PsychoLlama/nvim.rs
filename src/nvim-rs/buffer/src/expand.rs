@@ -72,7 +72,8 @@ extern "C" {
     #[link_name = "home_replace_save"]
     fn nvim_home_replace_save_buf(buf: BufHandle, src: *const c_char) -> *mut c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_xfree(p: *mut c_void);
+    fn xfree(ptr: *mut std::ffi::c_void);
+    #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut c_void;
 
     /// Convert fuzzy matches to a string array. Frees `fuzmatch`.
@@ -133,7 +134,7 @@ unsafe fn fname_match_rs(
     } else {
         std::ptr::null()
     };
-    nvim_xfree(p.cast::<c_void>());
+    xfree(p.cast::<c_void>());
     matched
 }
 
@@ -218,7 +219,7 @@ pub unsafe fn expand_bufnames_impl(
         }
         regex_handle = nvim_bufname_regex_compile(patc);
         if !patc_to_free.is_null() {
-            nvim_xfree(patc_to_free.cast::<c_void>());
+            xfree(patc_to_free.cast::<c_void>());
         }
         // regex_handle may be NULL if pattern is invalid
     }

@@ -73,6 +73,7 @@ extern "C" {
     #[link_name = "nvim_win_get_lcs_tab1"]
     fn nvim_stl_win_get_lcs_tab1(wp: WinHandle) -> c_int;
     // getvvcol via cursor position accessors (replace nvim_stl_getvvcol_cursor)
+    #[link_name = "getvvcol"]
     fn nvim_getvvcol(
         wp: WinHandle,
         pos: *mut RulerPosT,

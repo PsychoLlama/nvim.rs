@@ -178,6 +178,7 @@ extern "C" {
     // -------------------------------------------------------------------------
 
     /// Wrapper for `getvvcol` - gets virtual column positions
+    #[link_name = "getvvcol"]
     fn nvim_getvvcol(
         wp: WinHandle,
         pos: *const CursorPos,

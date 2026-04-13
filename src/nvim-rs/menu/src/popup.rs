@@ -244,7 +244,7 @@ pub unsafe extern "C" fn rs_popup_mode_name(name: *const c_char, idx: c_int) -> 
 
     // Allocate: original length + mode chars + NUL terminator
     let total_len = name_len + mode_chars_len + 1;
-    let p = unsafe { nvim_xmalloc(total_len) } as *mut u8;
+    let p = unsafe { xmalloc(total_len) } as *mut u8;
     if p.is_null() {
         return std::ptr::null_mut();
     }
@@ -280,7 +280,7 @@ pub unsafe extern "C" fn rs_popup_mode_name(name: *const c_char, idx: c_int) -> 
 }
 
 extern "C" {
-    fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
 }
 
 /// Check if a mode index is valid.

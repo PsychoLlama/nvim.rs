@@ -823,8 +823,8 @@ const LCS_LEADMULTISPACE_NAME_IDX: usize = 10;
 extern "C" {
     fn nvim_schar_from_str(str: *const c_char) -> ScharT;
     fn nvim_ptr2cells(p: *const c_char) -> c_int;
-    fn nvim_xmalloc(size: usize) -> *mut c_void;
     fn xfree(ptr: *mut c_void);
+    fn xmalloc(size: usize) -> *mut c_void;
     fn nvim_win_get_p_lcs(win: *const c_void) -> *const c_char;
     fn nvim_win_get_p_fcs(win: *const c_void) -> *const c_char;
     fn nvim_win_set_lcs_chars(win: *mut c_void, val: *const LcsChars);
@@ -1007,7 +1007,7 @@ pub unsafe extern "C" fn set_chars_option(
     if is_listchars {
         // Allocate multispace buffers
         lcs.multispace = if multispace_len > 0 {
-            let buf = nvim_xmalloc(((multispace_len as usize) + 1) * std::mem::size_of::<ScharT>())
+            let buf = xmalloc(((multispace_len as usize) + 1) * std::mem::size_of::<ScharT>())
                 .cast::<ScharT>();
             *buf.add(multispace_len as usize) = 0;
             buf
@@ -1015,9 +1015,8 @@ pub unsafe extern "C" fn set_chars_option(
             std::ptr::null_mut()
         };
         lcs.leadmultispace = if lead_multispace_len > 0 {
-            let buf =
-                nvim_xmalloc(((lead_multispace_len as usize) + 1) * std::mem::size_of::<ScharT>())
-                    .cast::<ScharT>();
+            let buf = xmalloc(((lead_multispace_len as usize) + 1) * std::mem::size_of::<ScharT>())
+                .cast::<ScharT>();
             *buf.add(lead_multispace_len as usize) = 0;
             buf
         } else {

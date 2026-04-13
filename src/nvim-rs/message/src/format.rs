@@ -449,7 +449,7 @@ extern "C" {
 
     // Memory management
     fn xmalloc(size: usize) -> *mut c_char;
-    fn nvim_xfree(ptr: *mut c_char);
+    fn xfree(ptr: *mut std::ffi::c_void);
 
     // History management
     fn msg_hist_add(s: *const c_char, len: c_int, hl_id: c_int);
@@ -665,7 +665,7 @@ pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut
 #[no_mangle]
 pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
     if !ptr.is_null() {
-        nvim_xfree(ptr);
+        xfree(ptr.cast());
     }
 }
 

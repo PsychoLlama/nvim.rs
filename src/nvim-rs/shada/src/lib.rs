@@ -379,9 +379,13 @@ extern "C" {
     fn nvim_file_close(fd: FileDescriptorHandle, fsync: c_int) -> c_int;
 
     // Memory allocation
+    #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
+    #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut c_void;
+    #[link_name = "xcalloc"]
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
+    #[link_name = "xrealloc"]
     fn nvim_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 

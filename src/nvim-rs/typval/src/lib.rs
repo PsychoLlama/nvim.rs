@@ -1227,6 +1227,7 @@ extern "C" {
 
     // Phase 6c accessor helpers for slice/range/flatten/remove
     fn nvim_tv_list_set_ret(tv: TypevalHandle, l: ListHandle);
+    #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut std::ffi::c_void);
     fn nvim_got_int() -> c_int;
     fn nvim_fast_breakcheck();
@@ -1279,6 +1280,7 @@ extern "C" {
 
     // Phase 6j: tv_dict_to_env
     fn nvim_dictitem_format_env(di: DictItemHandle) -> *mut c_char;
+    #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
     fn nvim_hashitem_to_dictitem(hi: HashItemHandle) -> DictItemHandle;
 }

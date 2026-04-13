@@ -618,6 +618,7 @@ extern "C" {
     fn nvim_marktree_itr_alloc() -> MarkTreeIterHandle;
 
     /// Free a heap-allocated MarkTreeIter.
+    #[link_name = "xfree"]
     fn nvim_marktree_itr_free(itr: MarkTreeIterHandle);
 
     /// Copy iterator contents from src to dst (equivalent to `*dst = *src`).
@@ -631,6 +632,7 @@ extern "C" {
     fn nvim_kvi_destroy_intersect(x: MTNodeHandle);
 
     /// Free a node's raw memory.
+    #[link_name = "xfree"]
     fn nvim_xfree_node(x: MTNodeHandle);
 
     /// Decrement the node count on a marktree.

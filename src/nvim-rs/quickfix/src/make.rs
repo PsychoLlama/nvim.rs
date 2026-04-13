@@ -63,6 +63,8 @@ const EVENT_QUICKFIXCMDPOST: c_int = 88;
 // =============================================================================
 
 extern "C" {
+    fn xmalloc(size: usize) -> *mut std::ffi::c_void;
+    fn xfree(ptr: *mut std::ffi::c_void);
     // Option globals (direct access)
     static p_shq: *const c_char;
     static p_sp: *const c_char;
@@ -100,8 +102,6 @@ extern "C" {
     fn vim_tempname() -> *mut c_char;
 
     // Memory
-    fn nvim_xmalloc(size: usize) -> *mut c_void;
-    fn nvim_xfree(ptr: *mut c_void);
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
     // qf_cmdtitle / eap accessors
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn rs_get_mef_name() -> *mut c_char {
         let mef_len = mef_bytes.len();
         // Allocate: mef_len + 30 bytes (enough for two integers).
         let name_buf_size = mef_len + 30;
-        let name: *mut c_char = nvim_xmalloc(name_buf_size).cast::<c_char>();
+        let name: *mut c_char = xmalloc(name_buf_size).cast::<c_char>();
 
         // Copy p_mef up to "##"
         std::ptr::copy_nonoverlapping(p_mef, name, mef_len + 1); // include NUL
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn rs_get_mef_name() -> *mut c_char {
         if !nvim_os_fileinfo_link_exists(name) {
             return name;
         }
-        nvim_xfree(name.cast::<c_void>());
+        xfree(name.cast::<c_void>());
     }
 }
 
@@ -344,7 +344,7 @@ pub unsafe extern "C" fn rs_make_get_fullcmd(
         len += strlen(p_sp) + strlen(fname) + 3;
     }
 
-    let cmd: *mut c_char = nvim_xmalloc(len).cast::<c_char>();
+    let cmd: *mut c_char = xmalloc(len).cast::<c_char>();
 
     // cmd = p_shq + makecmd + p_shq
     let fmt = c"%s%s%s".as_ptr();
@@ -483,8 +483,8 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
         // goto cleanup
         nvim_decr_quickfix_busy();
         nvim_os_remove(fname);
-        nvim_xfree(fname.cast::<c_void>());
-        nvim_xfree(cmd.cast::<c_void>());
+        xfree(fname.cast::<c_void>());
+        xfree(cmd.cast::<c_void>());
         return;
     }
 
@@ -513,8 +513,8 @@ pub unsafe extern "C" fn rs_ex_make(eap: EapHandle) {
     // cleanup:
     nvim_decr_quickfix_busy();
     nvim_os_remove(fname);
-    nvim_xfree(fname.cast::<c_void>());
-    nvim_xfree(cmd.cast::<c_void>());
+    xfree(fname.cast::<c_void>());
+    xfree(cmd.cast::<c_void>());
 }
 
 // =============================================================================

@@ -270,6 +270,7 @@ extern "C" {
         out_buffer: *mut ScharT,
     );
     // getvvcol via existing C wrapper
+    #[link_name = "getvvcol"]
     fn nvim_getvvcol(
         wp: WinHandle,
         pos: *mut PosT,

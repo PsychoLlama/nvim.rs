@@ -9,6 +9,8 @@ use std::os::raw::{c_char, c_int};
 
 // C accessor functions for leader and original text
 extern "C" {
+    fn xmalloc(size: usize) -> *mut c_char;
+    fn xfree(ptr: *mut u8);
     // Cursor and column accessors
     fn nvim_get_cursor_col() -> c_int;
 
@@ -245,8 +247,6 @@ extern "C" {
     fn nvim_ml_get_curline() -> *const c_char;
     // nvim_get_compl_col is in crate::vars
     // (nvim_cpt_sources_array_exists, nvim_get_cpt_source_startcol: inlined in vars.rs Phase 23)
-    fn nvim_xfree(ptr: *mut u8);
-    fn nvim_xmalloc(size: usize) -> *mut u8;
     fn nvim_compl_match_get_cpt_source_idx(m: crate::match_list::ComplMatch) -> c_int;
 }
 
@@ -266,7 +266,7 @@ unsafe fn adjusted_leader_clear() {
     // Safety: single-threaded; raw pointer read avoids static_mut_refs lint
     let ptr = std::ptr::read(&raw const ADJUSTED_LEADER_PTR);
     if !ptr.is_null() {
-        nvim_xfree(ptr.cast::<u8>());
+        xfree(ptr.cast());
         std::ptr::write(&raw mut ADJUSTED_LEADER_PTR, std::ptr::null_mut());
         std::ptr::write(&raw mut ADJUSTED_LEADER_SIZE, 0);
     }
@@ -293,7 +293,7 @@ unsafe fn prepend_startcol_text_rs(
     let prepend_len = (compl_col - startcol) as usize;
     let new_length = prepend_len + src_size;
 
-    let buf = nvim_xmalloc(new_length + 1).cast::<c_char>();
+    let buf = xmalloc(new_length + 1).cast::<c_char>();
     let line = nvim_ml_get_curline();
 
     // copy line[startcol..compl_col]
@@ -939,7 +939,7 @@ pub unsafe extern "C" fn rs_find_common_prefix(
         }
     }
 
-    nvim_xfree(match_count.cast::<u8>());
+    xfree(match_count.cast());
 
     let leader_len = rs_ins_compl_leader_len();
     if len > leader_len as c_int {

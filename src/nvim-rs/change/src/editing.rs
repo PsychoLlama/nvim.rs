@@ -25,6 +25,7 @@ extern "C" {
     fn ml_add_deleted_len(ptr: *mut c_char, len: ColnrT);
 
     // Memory allocation
+    #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut c_char;
 
     // State checks
@@ -65,6 +66,7 @@ extern "C" {
     fn nvim_p_ri() -> bool;
 
     // VREPLACE mode
+    #[link_name = "getvcol"]
     fn nvim_getvcol(
         win: WinHandle,
         pos: *const LinenrT,

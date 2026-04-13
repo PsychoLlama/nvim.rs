@@ -57,8 +57,7 @@ extern "C" {
     /// Restore `current_sctx` from pointer returned by `nvim_modeline_sctx_save_and_set()` and free it.
     fn nvim_modeline_sctx_restore(saved: *mut c_void);
     static mut secure: c_int;
-
-    fn nvim_xfree(p: *mut c_void);
+    fn xfree(ptr: *mut std::ffi::c_void);
 }
 
 // =============================================================================
@@ -277,7 +276,7 @@ unsafe fn chk_modeline(lnum: c_int, flags: c_int) -> c_int {
     }
 
     estack_pop();
-    nvim_xfree(line_copy_ptr.cast::<c_void>());
+    xfree(line_copy_ptr.cast::<c_void>());
 
     retval
 }

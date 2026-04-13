@@ -813,6 +813,7 @@ extern "C" {
     ) -> c_int;
 
     // getvvcol wrapper
+    #[link_name = "getvvcol"]
     fn nvim_getvvcol(
         wp: WinHandle,
         pos: *const PosT,
@@ -3641,6 +3642,7 @@ extern "C" {
     fn utf_head_off(base: *const std::ffi::c_char, p: *const std::ffi::c_char) -> c_int;
 
     /// Get virtual columns for a position (getvcol wrapper).
+    #[link_name = "getvcol"]
     fn nvim_getvcol(
         wp: WinHandle,
         pos: *const PosT,

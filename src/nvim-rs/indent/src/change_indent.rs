@@ -65,6 +65,7 @@ extern "C" {
 
     // Memory
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
 
     // Replace mode
@@ -94,6 +95,7 @@ extern "C" {
     fn nvim_advance_to_vcol(line: *mut c_char, target_vcol: c_int, out_vcol: *mut c_int) -> c_int;
 
     // xmallocz
+    #[link_name = "xmallocz"]
     fn nvim_xmallocz(size: usize) -> *mut c_char;
 
     // Rust functions in edit crate (via FFI)

@@ -113,6 +113,7 @@ extern "C" {
 
     // Phase 1: marktree iteration (heap-allocated iterator)
     fn nvim_marktree_itr_alloc() -> *mut std::ffi::c_void;
+    #[link_name = "xfree"]
     fn nvim_marktree_itr_free(itr: *mut std::ffi::c_void);
     fn rs_marktree_itr_get(
         b: *mut std::ffi::c_void,

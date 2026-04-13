@@ -62,7 +62,6 @@ extern "C" {
     static mut msg_silent: c_int;
     // Home directory handling (Phase 77: now implemented in Rust)
     fn home_replace_save(buf: *mut std::ffi::c_void, src: *const c_char) -> *mut c_char;
-    fn nvim_xfree(ptr: *mut c_char);
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: bool) -> c_int;
 
     // For msg_outtrans_long (Phase 80)
@@ -307,7 +306,7 @@ pub unsafe extern "C" fn rs_msg_home_replace(fname: *const c_char) {
 pub unsafe extern "C" fn rs_msg_home_replace_hl(fname: *const c_char, hl_id: c_int) {
     let name = home_replace_save(std::ptr::null_mut(), fname);
     msg_outtrans(name.cast_const(), hl_id, false);
-    nvim_xfree(name);
+    xfree(name.cast());
 }
 
 // ============================================================================

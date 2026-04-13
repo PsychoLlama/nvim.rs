@@ -26,6 +26,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     // Memory allocation
+    #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut c_char;
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;

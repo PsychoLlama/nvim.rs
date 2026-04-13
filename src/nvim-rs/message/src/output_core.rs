@@ -128,10 +128,7 @@ extern "C" {
     static mut mode_displayed: bool;
 }
 
-#[allow(clashing_extern_declarations)]
 extern "C" {
-    // Also declared in format.rs — same C symbol, safe to re-declare here.
-    fn nvim_xfree(ptr: *mut c_char);
     // Also declared in history.rs — same Rust static, safe to re-declare here.
     static mut msg_hist_last: *mut crate::history::MessageHistoryEntry;
 }
@@ -294,7 +291,7 @@ pub(crate) unsafe fn msg_keep_impl(
     need_fileinfo = false;
 
     if !buf.is_null() {
-        nvim_xfree(buf);
+        xfree(buf.cast());
     }
 
     ENTERED.store(ENTERED.load(Ordering::Relaxed) - 1, Ordering::Relaxed);

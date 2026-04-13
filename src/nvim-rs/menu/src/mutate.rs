@@ -47,8 +47,8 @@ extern "C" {
     fn semsg(s: *const c_char, ...) -> bool;
     fn nvim_gettext(s: *const c_char) -> *const c_char;
     fn xfree(ptr: *mut c_void);
+    fn xmalloc(size: usize) -> *mut c_void;
     fn xstrdup(s: *const c_char) -> *mut c_char;
-    fn nvim_xmalloc(size: usize) -> *mut c_void;
     fn strlen(s: *const c_char) -> usize;
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
@@ -512,7 +512,7 @@ pub unsafe extern "C" fn rs_add_menu_path(
 
                 if c != 0 {
                     let call_data_len = unsafe { strlen(call_data) };
-                    let s = unsafe { nvim_xmalloc(call_data_len + 5) } as *mut u8;
+                    let s = unsafe { xmalloc(call_data_len + 5) } as *mut u8;
                     unsafe { *s = c };
                     if d == 0 {
                         unsafe {
