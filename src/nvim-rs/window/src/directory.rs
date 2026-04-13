@@ -9,6 +9,9 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
+use crate::win_struct::win_ref;
+use crate::TabpageHandle;
+use crate::WinHandle;
 use std::ffi::{c_char, c_int};
 
 // MAXPATHL on Linux is 4096
@@ -22,10 +25,8 @@ const OK: c_int = 1;
 // =============================================================================
 
 extern "C" {
-    // curwin->w_localdir (or NULL)
-    fn nvim_curwin_get_localdir() -> *const c_char;
-    // curtab->tp_localdir (or NULL)
-    fn nvim_curtab_get_localdir() -> *const c_char;
+    fn nvim_get_curwin() -> WinHandle;
+    fn nvim_get_curtab() -> TabpageHandle;
     // globaldir global
     fn nvim_get_globaldir() -> *const c_char;
     // set globaldir = xstrdup(s)
@@ -67,9 +68,9 @@ extern "C" {
 fn win_fix_current_dir_impl() {
     unsafe {
         // New directory is either the local directory of the window, tab or NULL.
-        let win_localdir = nvim_curwin_get_localdir();
+        let win_localdir = win_ref(nvim_get_curwin()).w_localdir.cast_const();
         let new_dir = if win_localdir.is_null() {
-            nvim_curtab_get_localdir()
+            nvim_get_curtab().as_tabpage_ref().tp_localdir.cast_const()
         } else {
             win_localdir
         };

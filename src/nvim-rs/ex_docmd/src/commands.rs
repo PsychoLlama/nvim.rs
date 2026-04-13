@@ -2156,8 +2156,7 @@ extern "C" {
     fn load_colors(name: *mut c_char) -> c_int;
     fn os_breakcheck();
     static mut last_chdir_reason: *const c_char;
-    fn nvim_curwin_get_localdir() -> *const c_char;
-    fn nvim_curtab_get_localdir() -> *const c_char;
+    fn nvim_get_curtab() -> *mut c_void;
     fn nvim_docmd_nth_window(nr: c_int) -> WinHandle;
     fn win_goto(wp: WinHandle);
     fn close_others(message: c_int, forceit: c_int);
@@ -2279,9 +2278,12 @@ unsafe fn do_ex_pwd() {
         if p_verbose > 0 {
             let context: *const c_char = if !last_chdir_reason.is_null() {
                 last_chdir_reason
-            } else if !nvim_curwin_get_localdir().is_null() {
+            } else if !win_ref_raw(nvim_get_curwin()).w_localdir.is_null() {
                 c"window".as_ptr()
-            } else if !nvim_curtab_get_localdir().is_null() {
+            } else if !(*(nvim_get_curtab() as *const nvim_window::tabpage_struct::TabpageStruct))
+                .tp_localdir
+                .is_null()
+            {
                 c"tabpage".as_ptr()
             } else {
                 c"global".as_ptr()

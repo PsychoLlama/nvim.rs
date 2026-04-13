@@ -567,8 +567,7 @@ extern "C" {
     fn nvim_win_border_width_wrapper(wp: WinHandle) -> c_int;
     fn nvim_win_buf_ml_line_count(wp: WinHandle) -> i32;
     fn nvim_get_curwin_handle() -> c_int;
-    fn nvim_get_curwin_wrow() -> c_int;
-    fn nvim_get_curwin_wcol() -> c_int;
+    fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_status_height_const() -> c_int;
 }
 
@@ -1158,8 +1157,8 @@ pub unsafe extern "C" fn rs_win_config_float(wp: WinHandle, fconfig: *mut c_void
     let rel = nvim_wconfig_get_relative(fconfig);
     if rel == K_FLOAT_RELATIVE_CURSOR {
         nvim_wconfig_set_relative(fconfig, K_FLOAT_RELATIVE_WINDOW);
-        let cur_wrow = nvim_get_curwin_wrow();
-        let cur_wcol = nvim_get_curwin_wcol();
+        let cur_wrow = win_ref(nvim_get_curwin()).w_wrow;
+        let cur_wcol = win_ref(nvim_get_curwin()).w_wcol;
         let old_row = nvim_wconfig_get_row(fconfig);
         let old_col = nvim_wconfig_get_col(fconfig);
         nvim_wconfig_set_row(fconfig, old_row + f64::from(cur_wrow));
@@ -1326,8 +1325,6 @@ extern "C" {
     fn nvim_wconfig_free(cfg: *mut c_void);
     fn nvim_error_alloc_init() -> *mut c_void;
     fn nvim_error_free(err: *mut c_void);
-    fn nvim_wconfig_set_col_to_curwin_wcol(cfg: *mut c_void);
-    fn nvim_wconfig_set_row_to_curwin_wrow(cfg: *mut c_void);
     fn nvim_wconfig_set_relative_editor(cfg: *mut c_void);
     fn nvim_wconfig_set_focusable(cfg: *mut c_void, val: c_int);
     fn nvim_wconfig_set_mouse(cfg: *mut c_void, val: c_int);
@@ -1472,8 +1469,8 @@ pub unsafe extern "C" fn rs_win_new_float(
 #[unsafe(export_name = "win_float_create")]
 pub unsafe extern "C" fn rs_win_float_create(enter: bool, new_buf: bool) -> WinHandle {
     let config = nvim_wconfig_alloc_init();
-    nvim_wconfig_set_col_to_curwin_wcol(config);
-    nvim_wconfig_set_row_to_curwin_wrow(config);
+    nvim_wconfig_set_col(config, f64::from(win_ref(nvim_get_curwin()).w_wcol));
+    nvim_wconfig_set_row(config, f64::from(win_ref(nvim_get_curwin()).w_wrow));
     nvim_wconfig_set_relative_editor(config);
     nvim_wconfig_set_focusable(config, 0);
     nvim_wconfig_set_mouse(config, 0);

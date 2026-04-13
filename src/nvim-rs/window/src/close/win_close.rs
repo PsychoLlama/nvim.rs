@@ -88,7 +88,6 @@ extern "C" {
     fn nvim_getout_zero() -> !;
     fn nvim_do_cmdline_cmd_diffoff();
     fn nvim_one_window_and_locked_split() -> c_int;
-    fn nvim_curwin_set_buffer_to_curbuf();
     fn rs_win_close_othertab(
         wp: WinHandle,
         free_buf: c_int,
@@ -293,7 +292,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
     {
         let curwin = nvim_get_curwin();
         if nvim_win_get_buffer(curwin).is_null() {
-            nvim_curwin_set_buffer_to_curbuf();
+            crate::win_struct::win_mut(curwin).w_buffer = nvim_get_curbuf_c().0;
         }
         nvim_getout_zero(); // never returns
     }
