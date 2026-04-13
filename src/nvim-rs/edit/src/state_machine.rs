@@ -125,7 +125,6 @@ extern "C" {
 
     // --- topline / topfill for saving ---
     fn nvim_curwin_get_topline() -> LinenrT;
-    fn nvim_curwin_get_topfill() -> c_int;
 
     // --- dont_sync_undo ---
     fn nvim_get_dont_sync_undo() -> c_int;
@@ -296,7 +295,10 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     }
 
     unsafe { (*s).old_topline = nvim_curwin_get_topline() };
-    unsafe { (*s).old_topfill = nvim_curwin_get_topfill() };
+    unsafe {
+        let curwin = nvim_window::WinHandle::from_ptr(nvim_get_curwin());
+        (*s).old_topfill = nvim_window::win_struct::win_ref(curwin).w_topfill;
+    };
 
     if unsafe { (*s).c } != K_EVENT {
         unsafe { (*s).lastc = (*s).c }; // remember previous char for CTRL-D

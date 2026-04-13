@@ -62,14 +62,12 @@ unsafe extern "C" {
     fn nvim_firstwin_next_null_or_floating() -> c_int;
     fn nvim_set_curwin_to_firstwin();
     fn nvim_curtab_get_tp_next_null() -> c_int;
-    fn nvim_curwin_get_next_null() -> c_int;
     fn nvim_advance_curwin_to_next();
     fn nvim_set_curbuf_from_curwin();
     fn nvim_curbuf_get_ml_mfp_null() -> c_int;
     fn nvim_get_p_fdls() -> i64;
     fn nvim_curwin_set_p_fdl(val: c_int);
-    fn nvim_curwin_get_arg_idx() -> c_int;
-    fn nvim_curwin_set_arg_idx(val: c_int);
+    fn nvim_get_curwin() -> nvim_window::WinHandle;
     fn nvim_curbuf_setfname_null();
     fn nvim_get_curwin_ptr() -> *mut std::ffi::c_void;
     fn nvim_get_firstwin_ptr() -> *mut std::ffi::c_void;
@@ -149,7 +147,10 @@ pub unsafe extern "C" fn rs_create_windows(parmp: *mut MparmT) {
                 }
                 goto_tabpage(0);
             } else {
-                if nvim_curwin_get_next_null() != 0 {
+                if nvim_window::win_struct::win_ref(nvim_get_curwin())
+                    .w_next
+                    .is_null()
+                {
                     break;
                 }
                 nvim_advance_curwin_to_next();
@@ -179,7 +180,7 @@ pub unsafe extern "C" fn rs_create_windows(parmp: *mut MparmT) {
                     // happens next. Clear the file name and set the arg
                     // index to -1 to delete it later.
                     nvim_curbuf_setfname_null();
-                    nvim_curwin_set_arg_idx(-1);
+                    nvim_window::win_struct::win_mut(nvim_get_curwin()).w_arg_idx = -1;
                     swap_exists_action = SEA_NONE;
                 } else {
                     handle_swap_exists(std::ptr::null_mut());
@@ -219,7 +220,7 @@ pub unsafe extern "C" fn rs_edit_buffers(parmp: *mut MparmT, cwd: *mut c_char) {
     autocmd_no_leave += 1;
 
     // When w_arg_idx is -1 remove the window (see create_windows()).
-    if nvim_curwin_get_arg_idx() == -1 {
+    if nvim_window::win_struct::win_ref(nvim_get_curwin()).w_arg_idx == -1 {
         win_close(nvim_get_curwin_ptr(), true, false);
         advance = false;
     }
@@ -231,7 +232,7 @@ pub unsafe extern "C" fn rs_edit_buffers(parmp: *mut MparmT, cwd: *mut c_char) {
             os_chdir(cwd);
         }
         // When w_arg_idx is -1 remove the window (see create_windows()).
-        if nvim_curwin_get_arg_idx() == -1 {
+        if nvim_window::win_struct::win_ref(nvim_get_curwin()).w_arg_idx == -1 {
             arg_idx += 1;
             win_close(nvim_get_curwin_ptr(), true, false);
             advance = false;
@@ -255,7 +256,10 @@ pub unsafe extern "C" fn rs_edit_buffers(parmp: *mut MparmT, cwd: *mut c_char) {
                     nvim_set_shortmess_opt(buf.as_ptr());
                 }
             } else {
-                if nvim_curwin_get_next_null() != 0 {
+                if nvim_window::win_struct::win_ref(nvim_get_curwin())
+                    .w_next
+                    .is_null()
+                {
                     // just checking
                     break;
                 }
@@ -268,7 +272,7 @@ pub unsafe extern "C" fn rs_edit_buffers(parmp: *mut MparmT, cwd: *mut c_char) {
         let curbuf = nvim_get_curbuf();
         let firstwin_buf = nvim_firstwin_get_buffer();
         if curbuf == firstwin_buf || nvim_curbuf_has_ffname() == 0 {
-            nvim_curwin_set_arg_idx(arg_idx);
+            nvim_window::win_struct::win_mut(nvim_get_curwin()).w_arg_idx = arg_idx;
             // Edit file from arg list, if there is one.
             swap_exists_did_quit = false;
             let gargcount = nvim_al_GARGCOUNT();

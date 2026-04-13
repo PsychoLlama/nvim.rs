@@ -178,7 +178,7 @@ extern "C" {
     fn nvim_map_execute_lua_false();
     fn paste_repeat(count: c_int);
     fn state_handle_k_event();
-    fn nvim_curwin_is_qf_not_ll() -> c_int;
+    fn nvim_get_curwin() -> nvim_window::WinHandle;
     fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
     fn invoke_prompt_interrupt() -> bool;
     fn prompt_invoke_callback();
@@ -1071,7 +1071,10 @@ unsafe fn handle_tab(s: *mut InsertState) -> SwitchAction {
 unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
     // In quickfix window, <CR> jumps to error under cursor.
     if nvim_bt_quickfix_curbuf() != 0 && (*s).c == CAR {
-        if nvim_curwin_is_qf_not_ll() != 0 {
+        let curwin_is_qf_not_ll = nvim_window::win_struct::win_ref(nvim_get_curwin())
+            .w_llist_ref
+            .is_null();
+        if curwin_is_qf_not_ll {
             do_cmdline_cmd(c".cc".as_ptr());
         } else {
             do_cmdline_cmd(c".ll".as_ptr());

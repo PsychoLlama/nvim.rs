@@ -65,7 +65,7 @@ extern "C" {
     fn nvim_restore_cursor_pos(lnum: LinenrT, col: ColnrT, coladd: ColnrT);
     fn nvim_cursor_equals_saved(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
     fn nvim_cursor_on_tab_or_inline() -> c_int;
-    fn nvim_curwin_invalidate_wrow_wcol_virtcol();
+    fn nvim_get_curwin() -> nvim_window::WinHandle;
     fn nvim_check_cursor_col_insert_mode();
 
     // Buffer
@@ -255,7 +255,10 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text
     if nvim_cursor_on_tab_or_inline() != 0 {
-        nvim_curwin_invalidate_wrow_wcol_virtcol();
+        {
+            // VALID_WROW = 0x01, VALID_WCOL = 0x02, VALID_VIRTCOL = 0x04
+            nvim_window::win_struct::win_mut(nvim_get_curwin()).w_valid &= !(0x01 | 0x02 | 0x04);
+        }
     }
 
     // Enable langmap or IME, indicated by 'iminsert'.

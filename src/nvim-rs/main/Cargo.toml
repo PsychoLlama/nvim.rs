@@ -9,3 +9,4 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 nvim-buffer = { path = "../buffer" }
+nvim-window = { path = "../window" }
