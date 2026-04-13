@@ -9,6 +9,12 @@ use std::ptr;
 use crate::CmdModHandle;
 use crate::ExArgHandle;
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *mut c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+
 // =============================================================================
 // Command modifier table
 // =============================================================================
@@ -265,7 +271,6 @@ extern "C" {
     // nvim_docmd_get_exmode_plus: now in Rust state module
     // nvim_set_ex_pressedreturn: now in Rust state module
     fn nvim_get_curwin() -> *mut c_void;
-    fn nvim_win_get_cursor_lnum(wp: *mut c_void) -> i32;
     fn nvim_get_curbuf() -> *mut c_void;
     fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
@@ -326,7 +331,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
         if *cmd == 0
             && crate::exmode_active
             && nvim_docmd_getline_is_getexline(eap) != 0
-            && nvim_win_get_cursor_lnum(nvim_get_curwin())
+            && win_ref_raw(nvim_get_curwin()).w_cursor.lnum
                 < nvim_buf_get_line_count(nvim_get_curbuf())
         {
             (*eap).cmd = crate::state::nvim_docmd_get_exmode_plus();

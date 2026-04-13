@@ -78,6 +78,19 @@ const VV_SWAPCOMMAND: c_int = 49;
 
 type WinHandle = *const c_void;
 
+/// Access `WinStruct` fields from a const `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *const std::ffi::c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+/// Mutable access to `WinStruct` fields from a mut `win_T` pointer.
+#[inline]
+#[allow(clippy::missing_const_for_fn)]
+unsafe fn win_mut_raw<'a>(wp: *mut std::ffi::c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 extern "C" {
     fn nvim_get_postponed_split() -> c_int;
     fn nvim_set_postponed_split(val: c_int);
@@ -144,9 +157,6 @@ extern "C" {
 
     // Win/stack accessors
     fn nvim_tag_get_curwin() -> *mut c_void;
-    fn nvim_win_get_tagstackidx(wp: WinHandle) -> c_int;
-    fn nvim_win_get_tagstacklen(wp: WinHandle) -> c_int;
-    fn nvim_win_set_tagstackidx(wp: *mut c_void, idx: c_int);
 
     // Taggy getters (take *const c_void to match commands.rs)
     fn nvim_taggy_get_cur_match(tg: *const c_void) -> c_int;
@@ -162,7 +172,6 @@ extern "C" {
 
     // Stack entry accessor (returns *const to match commands.rs)
     fn nvim_win_get_tagstack_entry(wp: WinHandle, idx: c_int) -> *const c_void;
-    fn nvim_win_set_tagstacklen(wp: *mut c_void, len: c_int);
     fn nvim_tag_get_curbuf_ffname() -> *mut c_char;
     fn xfree(ptr: *mut c_void);
 }
@@ -756,8 +765,8 @@ pub unsafe extern "C" fn rs_do_tag(
     // Opaque buffer for saved fmark (max 64 bytes per _Static_assert)
     let mut saved_fmark_buf = [0u8; 64];
 
-    let mut tagstackidx = nvim_win_get_tagstackidx(curwin);
-    let mut tagstacklen = nvim_win_get_tagstacklen(curwin);
+    let mut tagstackidx = win_ref_raw(curwin).w_tagstackidx;
+    let mut tagstacklen = win_ref_raw(curwin).w_tagstacklen;
     let oldtagstackidx = tagstackidx;
     let mut prevtagstackidx = tagstackidx;
     let tagstack_ptr = nvim_tag_get_tagstack_ptr();
@@ -818,7 +827,7 @@ pub unsafe extern "C" fn rs_do_tag(
 
                 let entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
                 nvim_taggy_set_tagname(entry.cast_mut(), xstrdup(tag));
-                nvim_win_set_tagstacklen(curwin, tagstacklen);
+                win_mut_raw(curwin).w_tagstacklen = tagstacklen;
                 save_pos = true;
             }
             new_tag = true;
@@ -966,7 +975,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 nvim_tag_save_cursor_in_entry(tagstack_ptr, tagstackidx);
             }
 
-            nvim_win_set_tagstackidx(curwin, tagstackidx);
+            win_mut_raw(curwin).w_tagstackidx = tagstackidx;
             if cur_type != cmd_type::DT_SELECT && cur_type != cmd_type::DT_JUMP {
                 nvim_taggy_set_cur_match(entry.cast_mut(), cur_match);
                 nvim_taggy_set_cur_fnum(entry.cast_mut(), cur_fnum);
@@ -1267,8 +1276,8 @@ pub unsafe extern "C" fn rs_do_tag(
                 );
             } else {
                 // May have jumped to another window
-                if use_tagstack && tagstackidx > nvim_win_get_tagstacklen(nvim_tag_get_curwin()) {
-                    tagstackidx = nvim_win_get_tagstackidx(nvim_tag_get_curwin());
+                if use_tagstack && tagstackidx > win_ref_raw(nvim_tag_get_curwin()).w_tagstacklen {
+                    tagstackidx = win_ref_raw(nvim_tag_get_curwin()).w_tagstackidx;
                 }
             }
         }
@@ -1281,8 +1290,8 @@ pub unsafe extern "C" fn rs_do_tag(
 /// Cleanup at end of `do_tag`: save tagstack index and reset globals.
 unsafe fn do_tag_cleanup(use_tagstack: bool, tagstackidx: c_int, tofree: *mut c_char) {
     let curwin = nvim_tag_get_curwin();
-    if use_tagstack && tagstackidx <= nvim_win_get_tagstacklen(curwin) {
-        nvim_win_set_tagstackidx(curwin, tagstackidx);
+    if use_tagstack && tagstackidx <= win_ref_raw(curwin).w_tagstacklen {
+        win_mut_raw(curwin).w_tagstackidx = tagstackidx;
     }
     nvim_set_postponed_split(0);
     nvim_set_g_do_tagpreview(0);

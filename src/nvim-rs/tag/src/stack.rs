@@ -24,6 +24,18 @@ use crate::TAGSTACKSIZE;
 /// Opaque handle to win_T (window) - mutable version for stack operations
 type WinHandle = *const c_void;
 
+/// Access `WinStruct` fields from a const `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+/// Mutable access to `WinStruct` fields from a mut `win_T` pointer.
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 /// Opaque handle to taggy_T (tag stack entry) - mutable version for stack operations
 type TaggyHandle = *const c_void;
 
@@ -42,14 +54,8 @@ type ColnrT = c_int;
 // the data through the pointer.
 #[allow(clashing_extern_declarations)]
 extern "C" {
-    // Window tag stack accessors (getters use const)
-    fn nvim_win_get_tagstacklen(wp: WinHandle) -> c_int;
-    fn nvim_win_get_tagstackidx(wp: WinHandle) -> c_int;
+    // Window tag stack (tagstack array is opaque; keep tagstack_entry)
     fn nvim_win_get_tagstack_entry(wp: WinHandle, idx: c_int) -> TaggyHandle;
-
-    // Window tag stack setters (need mutable access)
-    fn nvim_win_set_tagstacklen(wp: *mut c_void, len: c_int);
-    fn nvim_win_set_tagstackidx(wp: *mut c_void, idx: c_int);
 
     // Taggy accessors (getters use const)
     fn nvim_taggy_get_tagname(tg: TaggyHandle) -> *const c_char;
@@ -161,14 +167,14 @@ pub unsafe extern "C" fn rs_tagstack_clear(wp: WinHandle) {
 
     let wp_mut = wp as *mut c_void;
 
-    let len = nvim_win_get_tagstacklen(wp);
+    let len = win_ref_raw(wp).w_tagstacklen;
     for i in 0..len {
         let entry = nvim_win_get_tagstack_entry(wp, i);
         rs_tagstack_clear_entry(entry);
     }
 
-    nvim_win_set_tagstacklen(wp_mut, 0);
-    nvim_win_set_tagstackidx(wp_mut, 0);
+    win_mut_raw(wp_mut).w_tagstacklen = 0;
+    win_mut_raw(wp_mut).w_tagstackidx = 0;
 }
 
 /// Shift the tag stack down by one, removing the oldest entry.
@@ -182,7 +188,7 @@ pub unsafe extern "C" fn rs_tagstack_shift(wp: WinHandle) {
 
     let wp_mut = wp as *mut c_void;
 
-    let len = nvim_win_get_tagstacklen(wp);
+    let len = win_ref_raw(wp).w_tagstacklen;
     if len <= 0 {
         return;
     }
@@ -202,7 +208,7 @@ pub unsafe extern "C" fn rs_tagstack_shift(wp: WinHandle) {
     let top = nvim_win_get_tagstack_entry(wp, len - 1);
     rs_tagstack_zero_entry(top);
 
-    nvim_win_set_tagstacklen(wp_mut, len - 1);
+    win_mut_raw(wp_mut).w_tagstacklen = len - 1;
 }
 
 /// Push a new entry onto the tag stack.
@@ -236,7 +242,7 @@ pub unsafe extern "C" fn rs_tagstack_push(
 
     let wp_mut = wp as *mut c_void;
 
-    let mut idx = nvim_win_get_tagstacklen(wp);
+    let mut idx = win_ref_raw(wp).w_tagstacklen;
 
     // If stack is full, remove oldest entry
     if idx >= TAGSTACKSIZE {
@@ -260,7 +266,7 @@ pub unsafe extern "C" fn rs_tagstack_push(
     nvim_taggy_set_fmark_fnum(entry_mut, fnum);
     nvim_taggy_set_user_data(entry_mut, user_data);
 
-    nvim_win_set_tagstacklen(wp_mut, idx + 1);
+    win_mut_raw(wp_mut).w_tagstacklen = idx + 1;
 }
 
 /// Pop an entry from the tag stack (go to older position).
@@ -274,12 +280,12 @@ pub unsafe extern "C" fn rs_tagstack_pop(wp: WinHandle) -> bool {
 
     let wp_mut = wp as *mut c_void;
 
-    let idx = nvim_win_get_tagstackidx(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
     if idx <= 0 {
         return false;
     }
 
-    nvim_win_set_tagstackidx(wp_mut, idx - 1);
+    win_mut_raw(wp_mut).w_tagstackidx = idx - 1;
     true
 }
 
@@ -289,7 +295,7 @@ pub unsafe extern "C" fn rs_tagstack_len(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_tagstacklen(wp)
+    win_ref_raw(wp).w_tagstacklen
 }
 
 /// Get the current index in the tag stack.
@@ -298,7 +304,7 @@ pub unsafe extern "C" fn rs_tagstack_idx(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_tagstackidx(wp)
+    win_ref_raw(wp).w_tagstackidx
 }
 
 /// Set the current index in the tag stack.
@@ -312,9 +318,9 @@ pub unsafe extern "C" fn rs_tagstack_set_idx(wp: WinHandle, idx: c_int) {
 
     let wp_mut = wp as *mut c_void;
 
-    let len = nvim_win_get_tagstacklen(wp);
+    let len = win_ref_raw(wp).w_tagstacklen;
     let clamped = idx.max(0).min(len);
-    nvim_win_set_tagstackidx(wp_mut, clamped);
+    win_mut_raw(wp_mut).w_tagstackidx = clamped;
 }
 
 /// Get a tag stack entry by index.
@@ -326,7 +332,7 @@ pub unsafe extern "C" fn rs_tagstack_get_entry(wp: WinHandle, idx: c_int) -> Tag
         return ptr::null();
     }
 
-    let len = nvim_win_get_tagstacklen(wp);
+    let len = win_ref_raw(wp).w_tagstacklen;
     if idx < 0 || idx >= len {
         return ptr::null();
     }
@@ -343,7 +349,7 @@ pub unsafe extern "C" fn rs_tagstack_current_entry(wp: WinHandle) -> TaggyHandle
         return ptr::null();
     }
 
-    let idx = nvim_win_get_tagstackidx(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
     if idx <= 0 {
         return ptr::null();
     }
@@ -362,8 +368,8 @@ pub unsafe extern "C" fn rs_tagstack_truncate(wp: WinHandle) {
 
     let wp_mut = wp as *mut c_void;
 
-    let idx = nvim_win_get_tagstackidx(wp);
-    let mut len = nvim_win_get_tagstacklen(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
+    let mut len = win_ref_raw(wp).w_tagstacklen;
 
     // Clear all entries above current index
     while idx < len {
@@ -372,7 +378,7 @@ pub unsafe extern "C" fn rs_tagstack_truncate(wp: WinHandle) {
         rs_tagstack_clear_entry(entry);
     }
 
-    nvim_win_set_tagstacklen(wp_mut, idx);
+    win_mut_raw(wp_mut).w_tagstacklen = idx;
 }
 
 // =============================================================================
@@ -385,7 +391,7 @@ pub unsafe extern "C" fn rs_tagstack_can_pop(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    nvim_win_get_tagstackidx(wp) > 0
+    win_ref_raw(wp).w_tagstackidx > 0
 }
 
 /// Check if we can go to a newer tag (push direction).
@@ -394,7 +400,7 @@ pub unsafe extern "C" fn rs_tagstack_can_push_nav(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    nvim_win_get_tagstackidx(wp) < nvim_win_get_tagstacklen(wp)
+    win_ref_raw(wp).w_tagstackidx < win_ref_raw(wp).w_tagstacklen
 }
 
 /// Check if the tag stack is empty.
@@ -403,7 +409,7 @@ pub unsafe extern "C" fn rs_tagstack_empty(wp: WinHandle) -> bool {
     if wp.is_null() {
         return true;
     }
-    nvim_win_get_tagstacklen(wp) <= 0
+    win_ref_raw(wp).w_tagstacklen <= 0
 }
 
 /// Check if the tag stack is full.
@@ -412,7 +418,7 @@ pub unsafe extern "C" fn rs_tagstack_full(wp: WinHandle) -> bool {
     if wp.is_null() {
         return true;
     }
-    nvim_win_get_tagstacklen(wp) >= TAGSTACKSIZE
+    win_ref_raw(wp).w_tagstacklen >= TAGSTACKSIZE
 }
 
 /// Navigate to an older tag (decrement index).
@@ -426,9 +432,9 @@ pub unsafe extern "C" fn rs_tagstack_go_older(wp: WinHandle, count: c_int) -> c_
 
     let wp_mut = wp as *mut c_void;
 
-    let idx = nvim_win_get_tagstackidx(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
     let new_idx = (idx - count).max(0);
-    nvim_win_set_tagstackidx(wp_mut, new_idx);
+    win_mut_raw(wp_mut).w_tagstackidx = new_idx;
     new_idx
 }
 
@@ -443,10 +449,10 @@ pub unsafe extern "C" fn rs_tagstack_go_newer(wp: WinHandle, count: c_int) -> c_
 
     let wp_mut = wp as *mut c_void;
 
-    let idx = nvim_win_get_tagstackidx(wp);
-    let len = nvim_win_get_tagstacklen(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
+    let len = win_ref_raw(wp).w_tagstacklen;
     let new_idx = (idx + count).min(len);
-    nvim_win_set_tagstackidx(wp_mut, new_idx);
+    win_mut_raw(wp_mut).w_tagstackidx = new_idx;
     new_idx
 }
 
@@ -623,7 +629,7 @@ pub unsafe extern "C" fn rs_tagstack_older_count(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_tagstackidx(wp)
+    win_ref_raw(wp).w_tagstackidx
 }
 
 /// Get the number of positions we can go newer.
@@ -632,8 +638,8 @@ pub unsafe extern "C" fn rs_tagstack_newer_count(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    let idx = nvim_win_get_tagstackidx(wp);
-    let len = nvim_win_get_tagstacklen(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
+    let len = win_ref_raw(wp).w_tagstacklen;
     len - idx
 }
 
@@ -643,7 +649,7 @@ pub unsafe extern "C" fn rs_tagstack_at_idx(wp: WinHandle, idx: c_int) -> bool {
     if wp.is_null() {
         return false;
     }
-    nvim_win_get_tagstackidx(wp) == idx
+    win_ref_raw(wp).w_tagstackidx == idx
 }
 
 /// Get remaining capacity in the tag stack.
@@ -652,7 +658,7 @@ pub unsafe extern "C" fn rs_tagstack_remaining(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    TAGSTACKSIZE - nvim_win_get_tagstacklen(wp)
+    TAGSTACKSIZE - win_ref_raw(wp).w_tagstacklen
 }
 
 /// Set both length and index atomically.
@@ -664,8 +670,8 @@ pub unsafe extern "C" fn rs_tagstack_set_len_idx(wp: WinHandle, len: c_int, idx:
     let wp_mut = wp as *mut c_void;
     let clamped_len = len.clamp(0, TAGSTACKSIZE);
     let clamped_idx = idx.clamp(0, clamped_len);
-    nvim_win_set_tagstacklen(wp_mut, clamped_len);
-    nvim_win_set_tagstackidx(wp_mut, clamped_idx);
+    win_mut_raw(wp_mut).w_tagstacklen = clamped_len;
+    win_mut_raw(wp_mut).w_tagstackidx = clamped_idx;
 }
 
 /// Increment the current match index in a stack entry.

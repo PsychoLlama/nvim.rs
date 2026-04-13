@@ -18,6 +18,16 @@ type LinenrT = i32;
 /// Opaque handle to a win_T.
 type WinHandle = *mut c_void;
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: WinHandle) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: WinHandle) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 // =============================================================================
 // CMD_ enum constants for skip_cmd
 // =============================================================================
@@ -215,10 +225,8 @@ extern "C" {
     fn setmouse();
     fn ui_cursor_shape();
 
-    // curwin accessors for ex_normal
+    // curwin accessor
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: i32);
 
     // Filetype helpers: now in Rust state module
     fn source_runtime(fname: *const c_char, flags: c_int) -> c_int;
@@ -229,7 +237,6 @@ extern "C" {
     fn text_locked() -> bool;
     fn text_locked_msg();
     fn nvim_get_firstwin() -> WinHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> *mut c_void;
     fn before_quit_autocmds(wp: WinHandle, quit_all: bool, forceit: bool) -> bool;
     fn nvim_docmd_check_more(message: c_int, forceit: c_int) -> c_int;
@@ -994,8 +1001,8 @@ pub unsafe extern "C" fn rs_ex_normal(eap: ExArgHandle) {
             if addr_count != 0 {
                 let line1 = (*eap).line1;
                 let curwin = nvim_get_curwin();
-                nvim_win_set_cursor_lnum(nvim_get_curwin(), line1);
-                nvim_win_set_cursor_col(nvim_get_curwin(), 0);
+                win_mut_raw(nvim_get_curwin()).w_cursor.lnum = line1;
+                win_mut_raw(nvim_get_curwin()).w_cursor.col = 0;
                 check_cursor_moved(curwin);
                 (*eap).line1 = line1 + 1;
             }
@@ -1195,12 +1202,12 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
     let wp = if (*eap).addr_count > 0 {
         let mut wnr = (*eap).line2;
         let mut wp = nvim_get_firstwin();
-        while !nvim_win_get_next(wp).is_null() {
+        while !win_ref_raw(wp).w_next.as_ptr().is_null() {
             wnr -= 1;
             if wnr <= 0 {
                 break;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref_raw(wp).w_next.as_ptr();
         }
         wp
     } else {
@@ -2032,7 +2039,7 @@ pub unsafe extern "C" fn rs_ex_redrawtabline(_eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
     let line1 = (*eap).line1;
     let line2 = (*eap).line2;
-    nvim_win_set_cursor_lnum(nvim_get_curwin(), line1);
+    win_mut_raw(nvim_get_curwin()).w_cursor.lnum = line1;
     let line2 = if line1 == line2 {
         if (*eap).addr_count >= 2 {
             return;
@@ -2069,7 +2076,7 @@ pub unsafe extern "C" fn rs_ex_put(eap: ExArgHandle) {
         forceit = true;
         (*eap).forceit = (true) as c_int;
     }
-    nvim_win_set_cursor_lnum(nvim_get_curwin(), line2);
+    win_mut_raw(nvim_get_curwin()).w_cursor.lnum = line2;
     check_cursor_col(nvim_get_curwin());
     let regname = (*eap).regname;
     let dir = if forceit { BACKWARD } else { FORWARD };
@@ -2093,7 +2100,7 @@ pub unsafe extern "C" fn rs_ex_iput(eap: ExArgHandle) {
         forceit = true;
         (*eap).forceit = (true) as c_int;
     }
-    nvim_win_set_cursor_lnum(nvim_get_curwin(), line2);
+    win_mut_raw(nvim_get_curwin()).w_cursor.lnum = line2;
     check_cursor_col(nvim_get_curwin());
     let regname = (*eap).regname;
     let dir = if forceit { BACKWARD } else { FORWARD };
@@ -2154,10 +2161,6 @@ extern "C" {
     fn load_colors(name: *mut c_char) -> c_int;
     fn nvim_buf_get_ml_empty(buf: *mut c_void) -> bool;
     fn os_breakcheck();
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> i32;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> i32;
-    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> i32;
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: i32);
     static mut last_chdir_reason: *const c_char;
     fn nvim_curwin_get_localdir() -> *const c_char;
     fn nvim_curtab_get_localdir() -> *const c_char;
@@ -2234,17 +2237,17 @@ pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
         return;
     }
     let curwin = nvim_get_curwin();
-    let saved_lnum = nvim_win_get_cursor_lnum(curwin);
-    let saved_col = nvim_win_get_cursor_col(curwin);
-    let saved_coladd = nvim_win_get_cursor_coladd(curwin);
-    nvim_win_set_cursor_lnum(curwin, (*eap).line2);
+    let saved_lnum = win_ref_raw(curwin).w_cursor.lnum;
+    let saved_col = win_ref_raw(curwin).w_cursor.col;
+    let saved_coladd = win_ref_raw(curwin).w_cursor.coladd;
+    win_mut_raw(curwin).w_cursor.lnum = (*eap).line2;
     beginline(BL_WHITE | BL_FIX);
     if setmark(*(arg as *const u8) as c_int) == 0 {
         emsg(c"E191: Argument must be a letter or forward/backward quote".as_ptr());
     }
-    nvim_win_set_cursor_lnum(curwin, saved_lnum);
-    nvim_win_set_cursor_col(curwin, saved_col);
-    nvim_win_set_cursor_coladd(curwin, saved_coladd);
+    win_mut_raw(curwin).w_cursor.lnum = saved_lnum;
+    win_mut_raw(curwin).w_cursor.col = saved_col;
+    win_mut_raw(curwin).w_cursor.coladd = saved_coladd;
 }
 
 /// ":print" / ":list" / ":number".
@@ -2269,7 +2272,7 @@ pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
             os_breakcheck();
         }
         setpcmark();
-        nvim_win_set_cursor_lnum(nvim_get_curwin(), line2);
+        win_mut_raw(nvim_get_curwin()).w_cursor.lnum = line2;
         beginline(BL_SOL | BL_FIX);
     }
     ex_no_reprint = true;
@@ -2341,7 +2344,7 @@ pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
         let mut wp = nvim_get_firstwin();
         while wnr > 1 {
             wnr -= 1;
-            let next = nvim_win_get_next(wp);
+            let next = win_ref_raw(wp).w_next.as_ptr();
             if next.is_null() {
                 break;
             }
@@ -2433,8 +2436,6 @@ extern "C" {
     fn curbufIsChanged() -> bool;
     fn do_write(eap: ExArgHandle) -> c_int;
     fn nvim_docmd_buf_hide_curwin() -> c_int;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn rs_win_setwidth_win(width: c_int, wp: WinHandle);
     fn rs_win_setheight_win(height: c_int, wp: WinHandle);
     fn atol(s: *const c_char) -> std::ffi::c_long;
@@ -2486,7 +2487,6 @@ extern "C" {
     fn redraw_statuslines();
     fn showmode();
     fn rs_set_cursor_for_append_to_line();
-    fn nvim_win_set_curswant(wp: WinHandle, val: c_int);
 
     // Phase 16: ex_put, ex_iput, ex_equal helpers
     fn do_put(regname: c_int, reg: *mut c_void, dir: c_int, count: c_int, flags: c_int);
@@ -2555,7 +2555,7 @@ pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c
             errormsg = crate::errors::E_INVRANGE_STR.as_ptr() as *mut c_char;
         } else {
             let new_lnum = if line2 == 0 { 1 } else { line2 };
-            nvim_win_set_cursor_lnum(nvim_get_curwin(), new_lnum);
+            win_mut_raw(nvim_get_curwin()).w_cursor.lnum = new_lnum;
             beginline(BL_SOL | BL_FIX);
         }
     }
@@ -2659,12 +2659,12 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
     if (*eap).addr_count > 0 {
         let mut n = (*eap).line2;
         wp = nvim_get_firstwin();
-        while !nvim_win_get_next(wp).is_null() {
+        while !win_ref_raw(wp).w_next.as_ptr().is_null() {
             n -= 1;
             if n <= 0 {
                 break;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref_raw(wp).w_next.as_ptr();
         }
     }
 
@@ -2673,7 +2673,7 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
     let cmod_split = crate::cmdmod.cmod_split;
     if cmod_split & WSP_VERT != 0 {
         let n = if !arg.is_null() && (*(arg as *const u8) == b'-' || *(arg as *const u8) == b'+') {
-            n_raw + nvim_win_get_w_width(wp)
+            n_raw + win_ref_raw(wp).w_width
         } else if n_raw == 0 && (arg.is_null() || *(arg as *const u8) == 0) {
             Columns
         } else {
@@ -2682,7 +2682,7 @@ pub unsafe extern "C" fn rs_ex_resize(eap: ExArgHandle) {
         rs_win_setwidth_win(n, wp);
     } else {
         let n = if !arg.is_null() && (*(arg as *const u8) == b'-' || *(arg as *const u8) == b'+') {
-            n_raw + nvim_win_get_w_height(wp)
+            n_raw + win_ref_raw(wp).w_height
         } else if n_raw == 0 && (arg.is_null() || *(arg as *const u8) == 0) {
             Rows - 1
         } else {
@@ -2804,7 +2804,7 @@ pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
 pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
     let prev_len = nvim_docmd_typebuf_tb_len();
 
-    nvim_win_set_cursor_lnum(nvim_get_curwin(), (*eap).line2);
+    win_mut_raw(nvim_get_curwin()).w_cursor.lnum = (*eap).line2;
     check_cursor_col(nvim_get_curwin());
 
     // Get the register name. No name means use the previous one.
@@ -2961,7 +2961,7 @@ pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
         // cursor line can be zero on startup
         let lnum = (*eap).line1;
         if lnum == 0 {
-            nvim_win_set_cursor_lnum(nvim_get_curwin(), 1);
+            win_mut_raw(nvim_get_curwin()).w_cursor.lnum = 1;
         }
         rs_set_cursor_for_append_to_line();
     }
@@ -2990,7 +2990,7 @@ pub unsafe extern "C" fn rs_ex_startinsert(eap: ExArgHandle) {
     restart_edit = restart_char;
 
     if !forceit {
-        nvim_win_set_curswant(nvim_get_curwin(), 0); // avoid MAXCOL
+        win_mut_raw(nvim_get_curwin()).w_curswant = 0; // avoid MAXCOL
     }
 
     if VIsual_active {
@@ -3431,7 +3431,7 @@ pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
     if cmdidx != CMD_YANK {
         // position cursor for undo
         setpcmark();
-        nvim_win_set_cursor_lnum(nvim_get_curwin(), (*eap).line1);
+        win_mut_raw(nvim_get_curwin()).w_cursor.lnum = (*eap).line1;
         beginline(BL_SOL | BL_FIX);
     }
 

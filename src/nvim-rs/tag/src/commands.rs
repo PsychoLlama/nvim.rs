@@ -33,6 +33,18 @@ const E_LISTREQ: &CStr = c"E714: List required";
 /// Opaque handle to win_T (window)
 type WinHandle = *const c_void;
 
+/// Access `WinStruct` fields from a const `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *const std::ffi::c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+/// Mutable access to `WinStruct` fields from a mut `win_T` pointer.
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut std::ffi::c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
+
 /// Line number type
 type LinenrT = i32;
 
@@ -46,10 +58,6 @@ type ColnrT = c_int;
 extern "C" {
     static Columns: c_int;
     static mut got_int: bool;
-    // Window tag stack accessors
-    fn nvim_win_get_tagstacklen(wp: WinHandle) -> c_int;
-    fn nvim_win_get_tagstackidx(wp: WinHandle) -> c_int;
-
     // String functions
     fn strlen(s: *const c_char) -> usize;
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
@@ -187,8 +195,8 @@ pub unsafe extern "C" fn rs_tag_validate_pop(wp: WinHandle, count: c_int) -> c_i
         return cmd_result::FAIL;
     }
 
-    let idx = nvim_win_get_tagstackidx(wp);
-    let len = nvim_win_get_tagstacklen(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
+    let len = win_ref_raw(wp).w_tagstacklen;
 
     if len == 0 {
         return cmd_result::STACK_EMPTY;
@@ -210,7 +218,7 @@ pub unsafe extern "C" fn rs_tag_calc_pop_idx(wp: WinHandle, count: c_int) -> c_i
         return 0;
     }
 
-    let idx = nvim_win_get_tagstackidx(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
     (idx - count).max(0)
 }
 
@@ -223,8 +231,8 @@ pub unsafe extern "C" fn rs_tag_validate_newer(wp: WinHandle, count: c_int) -> c
         return cmd_result::FAIL;
     }
 
-    let idx = nvim_win_get_tagstackidx(wp);
-    let len = nvim_win_get_tagstacklen(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
+    let len = win_ref_raw(wp).w_tagstacklen;
 
     if len == 0 {
         return cmd_result::STACK_EMPTY;
@@ -246,8 +254,8 @@ pub unsafe extern "C" fn rs_tag_calc_newer_idx(wp: WinHandle, count: c_int) -> c
         return 0;
     }
 
-    let idx = nvim_win_get_tagstackidx(wp);
-    let len = nvim_win_get_tagstacklen(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
+    let len = win_ref_raw(wp).w_tagstacklen;
     (idx + count - 1).min(len - 1).max(0)
 }
 
@@ -367,8 +375,8 @@ pub unsafe extern "C" fn rs_tag_calc_push_idx(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    let idx = nvim_win_get_tagstackidx(wp);
-    let len = nvim_win_get_tagstacklen(wp);
+    let idx = win_ref_raw(wp).w_tagstackidx;
+    let len = win_ref_raw(wp).w_tagstacklen;
 
     // New entry goes at current index position
     // (entries above will be truncated)
@@ -1047,7 +1055,7 @@ pub unsafe extern "C" fn rs_print_tag_list(
     let curwin = nvim_tag_get_curwin();
 
     // Get current match info from tag stack
-    let tagstackidx = nvim_win_get_tagstackidx(curwin);
+    let tagstackidx = win_ref_raw(curwin).w_tagstackidx;
     let tagstack_entry = nvim_win_get_tagstack_entry(curwin, tagstackidx);
     let tagstack_cur_match = if tagstack_entry.is_null() {
         -1
@@ -1437,8 +1445,8 @@ pub unsafe extern "C" fn rs_add_llist_tags(
 #[export_name = "do_tags"]
 pub unsafe extern "C" fn rs_do_tags(_eap: *mut std::ffi::c_void) {
     let curwin = nvim_tag_get_curwin();
-    let tagstackidx = nvim_win_get_tagstackidx(curwin);
-    let tagstacklen = nvim_win_get_tagstacklen(curwin);
+    let tagstackidx = win_ref_raw(curwin).w_tagstackidx;
+    let tagstacklen = win_ref_raw(curwin).w_tagstacklen;
 
     // Highlight title
     msg_puts_title(c"\n  # TO tag         FROM line  in file/text".as_ptr());
@@ -1603,7 +1611,6 @@ extern "C" {
     fn nvim_taggy_get_user_data(tg: *const c_void) -> *const c_char;
     fn nvim_taggy_get_fmark_col(tg: *const c_void) -> c_int;
     fn nvim_tag_taggy_fmark_coladd(tg: *const c_void) -> c_int;
-    fn nvim_win_set_tagstackidx(wp: *mut c_void, idx: c_int);
 
     // Already-migrated Rust functions callable via FFI
     fn rs_test_for_static(tagp: *const c_void) -> bool;
@@ -1934,8 +1941,8 @@ pub unsafe extern "C" fn rs_get_tagstack(wp: *mut c_void, retdict: *mut c_void) 
         return;
     }
 
-    let tagstacklen = nvim_win_get_tagstacklen(wp);
-    let tagstackidx = nvim_win_get_tagstackidx(wp);
+    let tagstacklen = win_ref_raw(wp).w_tagstacklen;
+    let tagstackidx = win_ref_raw(wp).w_tagstackidx;
 
     nvim_tag_tv_dict_add_nr(retdict, c"length".as_ptr(), 6, tagstacklen as i64);
     nvim_tag_tv_dict_add_nr(retdict, c"curidx".as_ptr(), 6, (tagstackidx + 1) as i64);
@@ -2014,8 +2021,8 @@ pub unsafe extern "C" fn rs_set_tagstack(
         tagstack_push_items_from_list(wp, list);
 
         // set the current index after the last entry
-        let len = nvim_win_get_tagstacklen(wp);
-        nvim_win_set_tagstackidx(wp, len);
+        let len = win_ref_raw(wp).w_tagstacklen;
+        win_mut_raw(wp).w_tagstackidx = len;
     }
 
     OK

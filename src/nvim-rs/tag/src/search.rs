@@ -13,6 +13,12 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+/// Access `WinStruct` fields from a const `win_T` pointer.
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+
 // =============================================================================
 // Type aliases for C types
 // =============================================================================
@@ -2748,8 +2754,6 @@ extern "C" {
     fn nvim_tag_get_g_tag_at_cursor() -> bool;
     // Phase 2: tagstack accessors replacing nvim_tag_get_curwin_tagstack_user_data
     fn nvim_tag_get_curwin() -> *mut c_void;
-    fn nvim_win_get_tagstacklen(wp: *const c_void) -> c_int;
-    fn nvim_win_get_tagstackidx(wp: *const c_void) -> c_int;
     fn nvim_win_get_tagstack_entry(wp: *const c_void, idx: c_int) -> *const c_void;
     fn nvim_taggy_get_user_data(tg: *const c_void) -> *const c_char;
     // Allocate a dict; VAR_FIXED = 2
@@ -2844,9 +2848,9 @@ pub unsafe extern "C" fn rs_tag_call_tagfunc(
 
     // Phase 2: inline nvim_tag_get_curwin_tagstack_user_data logic using fine-grained accessors
     let curwin = nvim_tag_get_curwin();
-    let tagstacklen = nvim_win_get_tagstacklen(curwin);
+    let tagstacklen = win_ref_raw(curwin).w_tagstacklen;
     let user_data: *const c_char = if tagstacklen > 0 {
-        let tagstackidx = nvim_win_get_tagstackidx(curwin);
+        let tagstackidx = win_ref_raw(curwin).w_tagstackidx;
         let idx = if tagstackidx == tagstacklen {
             tagstackidx - 1
         } else {

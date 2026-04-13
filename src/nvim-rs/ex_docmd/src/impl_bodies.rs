@@ -13,6 +13,12 @@ use std::ptr;
 
 use crate::ExArgHandle;
 
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *mut c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+
 // Type aliases
 type LinenrT = i32;
 type BufHandle = *mut c_void;
@@ -91,7 +97,6 @@ extern "C" {
     ) -> c_int;
     fn ngettext(s1: *const c_char, s2: *const c_char, n: std::ffi::c_ulong) -> *const c_char;
     fn nvim_get_argcount() -> c_int;
-    fn nvim_win_get_arg_idx(wp: *mut c_void) -> c_int;
     fn nvim_al_get_arg_had_last() -> c_int;
     fn rs_only_one_window() -> c_int;
     fn nvim_get_p_confirm() -> c_int;
@@ -125,7 +130,6 @@ extern "C" {
 
     // --- do_exedit_split_fallback helpers ---
     fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
-    fn nvim_win_get_arg_idx_invalid(wp: *mut c_void) -> c_int;
     fn nvim_al_check_arg_idx(wp: *mut c_void);
     fn maketitle();
 
@@ -349,7 +353,7 @@ unsafe fn rs_nvim_docmd_check_more_dialog(n: c_int) -> c_int {
 /// Accesses global state (ARGCOUNT, curwin, quitmore, cmdmod).
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_check_more(message: c_int, forceit: c_int) -> c_int {
-    let n = nvim_get_argcount() - nvim_win_get_arg_idx(nvim_get_curwin()) - 1;
+    let n = nvim_get_argcount() - win_ref_raw(nvim_get_curwin()).w_arg_idx - 1;
 
     if forceit == 0
         && rs_only_one_window() != 0
@@ -472,9 +476,9 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle) {
     if !do_ecmd_cmd.is_null() {
         do_cmdline_cmd(do_ecmd_cmd);
     }
-    let n = nvim_win_get_arg_idx_invalid(nvim_get_curwin());
+    let n = win_ref_raw(nvim_get_curwin()).w_arg_idx_invalid;
     nvim_al_check_arg_idx(nvim_get_curwin());
-    if n != nvim_win_get_arg_idx_invalid(nvim_get_curwin()) {
+    if n != win_ref_raw(nvim_get_curwin()).w_arg_idx_invalid {
         maketitle();
     }
 }

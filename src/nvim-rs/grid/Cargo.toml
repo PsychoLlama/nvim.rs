@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 nvim-arabic = { path = "../arabic" }
 nvim-mbyte = { path = "../mbyte" }
+nvim-window = { path = "../window" }
 
 [lints]
 workspace = true

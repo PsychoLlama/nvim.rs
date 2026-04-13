@@ -246,6 +246,19 @@ type LinenrT = i32;
 type WinHandle = *const c_void;
 /// Opaque handle to `taggy_T` (tag stack entry)
 type TaggyHandle = *const c_void;
+
+/// Access `WinStruct` fields from a const `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp.cast_mut()))
+}
+/// Mutable access to `WinStruct` fields from a mut `win_T` pointer.
+#[allow(dead_code)]
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut nvim_window::win_struct::WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
 /// Opaque handle to `fmark_T` (file mark)
 type FmarkHandle = *const c_void;
 /// Opaque handle to `findtags_state_T` (tag search state)
@@ -257,9 +270,7 @@ type FindTagsStateHandle = *mut c_void;
 
 #[allow(dead_code)]
 extern "C" {
-    // Window tag stack accessors
-    fn nvim_win_get_tagstacklen(wp: WinHandle) -> c_int;
-    fn nvim_win_get_tagstackidx(wp: WinHandle) -> c_int;
+    // Window tag stack accessors (tagstack array is opaque; keep tagstack_entry)
     fn nvim_win_get_tagstack_entry(wp: WinHandle, idx: c_int) -> TaggyHandle;
 
     // Taggy accessors
@@ -299,7 +310,7 @@ pub unsafe extern "C" fn rs_tag_stack_empty(wp: WinHandle) -> bool {
     if wp.is_null() {
         return true;
     }
-    nvim_win_get_tagstacklen(wp) <= 0
+    win_ref_raw(wp).w_tagstacklen <= 0
 }
 
 /// Returns the number of entries in the tag stack.
@@ -315,7 +326,7 @@ pub unsafe extern "C" fn rs_tag_stack_len(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_tagstacklen(wp)
+    win_ref_raw(wp).w_tagstacklen
 }
 
 /// Returns the current index in the tag stack.
@@ -332,7 +343,7 @@ pub unsafe extern "C" fn rs_tag_stack_idx(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_tagstackidx(wp)
+    win_ref_raw(wp).w_tagstackidx
 }
 
 /// Returns true if we are at the bottom of the tag stack (cannot pop).
@@ -346,7 +357,7 @@ pub unsafe extern "C" fn rs_tag_at_bottom(wp: WinHandle) -> bool {
     if wp.is_null() {
         return true;
     }
-    nvim_win_get_tagstackidx(wp) <= 0
+    win_ref_raw(wp).w_tagstackidx <= 0
 }
 
 /// Returns true if we are at the top of the tag stack.
@@ -360,7 +371,7 @@ pub unsafe extern "C" fn rs_tag_at_top(wp: WinHandle) -> bool {
     if wp.is_null() {
         return true;
     }
-    nvim_win_get_tagstackidx(wp) >= nvim_win_get_tagstacklen(wp)
+    win_ref_raw(wp).w_tagstackidx >= win_ref_raw(wp).w_tagstacklen
 }
 
 /// Returns the current match index from a tag stack entry.
@@ -543,7 +554,7 @@ pub unsafe extern "C" fn rs_tag_can_pop(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    nvim_win_get_tagstackidx(wp) > 0
+    win_ref_raw(wp).w_tagstackidx > 0
 }
 
 /// Returns true if the tag stack has room for more entries.
@@ -557,7 +568,7 @@ pub unsafe extern "C" fn rs_tag_can_push(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    nvim_win_get_tagstacklen(wp) < TAGSTACKSIZE
+    win_ref_raw(wp).w_tagstacklen < TAGSTACKSIZE
 }
 
 /// Calculates the next match index with wrapping.
@@ -635,7 +646,7 @@ pub unsafe extern "C" fn rs_tag_stack_pos_valid(wp: WinHandle, idx: c_int) -> bo
     if wp.is_null() {
         return false;
     }
-    idx >= 0 && idx < nvim_win_get_tagstacklen(wp)
+    idx >= 0 && idx < win_ref_raw(wp).w_tagstacklen
 }
 
 // =============================================================================

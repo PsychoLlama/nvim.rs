@@ -7,9 +7,22 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::manual_range_contains)]
 
+use nvim_window::win_struct::WinStruct;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::{LazyLock, Mutex};
+
+/// Access `WinStruct` fields from a raw `win_T` pointer.
+#[allow(clippy::missing_const_for_fn)]
+#[inline]
+unsafe fn win_ref_raw<'a>(wp: *mut c_void) -> &'a WinStruct {
+    nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp))
+}
+/// Mutable access to `WinStruct` fields from a raw `win_T` pointer.
+#[inline]
+unsafe fn win_mut_raw<'a>(wp: *mut c_void) -> &'a mut WinStruct {
+    nvim_window::win_struct::win_mut(nvim_window::WinHandle::from_ptr(wp))
+}
 
 // Re-export API types for hlattrs2dict, hl_inspect, object_to_color
 use nvim_api::{Arena, Array, Dict, Error, NvimString, Object, ObjectType};
@@ -134,34 +147,11 @@ extern "C" {
     // Accessors for win_bg_attr (Phase 16)
     /// Get current window pointer
     fn nvim_get_curwin() -> *mut c_void;
-    /// Get w_hl_attr_normal field from window
-    fn nvim_win_get_hl_attr_normal(wp: *mut c_void) -> c_int;
-    /// Get w_hl_attr_normalnc field from window
-    fn nvim_win_get_hl_attr_normalnc(wp: *mut c_void) -> c_int;
 
     // Accessors for update_window_hl (Phase 17)
     /// Get hlf_names[idx] string (C array, cannot eliminate)
     fn nvim_get_hlf_name(idx: c_int) -> *const c_char;
     // nvim_get_highlight_attr is already defined above (line 45)
-    // nvim_win_get_ns_hl is defined below in window accessors section
-    /// Get w_ns_hl_active field from window
-    fn nvim_win_get_ns_hl_active(wp: *mut c_void) -> c_int;
-    /// Set w_ns_hl_active field of window
-    fn nvim_win_set_ns_hl_active(wp: *mut c_void, val: c_int);
-    /// Get w_ns_hl_attr pointer from window
-    fn nvim_win_get_ns_hl_attr(wp: *mut c_void) -> *mut c_int;
-    /// Set w_ns_hl_attr pointer of window
-    fn nvim_win_set_ns_hl_attr(wp: *mut c_void, val: *mut c_int);
-    /// Get w_hl_needs_update field from window
-    fn nvim_win_get_hl_needs_update(wp: *mut c_void) -> bool;
-    /// Set w_hl_needs_update field of window
-    fn nvim_win_set_hl_needs_update(wp: *mut c_void, val: bool);
-    /// Set w_hl_attr_normal field of window
-    fn nvim_win_set_hl_attr_normal(wp: *mut c_void, val: c_int);
-    /// Set w_hl_attr_normalnc field of window
-    fn nvim_win_set_hl_attr_normalnc(wp: *mut c_void, val: c_int);
-    /// Get w_floating field from window
-    fn nvim_win_get_floating(wp: *mut c_void) -> c_int;
     /// Get w_config.external field from window
     fn nvim_win_get_config_external(wp: *mut c_void) -> bool;
     /// Get w_config.border field from window
@@ -174,8 +164,6 @@ extern "C" {
     fn nvim_win_set_config_shadow(wp: *mut c_void, val: bool);
     /// Get w_config.shadow field from window
     fn nvim_win_get_config_shadow(wp: *mut c_void) -> bool;
-    /// Get w_p_winbl field from window
-    fn nvim_win_get_p_winbl(wp: *mut c_void) -> c_int;
     /// Set w_grid_alloc.blending field of window
     fn nvim_win_set_grid_blending(wp: *mut c_void, val: bool);
 
@@ -1846,8 +1834,6 @@ extern "C" {
     fn nvim_set_cterm_normal_bg_color(val: c_int);
     /// Get curwin->w_ns_hl_active (current window's active namespace)
     fn c_curwin_ns_hl_active() -> c_int;
-    /// Get w_ns_hl field from a window
-    fn nvim_win_get_ns_hl(wp: *mut c_void) -> c_int;
 }
 
 /// Reset the cterm colors to what they were before Vim was started.
@@ -1888,7 +1874,7 @@ pub unsafe extern "C" fn rs_win_check_ns_hl(wp: *mut c_void) -> bool {
     let ns_hl = if wp.is_null() {
         -1
     } else {
-        nvim_win_get_ns_hl(wp)
+        win_ref_raw(wp).w_ns_hl
     };
     rs_set_ns_hl_win(ns_hl);
     rs_hl_check_ns()
@@ -2525,9 +2511,9 @@ pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
     let hl_attr_active = nvim_get_hl_attr_active();
     if ns_hl_fast < 0 {
         let local = if wp == curwin {
-            nvim_win_get_hl_attr_normal(wp)
+            win_ref_raw(wp).w_hl_attr_normal
         } else {
-            nvim_win_get_hl_attr_normalnc(wp)
+            win_ref_raw(wp).w_hl_attr_normalnc
         };
         if local != 0 {
             return local;
@@ -2543,8 +2529,8 @@ pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
 
 /// Helper: check_blending - updates w_grid_alloc.blending based on winbl and shadow
 unsafe fn check_blending(wp: *mut c_void) {
-    let winbl = nvim_win_get_p_winbl(wp);
-    let floating = nvim_win_get_floating(wp) != 0;
+    let winbl = win_ref_raw(wp).w_p_winbl() as c_int;
+    let floating = win_ref_raw(wp).w_floating;
     let shadow = nvim_win_get_config_shadow(wp);
     let blending = winbl > 0 || (floating && shadow);
     nvim_win_set_grid_blending(wp, blending);
@@ -2556,37 +2542,37 @@ unsafe fn check_blending(wp: *mut c_void) {
 /// namespace highlights and floating window configuration.
 #[export_name = "update_window_hl"]
 pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
-    let ns_id = nvim_win_get_ns_hl(wp);
+    let ns_id = win_ref_raw(wp).w_ns_hl;
 
     // Update namespace highlights
     rs_update_ns_hl(ns_id);
 
     // Get or update the highlight attribute array for this namespace
-    if ns_id != nvim_win_get_ns_hl_active(wp) || nvim_win_get_ns_hl_attr(wp).is_null() {
-        nvim_win_set_ns_hl_active(wp, ns_id);
+    if ns_id != win_ref_raw(wp).w_ns_hl_active || win_ref_raw(wp).w_ns_hl_attr.is_null() {
+        win_mut_raw(wp).w_ns_hl_active = ns_id;
 
         let hl_attr = rs_ns_hl_attr_get(ns_id);
         if hl_attr.is_null() {
             // No specific highlights, use the defaults
             // Cast const to mut - C code does the same: (int *)rs_ns_hl_attr_get()
-            nvim_win_set_ns_hl_attr(wp, nvim_get_highlight_attr() as *mut c_int);
+            win_mut_raw(wp).w_ns_hl_attr = nvim_get_highlight_attr() as *mut c_int;
         } else {
-            nvim_win_set_ns_hl_attr(wp, hl_attr as *mut c_int);
+            win_mut_raw(wp).w_ns_hl_attr = hl_attr as *mut c_int;
         }
     }
 
-    let hl_def = nvim_win_get_ns_hl_attr(wp);
+    let hl_def = win_ref_raw(wp).w_ns_hl_attr;
 
     // Early return if no update needed
-    if !nvim_win_get_hl_needs_update(wp) && !invalid {
+    if win_ref_raw(wp).w_hl_needs_update == 0 && !invalid {
         return;
     }
-    nvim_win_set_hl_needs_update(wp, false);
+    win_mut_raw(wp).w_hl_needs_update = 0;
 
     // Get HLF constants
     // If a floating window is blending it always has a named
     // wp->w_hl_attr_normal group. HL_ATTR(HLF_NFLOAT) is always named.
-    let floating = nvim_win_get_floating(wp) != 0;
+    let floating = win_ref_raw(wp).w_floating;
     let external = nvim_win_get_config_external(wp);
     let float_win = floating && !external;
 
@@ -2610,13 +2596,13 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
         hl_attr_normal = 0;
     }
 
-    let winbl = nvim_win_get_p_winbl(wp);
+    let winbl = win_ref_raw(wp).w_p_winbl() as c_int;
     let hl_attr_normal = if floating {
         rs_hl_apply_winblend(winbl, hl_attr_normal)
     } else {
         hl_attr_normal
     };
-    nvim_win_set_hl_attr_normal(wp, hl_attr_normal);
+    win_mut_raw(wp).w_hl_attr_normal = hl_attr_normal;
 
     // Handle border highlights for floating windows
     nvim_win_set_config_shadow(wp, false);
@@ -2655,7 +2641,7 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
     } else {
         hl_attr_normalnc
     };
-    nvim_win_set_hl_attr_normalnc(wp, hl_attr_normalnc);
+    win_mut_raw(wp).w_hl_attr_normalnc = hl_attr_normalnc;
 }
 
 /// Internal cterm to RGB conversion

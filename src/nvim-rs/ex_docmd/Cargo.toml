@@ -9,6 +9,7 @@ build = "build.rs"
 nvim-normal = { path = "../normal" }
 nvim-ex-eval = { path = "../ex_eval" }
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }
+nvim-window = { path = "../window" }
 
 [lib]
 crate-type = ["rlib"]
