@@ -6,6 +6,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_int, c_void};
 
 // =============================================================================
@@ -23,8 +24,6 @@ extern "C" {
 
     // Phase 2: buffer/window manipulation
 
-    /// Get the handle (b_fnum) of a buffer.
-    fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
     /// Find buffer by number.
     fn buflist_findnr(nr: c_int) -> BufHandle;
     /// Get pointer to curbuf.
@@ -39,12 +38,6 @@ extern "C" {
     fn rename_buffer(new_fname: *const u8) -> c_int;
     /// buf_clear() -- clear current buffer content.
     fn buf_clear();
-    /// Set curbuf->b_p_ma.
-    fn nvim_buf_set_b_p_ma(buf: BufHandle, val: c_int);
-    /// Set buf->b_p_ul.
-    fn nvim_buf_set_b_p_ul(buf: BufHandle, val: i64);
-    /// Set buf->b_p_tw.
-    fn nvim_buf_set_b_p_tw(buf: BufHandle, val: i64);
     /// Set cmdpreview_bufnr static.
     fn nvim_set_cmdpreview_bufnr(val: c_int);
     /// win_split(size, flags): split a window. Returns OK or FAIL.
@@ -65,6 +58,24 @@ extern "C" {
 const WSP_BOT: c_int = 0x10;
 // FAIL return value
 const FAIL: c_int = 0;
+
+/// Cast a buf_T* (as *mut c_void) to &BufStruct.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T *`.
+#[inline]
+unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
+/// Cast a buf_T* (as *mut c_void) to &mut BufStruct.
+///
+/// # Safety
+/// `buf` must be a valid, non-null, exclusively-accessible `buf_T *`.
+#[inline]
+unsafe fn bref_mut(buf: BufHandle) -> &'static mut BufStruct {
+    &mut *(buf.cast::<BufStruct>())
+}
 
 // =============================================================================
 // Preview Mode
@@ -441,11 +452,11 @@ unsafe fn cmdpreview_open_buf_impl() -> BufHandle {
     let aco = nvim_buf_aucmd_prepbuf_alloc(cmdpreview_buf);
     buf_clear();
     let curbuf = nvim_get_curbuf_ptr();
-    nvim_buf_set_b_p_ma(curbuf, 1); // true
-    nvim_buf_set_b_p_ul(curbuf, -1);
-    nvim_buf_set_b_p_tw(curbuf, 0); // Reset 'textwidth'
+    bref_mut(curbuf).b_p_ma = 1; // true
+    bref_mut(curbuf).b_p_ul = -1;
+    bref_mut(curbuf).b_p_tw = 0; // Reset 'textwidth'
     nvim_buf_aucmd_restbuf_free(aco);
-    nvim_set_cmdpreview_bufnr(nvim_buf_get_handle(cmdpreview_buf));
+    nvim_set_cmdpreview_bufnr(bref(cmdpreview_buf).handle);
 
     cmdpreview_buf
 }
@@ -469,7 +480,7 @@ unsafe fn cmdpreview_open_win_impl(cmdpreview_buf: BufHandle) -> WinHandle {
     let preview_win = nvim_get_curwin();
 
     // Switch to preview buffer using TRY_WRAP wrapper.
-    let buf_handle = nvim_buf_get_handle(cmdpreview_buf);
+    let buf_handle = bref(cmdpreview_buf).handle;
     if nvim_cmdpreview_try_do_buffer(buf_handle) == FAIL {
         return std::ptr::null_mut();
     }
@@ -618,57 +629,9 @@ extern "C" {
     // Buffer from window
     fn nvim_win_get_w_buffer_raw(wp: WinHandle) -> BufHandle;
 
-    // b_changed
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_changed(buf: BufHandle, val: bool);
-
-    // b_p_ma (getter only; setter already declared above)
-    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
-
-    // b_p_ul (getter only; setter already declared above)
-    fn nvim_buf_get_b_p_ul(buf: BufHandle) -> i64;
-
-    // b_op_start / b_op_end
-    fn nvim_buf_get_b_op_start_lnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_op_start_col(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_op_start_coladd(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_op_end_lnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_op_end_col(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_op_end_coladd(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_op_start(buf: BufHandle, lnum: c_int, col: c_int, coladd: c_int);
-    fn nvim_buf_set_b_op_end(buf: BufHandle, lnum: c_int, col: c_int, coladd: c_int);
-
     // changedtick (use _direct variant to avoid conflict with nvim API function)
     fn nvim_buf_get_changedtick_direct(buf: BufHandle) -> i64;
     fn buf_set_changedtick(buf: BufHandle, changedtick: i64);
-
-    // Undo field accessors (from undo.c)
-    fn nvim_buf_get_b_u_oldhead(buf: BufHandle) -> *mut c_void;
-    fn nvim_buf_set_b_u_oldhead(buf: BufHandle, val: *mut c_void);
-    fn nvim_buf_get_b_u_newhead(buf: BufHandle) -> *mut c_void;
-    fn nvim_buf_set_b_u_newhead(buf: BufHandle, val: *mut c_void);
-    fn nvim_buf_get_b_u_curhead(buf: BufHandle) -> *mut c_void;
-    fn nvim_buf_set_b_u_curhead(buf: BufHandle, val: *mut c_void);
-    fn nvim_buf_get_b_u_numhead(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_numhead(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_u_synced(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_u_synced(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_u_seq_last(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_seq_last(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_u_save_nr_last(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_save_nr_last(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_u_seq_cur(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_seq_cur(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_u_time_cur(buf: BufHandle) -> i64;
-    fn nvim_buf_set_b_u_time_cur(buf: BufHandle, val: i64);
-    fn nvim_buf_get_b_u_save_nr_cur(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_save_nr_cur(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_u_line_ptr(buf: BufHandle) -> *mut std::ffi::c_char;
-    fn nvim_buf_set_b_u_line_ptr(buf: BufHandle, val: *mut std::ffi::c_char);
-    fn nvim_buf_get_b_u_line_lnum(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_line_lnum(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_u_line_colnr(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_line_colnr(buf: BufHandle, val: c_int);
 
     // undo operations
     fn u_clearall(buf: BufHandle);
@@ -792,20 +755,21 @@ unsafe impl Sync for CpState {}
 ///
 /// `buf` must be a valid buffer pointer.
 unsafe fn save_undo(buf: BufHandle) -> CpUndoSaved {
+    let bp = bref(buf);
     CpUndoSaved {
-        oldhead: nvim_buf_get_b_u_oldhead(buf),
-        newhead: nvim_buf_get_b_u_newhead(buf),
-        curhead: nvim_buf_get_b_u_curhead(buf),
-        numhead: nvim_buf_get_b_u_numhead(buf),
-        synced: nvim_buf_get_b_u_synced(buf),
-        seq_last: nvim_buf_get_b_u_seq_last(buf),
-        save_nr_last: nvim_buf_get_b_u_save_nr_last(buf),
-        seq_cur: nvim_buf_get_b_u_seq_cur(buf),
-        time_cur: nvim_buf_get_b_u_time_cur(buf),
-        save_nr_cur: nvim_buf_get_b_u_save_nr_cur(buf),
-        line_ptr: nvim_buf_get_b_u_line_ptr(buf),
-        line_lnum: nvim_buf_get_b_u_line_lnum(buf),
-        line_colnr: nvim_buf_get_b_u_line_colnr(buf),
+        oldhead: bp.b_u_oldhead,
+        newhead: bp.b_u_newhead,
+        curhead: bp.b_u_curhead,
+        numhead: bp.b_u_numhead,
+        synced: bp.b_u_synced != 0,
+        seq_last: bp.b_u_seq_last,
+        save_nr_last: bp.b_u_save_nr_last,
+        seq_cur: bp.b_u_seq_cur,
+        time_cur: bp.b_u_time_cur,
+        save_nr_cur: bp.b_u_save_nr_cur,
+        line_ptr: bp.b_u_line_ptr,
+        line_lnum: bp.b_u_line_lnum,
+        line_colnr: bp.b_u_line_colnr,
     }
 }
 
@@ -816,20 +780,21 @@ unsafe fn save_undo(buf: BufHandle) -> CpUndoSaved {
 /// `buf` must be a valid buffer pointer. All pointer fields in `saved`
 /// must remain valid (they were saved from the same buffer before preview).
 unsafe fn restore_undo(buf: BufHandle, saved: &CpUndoSaved) {
-    nvim_buf_set_b_u_oldhead(buf, saved.oldhead);
-    nvim_buf_set_b_u_newhead(buf, saved.newhead);
-    nvim_buf_set_b_u_curhead(buf, saved.curhead);
-    nvim_buf_set_b_u_numhead(buf, saved.numhead);
-    nvim_buf_set_b_u_seq_last(buf, saved.seq_last);
-    nvim_buf_set_b_u_save_nr_last(buf, saved.save_nr_last);
-    nvim_buf_set_b_u_seq_cur(buf, saved.seq_cur);
-    nvim_buf_set_b_u_time_cur(buf, saved.time_cur);
-    nvim_buf_set_b_u_save_nr_cur(buf, saved.save_nr_cur);
-    nvim_buf_set_b_u_line_ptr(buf, saved.line_ptr);
-    nvim_buf_set_b_u_line_lnum(buf, saved.line_lnum);
-    nvim_buf_set_b_u_line_colnr(buf, saved.line_colnr);
+    let bp = bref_mut(buf);
+    bp.b_u_oldhead = saved.oldhead;
+    bp.b_u_newhead = saved.newhead;
+    bp.b_u_curhead = saved.curhead;
+    bp.b_u_numhead = saved.numhead;
+    bp.b_u_seq_last = saved.seq_last;
+    bp.b_u_save_nr_last = saved.save_nr_last;
+    bp.b_u_seq_cur = saved.seq_cur;
+    bp.b_u_time_cur = saved.time_cur;
+    bp.b_u_save_nr_cur = saved.save_nr_cur;
+    bp.b_u_line_ptr = saved.line_ptr;
+    bp.b_u_line_lnum = saved.line_lnum;
+    bp.b_u_line_colnr = saved.line_colnr;
     if saved.curhead.is_null() {
-        nvim_buf_set_b_u_synced(buf, saved.synced);
+        bp.b_u_synced = u8::from(saved.synced);
     }
 }
 
@@ -851,7 +816,7 @@ unsafe fn cmdpreview_prepare_impl() -> *mut c_void {
 
     while !wp.is_null() {
         let buf = nvim_win_get_w_buffer_raw(wp);
-        let buf_handle = nvim_buf_get_handle(buf);
+        let buf_handle = bref(buf).handle;
         let preview_bufnr = nvim_get_cmdpreview_bufnr();
 
         // Don't save state of command preview buffer or preview window.
@@ -863,21 +828,14 @@ unsafe fn cmdpreview_prepare_impl() -> *mut c_void {
         let buf_key = buf as usize;
         if saved_bufs.insert(buf_key) {
             let undo = save_undo(buf);
+            let bp = bref(buf);
             let saved = CpBufSaved {
                 buf,
-                save_b_p_ul: nvim_buf_get_b_p_ul(buf),
-                save_b_p_ma: nvim_buf_get_b_p_ma(buf),
-                save_b_changed: nvim_buf_get_b_changed(buf),
-                save_b_op_start: (
-                    nvim_buf_get_b_op_start_lnum(buf),
-                    nvim_buf_get_b_op_start_col(buf),
-                    nvim_buf_get_b_op_start_coladd(buf),
-                ),
-                save_b_op_end: (
-                    nvim_buf_get_b_op_end_lnum(buf),
-                    nvim_buf_get_b_op_end_col(buf),
-                    nvim_buf_get_b_op_end_coladd(buf),
-                ),
+                save_b_p_ul: bp.b_p_ul,
+                save_b_p_ma: bp.b_p_ma,
+                save_b_changed: bp.b_changed != 0,
+                save_b_op_start: (bp.b_op_start.lnum, bp.b_op_start.col, bp.b_op_start.coladd),
+                save_b_op_end: (bp.b_op_end.lnum, bp.b_op_end.col, bp.b_op_end.coladd),
                 save_changedtick: nvim_buf_get_changedtick_direct(buf),
                 undo,
             };
@@ -885,7 +843,7 @@ unsafe fn cmdpreview_prepare_impl() -> *mut c_void {
 
             u_clearall(buf);
             // Make sure we can undo all changes (b_p_ul = INT_MAX)
-            nvim_buf_set_b_p_ul(buf, i32::MAX as i64);
+            bref_mut(buf).b_p_ul = i64::from(i32::MAX);
         }
 
         let win_saved = CpWinSaved {
@@ -944,18 +902,18 @@ unsafe fn cmdpreview_restore_state_impl(state: *mut c_void) {
     for cp in &state.buf_info {
         let buf = cp.buf;
 
-        nvim_buf_set_b_changed(buf, cp.save_b_changed);
+        bref_mut(buf).b_changed = c_int::from(cp.save_b_changed);
 
         // Clear preview highlights.
         extmark_clear(buf, preview_ns as u32, 0, 0, c_int::MAX, c_int::MAX);
 
         // Check if undo restoration is needed.
-        let cur_seq = nvim_buf_get_b_u_seq_cur(buf);
+        let cur_seq = bref(buf).b_u_seq_cur;
         if cur_seq != cp.undo.seq_cur {
             let count = nvim_buf_count_undo_steps(buf);
             let aco = nvim_buf_aucmd_prepbuf_alloc(buf);
             // Ensure all entries will be undone.
-            if !nvim_buf_get_b_u_synced(buf) {
+            if bref(buf).b_u_synced == 0 {
                 u_sync(true);
             }
             // Undo invisibly. This also moves the cursor!
@@ -969,26 +927,28 @@ unsafe fn cmdpreview_restore_state_impl(state: *mut c_void) {
         u_blockfree(buf);
         restore_undo(buf, &cp.undo);
 
-        nvim_buf_set_b_op_start(
-            buf,
-            cp.save_b_op_start.0,
-            cp.save_b_op_start.1,
-            cp.save_b_op_start.2,
-        );
-        nvim_buf_set_b_op_end(
-            buf,
-            cp.save_b_op_end.0,
-            cp.save_b_op_end.1,
-            cp.save_b_op_end.2,
-        );
+        {
+            let bp = bref_mut(buf);
+            bp.b_op_start = nvim_buffer::buf_struct::PosT {
+                lnum: cp.save_b_op_start.0,
+                col: cp.save_b_op_start.1,
+                coladd: cp.save_b_op_start.2,
+            };
+            bp.b_op_end = nvim_buffer::buf_struct::PosT {
+                lnum: cp.save_b_op_end.0,
+                col: cp.save_b_op_end.1,
+                coladd: cp.save_b_op_end.2,
+            };
+        }
 
         let cur_tick = nvim_buf_get_changedtick_direct(buf);
         if cp.save_changedtick != cur_tick {
             buf_set_changedtick(buf, cp.save_changedtick);
         }
 
-        nvim_buf_set_b_p_ul(buf, cp.save_b_p_ul); // Restore 'undolevels'
-        nvim_buf_set_b_p_ma(buf, cp.save_b_p_ma); // Restore 'modifiable'
+        let bp = bref_mut(buf);
+        bp.b_p_ul = cp.save_b_p_ul; // Restore 'undolevels'
+        bp.b_p_ma = c_int::from(cp.save_b_p_ma != 0); // Restore 'modifiable'
     }
 
     for cw in &state.win_info {

@@ -140,9 +140,6 @@ extern "C" {
     fn nvim_buf_set_b_p_ml(buf: *mut core::ffi::c_void, v: c_int);
     fn nvim_buf_set_b_p_ml_nobin(buf: *mut core::ffi::c_void, v: c_int);
     fn nvim_buf_set_b_p_sts_nopaste(buf: *mut core::ffi::c_void, v: OptInt);
-    fn nvim_buf_set_b_p_iminsert(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_imsearch(buf: *mut core::ffi::c_void, v: c_int);
-    fn nvim_buf_set_b_p_ma(buf: *mut core::ffi::c_void, v: c_int);
 
     fn nvim_buf_copy_opt_sctx(buf: *mut core::ffi::c_void, bv: c_int);
     fn nvim_buf_set_b_s_spo_flags_from_global(buf: *mut core::ffi::c_void);
@@ -446,12 +443,10 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_kmap_state_set_init(buf);
 
     // Langmap/IME state: copy from current buffer is better than resetting
-    // iminsert/imsearch are OptInt globals but b_p_iminsert/b_p_imsearch are int fields
-    #[allow(clippy::cast_possible_truncation)]
-    nvim_buf_set_b_p_iminsert(buf, p_iminsert as c_int);
+    // iminsert/imsearch are OptInt globals, b_p_iminsert/b_p_imsearch are OptInt fields
+    unsafe { bref_raw_mut(buf) }.b_p_iminsert = p_iminsert;
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_IMINSERT);
-    #[allow(clippy::cast_possible_truncation)]
-    nvim_buf_set_b_p_imsearch(buf, p_imsearch as c_int);
+    unsafe { bref_raw_mut(buf) }.b_p_imsearch = p_imsearch;
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_IMSEARCH);
 
     // Global-local options: use global value (no local copy)
@@ -548,7 +543,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
             clear_string_option(bt_ptr);
         }
 
-        nvim_buf_set_b_p_ma(buf, p_ma);
+        unsafe { bref_raw_mut(buf) }.b_p_ma = c_int::from(p_ma != 0);
         nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_MODIFIABLE);
     }
 }

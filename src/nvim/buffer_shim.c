@@ -97,10 +97,7 @@ int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
 const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
 const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
 int nvim_buf_get_b_p_ro(buf_T *buf) { return buf->b_p_ro; }
-int nvim_buf_get_b_p_ma(buf_T *buf) { return buf->b_p_ma; }
 void nvim_buf_set_b_p_ml(buf_T *buf, int val) { if (buf) { buf->b_p_ml = val != 0; } }
-void nvim_buf_set_b_p_iminsert(buf_T *buf, int val) { if (buf) { buf->b_p_iminsert = val; } }
-void nvim_buf_set_b_p_imsearch(buf_T *buf, int val) { if (buf) { buf->b_p_imsearch = val; } }
 int nvim_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
 uint64_t *nvim_buf_get_chartab(buf_T *buf) { return buf->b_chartab; }
 int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
@@ -316,7 +313,6 @@ char *nvim_buf_get_b_p_vsts(buf_T *buf) { return buf->b_p_vsts; }
 char *nvim_buf_get_b_p_vsts_nopaste(buf_T *buf) { return buf->b_p_vsts_nopaste; }
 void nvim_buf_set_b_p_vsts_raw(buf_T *buf, char *val) { buf->b_p_vsts = val; }
 int *volatile *nvim_buf_get_b_p_vsts_array_ptr(buf_T *buf) { return (int *volatile *)&buf->b_p_vsts_array; }
-void nvim_buf_set_b_p_ma(buf_T *buf, int v) { buf->b_p_ma = v != 0; }
 void nvim_buf_set_b_p_vsts_nopaste_dup(buf_T *buf, const char *s) { buf->b_p_vsts_nopaste = s ? xstrdup(s) : NULL; }
 void nvim_buf_set_b_s_spc_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spc = xstrdup(s); }
 void nvim_buf_set_b_s_spf_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spf = xstrdup(s); }

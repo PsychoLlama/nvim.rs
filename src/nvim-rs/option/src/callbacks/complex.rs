@@ -6,6 +6,7 @@
 
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int, c_void};
 
 use super::{callback_ok, CallbackResult};
@@ -692,8 +693,6 @@ extern "C" {
     fn nvim_win_set_p_rl(win: *mut std::ffi::c_void, val: c_int);
     fn nvim_win_get_p_rl(win: *const std::ffi::c_void) -> c_int;
     fn nvim_get_p_tbidi() -> c_int;
-    fn nvim_buf_set_b_p_iminsert(buf: *mut std::ffi::c_void, val: c_int);
-    fn nvim_buf_set_b_p_imsearch(buf: *mut std::ffi::c_void, val: c_int);
     fn nvim_win_get_w_buffer(win: *const std::ffi::c_void) -> *mut std::ffi::c_void;
     fn changed_window_setting(win: *mut std::ffi::c_void);
     fn redraw_all_later(typ: c_int);
@@ -790,8 +789,9 @@ pub unsafe extern "C" fn rs_did_set_arabic(win: *mut std::ffi::c_void) -> Callba
         // Revert to the default keymap
         let buf = nvim_win_get_w_buffer(win);
         if !buf.is_null() {
-            nvim_buf_set_b_p_iminsert(buf, B_IMODE_NONE);
-            nvim_buf_set_b_p_imsearch(buf, B_IMODE_USE_INSERT);
+            let bp = &mut *buf.cast::<BufStruct>();
+            bp.b_p_iminsert = i64::from(B_IMODE_NONE);
+            bp.b_p_imsearch = i64::from(B_IMODE_USE_INSERT);
         }
     }
 

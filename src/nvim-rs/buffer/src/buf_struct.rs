@@ -239,13 +239,13 @@ pub struct BufStruct {
     // --- UNDO HEADERS (offsets 7752-7839) ---
 
     // offset 7752: uhp* b_u_oldhead (pointer)
-    _b_u_oldhead: *mut c_void,
+    pub b_u_oldhead: *mut c_void,
     // offset 7760: uhp* b_u_newhead (pointer)
-    _b_u_newhead: *mut c_void,
+    pub b_u_newhead: *mut c_void,
     // offset 7768: uhp* b_u_curhead (pointer)
-    _b_u_curhead: *mut c_void,
+    pub b_u_curhead: *mut c_void,
     // offset 7776: int b_u_numhead
-    _b_u_numhead: c_int,
+    pub b_u_numhead: c_int,
 
     // offset 7780: bool b_u_synced (1 byte in C)
     pub b_u_synced: u8,
@@ -259,9 +259,17 @@ pub struct BufStruct {
     pub b_u_seq_cur: c_int,
     _pad13: [u8; 4], // abs 7796..7799
 
-    // offset 7800..7831: b_u_time_cur(8), b_u_save_nr_cur(4), gap(4), b_u_line_ptr(8),
-    //                    b_u_line_lnum(4), b_u_line_colnr(4) = 32 bytes
-    _pad14a: [u8; 32],
+    // offset 7800: int64_t b_u_time_cur (time of last undo save)
+    pub b_u_time_cur: i64,
+    // offset 7808: int b_u_save_nr_cur
+    pub b_u_save_nr_cur: c_int,
+    _pad14_gap: [u8; 4], // abs 7812..7815 (alignment gap)
+    // offset 7816: char* b_u_line_ptr (pointer to undone line)
+    pub b_u_line_ptr: *mut c_char,
+    // offset 7824: linenr_T b_u_line_lnum
+    pub b_u_line_lnum: LineNr,
+    // offset 7828: colnr_T b_u_line_colnr
+    pub b_u_line_colnr: ColNr,
     // offset 7832: bool b_scanned (^N/^P buffer scan flag)
     pub b_scanned: u8,
     _pad14b: [u8; 7], // alignment gap to reach 7840

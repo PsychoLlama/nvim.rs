@@ -92,6 +92,13 @@ _Static_assert(offsetof(buf_T, b_u_seq_last) == 7784, "b_u_seq_last offset misma
 _Static_assert(offsetof(buf_T, b_u_save_nr_last) == 7788, "b_u_save_nr_last offset mismatch");
 _Static_assert(offsetof(buf_T, b_u_seq_cur) == 7792, "b_u_seq_cur offset mismatch");
 
+// Undo time/line tracking (in _pad14a region)
+_Static_assert(offsetof(buf_T, b_u_time_cur) == 7800, "b_u_time_cur offset mismatch");
+_Static_assert(offsetof(buf_T, b_u_save_nr_cur) == 7808, "b_u_save_nr_cur offset mismatch");
+_Static_assert(offsetof(buf_T, b_u_line_ptr) == 7816, "b_u_line_ptr offset mismatch");
+_Static_assert(offsetof(buf_T, b_u_line_lnum) == 7824, "b_u_line_lnum offset mismatch");
+_Static_assert(offsetof(buf_T, b_u_line_colnr) == 7828, "b_u_line_colnr offset mismatch");
+
 // Scan flag
 _Static_assert(offsetof(buf_T, b_scanned) == 7832, "b_scanned offset mismatch");
 
