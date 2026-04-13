@@ -92,14 +92,20 @@ extern "C" {
     fn nvim_ins_insert(replace_state: c_int);
     fn nvim_ins_ctrl_o();
     fn nvim_ins_ctrl_hat();
-    fn nvim_ins_start_select(c: c_int) -> c_int;
+
+    // -- ins_start_select dependencies (Phase 1 migration) --
+    static km_startsel: bool;
+    #[allow(clashing_extern_declarations)]
+    static mod_mask: c_int;
+    fn stuffcharReadbuff(c: c_int);
+    fn stuffReadbuffLen(data: *const u8, len: isize);
+    fn rs_start_selection();
 
     // -- ins_ctrl_ dependencies (Phase 3 migration) --
     fn nvim_get_revins_on() -> c_int;
     fn nvim_toggle_p_ri();
     fn nvim_edit_set_revins_on(val: c_int);
     fn nvim_set_revins_scol(val: c_int);
-    fn nvim_curwin_cursor_col_inc();
     fn showmode() -> c_int;
 
     // -- for inlining nvim_ins_ctrl_g_get_key --
@@ -188,6 +194,41 @@ const K_DEL: c_int = -17515; // TERMCAP2KEY('k','D')
 
 /// `kOptBoFlagBackspace` (beep flag for backspace)
 const BO_FLAG_BACKSPACE: c_int = 0x02;
+
+// -- ins_start_select key constants (from dispatch.rs, same values) --
+
+/// `K_KHOME` — Keypad Home
+const K_KHOME: c_int = -12619;
+/// `K_KEND` — Keypad End
+const K_KEND: c_int = -13387;
+/// `K_PAGEUP` — Page Up
+const K_PAGEUP: c_int = -20587;
+/// `K_KPAGEUP` — Keypad Page Up
+const K_KPAGEUP: c_int = -13131;
+/// `K_PAGEDOWN` — Page Down
+const K_PAGEDOWN: c_int = -20075;
+/// `K_KPAGEDOWN` — Keypad Page Down
+const K_KPAGEDOWN: c_int = -13643;
+/// `K_S_UP` — Shift-Up
+const K_S_UP: c_int = -1277;
+/// `K_S_DOWN` — Shift-Down
+const K_S_DOWN: c_int = -1533;
+/// `K_S_END` — Shift-End
+const K_S_END: c_int = -14122;
+/// `K_S_HOME` — Shift-Home
+const K_S_HOME: c_int = -12835;
+
+/// `MOD_MASK_SHIFT` from `keycodes.h`
+const MOD_MASK_SHIFT: c_int = 0x02;
+
+/// `K_SPECIAL` first byte of multi-byte special key sequence
+const K_SPECIAL: u8 = 0x80;
+
+/// `KS_MODIFIER` — second byte for modifier keys
+const KS_MODIFIER: u8 = 252;
+
+/// `Ctrl_O` (0x0F)
+const CTRL_O: c_int = 0x0F;
 
 // ============================================================================
 // ins_left
@@ -546,7 +587,7 @@ unsafe fn ins_ctrl__impl() {
     if nvim_get_revins_on() != 0 && nvim_get_revins_chars() != 0 && nvim_get_revins_scol() >= 0 {
         let mut rc = nvim_get_revins_chars();
         while nvim_gchar_cursor() != NUL && rc > 0 {
-            nvim_curwin_cursor_col_inc();
+            nvim_curwin_set_cursor_col(nvim_curwin_get_cursor_col() + 1);
             rc -= 1;
         }
         nvim_set_revins_chars(rc);
@@ -574,13 +615,45 @@ pub unsafe extern "C" fn rs_ins_ctrl_() {
 }
 
 // ============================================================================
-// ins_start_select (Phase 4b - delegated to C helper)
+// ins_start_select (Phase 1 migration - full Rust implementation)
 // ============================================================================
+
+/// Start select mode from insert mode on shifted navigation keys.
+///
+/// Ported from `nvim_ins_start_select` in `edit_shim.c`.
+unsafe fn ins_start_select_impl(c: c_int) -> c_int {
+    if !km_startsel {
+        return 0;
+    }
+    let needs_shift = matches!(
+        c,
+        K_KHOME | K_KEND | K_PAGEUP | K_KPAGEUP | K_PAGEDOWN | K_KPAGEDOWN
+    );
+    if needs_shift && (mod_mask & MOD_MASK_SHIFT) == 0 {
+        return 0;
+    }
+    if needs_shift
+        || matches!(
+            c,
+            K_S_LEFT | K_S_RIGHT | K_S_UP | K_S_DOWN | K_S_END | K_S_HOME
+        )
+    {
+        rs_start_selection();
+        stuffcharReadbuff(CTRL_O);
+        if mod_mask != 0 {
+            let buf: [u8; 3] = [K_SPECIAL, KS_MODIFIER, mod_mask as u8];
+            stuffReadbuffLen(buf.as_ptr(), 3);
+        }
+        stuffcharReadbuff(c);
+        return 1;
+    }
+    0
+}
 
 #[must_use]
 #[unsafe(export_name = "ins_start_select")]
 pub unsafe extern "C" fn rs_ins_start_select(c: c_int) -> c_int {
-    nvim_ins_start_select(c)
+    ins_start_select_impl(c)
 }
 
 // ============================================================================
