@@ -6,6 +6,7 @@
 use std::ffi::c_int;
 use std::fmt::Write as FmtWrite;
 
+use nvim_window::win_struct::win_ref;
 use nvim_window::WinHandle;
 
 use crate::{FoldHandle, GArrayHandle, LineNr};
@@ -30,7 +31,6 @@ const FAIL: c_int = 0;
 
 extern "C" {
     fn nvim_win_get_folds(wp: WinHandle) -> GArrayHandle;
-    fn nvim_win_get_w_fold_manual(wp: WinHandle) -> c_int;
     fn nvim_ga_len(gap: GArrayHandle) -> c_int;
     fn nvim_ga_fold_at(gap: GArrayHandle, idx: c_int) -> FoldHandle;
     fn nvim_fold_get_fd_top(fp: FoldHandle) -> LineNr;
@@ -118,7 +118,7 @@ pub unsafe fn put_folds_impl(fd: *mut libc::FILE, wp: WinHandle) -> c_int {
     }
 
     // If some folds are manually opened/closed, restore that.
-    if unsafe { nvim_win_get_w_fold_manual(wp) } != 0 {
+    if unsafe { c_int::from(win_ref(wp).w_fold_manual) } != 0 {
         let gap = unsafe { nvim_win_get_folds(wp) };
         return put_foldopen_recurse(&mut w, wp, gap, 0);
     }

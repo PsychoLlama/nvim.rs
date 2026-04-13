@@ -27,6 +27,7 @@ use std::ptr::{addr_of, addr_of_mut};
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
 
+use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // Direct access to C globals (avoids thin C accessor functions).
@@ -115,12 +116,6 @@ pub const HLF_C: c_int = 21;
 
 // C accessor functions for window fields
 extern "C" {
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_endrow(wp: WinHandle) -> c_int;
     fn nvim_win_get_endcol(wp: WinHandle) -> c_int;
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
@@ -136,12 +131,6 @@ extern "C" {
     // Window iteration accessors
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
-    fn nvim_win_get_redr_status(wp: WinHandle) -> c_int;
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn redraw_later(wp: WinHandle, redraw_type: c_int);
 
     // Buffer accessors
@@ -185,7 +174,7 @@ fn hsep_connected_impl(wp: WinHandle, corner: WindowCorner) -> bool {
     let before = matches!(corner, WindowCorner::TopLeft | WindowCorner::BottomLeft);
     let sep_row = unsafe {
         if matches!(corner, WindowCorner::TopLeft | WindowCorner::TopRight) {
-            nvim_win_get_winrow(wp) - 1
+            win_ref(wp).w_winrow - 1
         } else {
             nvim_win_get_endrow(wp)
         }
@@ -228,7 +217,7 @@ fn hsep_connected_impl(wp: WinHandle, corner: WindowCorner) -> bool {
                 // Use frame2win to get the window from the frame (handles non-leaf frames)
                 while !(*fr).fr_next.is_null() {
                     let win = rs_frame2win(fr);
-                    let win_row = nvim_win_get_winrow(win);
+                    let win_row = win_ref(win).w_winrow;
                     let fr_height = (*fr).fr_height;
                     if win_row + fr_height >= sep_row {
                         break;
@@ -239,7 +228,7 @@ fn hsep_connected_impl(wp: WinHandle, corner: WindowCorner) -> bool {
         }
 
         let leaf_win = (*fr).fr_win;
-        let win_row = nvim_win_get_winrow(leaf_win);
+        let win_row = win_ref(leaf_win).w_winrow;
         let end_row = nvim_win_get_endrow(leaf_win);
         sep_row == win_row - 1 || sep_row == end_row
     }
@@ -263,7 +252,7 @@ fn vsep_connected_impl(wp: WinHandle, corner: WindowCorner) -> bool {
     let before = matches!(corner, WindowCorner::TopLeft | WindowCorner::TopRight);
     let sep_col = unsafe {
         if matches!(corner, WindowCorner::TopLeft | WindowCorner::BottomLeft) {
-            nvim_win_get_wincol(wp) - 1
+            win_ref(wp).w_wincol - 1
         } else {
             nvim_win_get_endcol(wp)
         }
@@ -306,7 +295,7 @@ fn vsep_connected_impl(wp: WinHandle, corner: WindowCorner) -> bool {
                 // Use frame2win to get the window from the frame (handles non-leaf frames)
                 while !(*fr).fr_next.is_null() {
                     let win = rs_frame2win(fr);
-                    let win_col = nvim_win_get_wincol(win);
+                    let win_col = win_ref(win).w_wincol;
                     let fr_width = (*fr).fr_width;
                     if win_col + fr_width >= sep_col {
                         break;
@@ -317,7 +306,7 @@ fn vsep_connected_impl(wp: WinHandle, corner: WindowCorner) -> bool {
         }
 
         let leaf_win = (*fr).fr_win;
-        let win_col = nvim_win_get_wincol(leaf_win);
+        let win_col = win_ref(leaf_win).w_wincol;
         let end_col = nvim_win_get_endcol(leaf_win);
         sep_col == win_col - 1 || sep_col == end_col
     }
@@ -338,11 +327,11 @@ fn draw_vsep_win_impl(wp: WinHandle) {
     }
 
     unsafe {
-        if nvim_win_get_vsep_width(wp) == 0 {
+        if win_ref(wp).w_vsep_width == 0 {
             return;
         }
 
-        let winrow = nvim_win_get_winrow(wp);
+        let winrow = win_ref(wp).w_winrow;
         let endrow = nvim_win_get_endrow(wp);
         let endcol = nvim_win_get_endcol(wp);
         let vert_char = nvim_win_get_fcs_vert(wp);
@@ -373,11 +362,11 @@ fn draw_hsep_win_impl(wp: WinHandle) {
     }
 
     unsafe {
-        if nvim_win_get_hsep_height(wp) == 0 {
+        if win_ref(wp).w_hsep_height == 0 {
             return;
         }
 
-        let wincol = nvim_win_get_wincol(wp);
+        let wincol = win_ref(wp).w_wincol;
         let endrow = nvim_win_get_endrow(wp);
         let endcol = nvim_win_get_endcol(wp);
         let horiz_char = nvim_win_get_fcs_horiz(wp);
@@ -441,8 +430,8 @@ fn draw_sep_connectors_win_impl(wp: WinHandle) {
             return;
         }
 
-        let hsep_height = nvim_win_get_hsep_height(wp);
-        let vsep_width = nvim_win_get_vsep_width(wp);
+        let hsep_height = win_ref(wp).w_hsep_height;
+        let vsep_width = win_ref(wp).w_vsep_width;
 
         if !(hsep_height == 1 || vsep_width == 1) {
             return;
@@ -482,8 +471,8 @@ fn draw_sep_connectors_win_impl(wp: WinHandle) {
         let bot_left = !(win_at_bottom || win_at_left);
         let bot_right = !(win_at_bottom || win_at_right);
 
-        let winrow = nvim_win_get_winrow(wp);
-        let wincol = nvim_win_get_wincol(wp);
+        let winrow = win_ref(wp).w_winrow;
+        let wincol = win_ref(wp).w_wincol;
         let endrow = nvim_win_get_endrow(wp);
         let endcol = nvim_win_get_endcol(wp);
         let gridview = nvim_get_default_gridview();
@@ -555,18 +544,20 @@ fn status_redraw_all_impl() {
         // FOR_ALL_WINDOWS_IN_TAB(wp, curtab) - iterate windows in current tab
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            let status_h = nvim_win_get_status_height(wp);
-            let winbar_h = nvim_win_get_winbar_height(wp);
+            let status_h = win_ref(wp).w_status_height;
+            let winbar_h = win_ref(wp).w_winbar_height;
 
             // Mark for redraw if:
             // 1. Local statusline (not global) and window has status height, OR
             // 2. This is the current window (for global statusline), OR
             // 3. Window has a winbar
             if (!is_stl_global && status_h > 0) || wp == curwin || winbar_h > 0 {
-                nvim_win_set_redr_status(wp, 1);
+                {
+                    win_mut(wp).w_redr_status = (1) != 0;
+                };
                 redraw_later(wp, UPD_VALID);
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -594,12 +585,12 @@ fn status_redraw_buf_impl(buf: BufHandle) {
         // FOR_ALL_WINDOWS_IN_TAB(wp, curtab)
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            let win_buf = nvim_win_get_buffer(wp);
+            let win_buf = BufHandle(win_ref(wp).w_buffer);
 
             // Only process windows showing this buffer
             if win_buf == buf {
-                let status_h = nvim_win_get_status_height(wp);
-                let winbar_h = nvim_win_get_winbar_height(wp);
+                let status_h = win_ref(wp).w_status_height;
+                let winbar_h = win_ref(wp).w_winbar_height;
 
                 // Mark for redraw if:
                 // 1. Local statusline (not global) and window has status height, OR
@@ -609,16 +600,18 @@ fn status_redraw_buf_impl(buf: BufHandle) {
                     || (is_stl_global && wp == curwin)
                     || winbar_h > 0
                 {
-                    nvim_win_set_redr_status(wp, 1);
+                    {
+                        win_mut(wp).w_redr_status = (1) != 0;
+                    };
                     redraw_later(wp, UPD_VALID);
                 }
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
 
         // Redraw the ruler if it is in the command line and was not marked for redraw above
-        let curwin_status_h = nvim_win_get_status_height(curwin);
-        let curwin_redr_status = nvim_win_get_redr_status(curwin);
+        let curwin_status_h = win_ref(curwin).w_status_height;
+        let curwin_redr_status = c_int::from(win_ref(curwin).w_redr_status);
         if p_ru != 0 && curwin_status_h == 0 && curwin_redr_status == 0 {
             nvim_set_redraw_cmdline(true);
             redraw_later(curwin, UPD_VALID);
@@ -667,77 +660,74 @@ pub const UPD_NOT_VALID: c_int = 40;
 pub const UPD_CLEAR: c_int = 50;
 
 // Additional C accessor functions for window redraw state
-extern "C" {
-    fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
-    fn nvim_win_set_redr_type(wp: WinHandle, val: c_int);
-    fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
-    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
-    fn nvim_win_get_redraw_top(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_redraw_top(wp: WinHandle, val: LinenrT);
-    fn nvim_win_get_redraw_bot(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_redraw_bot(wp: WinHandle, val: LinenrT);
-    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
-}
+extern "C" {}
 
 /// Get the redraw type for a window.
 #[no_mangle]
-pub unsafe extern "C" fn rs_win_get_redr_type(wp: WinHandle) -> c_int {
-    nvim_win_get_redr_type(wp)
+pub const unsafe extern "C" fn rs_win_get_redr_type(wp: WinHandle) -> c_int {
+    win_ref(wp).w_redr_type
 }
 
 /// Set the redraw type for a window.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_set_redr_type(wp: WinHandle, val: c_int) {
-    nvim_win_set_redr_type(wp, val);
+    {
+        win_mut(wp).w_redr_type = val;
+    };
 }
 
 /// Get the number of valid lines in a window.
 #[no_mangle]
-pub unsafe extern "C" fn rs_win_get_lines_valid(wp: WinHandle) -> c_int {
-    nvim_win_get_lines_valid(wp)
+pub const unsafe extern "C" fn rs_win_get_lines_valid(wp: WinHandle) -> c_int {
+    win_ref(wp).w_lines_valid
 }
 
 /// Set the number of valid lines in a window.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_set_lines_valid(wp: WinHandle, val: c_int) {
-    nvim_win_set_lines_valid(wp, val);
+    {
+        win_mut(wp).w_lines_valid = val;
+    };
 }
 
 /// Get the top line for redraw range.
 #[no_mangle]
-pub unsafe extern "C" fn rs_win_get_redraw_top(wp: WinHandle) -> LinenrT {
-    nvim_win_get_redraw_top(wp)
+pub const unsafe extern "C" fn rs_win_get_redraw_top(wp: WinHandle) -> LinenrT {
+    win_ref(wp).w_redraw_top
 }
 
 /// Set the top line for redraw range.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_set_redraw_top(wp: WinHandle, val: LinenrT) {
-    nvim_win_set_redraw_top(wp, val);
+    {
+        win_mut(wp).w_redraw_top = val;
+    };
 }
 
 /// Get the bottom line for redraw range.
 #[no_mangle]
-pub unsafe extern "C" fn rs_win_get_redraw_bot(wp: WinHandle) -> LinenrT {
-    nvim_win_get_redraw_bot(wp)
+pub const unsafe extern "C" fn rs_win_get_redraw_bot(wp: WinHandle) -> LinenrT {
+    win_ref(wp).w_redraw_bot
 }
 
 /// Set the bottom line for redraw range.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_set_redraw_bot(wp: WinHandle, val: LinenrT) {
-    nvim_win_set_redraw_bot(wp, val);
+    {
+        win_mut(wp).w_redraw_bot = val;
+    };
 }
 
 /// Get the top line of the window viewport.
 #[no_mangle]
-pub unsafe extern "C" fn rs_win_get_topline(wp: WinHandle) -> LinenrT {
-    nvim_win_get_topline(wp)
+pub const unsafe extern "C" fn rs_win_get_topline(wp: WinHandle) -> LinenrT {
+    win_ref(wp).w_topline
 }
 
 /// Get the bottom line of the window viewport.
 #[no_mangle]
-pub unsafe extern "C" fn rs_win_get_botline(wp: WinHandle) -> LinenrT {
-    nvim_win_get_botline(wp)
+pub const unsafe extern "C" fn rs_win_get_botline(wp: WinHandle) -> LinenrT {
+    win_ref(wp).w_botline
 }
 
 /// Get the global must_redraw flag.
@@ -786,16 +776,16 @@ pub extern "C" fn rs_redraw_type_is_clear(redraw_type: c_int) -> c_int {
 /// Check if a line is within the window's visible range.
 #[no_mangle]
 pub unsafe extern "C" fn rs_line_in_window(wp: WinHandle, lnum: LinenrT) -> c_int {
-    let topline = nvim_win_get_topline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let topline = win_ref(wp).w_topline;
+    let botline = win_ref(wp).w_botline;
     c_int::from(lnum >= topline && lnum < botline)
 }
 
 /// Check if a line range overlaps with the window's visible range.
 #[no_mangle]
 pub unsafe extern "C" fn rs_range_in_window(wp: WinHandle, first: LinenrT, last: LinenrT) -> c_int {
-    let topline = nvim_win_get_topline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let topline = win_ref(wp).w_topline;
+    let botline = win_ref(wp).w_botline;
     c_int::from(last >= topline && first < botline)
 }
 
@@ -812,22 +802,26 @@ pub unsafe extern "C" fn rs_update_redraw_line(wp: WinHandle, lnum: LinenrT) {
 /// Only updates if the range is visible in the window.
 #[no_mangle]
 pub unsafe extern "C" fn rs_update_redraw_range(wp: WinHandle, first: LinenrT, last: LinenrT) {
-    let topline = nvim_win_get_topline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let topline = win_ref(wp).w_topline;
+    let botline = win_ref(wp).w_botline;
 
     // Only update if range is visible
     if last >= topline && first < botline {
-        let current_top = nvim_win_get_redraw_top(wp);
-        let current_bot = nvim_win_get_redraw_bot(wp);
+        let current_top = win_ref(wp).w_redraw_top;
+        let current_bot = win_ref(wp).w_redraw_bot;
 
         // Update top of redraw range
         if current_top == 0 || first < current_top {
-            nvim_win_set_redraw_top(wp, first);
+            {
+                win_mut(wp).w_redraw_top = first;
+            };
         }
 
         // Update bottom of redraw range
         if current_bot == 0 || last > current_bot {
-            nvim_win_set_redraw_bot(wp, last);
+            {
+                win_mut(wp).w_redraw_bot = last;
+            };
         }
 
         // Mark window for redraw
@@ -838,15 +832,19 @@ pub unsafe extern "C" fn rs_update_redraw_range(wp: WinHandle, first: LinenrT, l
 /// Reset the window's redraw range.
 #[no_mangle]
 pub unsafe extern "C" fn rs_reset_redraw_range(wp: WinHandle) {
-    nvim_win_set_redraw_top(wp, 0);
-    nvim_win_set_redraw_bot(wp, 0);
+    {
+        win_mut(wp).w_redraw_top = 0;
+    };
+    {
+        win_mut(wp).w_redraw_bot = 0;
+    };
 }
 
 /// Check if window has a pending redraw range.
 #[no_mangle]
 pub unsafe extern "C" fn rs_has_redraw_range(wp: WinHandle) -> c_int {
-    let top = nvim_win_get_redraw_top(wp);
-    let bot = nvim_win_get_redraw_bot(wp);
+    let top = win_ref(wp).w_redraw_top;
+    let bot = win_ref(wp).w_redraw_bot;
     c_int::from(top != 0 || bot != 0)
 }
 
@@ -860,10 +858,10 @@ pub unsafe extern "C" fn rs_get_effective_redraw_range(
     out_first: *mut LinenrT,
     out_last: *mut LinenrT,
 ) -> c_int {
-    let top = nvim_win_get_redraw_top(wp);
-    let bot = nvim_win_get_redraw_bot(wp);
-    let topline = nvim_win_get_topline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let top = win_ref(wp).w_redraw_top;
+    let bot = win_ref(wp).w_redraw_bot;
+    let topline = win_ref(wp).w_topline;
+    let botline = win_ref(wp).w_botline;
 
     if top == 0 && bot == 0 {
         return 0;
@@ -909,20 +907,22 @@ pub unsafe extern "C" fn rs_redraw_range_lines(wp: WinHandle) -> c_int {
 /// even if they were previously marked as valid.
 #[no_mangle]
 pub unsafe extern "C" fn rs_invalidate_lines_valid(wp: WinHandle) {
-    nvim_win_set_lines_valid(wp, 0);
+    {
+        win_mut(wp).w_lines_valid = 0;
+    };
 }
 
 /// Check if window needs any redrawing.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_needs_redraw(wp: WinHandle) -> c_int {
-    let redr_type = nvim_win_get_redr_type(wp);
+    let redr_type = win_ref(wp).w_redr_type;
     c_int::from(redr_type != 0)
 }
 
 /// Check if window needs full redraw (not just partial).
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_needs_full_redraw(wp: WinHandle) -> c_int {
-    let redr_type = nvim_win_get_redr_type(wp);
+    let redr_type = win_ref(wp).w_redr_type;
     c_int::from(redr_type >= UPD_NOT_VALID)
 }
 
@@ -1052,7 +1052,6 @@ extern "C" {
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
 
     // Floating window check
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 }
 
 /// Mark a window for later redraw with the specified type.
@@ -1075,17 +1074,21 @@ fn redraw_later_impl(wp: WinHandle, redraw_type: c_int) {
             return;
         }
 
-        let current_type = nvim_win_get_redr_type(wp);
+        let current_type = win_ref(wp).w_redr_type;
         if current_type >= redraw_type {
             return;
         }
 
         // Set the new redraw type
-        nvim_win_set_redr_type(wp, redraw_type);
+        {
+            win_mut(wp).w_redr_type = redraw_type;
+        };
 
         // If type >= UPD_NOT_VALID, invalidate line cache
         if redraw_type >= UPD_NOT_VALID {
-            nvim_win_set_lines_valid(wp, 0);
+            {
+                win_mut(wp).w_lines_valid = 0;
+            };
         }
 
         // Update must_redraw global
@@ -1110,7 +1113,7 @@ fn redraw_all_later_impl(redraw_type: c_int) {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             redraw_later_impl(wp, redraw_type);
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
 
         // Also update must_redraw directly
@@ -1136,7 +1139,7 @@ fn redraw_buf_later_impl(buf: BufHandle, redraw_type: c_int) {
             if nvim_win_buffer_eq(wp, buf) != 0 {
                 redraw_later_impl(wp, redraw_type);
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -1172,7 +1175,7 @@ fn screen_invalidate_highlights_impl() {
         while !wp.is_null() {
             redraw_later_impl(wp, UPD_NOT_VALID);
             nvim_win_grid_alloc_set_valid(wp, 0);
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -1189,22 +1192,26 @@ pub extern "C" fn rs_screen_invalidate_highlights() {
 /// Only updates if the range is visible in the window.
 fn redraw_win_range_later_impl(wp: WinHandle, first: LinenrT, last: LinenrT) {
     unsafe {
-        let topline = nvim_win_get_topline(wp);
-        let botline = nvim_win_get_botline(wp);
+        let topline = win_ref(wp).w_topline;
+        let botline = win_ref(wp).w_botline;
 
         // Only update if range is visible
         if last >= topline && first < botline {
-            let current_top = nvim_win_get_redraw_top(wp);
-            let current_bot = nvim_win_get_redraw_bot(wp);
+            let current_top = win_ref(wp).w_redraw_top;
+            let current_bot = win_ref(wp).w_redraw_bot;
 
             // Update top of redraw range
             if current_top == 0 || first < current_top {
-                nvim_win_set_redraw_top(wp, first);
+                {
+                    win_mut(wp).w_redraw_top = first;
+                };
             }
 
             // Update bottom of redraw range
             if current_bot == 0 || last > current_bot {
-                nvim_win_set_redraw_bot(wp, last);
+                {
+                    win_mut(wp).w_redraw_bot = last;
+                };
             }
 
             redraw_later_impl(wp, UPD_VALID);
@@ -1240,10 +1247,12 @@ pub extern "C" fn rs_redraw_buf_line_later(buf: BufHandle, line: LinenrT, force:
                 let clamped = line.min(ml_line_count);
                 redraw_win_range_later_impl(wp, clamped, clamped);
                 if force && line > ml_line_count {
-                    nvim_win_set_redraw_bot(wp, line);
+                    {
+                        win_mut(wp).w_redraw_bot = line;
+                    };
                 }
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -1258,7 +1267,7 @@ fn redraw_buf_range_later_impl(buf: BufHandle, first: LinenrT, last: LinenrT) {
             if nvim_win_buffer_eq(wp, buf) != 0 {
                 redraw_win_range_later_impl(wp, first, last);
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -1274,8 +1283,8 @@ pub extern "C" fn rs_redraw_buf_range_later(buf: BufHandle, first: LinenrT, last
 /// Helper for redraw_buf_status_later.
 fn win_needs_status_redraw(wp: WinHandle) -> bool {
     unsafe {
-        let status_h = nvim_win_get_status_height(wp);
-        let winbar_h = nvim_win_get_winbar_height(wp);
+        let status_h = win_ref(wp).w_status_height;
+        let winbar_h = win_ref(wp).w_winbar_height;
         let is_stl_global = global_stl_height() != 0;
         let is_curwin = wp == nvim_get_curwin();
 
@@ -1291,14 +1300,16 @@ fn redraw_buf_status_later_impl(buf: BufHandle) {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             if nvim_win_buffer_eq(wp, buf) != 0 && win_needs_status_redraw(wp) {
-                nvim_win_set_redr_status(wp, 1);
+                {
+                    win_mut(wp).w_redr_status = (1) != 0;
+                };
 
                 // Set must_redraw to at least UPD_VALID
                 if !redraw_not_allowed && UPD_VALID > must_redraw {
                     must_redraw = UPD_VALID;
                 }
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -1368,14 +1379,16 @@ pub extern "C" fn rs_win_should_skip_update(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let view_height = nvim_win_get_view_height(wp);
-        let view_width = nvim_win_get_view_width(wp);
+        let view_height = win_ref(wp).w_view_height;
+        let view_width = win_ref(wp).w_view_width;
 
         if view_height == 0 {
             // Draw separators and return skip
             rs_draw_hsep_win(wp);
             rs_draw_sep_connectors_win(wp);
-            nvim_win_set_redr_type(wp, 0);
+            {
+                win_mut(wp).w_redr_type = 0;
+            };
             return 1;
         }
 
@@ -1383,7 +1396,9 @@ pub extern "C" fn rs_win_should_skip_update(wp: WinHandle) -> c_int {
             // Draw separators and return skip
             rs_draw_vsep_win(wp);
             rs_draw_sep_connectors_win(wp);
-            nvim_win_set_redr_type(wp, 0);
+            {
+                win_mut(wp).w_redr_type = 0;
+            };
             return 1;
         }
 
@@ -1392,17 +1407,16 @@ pub extern "C" fn rs_win_should_skip_update(wp: WinHandle) -> c_int {
 }
 
 // Additional accessor for view dimensions
-extern "C" {
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
-}
+extern "C" {}
 
 /// Reset window redraw type after update.
 #[no_mangle]
 pub extern "C" fn rs_win_update_reset_redr_type(wp: WinHandle) {
     if !wp.is_null() {
         unsafe {
-            nvim_win_set_redr_type(wp, 0);
+            {
+                win_mut(wp).w_redr_type = 0;
+            };
         }
     }
 }
@@ -1415,7 +1429,7 @@ pub extern "C" fn rs_win_needs_full_update(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let redr_type = nvim_win_get_redr_type(wp);
+        let redr_type = win_ref(wp).w_redr_type;
         c_int::from(redr_type >= UPD_NOT_VALID)
     }
 }
@@ -1427,7 +1441,7 @@ pub extern "C" fn rs_win_get_effective_redr_type(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    unsafe { nvim_win_get_redr_type(wp).clamp(0, UPD_CLEAR) }
+    unsafe { win_ref(wp).w_redr_type.clamp(0, UPD_CLEAR) }
 }
 
 // =============================================================================
@@ -1437,8 +1451,6 @@ pub extern "C" fn rs_win_get_effective_redr_type(wp: WinHandle) -> c_int {
 // Additional C function declarations for screen update
 extern "C" {
     // Window clear state
-    fn nvim_win_get_redr_border(wp: WinHandle) -> c_int;
-    fn nvim_win_set_redr_border(wp: WinHandle, val: c_int);
 
     // Buffer mod state
     fn nvim_buf_get_mod_set(buf: BufHandle) -> c_int;
@@ -1477,8 +1489,8 @@ pub extern "C" fn rs_win_needs_border_redraw(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let redr_border = nvim_win_get_redr_border(wp);
-        let redr_type = nvim_win_get_redr_type(wp);
+        let redr_border = c_int::from(win_ref(wp).w_redr_border);
+        let redr_type = win_ref(wp).w_redr_type;
         c_int::from(redr_border != 0 || redr_type >= UPD_NOT_VALID)
     }
 }
@@ -1488,7 +1500,7 @@ pub extern "C" fn rs_win_needs_border_redraw(wp: WinHandle) -> c_int {
 pub extern "C" fn rs_win_reset_redr_border(wp: WinHandle) {
     if !wp.is_null() {
         unsafe {
-            nvim_win_set_redr_border(wp, 0);
+            win_mut(wp).w_redr_border = false;
         }
     }
 }
@@ -1498,7 +1510,7 @@ pub extern "C" fn rs_win_reset_redr_border(wp: WinHandle) {
 pub extern "C" fn rs_win_reset_buf_mod_set(wp: WinHandle) {
     if !wp.is_null() {
         unsafe {
-            let buf = nvim_win_get_buffer(wp);
+            let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
                 nvim_buf_set_mod_set(buf, 0);
             }
@@ -1514,7 +1526,7 @@ pub extern "C" fn rs_win_buf_has_mod_set(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let buf = nvim_win_get_buffer(wp);
+        let buf = BufHandle(win_ref(wp).w_buffer);
         if buf.is_null() {
             return 0;
         }
@@ -1533,9 +1545,11 @@ pub extern "C" fn rs_win_post_update(wp: WinHandle) {
 
     unsafe {
         // Reset redraw type
-        nvim_win_set_redr_type(wp, 0);
+        {
+            win_mut(wp).w_redr_type = 0;
+        };
         // Reset border redraw flag
-        nvim_win_set_redr_border(wp, 0);
+        win_mut(wp).w_redr_border = false;
     }
 }
 
@@ -1546,11 +1560,6 @@ pub extern "C" fn rs_win_post_update(wp: WinHandle) {
 // Additional C function declarations for visual mode
 extern "C" {
     static mut VIsual_active: bool;
-    fn nvim_win_get_old_visual_mode(wp: WinHandle) -> c_int;
-    fn nvim_win_set_old_visual_mode(wp: WinHandle, val: c_int);
-    fn nvim_win_set_old_cursor_lnum(wp: WinHandle, val: LinenrT);
-    fn nvim_win_set_old_visual_lnum(wp: WinHandle, val: LinenrT);
-    fn nvim_win_set_old_visual_col(wp: WinHandle, val: ColnrT);
 }
 
 /// Column number type (matches `colnr_T` in Neovim).
@@ -1567,7 +1576,7 @@ pub extern "C" fn rs_visual_selection_changed(wp: WinHandle) -> c_int {
 
     unsafe {
         let visual_active = VIsual_active;
-        let old_visual_mode = nvim_win_get_old_visual_mode(wp);
+        let old_visual_mode = c_int::from(win_ref(wp).w_old_visual_mode);
 
         if !visual_active && old_visual_mode == 0 {
             return 0;
@@ -1586,6 +1595,7 @@ pub extern "C" fn rs_visual_selection_changed(wp: WinHandle) -> c_int {
 
 /// Update visual mode tracking state after window update.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
 pub extern "C" fn rs_update_visual_state(
     wp: WinHandle,
     cursor_lnum: LinenrT,
@@ -1601,15 +1611,31 @@ pub extern "C" fn rs_update_visual_state(
 
         if visual_active {
             let visual_mode = VIsual_mode;
-            nvim_win_set_old_visual_mode(wp, visual_mode);
-            nvim_win_set_old_cursor_lnum(wp, cursor_lnum);
-            nvim_win_set_old_visual_lnum(wp, visual_lnum);
-            nvim_win_set_old_visual_col(wp, visual_col);
+            {
+                win_mut(wp).w_old_visual_mode = (visual_mode) as c_char;
+            };
+            {
+                win_mut(wp).w_old_cursor_lnum = cursor_lnum;
+            };
+            {
+                win_mut(wp).w_old_visual_lnum = visual_lnum;
+            };
+            {
+                win_mut(wp).w_old_visual_col = visual_col;
+            };
         } else {
-            nvim_win_set_old_visual_mode(wp, 0);
-            nvim_win_set_old_cursor_lnum(wp, 0);
-            nvim_win_set_old_visual_lnum(wp, 0);
-            nvim_win_set_old_visual_col(wp, 0);
+            {
+                win_mut(wp).w_old_visual_mode = (0) as c_char;
+            };
+            {
+                win_mut(wp).w_old_cursor_lnum = 0;
+            };
+            {
+                win_mut(wp).w_old_visual_lnum = 0;
+            };
+            {
+                win_mut(wp).w_old_visual_col = 0;
+            };
         }
     }
 }
@@ -1622,10 +1648,18 @@ pub extern "C" fn rs_clear_visual_state(wp: WinHandle) {
     }
 
     unsafe {
-        nvim_win_set_old_visual_mode(wp, 0);
-        nvim_win_set_old_cursor_lnum(wp, 0);
-        nvim_win_set_old_visual_lnum(wp, 0);
-        nvim_win_set_old_visual_col(wp, 0);
+        {
+            win_mut(wp).w_old_visual_mode = (0) as c_char;
+        };
+        {
+            win_mut(wp).w_old_cursor_lnum = 0;
+        };
+        {
+            win_mut(wp).w_old_visual_lnum = 0;
+        };
+        {
+            win_mut(wp).w_old_visual_col = 0;
+        };
     }
 }
 
@@ -2081,12 +2115,12 @@ pub extern "C" fn rs_redraw_statuslines() {
     unsafe {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            if nvim_win_get_redr_status(wp) != 0 {
+            if c_int::from(win_ref(wp).w_redr_status) != 0 {
                 nvim_win_check_ns_hl(wp);
                 nvim_win_redr_winbar(wp);
                 nvim_win_redr_status(wp);
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
 
         nvim_win_check_ns_hl(WinHandle::null());
@@ -2154,12 +2188,6 @@ struct FoldInfo {
 }
 
 extern "C" {
-    #[link_name = "nvim_win_get_p_cole"]
-    fn nvim_win_get_w_p_cole(wp: WinHandle) -> c_int;
-    #[link_name = "nvim_win_get_p_cul"]
-    fn nvim_win_get_w_p_cul(wp: WinHandle) -> c_int;
-    fn nvim_win_set_w_cursorline(wp: WinHandle, val: LinenrT);
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
     fn changed_window_setting(wp: WinHandle);
     #[link_name = "curs_columns"]
@@ -2182,13 +2210,14 @@ pub extern "C" fn rs_conceal_check_cursor_line() {
     unsafe {
         let curwin = nvim_get_curwin();
         let should_conceal = rs_conceal_cursor_line(curwin);
-        if nvim_win_get_w_p_cole(curwin) <= 0
+        #[allow(clippy::cast_possible_truncation)]
+        if win_ref(curwin).w_p_cole() as c_int <= 0
             || CONCEAL_CURSOR_USED.load(std::sync::atomic::Ordering::Relaxed) == should_conceal
         {
             return;
         }
 
-        let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
+        let cursor_lnum = win_ref(curwin).w_cursor.lnum;
         rs_redrawWinline(curwin, cursor_lnum);
 
         // Concealed line visibility toggled.
@@ -2208,19 +2237,23 @@ pub extern "C" fn rs_conceal_check_cursor_line() {
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, _foldinfo: FoldinfoHandle) {
     unsafe {
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
         let cursorline = if rs_win_cursorline_standout(wp) {
             cursor_lnum
         } else {
             0
         };
-        nvim_win_set_w_cursorline(wp, cursorline);
+        {
+            win_mut(wp).w_cursorline = cursorline;
+        };
 
-        if nvim_win_get_w_p_cul(wp) != 0 {
+        if win_ref(wp).w_p_cul() != 0 {
             // Make sure that the cursorline on a closed fold is redrawn
             let fi = nvim_fold_info_rs(wp, cursor_lnum);
             if fi.fi_level != 0 && fi.fi_lines > 0 {
-                nvim_win_set_w_cursorline(wp, fi.fi_lnum);
+                {
+                    win_mut(wp).w_cursorline = fi.fi_lnum;
+                };
             }
         }
     }
@@ -2231,12 +2264,6 @@ pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, _foldinfo: FoldinfoHan
 // =============================================================================
 
 extern "C" {
-    #[link_name = "nvim_win_get_wrow"]
-    fn nvim_win_get_w_wrow(wp: WinHandle) -> c_int;
-    #[link_name = "nvim_win_get_wcol"]
-    fn nvim_win_get_w_wcol(wp: WinHandle) -> c_int;
-    #[link_name = "nvim_win_get_p_rl"]
-    fn nvim_win_get_w_p_rl(wp: WinHandle) -> c_int;
     fn nvim_win_rl_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_grid_adjust_cursor_goto(wp: WinHandle, row: c_int, col: c_int);
     fn nvim_validate_cursor_for_win(wp: WinHandle);
@@ -2261,13 +2288,13 @@ pub extern "C" fn rs_setcursor_mayforce(wp: WinHandle, force: bool) {
         if force || redrawing_impl() {
             nvim_validate_cursor_for_win(wp);
 
-            let row = nvim_win_get_w_wrow(wp);
-            let col = if nvim_win_get_w_p_rl(wp) != 0 {
+            let row = win_ref(wp).w_wrow;
+            let col = if win_ref(wp).w_p_rl() != 0 {
                 // With 'rightleft' set and the cursor on a double-wide character,
                 // position it on the leftmost column.
                 nvim_win_rl_cursor_col(wp)
             } else {
-                nvim_win_get_w_wcol(wp)
+                win_ref(wp).w_wcol
             };
 
             nvim_grid_adjust_cursor_goto(wp, row, col);
@@ -2321,14 +2348,6 @@ pub extern "C" fn rs_end_search_hl() {
 // =============================================================================
 
 extern "C" {
-    #[link_name = "nvim_win_get_view_width"]
-    fn nvim_win_get_w_view_width(wp: WinHandle) -> c_int;
-    #[link_name = "nvim_win_get_scwidth"]
-    fn nvim_win_get_w_scwidth(wp: WinHandle) -> c_int;
-    #[link_name = "nvim_win_get_p_nu"]
-    fn nvim_win_get_w_p_nu(wp: WinHandle) -> c_int;
-    #[link_name = "nvim_win_get_p_rnu"]
-    fn nvim_win_get_w_p_rnu(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_grid(wp: WinHandle) -> GridViewHandle;
     fn win_bg_attr(wp: WinHandle) -> c_int;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
@@ -2375,9 +2394,9 @@ pub extern "C" fn rs_win_draw_end(
     hl: c_int,
 ) {
     unsafe {
-        let view_width = nvim_win_get_w_view_width(wp);
+        let view_width = win_ref(wp).w_view_width;
         let fdc = rs_compute_foldcolumn(wp, 0);
-        let scwidth = nvim_win_get_w_scwidth(wp);
+        let scwidth = win_ref(wp).w_scwidth;
         let grid = nvim_win_get_w_grid(wp);
 
         for row in startrow..endrow {
@@ -2406,7 +2425,7 @@ pub extern "C" fn rs_win_draw_end(
                 }
 
                 // draw the number column
-                if (nvim_win_get_w_p_nu(wp) != 0 || nvim_win_get_w_p_rnu(wp) != 0)
+                if (win_ref(wp).w_p_nu() != 0 || win_ref(wp).w_p_rnu() != 0)
                     && vim_strchr(p_cpo, CPO_NUMCOL).is_null()
                 {
                     let width = rs_number_width(wp) + 1;
@@ -2428,7 +2447,7 @@ pub extern "C" fn rs_win_draw_end(
 
             grid_line_clear_end(n, view_width, win_bg_attr(wp), attr);
 
-            if nvim_win_get_w_p_rl(wp) != 0 {
+            if win_ref(wp).w_p_rl() != 0 {
                 grid_line_mirror(view_width);
             }
             rs_grid_line_flush();
@@ -2664,8 +2683,8 @@ pub unsafe extern "C" fn rs_win_scroll_lines(wp: WinHandle, row: c_int, line_cou
     let grid_view = nvim_win_get_w_grid(wp);
     let grid = grid_adjust(grid_view, &raw mut row_off, &raw mut col);
 
-    let view_width = nvim_win_get_view_width(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_width = win_ref(wp).w_view_width;
+    let view_height = win_ref(wp).w_view_height;
 
     // Get actual grid dimensions via the adjusted grid pointer
     // We need grid->cols and grid->rows for the bounds check
@@ -2763,7 +2782,6 @@ extern "C" {
     /// edit_submode_extra pointer (from insexpand_shim.c).
     // nvim_get_edit_submode_extra_ptr: inlined (Phase 37, use g_edit_submode_extra directly)
     /// w_p_arab window option accessor (from window crate).
-    fn nvim_win_get_p_arab(wp: WinHandle) -> c_int;
     /// Clear the showcmd area.
     fn rs_clear_showcmd();
 }
@@ -2854,7 +2872,7 @@ unsafe fn showmode_display_mode(hl_id: c_int, length: &mut c_int) {
             }
         }
         if (state & MODE_LANGMAP) != 0 {
-            if nvim_win_get_p_arab(nvim_get_curwin()) != 0 {
+            if win_ref(nvim_get_curwin()).w_p_arab() != 0 {
                 msg_puts_hl(c" Arabic".as_ptr(), hl_id, false);
             } else if get_keymap_str(
                 nvim_get_curwin(),
@@ -2985,26 +3003,16 @@ const MAXCOL: c_int = 0x7fff_ffff;
 
 extern "C" {
     /// Get wp->w_old_cursor_lnum.
-    fn nvim_win_get_old_cursor_lnum(wp: WinHandle) -> LinenrT;
     /// Get wp->w_old_visual_lnum.
-    fn nvim_win_get_old_visual_lnum(wp: WinHandle) -> LinenrT;
     /// Get wp->w_old_visual_col.
-    fn nvim_win_get_old_visual_col(wp: WinHandle) -> ColnrT;
     /// Get wp->w_old_cursor_fcol.
-    fn nvim_win_get_old_cursor_fcol(wp: WinHandle) -> ColnrT;
     /// Get wp->w_old_cursor_lcol.
-    fn nvim_win_get_old_cursor_lcol(wp: WinHandle) -> ColnrT;
     /// Get wp->w_old_curswant.
-    fn nvim_win_get_old_curswant(wp: WinHandle) -> ColnrT;
     /// Set wp->w_old_cursor_fcol.
-    fn nvim_win_set_old_cursor_fcol(wp: WinHandle, val: ColnrT);
     /// Set wp->w_old_cursor_lcol.
-    fn nvim_win_set_old_cursor_lcol(wp: WinHandle, val: ColnrT);
     /// Set wp->w_old_curswant.
-    fn nvim_win_set_old_curswant(wp: WinHandle, val: ColnrT);
 
     /// Get wp->w_valid flags.
-    fn nvim_win_get_valid(wp: WinHandle) -> c_int;
     /// Get wp->w_lines[idx].wl_size.
     fn nvim_win_wlines_get_size(wp: WinHandle, idx: c_int) -> c_int;
     /// Get wp->w_lines[idx].wl_valid.
@@ -3014,14 +3022,10 @@ extern "C" {
 
     /// Get curwin->w_p_lbr.
     fn nvim_curwin_get_w_p_lbr() -> c_int;
-    /// Get curwin->w_curswant.
-    fn nvim_curwin_get_curswant() -> ColnrT;
     /// Get curwin->w_ve_flags.
     fn nvim_curwin_get_w_ve_flags() -> u32;
     /// Set curwin->w_ve_flags.
     fn nvim_curwin_set_w_ve_flags(val: u32);
-    /// Get curwin->w_cursor.lnum.
-    fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     /// Return true if buf == curwin->w_buffer.
     fn nvim_buf_is_curwin_buf(buf: BufHandle) -> bool;
 
@@ -3045,6 +3049,7 @@ extern "C" {
 /// # Safety
 /// Must be called from within the win_update() context with valid wp/buf.
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
 unsafe fn win_update_visual_region_impl(
     wp: WinHandle,
     buf: BufHandle,
@@ -3056,18 +3061,18 @@ unsafe fn win_update_visual_region_impl(
 ) {
     let visual_active = VIsual_active;
     let buf_is_curwin = nvim_buf_is_curwin_buf(buf);
-    let old_cursor_lnum = nvim_win_get_old_cursor_lnum(wp);
+    let old_cursor_lnum = win_ref(wp).w_old_cursor_lnum;
 
     // check if we are updating or removing the inverted part
     if (visual_active && buf_is_curwin) || (old_cursor_lnum != 0 && type_ != UPD_NOT_VALID) {
-        let old_visual_lnum = nvim_win_get_old_visual_lnum(wp);
-        let old_visual_col = nvim_win_get_old_visual_col(wp);
+        let old_visual_lnum = win_ref(wp).w_old_visual_lnum;
+        let old_visual_col = win_ref(wp).w_old_visual_col;
 
         let (from, to) = if visual_active {
-            let cursor_lnum = nvim_curwin_get_cursor_lnum();
+            let cursor_lnum = win_ref(nvim_get_curwin()).w_cursor.lnum;
             let visual_lnum = nvim_get_VIsual_lnum();
             let visual_mode = VIsual_mode;
-            let old_visual_mode = nvim_win_get_old_visual_mode(wp);
+            let old_visual_mode = c_int::from(win_ref(wp).w_old_visual_mode);
 
             let (from, to) = if visual_mode != old_visual_mode || type_ == UPD_INVERTED_ALL {
                 let (f, t) = if cursor_lnum < visual_lnum {
@@ -3106,16 +3111,20 @@ unsafe fn win_update_visual_region_impl(
                 let mut toc: ColnrT = 0;
                 nvim_win_visual_block_cols(wp, &raw mut fromc, &raw mut toc);
 
-                let prev_first_col = nvim_win_get_old_cursor_fcol(wp);
-                let prev_last_col = nvim_win_get_old_cursor_lcol(wp);
+                let prev_first_col = win_ref(wp).w_old_cursor_fcol;
+                let prev_last_col = win_ref(wp).w_old_cursor_lcol;
                 let (f, t) = if fromc != prev_first_col || toc != prev_last_col {
                     let visual_lnum2 = nvim_get_VIsual_lnum();
                     (from.min(visual_lnum2), to.max(visual_lnum2))
                 } else {
                     (from, to)
                 };
-                nvim_win_set_old_cursor_fcol(wp, fromc);
-                nvim_win_set_old_cursor_lcol(wp, toc);
+                {
+                    win_mut(wp).w_old_cursor_fcol = fromc;
+                };
+                {
+                    win_mut(wp).w_old_cursor_lcol = toc;
+                };
                 (f, t)
             } else {
                 (from, to)
@@ -3132,11 +3141,11 @@ unsafe fn win_update_visual_region_impl(
             (f, t)
         };
 
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         let from = from.max(topline);
 
-        let (from, to) = if (nvim_win_get_valid(wp) & VALID_BOTLINE) != 0 {
-            let botline = nvim_win_get_botline(wp);
+        let (from, to) = if (win_ref(wp).w_valid & VALID_BOTLINE) != 0 {
+            let botline = win_ref(wp).w_botline;
             (from.min(botline - 1), to.min(botline - 1))
         } else {
             (from, to)
@@ -3144,10 +3153,10 @@ unsafe fn win_update_visual_region_impl(
 
         let ms = *mid_start;
         if ms > 0 {
-            let mut lnum = nvim_win_get_topline(wp);
+            let mut lnum = win_ref(wp).w_topline;
             let mut idx: c_int = 0;
             let mut srow: c_int = 0;
-            let lines_valid = nvim_win_get_lines_valid(wp);
+            let lines_valid = win_ref(wp).w_lines_valid;
 
             if scrolled_down {
                 *mid_start = top_end;
@@ -3172,7 +3181,7 @@ unsafe fn win_update_visual_region_impl(
             }
 
             srow += *mid_start;
-            *mid_end = nvim_win_get_view_height(wp);
+            *mid_end = win_ref(wp).w_view_height;
 
             while idx < lines_valid {
                 let wl_valid = nvim_win_get_lines_wl_valid(wp, idx);
@@ -3189,20 +3198,38 @@ unsafe fn win_update_visual_region_impl(
 
     // Save visual state for next iteration
     if visual_active && nvim_buf_is_curwin_buf(buf) {
-        let cursor_lnum = nvim_curwin_get_cursor_lnum();
+        let cursor_lnum = win_ref(nvim_get_curwin()).w_cursor.lnum;
         let visual_lnum = nvim_get_VIsual_lnum();
         let visual_col = nvim_get_VIsual_col();
-        let curswant = nvim_curwin_get_curswant();
-        nvim_win_set_old_visual_mode(wp, VIsual_mode);
-        nvim_win_set_old_cursor_lnum(wp, cursor_lnum);
-        nvim_win_set_old_visual_lnum(wp, visual_lnum);
-        nvim_win_set_old_visual_col(wp, visual_col);
-        nvim_win_set_old_curswant(wp, curswant);
+        let curswant = win_ref(nvim_get_curwin()).w_curswant;
+        {
+            win_mut(wp).w_old_visual_mode = (VIsual_mode) as c_char;
+        };
+        {
+            win_mut(wp).w_old_cursor_lnum = cursor_lnum;
+        };
+        {
+            win_mut(wp).w_old_visual_lnum = visual_lnum;
+        };
+        {
+            win_mut(wp).w_old_visual_col = visual_col;
+        };
+        {
+            win_mut(wp).w_old_curswant = curswant;
+        };
     } else {
-        nvim_win_set_old_visual_mode(wp, 0);
-        nvim_win_set_old_cursor_lnum(wp, 0);
-        nvim_win_set_old_visual_lnum(wp, 0);
-        nvim_win_set_old_visual_col(wp, 0);
+        {
+            win_mut(wp).w_old_visual_mode = (0) as c_char;
+        };
+        {
+            win_mut(wp).w_old_cursor_lnum = 0;
+        };
+        {
+            win_mut(wp).w_old_visual_lnum = 0;
+        };
+        {
+            win_mut(wp).w_old_visual_col = 0;
+        };
     }
 }
 
@@ -3235,12 +3262,7 @@ const MAXLNUM: LinenrT = 0x7fff_ffff;
 
 extern "C" {
     fn nvim_win_get_maxscwidth(wp: WinHandle) -> c_int;
-    fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
-    fn nvim_win_get_minscwidth(wp: WinHandle) -> c_int;
-    fn nvim_win_set_scwidth(wp: WinHandle, val: c_int);
     fn nvim_win_get_w_p_stc_nul(wp: WinHandle) -> bool;
-    fn nvim_win_get_nrwidth_line_count(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_nrwidth_line_count(wp: WinHandle, val: LinenrT);
 
     fn nvim_buf_signcols_get_autom(buf: BufHandle) -> bool;
     fn nvim_buf_signcols_set_autom(buf: BufHandle, val: bool);
@@ -3272,9 +3294,9 @@ extern "C" {
 /// `wp` must be a valid non-null window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_redraw_signcols(wp: WinHandle) -> bool {
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     let maxscwidth = nvim_win_get_maxscwidth(wp);
-    let minscwidth = nvim_win_get_minscwidth(wp);
+    let minscwidth = win_ref(wp).w_minscwidth;
     let has_stc = nvim_win_get_w_p_stc_nul(wp);
 
     if !nvim_buf_signcols_get_autom(buf)
@@ -3296,14 +3318,16 @@ pub unsafe extern "C" fn rs_win_redraw_signcols(wp: WinHandle) -> bool {
     let rebuild_stc = max != last_max && has_stc;
 
     if rebuild_stc {
-        nvim_win_set_nrwidth_line_count(wp, 0);
+        {
+            win_mut(wp).w_nrwidth_line_count = 0;
+        };
     } else if minscwidth == 0 && maxscwidth == 1 {
         width = c_int::from(nvim_buf_meta_total(buf, K_MT_META_SIGN_TEXT) > 0);
     }
 
-    let scwidth = nvim_win_get_scwidth(wp);
-    nvim_win_set_scwidth(wp, 0.max(minscwidth).max(width));
-    nvim_win_get_scwidth(wp) != scwidth || rebuild_stc
+    let scwidth = win_ref(wp).w_scwidth;
+    win_mut(wp).w_scwidth = 0.max(minscwidth).max(width);
+    win_ref(wp).w_scwidth != scwidth || rebuild_stc
 }
 
 // =============================================================================
@@ -3376,13 +3400,9 @@ extern "C" {
     /// Get buf->b_s.b_syn_sync_linebreaks.
     fn nvim_buf_get_syn_sync_linebreaks(buf: BufHandle) -> LinenrT;
     /// Get wp->w_skipcol.
-    fn nvim_win_get_skipcol(wp: WinHandle) -> ColnrT;
     /// Set wp->w_skipcol.
-    fn nvim_win_set_skipcol(wp: WinHandle, val: ColnrT);
     /// Set wp->w_nrwidth.
-    fn nvim_win_set_nrwidth(wp: WinHandle, val: c_int);
     /// Get wp->w_upd_rows.
-    fn nvim_win_get_upd_rows(wp: WinHandle) -> c_int;
     /// Get wp->w_lines[idx].wl_lnum.
     fn nvim_win_get_wlines_lnum(wp: WinHandle, idx: c_int) -> LinenrT;
     /// Get wp->w_lines[idx].wl_lastlnum.
@@ -3433,11 +3453,8 @@ extern "C" {
     #[link_name = "nvim_win_set_redraw_bot"]
     fn win_set_redraw_bot(wp: WinHandle, val: LinenrT);
     /// nvim_win_get_p_nu: get wp->w_p_nu.
-    fn nvim_win_get_p_nu(wp: WinHandle) -> c_int;
     /// nvim_win_get_p_rnu: get wp->w_p_rnu.
-    fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
     /// nvim_win_get_nrwidth: get wp->w_nrwidth.
-    fn nvim_win_get_nrwidth(wp: WinHandle) -> c_int;
     /// nvim_win_get_wlines_size: get wp->w_lines[idx].wl_size.
     fn nvim_win_get_wlines_size(wp: WinHandle, idx: c_int) -> c_int;
     /// nvim_win_get_redr_type: get wp->w_redr_type.
@@ -3465,36 +3482,10 @@ extern "C" {
 
 // Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize FFI
 extern "C" {
-    /// Get wp->w_old_topfill.
-    fn nvim_win_get_old_topfill(wp: WinHandle) -> c_int;
-    /// Set wp->w_old_topfill.
-    fn nvim_win_set_old_topfill(wp: WinHandle, val: c_int);
-    /// Get wp->w_old_botfill.
-    fn nvim_win_get_old_botfill(wp: WinHandle) -> bool;
-    /// Set wp->w_old_botfill.
-    fn nvim_win_set_old_botfill(wp: WinHandle, val: bool);
-    /// Get wp->w_botfill.
-    #[link_name = "nvim_win_get_botfill"]
-    fn nvim_win_get_botfill_body(wp: WinHandle) -> c_int;
-    /// Get wp->w_redr_statuscol.
-    fn nvim_win_get_redr_statuscol(wp: WinHandle) -> bool;
-    /// Set wp->w_redr_statuscol.
-    #[link_name = "nvim_win_set_redr_statuscol"]
-    fn nvim_win_set_redr_statuscol_body(wp: WinHandle, val: bool);
-    /// Get wp->w_valid.
-    fn nvim_win_get_w_valid(wp: WinHandle) -> c_int;
     /// Apply wp->w_valid &= mask.
     fn nvim_win_and_w_valid(wp: WinHandle, mask: c_int);
     /// Apply wp->w_valid |= mask.
     fn nvim_win_or_w_valid(wp: WinHandle, mask: c_int);
-    /// Get wp->w_last_cursorline.
-    fn nvim_win_get_last_cursorline(wp: WinHandle) -> LinenrT;
-    /// Set wp->w_last_cursorline.
-    fn nvim_win_set_last_cursorline(wp: WinHandle, val: LinenrT);
-    /// Get wp->w_last_cursor_lnum_rnu.
-    fn nvim_win_get_last_cursor_lnum_rnu(wp: WinHandle) -> LinenrT;
-    /// Set wp->w_last_cursor_lnum_rnu.
-    fn nvim_win_set_last_cursor_lnum_rnu(wp: WinHandle, val: LinenrT);
     /// Return true if wp->w_match_head != NULL.
     fn nvim_win_get_match_head_nonnull(wp: WinHandle) -> bool;
     /// Get buf->b_mod_xlines.
@@ -3578,46 +3569,10 @@ extern "C" {
         endrow: c_int,
         hl: c_int,
     );
-    /// Get wp->w_botline.
-    #[link_name = "nvim_win_get_botline"]
-    fn nvim_win_get_botline_body(wp: WinHandle) -> LinenrT;
-    /// Set wp->w_botline.
-    #[link_name = "nvim_win_set_botline"]
-    fn nvim_win_set_botline_body(wp: WinHandle, val: LinenrT);
-    /// Set wp->w_empty_rows.
-    #[link_name = "nvim_win_set_empty_rows"]
-    fn nvim_win_set_empty_rows_body(wp: WinHandle, val: c_int);
-    /// Set wp->w_filler_rows.
-    #[link_name = "nvim_win_set_filler_rows"]
-    fn nvim_win_set_filler_rows_body(wp: WinHandle, val: c_int);
-    /// Get wp->w_topfill.
-    #[link_name = "nvim_win_get_topfill"]
-    fn nvim_win_get_topfill_body(wp: WinHandle) -> c_int;
-    /// Get wp->w_cursorline.
-    #[link_name = "nvim_win_get_cursorline"]
-    fn nvim_win_get_cursorline_body(wp: WinHandle) -> LinenrT;
-    /// Get wp->w_p_rnu.
-    #[link_name = "nvim_win_get_p_rnu"]
-    fn nvim_win_get_p_rnu_body(wp: WinHandle) -> c_int;
-    /// Get wp->w_p_nu.
-    #[link_name = "nvim_win_get_p_nu"]
-    fn nvim_win_get_p_nu_body(wp: WinHandle) -> c_int;
-    /// Get wp->w_p_cul.
-    #[link_name = "nvim_win_get_p_cul"]
-    fn nvim_win_get_p_cul_body(wp: WinHandle) -> c_int;
-    /// Set wp->w_viewport_invalid.
-    #[link_name = "nvim_win_set_viewport_invalid"]
-    fn nvim_win_set_viewport_invalid_body(wp: WinHandle, val: bool);
     /// Get wp->w_p_fcs_chars.lastline (schar_T as u32).
     fn nvim_win_get_fcs_lastline(wp: WinHandle) -> ScharT;
     /// Get wp->w_p_fcs_chars.eob (schar_T as u32).
     fn nvim_win_get_fcs_eob(wp: WinHandle) -> ScharT;
-    /// Get wp->w_lines_valid (aliased to avoid name collision).
-    #[link_name = "nvim_win_get_lines_valid"]
-    fn nvim_win_get_lines_valid2(wp: WinHandle) -> c_int;
-    /// Set wp->w_lines_valid (aliased to avoid name collision).
-    #[link_name = "nvim_win_set_lines_valid"]
-    fn nvim_win_set_lines_valid2(wp: WinHandle, val: c_int);
     /// spell_check_window wrapper.
     fn nvim_spell_check_window(wp: WinHandle) -> bool;
     /// Check if fold method is Syntax for this window.
@@ -3705,7 +3660,7 @@ struct WinUpdateBodyState {
 unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
     // Read type from window (rs_win_update already did UPD_NOT_VALID side-effects).
     let type_ = win_get_redr_type_body(wp);
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
 
     // Save got_int; the C from_scroll function will zero and restore it.
     // (Zeroing got_int + syn_set_timeout is done in C where proftime_T stays in scope.)
@@ -3727,8 +3682,8 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
     nvim_init_search_hl_win(wp);
 
     // Make sure skipcol is valid
-    let skipcol = nvim_win_get_skipcol(wp);
-    let view_width = nvim_win_get_view_width(wp);
+    let skipcol = win_ref(wp).w_skipcol;
+    let view_width = win_ref(wp).w_view_width;
     let col_off = nvim_win_col_off(wp);
     if skipcol > 0 && view_width > col_off {
         let mut w: c_int = 0;
@@ -3744,13 +3699,13 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
         }
         if w != skipcol {
             // always round down, the higher value may not be valid
-            nvim_win_set_skipcol(wp, w - add);
+            win_mut(wp).w_skipcol = w - add;
         }
     }
 
-    let nrwidth_before = nvim_win_get_nrwidth(wp);
+    let nrwidth_before = win_ref(wp).w_nrwidth;
     let has_stc = nvim_win_get_w_p_stc_nul(wp);
-    let nrwidth_new = if nvim_win_get_p_nu(wp) != 0 || nvim_win_get_p_rnu(wp) != 0 || has_stc {
+    let nrwidth_new = if win_ref(wp).w_p_nu() != 0 || win_ref(wp).w_p_rnu() != 0 || has_stc {
         nvim_number_width(wp)
     } else {
         0
@@ -3763,11 +3718,13 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
     let mut type_ = type_;
 
     #[allow(clippy::if_not_else)]
-    if nvim_win_get_nrwidth(wp) != nrwidth_new {
+    if win_ref(wp).w_nrwidth != nrwidth_new {
         // Force redraw when width of 'number' or 'relativenumber' column changes.
         type_ = UPD_NOT_VALID;
         nvim_changed_line_abv_curs_win(wp);
-        nvim_win_set_nrwidth(wp, nrwidth_new);
+        {
+            win_mut(wp).w_nrwidth = nrwidth_new;
+        };
     } else {
         // Set mod_top to the first line that needs displaying because of
         // changes. Set mod_bot to the first line after the changes.
@@ -3914,13 +3871,13 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
     clippy::ptr_as_ptr
 )]
 unsafe fn win_update_body_scroll(wp: WinHandle, st: &mut WinUpdateBodyState) {
-    let buf = nvim_win_get_buffer(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
+    let view_height = win_ref(wp).w_view_height;
 
     // When only displaying lines at the top, compute top_end from w_upd_rows.
     if st.type_ == UPD_REDRAW_TOP {
         let lines_valid = win_get_lines_valid_body(wp);
-        let upd_rows = nvim_win_get_upd_rows(wp);
+        let upd_rows = win_ref(wp).w_upd_rows;
         let mut j: c_int = 0;
         for i in 0..lines_valid {
             j += nvim_win_get_wlines_size(wp, i);
@@ -3952,8 +3909,8 @@ unsafe fn win_update_body_scroll(wp: WinHandle, st: &mut WinUpdateBodyState) {
         );
     }
 
-    let botfill = nvim_win_get_botfill_body(wp) != 0;
-    let old_botfill = nvim_win_get_old_botfill(wp);
+    let botfill = win_ref(wp).w_botfill;
+    let old_botfill = win_ref(wp).w_old_botfill;
 
     if (st.type_ == UPD_VALID
         || st.type_ == UPD_SOME_VALID
@@ -3964,8 +3921,8 @@ unsafe fn win_update_body_scroll(wp: WinHandle, st: &mut WinUpdateBodyState) {
     {
         let wlines0_valid = nvim_win_get_wlines_valid(wp, 0);
         let wlines0_lnum = nvim_win_get_wlines_lnum(wp, 0);
-        let old_topfill = nvim_win_get_old_topfill(wp);
-        let topfill = nvim_win_get_topfill_body(wp);
+        let old_topfill = win_ref(wp).w_old_topfill;
+        let topfill = win_ref(wp).w_topfill;
 
         if st.mod_top != 0
             && topline == st.mod_top
@@ -4107,7 +4064,7 @@ unsafe fn win_update_body_scroll(wp: WinHandle, st: &mut WinUpdateBodyState) {
     }
 
     // Check if we are updating or removing the inverted part.
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     rs_win_update_visual_region(
         wp,
         buf,
@@ -4178,9 +4135,9 @@ unsafe fn win_update_body_draw_loop(
     wp: WinHandle,
     st: &mut WinUpdateBodyState,
 ) -> (bool, bool, LinenrT, c_int, c_int, c_int) {
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     let ml_line_count = buf_get_ml_line_count_body(buf);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
     let curwin = nvim_get_curwin();
 
     // Cursorline fold info (computed during scroll phase for wp).
@@ -4231,12 +4188,12 @@ unsafe fn win_update_body_draw_loop(
                 0
             };
             let mod_set = buf_get_mod_set_body(buf) != 0;
-            let p_nu = nvim_win_get_p_nu_body(wp) != 0;
-            let p_rnu = nvim_win_get_p_rnu_body(wp) != 0;
-            let p_cul = nvim_win_get_p_cul_body(wp) != 0;
-            let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-            let w_cursorline = nvim_win_get_cursorline_body(wp);
-            let w_last_cursorline = nvim_win_get_last_cursorline(wp);
+            let p_nu = win_ref(wp).w_p_nu() != 0;
+            let p_rnu = win_ref(wp).w_p_rnu() != 0;
+            let p_cul = win_ref(wp).w_p_cul() != 0;
+            let cursor_lnum = win_ref(wp).w_cursor.lnum;
+            let w_cursorline = win_ref(wp).w_cursorline;
+            let w_last_cursorline = win_ref(wp).w_cursorline;
 
             let needs_update = row < st.top_end
                 || (row >= st.mid_start && row < st.mid_end)
@@ -4506,7 +4463,7 @@ unsafe fn win_update_body_draw_loop(
                 idx += 1;
             } else {
                 // Line doesn't need redrawing, but may need number column update.
-                let p_cul = nvim_win_get_p_cul_body(wp) != 0;
+                let p_cul = win_ref(wp).w_p_cul() != 0;
                 let foldinfo = if p_cul && lnum == cursor_lnum {
                     cursorline_fi
                 } else {
@@ -4520,7 +4477,7 @@ unsafe fn win_update_body_draw_loop(
                     && lnum >= st.mod_bot
                     && buf_get_mod_set_body(buf) != 0
                     && nvim_buf_get_mod_xlines(buf) != 0)
-                    || (p_rnu && nvim_win_get_last_cursor_lnum_rnu(wp) != cursor_lnum)
+                    || (p_rnu && win_ref(wp).w_last_cursor_lnum_rnu != cursor_lnum)
                 {
                     let mut zero_spv = SpvT::default();
                     rs_win_line(
@@ -4547,7 +4504,7 @@ unsafe fn win_update_body_draw_loop(
             }
 
             // 'statuscolumn' width has changed or errored: restart from top.
-            if nvim_win_get_redr_statuscol(wp) {
+            if win_ref(wp).w_redr_statuscol {
                 nvim_win_redr_statuscol_restart(wp);
                 idx = 0;
                 row = 0;
@@ -4600,21 +4557,23 @@ unsafe fn win_update_body_finalize(
     // Static to detect recursive calls (matches C `static bool recursive`).
     static mut RECURSIVE: bool = false;
 
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     let ml_line_count = buf_get_ml_line_count_body(buf);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
     let curwin = nvim_get_curwin();
 
     // Update w_last_cursorline.
-    nvim_win_set_last_cursorline(wp, nvim_win_get_cursorline_body(wp));
+    win_mut(wp).w_last_cursorline = win_ref(wp).w_cursorline;
 
     // Update w_last_cursor_lnum_rnu.
-    let last_rnu = if nvim_win_get_p_rnu_body(wp) != 0 {
-        nvim_win_get_cursor_lnum(wp)
+    let last_rnu = if win_ref(wp).w_p_rnu() != 0 {
+        win_ref(wp).w_cursor.lnum
     } else {
         0
     };
-    nvim_win_set_last_cursor_lnum_rnu(wp, last_rnu);
+    {
+        win_mut(wp).w_last_cursor_lnum_rnu = last_rnu;
+    };
 
     // Clamp w_lines_valid.
     let lines_valid = win_get_lines_valid_body(wp);
@@ -4625,25 +4584,31 @@ unsafe fn win_update_body_finalize(
         syntax_end_parsing(wp, st.syntax_last_parsed + 1);
     }
 
-    let old_botline = nvim_win_get_botline_body(wp);
+    let old_botline = win_ref(wp).w_botline;
 
     // Handle end-of-window conditions.
-    nvim_win_set_empty_rows_body(wp, 0);
-    nvim_win_set_filler_rows_body(wp, 0);
+    {
+        win_mut(wp).w_empty_rows = 0;
+    };
+    {
+        win_mut(wp).w_filler_rows = 0;
+    };
 
     if !eof && !didline {
         // Line didn't fit: draw truncation markers.
         let at_attr = nvim_hl_combine_attr(nvim_win_bg_attr(wp), nvim_win_hl_attr(wp, HLF_AT));
         let topline = win_get_topline_body(wp);
-        let view_width = nvim_win_get_view_width(wp);
+        let view_width = win_ref(wp).w_view_width;
 
         if lnum == topline {
             // Single line that doesn't fit.
-            nvim_win_set_botline_body(wp, lnum + 1);
+            win_mut(wp).w_botline = lnum + 1;
         } else if nvim_win_get_fill(wp, lnum) >= view_height - srow {
             // Window ends in filler lines.
-            nvim_win_set_botline_body(wp, lnum);
-            nvim_win_set_filler_rows_body(wp, view_height - srow);
+            {
+                win_mut(wp).w_botline = lnum;
+            };
+            win_mut(wp).w_filler_rows = view_height - srow;
         } else {
             let dy_flags = nvim_get_dy_flags_body();
             if dy_flags & K_OPT_DY_FLAG_TRUNCATE != 0 {
@@ -4655,7 +4620,9 @@ unsafe fn win_update_body_finalize(
                 rs_grid_line_fill(3, view_width, SCHAR_SPACE, at_attr);
                 rs_grid_line_flush();
                 nvim_set_empty_rows_win(wp, srow);
-                nvim_win_set_botline_body(wp, lnum);
+                {
+                    win_mut(wp).w_botline = lnum;
+                };
             } else if dy_flags & K_OPT_DY_FLAG_LASTLINE != 0 {
                 // Display "@@@" at end of last line.
                 rs_grid_line_start(nvim_win_get_w_grid(wp), view_height - 1);
@@ -4674,20 +4641,24 @@ unsafe fn win_update_body_finalize(
                 );
                 rs_grid_line_flush();
                 nvim_set_empty_rows_win(wp, srow);
-                nvim_win_set_botline_body(wp, lnum);
+                {
+                    win_mut(wp).w_botline = lnum;
+                };
             } else {
                 let lastline_char = nvim_win_get_fcs_lastline(wp);
                 win_draw_end(wp, lastline_char, true, srow, view_height, HLF_AT);
                 nvim_set_empty_rows_win(wp, srow);
-                nvim_win_set_botline_body(wp, lnum);
+                {
+                    win_mut(wp).w_botline = lnum;
+                };
             }
         }
     } else {
         if eof {
             // Hit end of file.
-            nvim_win_set_botline_body(wp, ml_line_count + 1);
+            win_mut(wp).w_botline = ml_line_count + 1;
             let j = nvim_win_get_fill(wp, ml_line_count + 1);
-            let botfill = nvim_win_get_botfill_body(wp) != 0;
+            let botfill = win_ref(wp).w_botfill;
             if j > 0 && !botfill && row < view_height {
                 // Display filler text below last line.
                 let mut zero_spv = SpvT::default();
@@ -4714,7 +4685,9 @@ unsafe fn win_update_body_finalize(
                 // This matches the C behavior for the post-EOF filler line case.
             }
         } else if nvim_get_dollar_vcol() == -1 || wp != curwin {
-            nvim_win_set_botline_body(wp, lnum);
+            {
+                win_mut(wp).w_botline = lnum;
+            };
         }
 
         // Draw EOB characters for empty rows.
@@ -4735,18 +4708,22 @@ unsafe fn win_update_body_finalize(
     }
 
     // Draw separators.
-    if nvim_win_get_redr_type(wp) >= UPD_REDRAW_TOP {
+    if win_ref(wp).w_redr_type >= UPD_REDRAW_TOP {
         rs_draw_vsep_win(wp);
         rs_draw_hsep_win(wp);
         rs_draw_sep_connectors_win(wp);
     }
 
     // Reset redraw type and fill state.
-    nvim_win_set_redr_type(wp, 0);
-    let topfill = nvim_win_get_topfill_body(wp);
-    nvim_win_set_old_topfill(wp, topfill);
-    let botfill = nvim_win_get_botfill_body(wp) != 0;
-    nvim_win_set_old_botfill(wp, botfill);
+    {
+        win_mut(wp).w_redr_type = 0;
+    };
+    let topfill = win_ref(wp).w_topfill;
+    {
+        win_mut(wp).w_old_topfill = topfill;
+    };
+    let botfill = win_ref(wp).w_botfill;
+    win_mut(wp).w_old_botfill = botfill;
 
     // Send win_extmarks.
     nvim_win_send_extmarks(wp);
@@ -4754,8 +4731,10 @@ unsafe fn win_update_body_finalize(
     // Botline validation + recursive topline correction.
     if nvim_get_dollar_vcol() == -1 || wp != curwin {
         nvim_win_or_w_valid(wp, VALID_BOTLINE);
-        nvim_win_set_viewport_invalid_body(wp, true);
-        let new_botline = nvim_win_get_botline_body(wp);
+        {
+            win_mut(wp).w_viewport_invalid = true;
+        };
+        let new_botline = win_ref(wp).w_botline;
         if wp == curwin && new_botline != old_botline && !RECURSIVE {
             RECURSIVE = true;
             nvim_win_and_w_valid(curwin, !VALID_TOPLINE);
@@ -4773,7 +4752,7 @@ unsafe fn win_update_body_finalize(
     }
 
     // Terminal resize if nrwidth changed.
-    if st.nrwidth_before != nvim_win_get_nrwidth(wp) && nvim_buf_has_terminal(buf) {
+    if st.nrwidth_before != win_ref(wp).w_nrwidth && nvim_buf_has_terminal(buf) {
         nvim_buf_terminal_check_size(buf);
     }
 }
@@ -4789,25 +4768,33 @@ unsafe fn win_update_body_finalize(
 /// Must be called with a valid, non-null `wp` during screen update.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_update(wp: WinHandle) {
-    let type_ = nvim_win_get_redr_type(wp);
+    let type_ = win_ref(wp).w_redr_type;
     if type_ >= UPD_NOT_VALID {
-        nvim_win_set_redr_status(wp, 1);
-        nvim_win_set_lines_valid(wp, 0);
+        {
+            win_mut(wp).w_redr_status = (1) != 0;
+        };
+        {
+            win_mut(wp).w_lines_valid = 0;
+        };
     }
 
     // Window is zero-height: only draw horizontal separator.
-    if nvim_win_get_view_height(wp) == 0 {
+    if win_ref(wp).w_view_height == 0 {
         rs_draw_hsep_win(wp);
         rs_draw_sep_connectors_win(wp);
-        nvim_win_set_redr_type(wp, 0);
+        {
+            win_mut(wp).w_redr_type = 0;
+        };
         return;
     }
 
     // Window is zero-width: only draw vertical separator.
-    if nvim_win_get_view_width(wp) == 0 {
+    if win_ref(wp).w_view_width == 0 {
         rs_draw_vsep_win(wp);
         rs_draw_sep_connectors_win(wp);
-        nvim_win_set_redr_type(wp, 0);
+        {
+            win_mut(wp).w_redr_type = 0;
+        };
         return;
     }
 
@@ -4845,7 +4832,7 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
     while !wp.is_null() {
         update_window_hl(wp, type_ >= UPD_NOT_VALID || hl_changed != 0);
 
-        let buf = nvim_win_get_buffer(wp);
+        let buf = BufHandle(win_ref(wp).w_buffer);
         if nvim_buf_get_mod_set(buf) != 0 {
             if nvim_buf_get_mod_tick_syn(buf) < tick && syntax_present(wp) {
                 syn_stack_apply_changes(buf);
@@ -4856,7 +4843,7 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
                 nvim_buf_set_mod_tick_decor(buf, tick);
             }
         }
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 
     // Clear any stale search hl state before the draw pass
@@ -4867,20 +4854,22 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
     // Pass 2: grid alloc + border + win_update + status
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
-        let redr_type = nvim_win_get_redr_type(wp);
+        let redr_type = win_ref(wp).w_redr_type;
         if redr_type == UPD_CLEAR
-            && nvim_win_get_floating(wp) != 0
+            && c_int::from(win_ref(wp).w_floating) != 0
             && nvim_win_get_grid_alloc_chars(wp)
         {
             nvim_win_grid_alloc_invalidate(wp);
-            nvim_win_set_redr_type(wp, UPD_NOT_VALID);
+            {
+                win_mut(wp).w_redr_type = UPD_NOT_VALID;
+            };
         }
 
         nvim_win_check_ns_hl(wp);
         win_grid_alloc(wp);
 
-        let redr_type = nvim_win_get_redr_type(wp);
-        let redr_border = nvim_win_get_redr_border(wp);
+        let redr_type = win_ref(wp).w_redr_type;
+        let redr_border = c_int::from(win_ref(wp).w_redr_border);
         if redr_border != 0 || redr_type >= UPD_NOT_VALID {
             nvim_win_draw_border(wp);
         }
@@ -4893,12 +4882,12 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
             rs_win_update(wp);
         }
 
-        if nvim_win_get_redr_status(wp) != 0 {
+        if c_int::from(win_ref(wp).w_redr_status) != 0 {
             nvim_win_redr_winbar(wp);
             nvim_win_redr_status(wp);
         }
 
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 
     rs_end_search_hl();
@@ -4913,9 +4902,9 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
     // Pass 3: reset b_mod_set
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
-        let buf = nvim_win_get_buffer(wp);
+        let buf = BufHandle(win_ref(wp).w_buffer);
         nvim_buf_set_mod_set(buf, 0);
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 }
 
@@ -5192,15 +5181,11 @@ extern "C" {
         vis_coladd: i32,
     );
     /// Get w_virtcol for the window.
-    fn nvim_win_get_virtcol(wp: WinHandle) -> c_int;
     /// Get w_topfill for the window.
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
     /// Get b_ml.ml_line_count for window's buffer.
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
     /// Get w_cursor.col for window.
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
     /// Get w_cursor.coladd for window.
-    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> c_int;
     /// Return 1 if global p_wbr is empty/NUL.
     fn nvim_get_p_wbr_empty() -> c_int;
     /// Return 1 if window's w_p_wbr is empty/NUL.
@@ -5242,13 +5227,13 @@ pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
     let stl_vis_coladd = nvim_curwin_get_stl_vis_coladd();
 
     let vis_active = nvim_VIsual_active() != 0;
-    let cur_lnum = nvim_win_get_cursor_lnum(curwin);
-    let cur_col = nvim_win_get_cursor_col(curwin);
-    let cur_coladd = nvim_win_get_cursor_coladd(curwin);
-    let cur_virtcol = nvim_win_get_virtcol(curwin);
-    let cur_topline = nvim_win_get_topline(curwin);
+    let cur_lnum = win_ref(curwin).w_cursor.lnum;
+    let cur_col = win_ref(curwin).w_cursor.col;
+    let cur_coladd = win_ref(curwin).w_cursor.coladd;
+    let cur_virtcol = win_ref(curwin).w_virtcol;
+    let cur_topline = win_ref(curwin).w_topline;
     let cur_line_count = nvim_win_buf_line_count(curwin);
-    let cur_topfill = nvim_win_get_topfill(curwin);
+    let cur_topfill = win_ref(curwin).w_topfill;
 
     let mut vis_lnum = 0i32;
     let mut vis_col = 0i32;
@@ -5275,13 +5260,17 @@ pub unsafe extern "C" fn rs_show_cursor_info_later(force: bool) {
                 || vis_coladd != stl_vis_coladd));
 
     if changed {
-        if nvim_win_get_status_height(curwin) != 0 || global_stl_height() != 0 {
-            nvim_win_set_redr_status(curwin, 1);
+        if win_ref(curwin).w_status_height != 0 || global_stl_height() != 0 {
+            {
+                win_mut(curwin).w_redr_status = (1) != 0;
+            };
         } else {
             nvim_set_redraw_cmdline(true);
         }
         if nvim_get_p_wbr_empty() == 0 || nvim_win_get_p_wbr_empty(curwin) == 0 {
-            nvim_win_set_redr_status(curwin, 1);
+            {
+                win_mut(curwin).w_redr_status = (1) != 0;
+            };
         }
         rs_redraw_custom_title_later();
     }

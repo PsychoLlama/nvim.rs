@@ -30,6 +30,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use nvim_buffer::BufHandle;
+use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
 
 /// Line number type (matches linenr_T in C).
@@ -238,7 +239,6 @@ extern "C" {
     fn nvim_win_get_fdm_char(wp: WinHandle, idx: c_int) -> c_char;
 
     /// Get the w_p_fen (foldenable) field from a window.
-    fn nvim_win_get_p_fen(wp: WinHandle) -> c_int;
 
     /// Check if window's buffer has a terminal.
     fn nvim_win_buf_has_terminal(wp: WinHandle) -> c_int;
@@ -285,7 +285,6 @@ extern "C" {
 
     /// Get the w_foldinvalid field from a window (reserved for future use).
     #[allow(dead_code)]
-    fn nvim_win_get_w_foldinvalid(wp: WinHandle) -> bool;
 
     /// Set the fd_flags field of a fold.
     fn nvim_fold_set_fd_flags(fp: FoldHandle, flags: c_int);
@@ -322,7 +321,6 @@ extern "C" {
     // ========================================================================
 
     /// Get the w_lines_valid field from a window.
-    fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
 
     /// Get a wline_T pointer at index in a window's w_lines array.
     fn nvim_win_get_wl_entry(wp: WinHandle, idx: c_int) -> WlineHandle;
@@ -372,7 +370,6 @@ extern "C" {
     fn nvim_fold_copy(dst: FoldHandle, src: FoldHandle);
 
     /// Get the buffer from a window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 
     /// Free the ga_data pointer of a garray (for nested folds).
     fn nvim_ga_free_data(gap: GArrayHandle);
@@ -385,10 +382,8 @@ extern "C" {
     // ========================================================================
 
     /// Get the w_fold_manual field from a window.
-    fn nvim_win_get_w_fold_manual(wp: WinHandle) -> c_int;
 
     /// Set the w_fold_manual field in a window.
-    fn nvim_win_set_w_fold_manual(wp: WinHandle, val: bool);
 
     /// Call changed_window_setting for a window.
     fn changed_window_setting(wp: WinHandle);
@@ -397,16 +392,13 @@ extern "C" {
     fn nvim_emsg_nofold();
 
     /// Get the w_p_scb (scrollbind) field from a window.
-    fn nvim_win_get_p_scb(wp: WinHandle) -> bool;
 
     /// Get the cursor lnum from a window.
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LineNr;
 
     /// Get the first window in the current tab.
     fn nvim_get_first_win_in_tab() -> WinHandle;
 
     /// Get the next window in a tab (from w_next).
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 
     /// Wrapper for diff_lnum_win.
     #[link_name = "rs_diff_lnum_win"]
@@ -554,7 +546,7 @@ fn has_any_folding_impl(win: WinHandle) -> bool {
         }
 
         // Check: win->w_p_fen (foldenable)
-        let fold_enabled = nvim_win_get_p_fen(win) != 0;
+        let fold_enabled = win_ref(win).w_p_fen() != 0;
         if !fold_enabled {
             return false;
         }
@@ -723,7 +715,7 @@ fn find_wl_entry_impl(win: WinHandle, lnum: LineNr) -> c_int {
         return -1;
     }
 
-    let lines_valid = unsafe { nvim_win_get_lines_valid(win) };
+    let lines_valid = unsafe { win_ref(win).w_lines_valid };
 
     for i in 0..lines_valid {
         let wl = unsafe { nvim_win_get_wl_entry(win, i) };
@@ -1728,7 +1720,7 @@ pub(crate) fn fold_remove_impl(wp: WinHandle, gap: GArrayHandle, top: LineNr, bo
         return;
     }
 
-    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
 
     loop {
         let len = unsafe { nvim_ga_len(gap) };
@@ -2286,7 +2278,7 @@ fn set_manual_fold_win_impl(
                 }
             }
         }
-        unsafe { nvim_win_set_w_fold_manual(wp, true) };
+        unsafe { win_mut(wp).w_fold_manual = true };
         if done & done_flags::DONE_ACTION != 0 {
             unsafe { changed_window_setting(wp) };
         }
@@ -2335,19 +2327,20 @@ fn set_manual_fold_impl(
     let curwin = unsafe { nvim_get_curwin() };
 
     // Check if in diff mode with scrollbind
-    if foldmethod_is_diff_impl(curwin) && unsafe { nvim_win_get_p_scb(curwin) } {
-        let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+    if foldmethod_is_diff_impl(curwin) && unsafe { win_ref(curwin).w_p_scb() != 0 } {
+        let cursor_lnum = unsafe { win_ref(curwin).w_cursor.lnum };
 
         // Do the same operation in other windows in diff mode.
         let mut wp = unsafe { nvim_get_first_win_in_tab() };
         while !wp.is_null() {
-            if wp != curwin && foldmethod_is_diff_impl(wp) && unsafe { nvim_win_get_p_scb(wp) } {
+            if wp != curwin && foldmethod_is_diff_impl(wp) && unsafe { win_ref(wp).w_p_scb() != 0 }
+            {
                 let dlnum = unsafe { nvim_diff_lnum_win(cursor_lnum, wp) };
                 if dlnum != 0 {
                     set_manual_fold_win_impl(wp, dlnum, opening, recurse, std::ptr::null_mut());
                 }
             }
-            wp = unsafe { nvim_win_get_next(wp) };
+            wp = unsafe { win_ref(wp).w_next };
         }
     }
 
@@ -2362,7 +2355,7 @@ fn new_fold_level_win_impl(wp: WinHandle) {
 
     checkupdate_impl(wp);
 
-    let w_fold_manual = unsafe { nvim_win_get_w_fold_manual(wp) };
+    let w_fold_manual = unsafe { c_int::from(win_ref(wp).w_fold_manual) };
     if w_fold_manual != 0 {
         // Set all flags for the first level of folds to FD_LEVEL.
         unsafe {
@@ -2374,7 +2367,7 @@ fn new_fold_level_win_impl(wp: WinHandle) {
                     nvim_fold_set_fd_flags(fp, fold_flags::FD_LEVEL);
                 }
             }
-            nvim_win_set_w_fold_manual(wp, false);
+            win_mut(wp).w_fold_manual = false;
         }
     }
 
@@ -2387,17 +2380,18 @@ fn new_fold_level_impl() {
     new_fold_level_win_impl(curwin);
 
     // If in diff mode with scrollbind, set the same foldlevel in other windows
-    if foldmethod_is_diff_impl(curwin) && unsafe { nvim_win_get_p_scb(curwin) } {
+    if foldmethod_is_diff_impl(curwin) && unsafe { win_ref(curwin).w_p_scb() != 0 } {
         let fdl = unsafe { nvim_win_get_p_fdl(curwin) };
 
         let mut wp = unsafe { nvim_get_first_win_in_tab() };
         while !wp.is_null() {
-            if wp != curwin && foldmethod_is_diff_impl(wp) && unsafe { nvim_win_get_p_scb(wp) } {
+            if wp != curwin && foldmethod_is_diff_impl(wp) && unsafe { win_ref(wp).w_p_scb() != 0 }
+            {
                 // Set w_p_fdl
                 unsafe { nvim_win_set_p_fdl(wp, fdl) };
                 new_fold_level_win_impl(wp);
             }
-            wp = unsafe { nvim_win_get_next(wp) };
+            wp = unsafe { win_ref(wp).w_next };
         }
     }
 }
@@ -2479,9 +2473,6 @@ extern "C" {
     /// Check if a garray is empty.
     fn nvim_ga_is_empty(gap: GArrayHandle) -> bool;
 
-    /// Set the w_foldinvalid field in a window.
-    fn nvim_win_set_w_foldinvalid(wp: WinHandle, val: bool);
-
 }
 
 /// Deep copy a garray of folds.
@@ -2542,12 +2533,12 @@ fn copy_folding_state_impl(wp_from: WinHandle, wp_to: WinHandle) {
 
     unsafe {
         // Copy w_fold_manual
-        let fold_manual = nvim_win_get_w_fold_manual(wp_from);
-        nvim_win_set_w_fold_manual(wp_to, fold_manual != 0);
+        let fold_manual = c_int::from(win_ref(wp_from).w_fold_manual);
+        win_mut(wp_to).w_fold_manual = fold_manual != 0;
 
         // Copy w_foldinvalid
-        let foldinvalid = nvim_win_get_w_foldinvalid(wp_from);
-        nvim_win_set_w_foldinvalid(wp_to, foldinvalid);
+        let foldinvalid = win_ref(wp_from).w_foldinvalid;
+        win_mut(wp_to).w_foldinvalid = foldinvalid;
 
         // Clone the folds
         let from_folds = nvim_win_get_folds(wp_from);
@@ -2564,7 +2555,7 @@ fn clear_folding_impl(win: WinHandle) {
 
     let folds = unsafe { nvim_win_get_folds(win) };
     delete_fold_recurse_impl(folds);
-    unsafe { nvim_win_set_w_foldinvalid(win, false) };
+    unsafe { win_mut(win).w_foldinvalid = false };
 }
 
 // ============================================================================
@@ -2625,7 +2616,7 @@ fn fold_update_all_impl(win: WinHandle) {
     }
 
     unsafe {
-        nvim_win_set_w_foldinvalid(win, true);
+        win_mut(win).w_foldinvalid = true;
         nvim_redraw_later(win, UPD_NOT_VALID);
     }
 }
@@ -2768,10 +2759,8 @@ extern "C" {
     fn nvim_set_VIsual_col(col: c_int);
 
     /// Set cursor lnum in window.
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LineNr);
 
     /// Set cursor col in window.
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: ColNr);
 
     /// Get length of line.
     fn ml_get_len(lnum: LineNr) -> ColNr;
@@ -2792,10 +2781,10 @@ fn fold_adjust_cursor_impl(wp: WinHandle) {
         return;
     }
 
-    let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(wp) };
+    let cursor_lnum = unsafe { win_ref(wp).w_cursor.lnum };
     let result = has_folding_win_impl(wp, cursor_lnum, true);
     if result.has_folding != 0 {
-        unsafe { nvim_win_set_cursor_lnum(wp, result.first) };
+        unsafe { win_mut(wp).w_cursor.lnum = result.first };
     }
 }
 
@@ -2810,7 +2799,7 @@ fn fold_adjust_visual_impl() {
 
     // Determine start and end positions
     let visual_lnum = LineNr::from(unsafe { nvim_get_VIsual_lnum() });
-    let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+    let cursor_lnum = unsafe { win_ref(curwin).w_cursor.lnum };
 
     // Check which is start vs end (ltoreq comparison)
     let (start_lnum, end_lnum, start_is_visual) = if visual_lnum <= cursor_lnum {
@@ -2832,8 +2821,8 @@ fn fold_adjust_visual_impl() {
                 }
             } else {
                 unsafe {
-                    nvim_win_set_cursor_lnum(curwin, first_lnum);
-                    nvim_win_set_cursor_col(curwin, 0);
+                    win_mut(curwin).w_cursor.lnum = first_lnum;
+                    win_mut(curwin).w_cursor.col = 0;
                 }
             }
         }
@@ -2859,8 +2848,8 @@ fn fold_adjust_visual_impl() {
     if start_is_visual {
         // end is cursor
         unsafe {
-            nvim_win_set_cursor_lnum(curwin, last_lnum);
-            nvim_win_set_cursor_col(curwin, end_col);
+            win_mut(curwin).w_cursor.lnum = last_lnum;
+            win_mut(curwin).w_cursor.col = end_col;
         }
     } else {
         // end is VIsual
@@ -2919,7 +2908,7 @@ fn fold_move_to_impl(updown: bool, dir: c_int, count: c_int) -> c_int {
 
         let mut use_level = false;
         let mut maybe_small = false;
-        let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+        let cursor_lnum = unsafe { win_ref(curwin).w_cursor.lnum };
         let mut lnum_found = cursor_lnum;
         let mut level: c_int = 0;
         let mut last = false;
@@ -3062,8 +3051,8 @@ fn fold_move_to_impl(updown: bool, dir: c_int, count: c_int) -> c_int {
             unsafe { setpcmark() };
         }
         unsafe {
-            nvim_win_set_cursor_lnum(curwin, lnum_found);
-            nvim_win_set_cursor_col(curwin, 0);
+            win_mut(curwin).w_cursor.lnum = lnum_found;
+            win_mut(curwin).w_cursor.col = 0;
         }
         retval = OK;
     }
@@ -3324,7 +3313,7 @@ fn fold_create_impl(wp: WinHandle, mut start_lnum: LineNr, mut end_lnum: LineNr)
         set_fold_repeat_impl(start_lnum, 1, false);
     }
     if !use_level {
-        unsafe { nvim_win_set_w_fold_manual(wp, true) };
+        unsafe { win_mut(wp).w_fold_manual = true };
     }
 
     // Redraw
@@ -3423,13 +3412,13 @@ fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, 
         unsafe { nvim_emsg_nofold() };
         // Force a redraw to remove the Visual highlighting.
         if had_visual {
-            let buf = unsafe { nvim_win_get_buffer(wp) };
+            let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
             unsafe { redraw_buf_later(buf, UPD_INVERTED) };
         }
     }
 
     if last_lnum > 0 {
-        let buf = unsafe { nvim_win_get_buffer(wp) };
+        let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
         unsafe { nvim_changed_lines(buf, first_lnum, 0, last_lnum, 0, false) };
 
         // send one nvim_buf_lines_event at the end
@@ -3504,7 +3493,7 @@ fn fold_open_cursor_impl() {
 
     loop {
         let mut done: c_int = done_flags::DONE_NOTHING;
-        let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+        let cursor_lnum = unsafe { win_ref(curwin).w_cursor.lnum };
         set_manual_fold_win_impl(curwin, cursor_lnum, true, false, &raw mut done);
         if done & done_flags::DONE_ACTION == 0 {
             break;
@@ -3579,12 +3568,12 @@ pub(crate) fn checkupdate_impl(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let foldinvalid = unsafe { nvim_win_get_w_foldinvalid(wp) };
+    let foldinvalid = unsafe { win_ref(wp).w_foldinvalid };
     if !foldinvalid {
         return;
     }
     update::fold_update_impl(wp, 1, MAXLNUM);
-    unsafe { nvim_win_set_w_foldinvalid(wp, false) };
+    unsafe { win_mut(wp).w_foldinvalid = false };
 }
 
 /// Get fold level at line number "lnum" in the current window.
@@ -3652,7 +3641,7 @@ fn fold_check_close_impl() {
     checkupdate_impl(curwin);
 
     let gap = unsafe { nvim_win_get_folds(curwin) };
-    let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+    let cursor_lnum = unsafe { win_ref(curwin).w_cursor.lnum };
     let fdl = unsafe { nvim_win_get_p_fdl(curwin) };
 
     if check_close_rec_impl(gap, cursor_lnum, fdl) {

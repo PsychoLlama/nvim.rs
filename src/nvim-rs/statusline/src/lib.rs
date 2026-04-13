@@ -10,6 +10,7 @@
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::io::Write;
 
+use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::{BufHandle, Frame, WinHandle, FR_COL};
 
 pub mod builder;
@@ -205,16 +206,9 @@ extern "C" {
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
     fn nvim_win_get_fcs_stl(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_stlnc(wp: WinHandle) -> ScharT;
-    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
     fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
     fn nvim_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
-    fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
-    fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
 
     // Buffer accessors for statusline rendering
     fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
@@ -224,16 +218,6 @@ extern "C" {
     fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
     fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
 
-    // Cursor info accessors (for get_win_cursor_info)
-    #[link_name = "nvim_win_get_cursor_lnum"]
-    fn lib_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    #[link_name = "nvim_win_get_cursor_col"]
-    fn lib_win_get_cursor_col(wp: WinHandle) -> c_int;
-    #[link_name = "nvim_win_set_cursor_lnum"]
-    fn lib_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
-    #[link_name = "nvim_win_set_cursor_col"]
-    fn lib_win_set_cursor_col(wp: WinHandle, col: c_int);
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
     fn nvim_buf_get_ml_flags(buf: BufHandle) -> c_int;
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> c_int;
@@ -262,28 +246,28 @@ pub(crate) unsafe fn get_win_cursor_info(wp: WinHandle) -> crate::stl_build::Stl
         return info;
     }
 
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle::from_ptr(win_ref(wp).w_buffer);
     if buf.is_null() {
         return info;
     }
 
     let line_count = nvim_buf_get_ml_line_count(buf);
-    let mut lnum = lib_win_get_cursor_lnum(wp);
+    let mut lnum = win_ref(wp).w_cursor.lnum;
 
     // Clamp cursor lnum to line count
     if lnum > line_count {
         lnum = line_count;
-        lib_win_set_cursor_lnum(wp, lnum);
+        win_mut(wp).w_cursor.lnum = lnum;
     }
 
     // Clamp cursor col to line length
     let linelen = nvim_ml_get_buf_len(buf, lnum);
-    let col = lib_win_get_cursor_col(wp);
+    let col = win_ref(wp).w_cursor.col;
     if col > linelen {
-        lib_win_set_cursor_col(wp, linelen);
-        nvim_win_set_cursor_coladd(wp, 0);
+        win_mut(wp).w_cursor.col = linelen;
+        win_mut(wp).w_cursor.coladd = 0;
     }
-    let col = lib_win_get_cursor_col(wp);
+    let col = win_ref(wp).w_cursor.col;
 
     info.clamped_lnum = lnum;
     // cursor_invalid: lnum > line_count before clamping (already clamped, check original)
@@ -490,10 +474,10 @@ fn get_rel_pos_impl(wp: WinHandle) -> RelativePosition {
     }
 
     unsafe {
-        let topline = nvim_win_get_topline(wp);
-        let botline = nvim_win_get_botline(wp);
+        let topline = win_ref(wp).w_topline;
+        let botline = win_ref(wp).w_botline;
         let line_count = nvim_win_buf_line_count(wp);
-        let topfill = nvim_win_get_topfill(wp);
+        let topfill = win_ref(wp).w_topfill;
 
         // Calculate lines above the window
         let mut above = topline - 1;
@@ -600,8 +584,8 @@ fn stl_append_arg_number_impl(buf: &mut [u8], wp: WinHandle) -> c_int {
             return 0;
         }
 
-        let arg_idx = nvim_win_get_arg_idx(wp);
-        let arg_idx_invalid = nvim_win_get_arg_idx_invalid(wp) != 0;
+        let arg_idx = win_ref(wp).w_arg_idx;
+        let arg_idx_invalid = win_ref(wp).w_arg_idx_invalid != 0;
 
         let mut cursor = std::io::Cursor::new(buf);
         let result = if arg_idx_invalid {
@@ -779,7 +763,7 @@ fn stl_render_filename_impl(buf: &mut [u8], wp: WinHandle, ftype: StlFilenameTyp
     }
 
     unsafe {
-        let buf_handle = nvim_win_get_buffer(wp);
+        let buf_handle = BufHandle::from_ptr(win_ref(wp).w_buffer);
         if buf_handle.is_null() {
             return 0;
         }
@@ -824,7 +808,7 @@ fn stl_render_modified_impl(buf: &mut [u8], wp: WinHandle, short: bool) -> c_int
     }
 
     unsafe {
-        let buf_handle = nvim_win_get_buffer(wp);
+        let buf_handle = BufHandle::from_ptr(win_ref(wp).w_buffer);
         if buf_handle.is_null() {
             return 0;
         }
@@ -858,7 +842,7 @@ fn stl_render_readonly_impl(buf: &mut [u8], wp: WinHandle, short: bool) -> c_int
     }
 
     unsafe {
-        let buf_handle = nvim_win_get_buffer(wp);
+        let buf_handle = BufHandle::from_ptr(win_ref(wp).w_buffer);
         if buf_handle.is_null() {
             return 0;
         }
@@ -885,7 +869,7 @@ fn stl_render_filetype_impl(buf: &mut [u8], wp: WinHandle, bracketed: bool) -> c
     }
 
     unsafe {
-        let buf_handle = nvim_win_get_buffer(wp);
+        let buf_handle = BufHandle::from_ptr(win_ref(wp).w_buffer);
         if buf_handle.is_null() {
             return 0;
         }
@@ -924,7 +908,7 @@ fn stl_render_line_col_impl(buf: &mut [u8], wp: WinHandle, show_total: bool) -> 
     }
 
     unsafe {
-        let lnum = nvim_win_get_cursor_lnum(wp);
+        let lnum = win_ref(wp).w_cursor.lnum;
         let line_count = nvim_win_buf_line_count(wp);
 
         let mut cursor = std::io::Cursor::new(buf);
@@ -952,7 +936,7 @@ fn stl_render_percentage_impl(buf: &mut [u8], wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let lnum = nvim_win_get_cursor_lnum(wp);
+        let lnum = win_ref(wp).w_cursor.lnum;
         let line_count = nvim_win_buf_line_count(wp);
 
         // Calculate percentage using the same formula as calc_percentage
@@ -2129,8 +2113,8 @@ pub unsafe extern "C" fn rs_stl_eval_arglist_status(
         return 0;
     }
 
-    let arg_idx = nvim_win_get_arg_idx(wp);
-    let arg_idx_invalid = nvim_win_get_arg_idx_invalid(wp) != 0;
+    let arg_idx = win_ref(wp).w_arg_idx;
+    let arg_idx_invalid = win_ref(wp).w_arg_idx_invalid != 0;
 
     let mut cursor = std::io::Cursor::new(std::slice::from_raw_parts_mut(buf, buflen));
 
@@ -2358,14 +2342,10 @@ extern "C" {
     #[link_name = "rs_global_stl_height"]
     fn nvim_global_stl_height() -> c_int;
     fn nvim_stl_wildmenu_blocking() -> c_int;
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
     fn nvim_set_redraw_cmdline(val: bool);
     fn nvim_redrawing() -> c_int;
     fn nvim_stl_win_get_p_stl(wp: WinHandle) -> *const c_char;
     static mut p_stl: *const c_char;
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_fcs_vert(wp: WinHandle) -> ScharT;
     fn nvim_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
     fn nvim_get_default_gridview() -> GridViewHandle;
@@ -2374,7 +2354,6 @@ extern "C" {
     fn rs_grid_line_start(view: GridViewHandle, row: c_int);
     fn rs_grid_line_put_schar(col: c_int, schar: ScharT, attr: c_int);
     fn rs_grid_line_flush();
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
     static mut p_wbr: *const c_char;
     fn nvim_win_get_p_wbr(wp: WinHandle) -> *const c_char;
 }
@@ -2408,20 +2387,20 @@ pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
     }
 
     BUSY.with(|b| b.set(true));
-    nvim_win_set_redr_status(wp, 0);
+    win_mut(wp).w_redr_status = false;
 
-    if nvim_win_get_status_height(wp) == 0 && !(is_stl_global && nvim_win_is_curwin(wp) != 0) {
+    if win_ref(wp).w_status_height == 0 && !(is_stl_global && nvim_win_is_curwin(wp) != 0) {
         // no status line, either global statusline is enabled or the window is a last window
         nvim_set_redraw_cmdline(true);
     } else if nvim_redrawing() == 0 {
         // Don't redraw right now, do it later. Don't update status line when
         // popup menu is visible and may be drawn over it
-        nvim_win_set_redr_status(wp, 1);
+        win_mut(wp).w_redr_status = (1) != 0;
     } else {
         let w_p_stl = nvim_stl_win_get_p_stl(wp);
         let has_custom_stl = !w_p_stl.is_null() && *w_p_stl != 0;
         let has_global_stl = !p_stl.is_null() && *p_stl != 0;
-        let is_floating = nvim_win_get_floating(wp) != 0;
+        let is_floating = c_int::from(win_ref(wp).w_floating) != 0;
         let is_curwin = nvim_win_is_curwin(wp) != 0;
 
         if has_custom_stl || (has_global_stl && (!is_floating || (is_stl_global && is_curwin))) {
@@ -2432,10 +2411,7 @@ pub unsafe extern "C" fn rs_win_redr_status(wp: WinHandle) {
 
     // May need to draw the character below the vertical separator.
     let mut group: c_int = HLF_C;
-    if nvim_win_get_vsep_width(wp) != 0
-        && nvim_win_get_status_height(wp) != 0
-        && nvim_redrawing() != 0
-    {
+    if win_ref(wp).w_vsep_width != 0 && win_ref(wp).w_status_height != 0 && nvim_redrawing() != 0 {
         let fillchar = if rs_stl_connected(wp) != 0 {
             rs_fillchar_status(&raw mut group, wp)
         } else {
@@ -2480,7 +2456,7 @@ pub unsafe extern "C" fn rs_win_redr_winbar(wp: WinHandle) {
         return;
     }
 
-    if nvim_win_get_winbar_height(wp) != 0 && nvim_redrawing() != 0 {
+    if win_ref(wp).w_winbar_height != 0 && nvim_redrawing() != 0 {
         let w_p_wbr = nvim_win_get_p_wbr(wp);
         let has_global_wbr = !p_wbr.is_null() && *p_wbr != 0;
         let has_win_wbr = !w_p_wbr.is_null() && *w_p_wbr != 0;

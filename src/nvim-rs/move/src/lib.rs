@@ -21,6 +21,7 @@
 use std::ffi::c_int;
 
 use nvim_fold::WlineHandle;
+use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
 
 // Re-export validity flags from viewport crate for convenience
@@ -47,37 +48,17 @@ extern "C" {
     static Rows: c_int;
     static Columns: c_int;
     // Window validity flags
-    fn nvim_win_get_valid(wp: WinHandle) -> c_int;
-    fn nvim_win_set_valid(wp: WinHandle, val: c_int);
     fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
 
     // Cursor position
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> ColnrT;
 
     // Valid cursor tracking
-    fn nvim_win_get_valid_cursor_lnum(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_valid_cursor_col(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_valid_cursor_coladd(wp: WinHandle) -> ColnrT;
-    fn nvim_win_set_valid_cursor(wp: WinHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
-    fn nvim_win_set_valid_cursor_col(wp: WinHandle, col: ColnrT);
-    fn nvim_win_set_valid_cursor_coladd(wp: WinHandle, coladd: ColnrT);
 
     // Scroll positions
-    fn nvim_win_get_leftcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_valid_leftcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_valid_skipcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_set_valid_leftcol(wp: WinHandle, val: ColnrT);
-    fn nvim_win_set_valid_skipcol(wp: WinHandle, val: ColnrT);
 
     // Viewport state
-    fn nvim_win_get_viewport_invalid(wp: WinHandle) -> c_int;
-    fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
 
     // Concealment checking
-    fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     #[link_name = "conceal_cursor_line"]
     fn rs_conceal_cursor_line(wp: WinHandle) -> bool;
@@ -86,28 +67,12 @@ extern "C" {
     fn rs_changed_window_setting(wp: WinHandle);
 
     // Topline/botline
-    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
 
     // Cursor row/height info
-    fn nvim_win_get_cline_row(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cline_row(wp: WinHandle, val: c_int);
-    fn nvim_win_get_cline_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cline_height(wp: WinHandle, val: c_int);
-    fn nvim_win_get_cline_folded(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cline_folded(wp: WinHandle, val: c_int);
 
     // Window options
-    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
 
     // Curswant tracking
-    fn nvim_win_get_curswant(wp: WinHandle) -> ColnrT;
-    fn nvim_win_set_curswant(wp: WinHandle, val: ColnrT);
-    fn nvim_win_get_set_curswant(wp: WinHandle) -> c_int;
-    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
-    fn nvim_win_get_virtcol(wp: WinHandle) -> ColnrT;
 
     // Current window accessor
     fn nvim_get_curwin() -> WinHandle;
@@ -150,8 +115,8 @@ pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
         return;
     }
 
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let valid_cursor_lnum = nvim_win_get_valid_cursor_lnum(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let valid_cursor_lnum = win_ref(wp).w_valid_cursor.lnum;
 
     if cursor_lnum != valid_cursor_lnum {
         // Line changed - major invalidation
@@ -159,7 +124,7 @@ pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
 
         // Check for concealed line visibility toggle
         let is_curwin = nvim_win_is_curwin(wp) != 0;
-        let p_cole = nvim_win_get_p_cole(wp);
+        let p_cole = win_ref(wp).w_p_cole();
         let conceal_cursor = rs_conceal_cursor_line(wp);
 
         if is_curwin && valid_cursor_lnum > 0 && p_cole >= 2 && !conceal_cursor {
@@ -172,37 +137,47 @@ pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
         }
 
         // Update tracking state
-        let cursor_col = nvim_win_get_cursor_col(wp);
-        let cursor_coladd = nvim_win_get_cursor_coladd(wp);
-        let leftcol = nvim_win_get_leftcol(wp);
-        let skipcol = nvim_win_get_skipcol(wp);
+        let cursor_col = win_ref(wp).w_cursor.col;
+        let cursor_coladd = win_ref(wp).w_cursor.coladd;
+        let leftcol = win_ref(wp).w_leftcol;
+        let skipcol = win_ref(wp).w_skipcol;
 
-        nvim_win_set_valid_cursor(wp, cursor_lnum, cursor_col, cursor_coladd);
-        nvim_win_set_valid_leftcol(wp, leftcol);
-        nvim_win_set_valid_skipcol(wp, skipcol);
-        nvim_win_set_viewport_invalid(wp, 1);
+        {
+            let _ws = win_mut(wp);
+            _ws.w_valid_cursor.lnum = cursor_lnum;
+            _ws.w_valid_cursor.col = cursor_col;
+            _ws.w_valid_cursor.coladd = cursor_coladd;
+        };
+        win_mut(wp).w_valid_leftcol = leftcol;
+        win_mut(wp).w_valid_skipcol = skipcol;
+        win_mut(wp).w_viewport_invalid = 1 != 0;
     } else {
-        let skipcol = nvim_win_get_skipcol(wp);
-        let valid_skipcol = nvim_win_get_valid_skipcol(wp);
+        let skipcol = win_ref(wp).w_skipcol;
+        let valid_skipcol = win_ref(wp).w_valid_skipcol;
 
         if skipcol != valid_skipcol {
             // Skipcol changed
             nvim_win_clear_valid_bits(wp, VALID_SKIPCOL_CHANGE);
 
-            let cursor_col = nvim_win_get_cursor_col(wp);
-            let cursor_coladd = nvim_win_get_cursor_coladd(wp);
-            let leftcol = nvim_win_get_leftcol(wp);
+            let cursor_col = win_ref(wp).w_cursor.col;
+            let cursor_coladd = win_ref(wp).w_cursor.coladd;
+            let leftcol = win_ref(wp).w_leftcol;
 
-            nvim_win_set_valid_cursor(wp, cursor_lnum, cursor_col, cursor_coladd);
-            nvim_win_set_valid_leftcol(wp, leftcol);
-            nvim_win_set_valid_skipcol(wp, skipcol);
+            {
+                let _ws = win_mut(wp);
+                _ws.w_valid_cursor.lnum = cursor_lnum;
+                _ws.w_valid_cursor.col = cursor_col;
+                _ws.w_valid_cursor.coladd = cursor_coladd;
+            };
+            win_mut(wp).w_valid_leftcol = leftcol;
+            win_mut(wp).w_valid_skipcol = skipcol;
         } else {
-            let cursor_col = nvim_win_get_cursor_col(wp);
-            let cursor_coladd = nvim_win_get_cursor_coladd(wp);
-            let leftcol = nvim_win_get_leftcol(wp);
-            let valid_cursor_col = nvim_win_get_valid_cursor_col(wp);
-            let valid_cursor_coladd = nvim_win_get_valid_cursor_coladd(wp);
-            let valid_leftcol = nvim_win_get_valid_leftcol(wp);
+            let cursor_col = win_ref(wp).w_cursor.col;
+            let cursor_coladd = win_ref(wp).w_cursor.coladd;
+            let leftcol = win_ref(wp).w_leftcol;
+            let valid_cursor_col = win_ref(wp).w_valid_cursor.col;
+            let valid_cursor_coladd = win_ref(wp).w_valid_cursor.coladd;
+            let valid_leftcol = win_ref(wp).w_valid_leftcol;
 
             if cursor_col != valid_cursor_col
                 || leftcol != valid_leftcol
@@ -210,10 +185,10 @@ pub unsafe extern "C" fn rs_check_cursor_moved(wp: WinHandle) {
             {
                 // Column changed
                 nvim_win_clear_valid_bits(wp, VALID_COL_CHANGE);
-                nvim_win_set_valid_cursor_col(wp, cursor_col);
-                nvim_win_set_valid_leftcol(wp, leftcol);
-                nvim_win_set_valid_cursor_coladd(wp, cursor_coladd);
-                nvim_win_set_viewport_invalid(wp, 1);
+                win_mut(wp).w_valid_cursor.col = cursor_col;
+                win_mut(wp).w_valid_leftcol = leftcol;
+                win_mut(wp).w_valid_cursor.coladd = cursor_coladd;
+                win_mut(wp).w_viewport_invalid = 1 != 0;
             }
         }
     }
@@ -235,7 +210,7 @@ pub unsafe extern "C" fn rs_cursor_valid(wp: WinHandle) -> c_int {
     }
 
     rs_check_cursor_moved(wp);
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     c_int::from((valid & (VALID_WROW | VALID_WCOL)) == (VALID_WROW | VALID_WCOL))
 }
 
@@ -257,9 +232,9 @@ pub unsafe extern "C" fn rs_update_curswant_force() {
     }
 
     rs_validate_virtcol(wp);
-    let virtcol = nvim_win_get_virtcol(wp);
-    nvim_win_set_curswant(wp, virtcol);
-    nvim_win_set_set_curswant(wp, 0);
+    let virtcol = win_ref(wp).w_virtcol;
+    win_mut(wp).w_curswant = virtcol;
+    win_mut(wp).w_set_curswant = 0;
 }
 
 /// Update `w_curswant` if `w_set_curswant` is set.
@@ -273,7 +248,7 @@ pub unsafe extern "C" fn rs_update_curswant() {
         return;
     }
 
-    if nvim_win_get_set_curswant(wp) != 0 {
+    if win_ref(wp).w_set_curswant != 0 {
         rs_update_curswant_force();
     }
 }
@@ -291,7 +266,7 @@ pub unsafe extern "C" fn rs_wrow_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    c_int::from((nvim_win_get_valid(wp) & VALID_WROW) != 0)
+    c_int::from((win_ref(wp).w_valid & VALID_WROW) != 0)
 }
 
 /// Check if the window column (`w_wcol`) is valid.
@@ -303,7 +278,7 @@ pub unsafe extern "C" fn rs_wcol_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    c_int::from((nvim_win_get_valid(wp) & VALID_WCOL) != 0)
+    c_int::from((win_ref(wp).w_valid & VALID_WCOL) != 0)
 }
 
 /// Check if the virtual column (`w_virtcol`) is valid.
@@ -315,7 +290,7 @@ pub unsafe extern "C" fn rs_virtcol_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    c_int::from((nvim_win_get_valid(wp) & VALID_VIRTCOL) != 0)
+    c_int::from((win_ref(wp).w_valid & VALID_VIRTCOL) != 0)
 }
 
 /// Check if the cursor height (`w_cline_height`) is valid.
@@ -327,7 +302,7 @@ pub unsafe extern "C" fn rs_cheight_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    c_int::from((nvim_win_get_valid(wp) & VALID_CHEIGHT) != 0)
+    c_int::from((win_ref(wp).w_valid & VALID_CHEIGHT) != 0)
 }
 
 /// Check if the cursor row (`w_cline_row`) is valid.
@@ -339,7 +314,7 @@ pub unsafe extern "C" fn rs_crow_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    c_int::from((nvim_win_get_valid(wp) & VALID_CROW) != 0)
+    c_int::from((win_ref(wp).w_valid & VALID_CROW) != 0)
 }
 
 /// Check if the topline is valid.
@@ -351,7 +326,7 @@ pub unsafe extern "C" fn rs_topline_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    c_int::from((nvim_win_get_valid(wp) & VALID_TOPLINE) != 0)
+    c_int::from((win_ref(wp).w_valid & VALID_TOPLINE) != 0)
 }
 
 /// Check if the botline is valid.
@@ -363,7 +338,7 @@ pub unsafe extern "C" fn rs_botline_valid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    c_int::from((nvim_win_get_valid(wp) & VALID_BOTLINE) != 0)
+    c_int::from((win_ref(wp).w_valid & VALID_BOTLINE) != 0)
 }
 
 // =============================================================================
@@ -379,8 +354,8 @@ pub unsafe extern "C" fn rs_mark_topline_valid(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_TOPLINE);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_TOPLINE;
 }
 
 /// Mark the virtual column as valid.
@@ -392,8 +367,8 @@ pub unsafe extern "C" fn rs_mark_virtcol_valid(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_VIRTCOL);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_VIRTCOL;
 }
 
 /// Mark the cursor row as valid.
@@ -405,8 +380,8 @@ pub unsafe extern "C" fn rs_mark_crow_valid(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_CROW);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_CROW;
 }
 
 /// Mark the cursor height as valid.
@@ -418,8 +393,8 @@ pub unsafe extern "C" fn rs_mark_cheight_valid(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_CHEIGHT);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_CHEIGHT;
 }
 
 /// Mark both cursor row and height as valid.
@@ -431,8 +406,8 @@ pub unsafe extern "C" fn rs_mark_crow_cheight_valid(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_CROW | VALID_CHEIGHT);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_CROW | VALID_CHEIGHT;
 }
 
 /// Mark window cursor position (row and column) as valid.
@@ -444,8 +419,8 @@ pub unsafe extern "C" fn rs_mark_wcol_wrow_valid(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_WCOL | VALID_WROW);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_WCOL | VALID_WROW;
 }
 
 // =============================================================================
@@ -634,8 +609,8 @@ pub unsafe extern "C" fn rs_mark_botline_valid(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_BOTLINE);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_BOTLINE;
 }
 
 /// Mark botline as approximately valid.
@@ -647,8 +622,8 @@ pub unsafe extern "C" fn rs_mark_botline_approximate(wp: WinHandle) {
     if wp.is_null() {
         return;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_BOTLINE_AP);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_BOTLINE_AP;
 }
 
 /// Clear the topline validity flag.
@@ -702,8 +677,8 @@ pub unsafe extern "C" fn rs_cursor_at_or_above_topline(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let topline = nvim_win_get_topline(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let topline = win_ref(wp).w_topline;
     c_int::from(cursor_lnum <= topline)
 }
 
@@ -718,8 +693,8 @@ pub unsafe extern "C" fn rs_cursor_at_or_below_botline(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let botline = nvim_win_get_botline(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let botline = win_ref(wp).w_botline;
     c_int::from(cursor_lnum >= botline - 1)
 }
 
@@ -742,9 +717,9 @@ pub unsafe extern "C" fn rs_check_top_offset(wp: WinHandle) -> c_int {
     }
 
     let so = rs_get_scrolloff_value(wp);
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let topline = nvim_win_get_topline(wp);
-    let topfill = nvim_win_get_topfill(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let topline = win_ref(wp).w_topline;
+    let topfill = win_ref(wp).w_topfill;
 
     if cursor_lnum < topline + so || nvim_win_lines_concealed(wp) != 0 {
         let mut loff = LineOff {
@@ -788,7 +763,6 @@ mod upd {
 
 extern "C" {
     // Skipcol setter
-    fn nvim_win_set_skipcol(wp: WinHandle, val: ColnrT);
 
     // Redraw functions
     #[link_name = "redraw_later"]
@@ -803,10 +777,6 @@ extern "C" {
     fn nvim_pum_visible() -> c_int;
 
     // Window options for cursorline/cursorcolumn
-    fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_cuc(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_culopt_flags(wp: WinHandle) -> c_int;
 
     // Cursorline standout check (from plines crate)
     #[link_name = "win_cursorline_standout"]
@@ -816,7 +786,6 @@ extern "C" {
     fn nvim_VIsual_active() -> c_int;
 
     // Buffer accessor
-    fn nvim_win_get_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
 
     // Plines accessor (from plines crate)
@@ -849,7 +818,6 @@ extern "C" {
     fn curs_columns(wp: WinHandle, may_scroll: c_int);
 
     // virtcol setter
-    fn nvim_win_set_virtcol(wp: WinHandle, val: ColnrT);
 }
 
 /// Position type (matches `pos_T` in Neovim).
@@ -874,12 +842,12 @@ pub unsafe extern "C" fn rs_reset_skipcol(wp: WinHandle) {
         return;
     }
 
-    let skipcol = nvim_win_get_skipcol(wp);
+    let skipcol = win_ref(wp).w_skipcol;
     if skipcol == 0 {
         return;
     }
 
-    nvim_win_set_skipcol(wp, 0);
+    win_mut(wp).w_skipcol = 0;
 
     // Should use the least expensive way that displays all that changed.
     // UPD_NOT_VALID is too expensive, UPD_REDRAW_TOP does not redraw
@@ -902,14 +870,14 @@ pub unsafe extern "C" fn rs_redraw_for_cursorline(wp: WinHandle) {
         return;
     }
 
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     let crow_valid = (valid & VALID_CROW) != 0;
 
     if crow_valid || nvim_pum_visible() != 0 {
         return;
     }
 
-    let p_rnu = nvim_win_get_p_rnu(wp) != 0;
+    let p_rnu = win_ref(wp).w_p_rnu() != 0;
     let cursorline_standout = rs_win_cursorline_standout(wp);
 
     if p_rnu || cursorline_standout {
@@ -934,24 +902,24 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
     // If the cursor moves horizontally when 'concealcursor' is active, then the
     // current line needs to be redrawn to calculate the correct cursor position.
     let is_curwin = nvim_win_is_curwin(wp) != 0;
-    let p_cole = nvim_win_get_p_cole(wp);
+    let p_cole = win_ref(wp).w_p_cole();
     if is_curwin && p_cole > 0 && rs_conceal_cursor_line(wp) {
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
         nvim_redrawWinline(wp, cursor_lnum);
     }
 
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_VIRTCOL) != 0 || nvim_pum_visible() != 0 {
         return;
     }
 
-    let cursorcolumn_enabled = nvim_win_get_p_cuc(wp) != 0;
+    let cursorcolumn_enabled = win_ref(wp).w_p_cuc() != 0;
     if cursorcolumn_enabled {
         // When 'cursorcolumn' is set need to redraw with UPD_SOME_VALID.
         nvim_redraw_later(wp, upd::SOME_VALID);
     } else {
-        let cursorline_enabled = nvim_win_get_p_cul(wp) != 0;
-        let culopt_flags = nvim_win_get_p_culopt_flags(wp);
+        let cursorline_enabled = win_ref(wp).w_p_cul() != 0;
+        let culopt_flags = c_int::from(win_ref(wp).w_p_culopt_flags);
         if cursorline_enabled && (culopt_flags & OPT_CULOPT_FLAG_SCREENLINE) != 0 {
             // When 'cursorlineopt' contains "screenline" need to redraw with UPD_VALID.
             nvim_redraw_later(wp, upd::VALID);
@@ -960,7 +928,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
 
     // When current buffer's cursor moves in Visual mode, redraw it with UPD_INVERTED.
     let visual_active = nvim_VIsual_active() != 0;
-    let win_buf = nvim_win_get_buffer(wp);
+    let win_buf = win_ref(wp).w_buffer;
     let curbuf = nvim_get_curbuf();
     if visual_active && win_buf == curbuf {
         redraw_buf_later(curbuf, upd::INVERTED);
@@ -1004,12 +972,12 @@ pub unsafe extern "C" fn rs_plines_correct_topline(
         *foldedp = folded_int != 0;
     }
 
-    let topline = nvim_win_get_topline(wp);
+    let topline = win_ref(wp).w_topline;
     if lnum == topline {
         n -= rs_adjust_plines_for_skipcol(wp);
     }
 
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
     if limit_winheight && n > view_height {
         return view_height;
     }
@@ -1033,17 +1001,17 @@ pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
     // If w_cline_row is valid, start there.
     // Otherwise have to start at w_topline.
     rs_check_cursor_moved(wp);
-    let valid = nvim_win_get_valid(wp);
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let valid = win_ref(wp).w_valid;
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
 
     let (mut lnum, mut done) = if (valid & VALID_CROW) != 0 {
-        (cursor_lnum, nvim_win_get_cline_row(wp))
+        (cursor_lnum, win_ref(wp).w_cline_row)
     } else {
-        (nvim_win_get_topline(wp), 0)
+        (win_ref(wp).w_topline, 0)
     };
 
     let line_count = nvim_win_buf_line_count(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
 
     while lnum <= line_count {
         let mut last = lnum;
@@ -1058,7 +1026,7 @@ pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
         );
 
         // Topline adjustment for skipcol
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         let n = if lnum == topline {
             n - rs_adjust_plines_for_skipcol(wp)
         } else {
@@ -1067,12 +1035,12 @@ pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
 
         // If cursor is on this line range, update cline info
         if lnum <= cursor_lnum && last >= cursor_lnum {
-            nvim_win_set_cline_row(wp, done);
-            nvim_win_set_cline_height(wp, n);
-            nvim_win_set_cline_folded(wp, folded);
+            win_mut(wp).w_cline_row = done;
+            win_mut(wp).w_cline_height = n;
+            win_mut(wp).w_cline_folded = folded != 0;
             rs_redraw_for_cursorline(wp);
-            let valid = nvim_win_get_valid(wp);
-            nvim_win_set_valid(wp, valid | VALID_CROW | VALID_CHEIGHT);
+            let valid = win_ref(wp).w_valid;
+            win_mut(wp).w_valid = valid | VALID_CROW | VALID_CHEIGHT;
         }
 
         if done + n > view_height {
@@ -1083,10 +1051,10 @@ pub unsafe extern "C" fn rs_comp_botline(wp: WinHandle) {
     }
 
     // wp->w_botline is the line that is just below the window
-    nvim_win_set_botline(wp, lnum);
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_BOTLINE | VALID_BOTLINE_AP);
-    nvim_win_set_viewport_invalid(wp, 1);
+    win_mut(wp).w_botline = lnum;
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_BOTLINE | VALID_BOTLINE_AP;
+    win_mut(wp).w_viewport_invalid = 1 != 0;
 
     rs_set_empty_rows(wp, done);
 
@@ -1111,15 +1079,15 @@ pub unsafe extern "C" fn rs_validate_virtcol(wp: WinHandle) {
 
     rs_check_cursor_moved(wp);
 
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_VIRTCOL) != 0 {
         return;
     }
 
     // Get cursor position
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let cursor_col = nvim_win_get_cursor_col(wp);
-    let cursor_coladd = nvim_win_get_cursor_coladd(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let cursor_col = win_ref(wp).w_cursor.col;
+    let cursor_coladd = win_ref(wp).w_cursor.coladd;
     let pos = PosT {
         lnum: cursor_lnum,
         col: cursor_col,
@@ -1134,10 +1102,10 @@ pub unsafe extern "C" fn rs_validate_virtcol(wp: WinHandle) {
         std::ptr::addr_of_mut!(virtcol),
         std::ptr::null_mut(),
     );
-    nvim_win_set_virtcol(wp, virtcol);
+    win_mut(wp).w_virtcol = virtcol;
 
     rs_redraw_for_cursorcolumn(wp);
-    nvim_win_set_valid(wp, valid | VALID_VIRTCOL);
+    win_mut(wp).w_valid = valid | VALID_VIRTCOL;
 }
 
 /// Validate `w_cline_height` only.
@@ -1154,12 +1122,12 @@ pub unsafe extern "C" fn rs_validate_cheight(wp: WinHandle) {
 
     rs_check_cursor_moved(wp);
 
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_CHEIGHT) != 0 {
         return;
     }
 
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
     let mut folded: c_int = 0;
     let height = nvim_plines_win_full(
         wp,
@@ -1170,9 +1138,9 @@ pub unsafe extern "C" fn rs_validate_cheight(wp: WinHandle) {
         1,
     );
 
-    nvim_win_set_cline_height(wp, height);
-    nvim_win_set_cline_folded(wp, folded);
-    nvim_win_set_valid(wp, valid | VALID_CHEIGHT);
+    win_mut(wp).w_cline_height = height;
+    win_mut(wp).w_cline_folded = folded != 0;
+    win_mut(wp).w_valid = valid | VALID_CHEIGHT;
 }
 
 /// Make sure the value of `w_botline` is valid.
@@ -1187,7 +1155,7 @@ pub unsafe extern "C" fn rs_validate_botline(wp: WinHandle) {
         return;
     }
 
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_BOTLINE) == 0 {
         rs_comp_botline(wp);
     }
@@ -1208,7 +1176,7 @@ pub unsafe extern "C" fn rs_validate_cursor(wp: WinHandle) {
     rs_check_cursor_lnum(wp);
     rs_check_cursor_moved(wp);
 
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & (VALID_WCOL | VALID_WROW)) != (VALID_WCOL | VALID_WROW) {
         curs_columns(wp, 1);
     }
@@ -1226,9 +1194,6 @@ extern "C" {
     fn rs_win_col_off2(wp: WinHandle) -> c_int;
 
     // Window accessors for column operations
-    fn nvim_win_get_wcol(wp: WinHandle) -> c_int;
-    fn nvim_win_set_wcol(wp: WinHandle, val: c_int);
-    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
 }
 
 /// Compute `w_wcol` from `w_virtcol`.
@@ -1245,18 +1210,18 @@ pub unsafe extern "C" fn rs_compute_wcol(wp: WinHandle) {
     }
 
     // If already valid, nothing to do
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_WCOL) != 0 {
         return;
     }
 
-    let virtcol = nvim_win_get_virtcol(wp);
+    let virtcol = win_ref(wp).w_virtcol;
     let off = rs_win_col_off(wp);
     let mut col = virtcol + off;
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
     let width = view_width - off + rs_win_col_off2(wp);
-    let p_wrap = nvim_win_get_p_wrap(wp);
-    let leftcol = nvim_win_get_leftcol(wp);
+    let p_wrap = win_ref(wp).w_p_wrap();
+    let leftcol = win_ref(wp).w_leftcol;
 
     // long line wrapping, adjust
     if p_wrap != 0 && col >= view_width && width > 0 {
@@ -1270,8 +1235,8 @@ pub unsafe extern "C" fn rs_compute_wcol(wp: WinHandle) {
         col = 0;
     }
 
-    nvim_win_set_wcol(wp, col);
-    nvim_win_set_valid(wp, valid | VALID_WCOL);
+    win_mut(wp).w_wcol = col;
+    win_mut(wp).w_valid = valid | VALID_WCOL;
 }
 
 /// Validate `w_wcol` and `w_virtcol` only.
@@ -1293,7 +1258,7 @@ pub unsafe extern "C" fn rs_get_wcol(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_wcol(wp)
+    win_ref(wp).w_wcol
 }
 
 /// Get the window column offset (number/sign column width).
@@ -1331,7 +1296,7 @@ pub unsafe extern "C" fn rs_compute_wrap_width(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
     let off = rs_win_col_off(wp);
     view_width - off + rs_win_col_off2(wp)
 }
@@ -1342,21 +1307,15 @@ pub unsafe extern "C" fn rs_compute_wrap_width(wp: WinHandle) -> c_int {
 
 extern "C" {
     // Topline/topfill setters
-    fn nvim_win_set_topline(wp: WinHandle, val: LinenrT);
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
 
     // Float window management
     fn win_check_anchored_floats(wp: WinHandle);
 
     // Wrow accessors
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
-    fn nvim_win_set_wrow(wp: WinHandle, val: c_int);
 
     // Smoothscroll option accessor
-    fn nvim_win_get_p_sms(wp: WinHandle) -> c_int;
 
     // Botline setter
-    fn nvim_win_set_botline(wp: WinHandle, val: LinenrT);
 
     fn cursor_correct(wp: WinHandle);
     fn cursor_correct_sms(wp: WinHandle);
@@ -1384,8 +1343,6 @@ extern "C" {
     fn rs_coladvance(wp: WinHandle, wcol: ColnrT) -> c_int;
 
     // Cursor position setters
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: ColnrT);
 }
 
 /// Ensure topfill doesn't use too many window lines.
@@ -1401,19 +1358,19 @@ pub unsafe extern "C" fn rs_check_topfill(wp: WinHandle, down: c_int) {
         return;
     }
 
-    let topfill = nvim_win_get_topfill(wp);
+    let topfill = win_ref(wp).w_topfill;
     if topfill > 0 {
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         let n = nvim_plines_win_nofill(wp, topline, 1);
-        let view_height = nvim_win_get_view_height(wp);
+        let view_height = win_ref(wp).w_view_height;
 
         if topfill + n > view_height {
             if down != 0 && topline > 1 {
-                nvim_win_set_topline(wp, topline - 1);
-                nvim_win_set_topfill(wp, 0);
+                win_mut(wp).w_topline = topline - 1;
+                win_mut(wp).w_topfill = 0;
             } else {
                 let new_topfill = (view_height - n).max(0);
-                nvim_win_set_topfill(wp, new_topfill);
+                win_mut(wp).w_topfill = new_topfill;
             }
         }
     }
@@ -1430,7 +1387,7 @@ pub unsafe extern "C" fn rs_get_topfill(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_topfill(wp)
+    win_ref(wp).w_topfill
 }
 
 /// Set the topfill value for a window.
@@ -1442,7 +1399,7 @@ pub unsafe extern "C" fn rs_set_topfill(wp: WinHandle, val: c_int) {
     if wp.is_null() {
         return;
     }
-    nvim_win_set_topfill(wp, val);
+    win_mut(wp).w_topfill = val;
 }
 
 // =============================================================================
@@ -1483,11 +1440,11 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
     let mut done = 0; // total # of physical lines done
     let mut width1 = 0;
     let mut width2 = 0;
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let p_sms = win_ref(wp).w_p_sms() != 0;
     let do_sms = p_wrap && p_sms;
-    let view_width = nvim_win_get_view_width(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_width = win_ref(wp).w_view_width;
+    let view_height = win_ref(wp).w_view_height;
 
     if do_sms {
         width1 = view_width - win_col_off(wp);
@@ -1495,7 +1452,7 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
     }
 
     // Make sure w_topline is at the first of a sequence of folded lines.
-    let mut topline = nvim_win_get_topline(wp);
+    let mut topline = win_ref(wp).w_topline;
     let mut first_lnum = topline;
     if nvim_hasFolding(
         wp,
@@ -1505,16 +1462,16 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
     ) != 0
     {
         topline = first_lnum;
-        nvim_win_set_topline(wp, topline);
+        win_mut(wp).w_topline = topline;
     }
 
     validate_cursor(wp); // w_wrow needs to be valid
 
     let mut todo = line_count;
     while todo > 0 {
-        let topfill = nvim_win_get_topfill(wp);
-        topline = nvim_win_get_topline(wp);
-        let skipcol = nvim_win_get_skipcol(wp);
+        let topfill = win_ref(wp).w_topfill;
+        topline = win_ref(wp).w_topline;
+        let skipcol = win_ref(wp).w_skipcol;
 
         let fill = nvim_win_get_fill(wp, topline);
         let can_fill = topfill < view_height - 1 && topfill < fill;
@@ -1527,21 +1484,21 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
         if do_sms && skipcol >= width1 {
             // scroll a screen line down
             if skipcol >= width1 + width2 {
-                nvim_win_set_skipcol(wp, skipcol - width2);
+                win_mut(wp).w_skipcol = skipcol - width2;
             } else {
-                nvim_win_set_skipcol(wp, skipcol - width1);
+                win_mut(wp).w_skipcol = skipcol - width1;
             }
             nvim_redraw_later(wp, upd_scroll::NOT_VALID);
             done += 1;
         } else if can_fill {
-            nvim_win_set_topfill(wp, topfill + 1);
+            win_mut(wp).w_topfill = topfill + 1;
             done += 1;
         } else {
             // scroll a text line down
             topline -= 1;
-            nvim_win_set_topline(wp, topline);
-            nvim_win_set_skipcol(wp, 0);
-            nvim_win_set_topfill(wp, 0);
+            win_mut(wp).w_topline = topline;
+            win_mut(wp).w_skipcol = 0;
+            win_mut(wp).w_topfill = 0;
 
             // A sequence of folded lines only counts for one logical line
             let mut first: LinenrT = 0;
@@ -1556,21 +1513,21 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
                 if !byfold {
                     todo -= topline - first - 1;
                 }
-                let botline = nvim_win_get_botline(wp);
-                nvim_win_set_botline(wp, botline - (topline - first));
+                let botline = win_ref(wp).w_botline;
+                win_mut(wp).w_botline = botline - (topline - first);
                 topline = first;
-                nvim_win_set_topline(wp, topline);
+                win_mut(wp).w_topline = topline;
             } else if nvim_decor_conceal_line(wp, topline - 1, 0) != 0 {
                 todo += 1;
             } else if do_sms {
                 let mut size = linetabsize_eol(wp, topline);
                 if size > width1 {
-                    nvim_win_set_skipcol(wp, width1);
+                    win_mut(wp).w_skipcol = width1;
                     size -= width1;
                     nvim_redraw_later(wp, upd_scroll::NOT_VALID);
                 }
                 while size > width2 {
-                    nvim_win_set_skipcol(wp, nvim_win_get_skipcol(wp) + width2);
+                    win_mut(wp).w_skipcol = win_ref(wp).w_skipcol + width2;
                     size -= width2;
                 }
                 done += 1;
@@ -1580,18 +1537,18 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
         }
 
         // approximate w_botline
-        let botline = nvim_win_get_botline(wp);
-        nvim_win_set_botline(wp, botline - 1);
+        let botline = win_ref(wp).w_botline;
+        win_mut(wp).w_botline = botline - 1;
         invalidate_botline(wp);
 
         todo -= 1;
     }
 
     // Adjust for concealed lines above w_topline
-    topline = nvim_win_get_topline(wp);
+    topline = win_ref(wp).w_topline;
     while topline > 1 && nvim_decor_conceal_line(wp, topline - 2, 0) != 0 {
         topline -= 1;
-        nvim_win_set_topline(wp, topline);
+        win_mut(wp).w_topline = topline;
         let mut first: LinenrT = 0;
         if nvim_hasFolding(
             wp,
@@ -1601,39 +1558,39 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
         ) != 0
         {
             topline = first;
-            nvim_win_set_topline(wp, topline);
+            win_mut(wp).w_topline = topline;
         }
     }
 
     // keep w_wrow updated
-    let wrow = nvim_win_get_wrow(wp);
-    nvim_win_set_wrow(wp, wrow + done);
+    let wrow = win_ref(wp).w_wrow;
+    win_mut(wp).w_wrow = wrow + done;
 
     // keep w_cline_row updated
-    let cline_row = nvim_win_get_cline_row(wp);
-    nvim_win_set_cline_row(wp, cline_row + done);
+    let cline_row = win_ref(wp).w_cline_row;
+    win_mut(wp).w_cline_row = cline_row + done;
 
-    topline = nvim_win_get_topline(wp);
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    topline = win_ref(wp).w_topline;
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
     if cursor_lnum == topline {
-        nvim_win_set_cline_row(wp, 0);
+        win_mut(wp).w_cline_row = 0;
     }
 
     check_topfill(wp, 1);
 
     // Compute the row number of the last row of the cursor line
     // and move the cursor onto the displayed part of the window.
-    let mut wrow = nvim_win_get_wrow(wp);
+    let mut wrow = win_ref(wp).w_wrow;
     if p_wrap && view_width != 0 {
         validate_virtcol(wp);
         validate_cheight(wp);
-        let cline_height = nvim_win_get_cline_height(wp);
-        let virtcol = nvim_win_get_virtcol(wp);
+        let cline_height = win_ref(wp).w_cline_height;
+        let virtcol = win_ref(wp).w_virtcol;
         wrow += cline_height - 1 - virtcol / view_width;
     }
 
     let mut moved = false;
-    let mut cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let mut cursor_lnum = win_ref(wp).w_cursor.lnum;
     while wrow >= view_height && cursor_lnum > 1 {
         let mut first: LinenrT = 0;
         if nvim_hasFolding(
@@ -1649,7 +1606,7 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
             wrow -= nvim_plines_win(wp, cursor_lnum, 1);
             cursor_lnum -= 1;
         }
-        nvim_win_set_cursor_lnum(wp, cursor_lnum);
+        win_mut(wp).w_cursor.lnum = cursor_lnum;
         nvim_win_clear_valid_bits(wp, SCROLL_CURSOR_MOVED_BITS);
         moved = true;
     }
@@ -1657,14 +1614,14 @@ pub unsafe extern "C" fn rs_scrolldown(wp: WinHandle, line_count: LinenrT, byfol
     if moved {
         // Move cursor to first line of closed fold.
         rs_foldAdjustCursor(wp);
-        let curswant = nvim_win_get_curswant(wp);
+        let curswant = win_ref(wp).w_curswant;
         rs_coladvance(wp, curswant);
     }
 
-    topline = nvim_win_get_topline(wp);
-    cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    topline = win_ref(wp).w_topline;
+    cursor_lnum = win_ref(wp).w_cursor.lnum;
     if cursor_lnum < topline {
-        nvim_win_set_cursor_lnum(wp, topline);
+        win_mut(wp).w_cursor.lnum = topline;
     }
 
     c_int::from(moved)
@@ -1691,21 +1648,21 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
     }
 
     let byfold = byfold != 0;
-    let orig_topline = nvim_win_get_topline(wp);
-    let orig_botline = nvim_win_get_botline(wp);
+    let orig_topline = win_ref(wp).w_topline;
+    let orig_botline = win_ref(wp).w_botline;
 
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let p_sms = win_ref(wp).w_p_sms() != 0;
     let do_sms = p_wrap && p_sms;
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
 
     if do_sms || (byfold && nvim_win_lines_concealed(wp) != 0) || win_may_fill(wp) {
         let width1 = view_width - win_col_off(wp);
         let width2 = width1 + win_col_off2(wp);
-        let prev_skipcol = nvim_win_get_skipcol(wp);
+        let prev_skipcol = win_ref(wp).w_skipcol;
 
         let mut size = if do_sms {
-            linetabsize_eol(wp, nvim_win_get_topline(wp))
+            linetabsize_eol(wp, win_ref(wp).w_topline)
         } else {
             0
         };
@@ -1716,12 +1673,12 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
         // folding: count each sequence of folded lines as one logical line.
         let mut todo = line_count;
         while todo > 0 {
-            let topline = nvim_win_get_topline(wp);
+            let topline = win_ref(wp).w_topline;
             todo += nvim_decor_conceal_line(wp, topline - 1, 0);
 
-            let topfill = nvim_win_get_topfill(wp);
+            let topfill = win_ref(wp).w_topfill;
             if topfill > 0 {
-                nvim_win_set_topfill(wp, topfill - 1);
+                win_mut(wp).w_topfill = topfill - 1;
             } else {
                 let mut lnum = topline;
                 if byfold {
@@ -1732,16 +1689,16 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
                 if lnum == topline && do_sms {
                     // 'smoothscroll': increase "w_skipcol" until it goes over
                     // the end of the line, then advance to the next line.
-                    let skipcol = nvim_win_get_skipcol(wp);
+                    let skipcol = win_ref(wp).w_skipcol;
                     let add = if skipcol > 0 { width2 } else { width1 };
-                    nvim_win_set_skipcol(wp, skipcol + add);
+                    win_mut(wp).w_skipcol = skipcol + add;
 
-                    let new_skipcol = nvim_win_get_skipcol(wp);
+                    let new_skipcol = win_ref(wp).w_skipcol;
                     if new_skipcol >= size {
                         let line_count = nvim_win_buf_line_count(wp);
                         if lnum == line_count {
                             // at the last screen line, can't scroll further
-                            nvim_win_set_skipcol(wp, new_skipcol - add);
+                            win_mut(wp).w_skipcol = new_skipcol - add;
                             break;
                         }
                         lnum += 1;
@@ -1756,14 +1713,14 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
 
                 if lnum > topline {
                     // approximate w_botline
-                    let botline = nvim_win_get_botline(wp);
-                    nvim_win_set_botline(wp, botline + (lnum - topline));
-                    nvim_win_set_topline(wp, lnum);
+                    let botline = win_ref(wp).w_botline;
+                    win_mut(wp).w_botline = botline + (lnum - topline);
+                    win_mut(wp).w_topline = lnum;
                     let fill = nvim_win_get_fill(wp, lnum);
-                    nvim_win_set_topfill(wp, fill);
-                    nvim_win_set_skipcol(wp, 0);
+                    win_mut(wp).w_topfill = fill;
+                    win_mut(wp).w_skipcol = 0;
                     if todo > 1 && do_sms {
-                        size = linetabsize_eol(wp, nvim_win_get_topline(wp));
+                        size = linetabsize_eol(wp, win_ref(wp).w_topline);
                     }
                 }
             }
@@ -1771,34 +1728,34 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
             todo -= 1;
         }
 
-        let skipcol = nvim_win_get_skipcol(wp);
+        let skipcol = win_ref(wp).w_skipcol;
         if prev_skipcol > 0 || skipcol > 0 {
             // need to redraw more, because wl_size of the (new) topline may
             // now be invalid
             nvim_redraw_later(wp, upd_scroll::NOT_VALID);
         }
     } else {
-        let topline = nvim_win_get_topline(wp);
-        let botline = nvim_win_get_botline(wp);
-        nvim_win_set_topline(wp, topline + line_count);
-        nvim_win_set_botline(wp, botline + line_count); // approximate w_botline
+        let topline = win_ref(wp).w_topline;
+        let botline = win_ref(wp).w_botline;
+        win_mut(wp).w_topline = topline + line_count;
+        win_mut(wp).w_botline = botline + line_count; // approximate w_botline
     }
 
     // Clamp topline and botline to buffer bounds
     let line_count = nvim_win_buf_line_count(wp);
-    let topline = nvim_win_get_topline(wp);
+    let topline = win_ref(wp).w_topline;
     if topline > line_count {
-        nvim_win_set_topline(wp, line_count);
+        win_mut(wp).w_topline = line_count;
     }
-    let botline = nvim_win_get_botline(wp);
+    let botline = win_ref(wp).w_botline;
     if botline > line_count + 1 {
-        nvim_win_set_botline(wp, line_count + 1);
+        win_mut(wp).w_botline = line_count + 1;
     }
 
     check_topfill(wp, 0);
 
     // Make sure w_topline is at the first of a sequence of folded lines.
-    let topline = nvim_win_get_topline(wp);
+    let topline = win_ref(wp).w_topline;
     let mut first: LinenrT = 0;
     if nvim_hasFolding(
         wp,
@@ -1807,22 +1764,22 @@ pub unsafe extern "C" fn rs_scrollup(wp: WinHandle, line_count: LinenrT, byfold:
         std::ptr::null_mut(),
     ) != 0
     {
-        nvim_win_set_topline(wp, first);
+        win_mut(wp).w_topline = first;
     }
 
     nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW | VALID_BOTLINE);
 
-    let topline = nvim_win_get_topline(wp);
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let topline = win_ref(wp).w_topline;
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
     if cursor_lnum < topline {
-        nvim_win_set_cursor_lnum(wp, topline);
+        win_mut(wp).w_cursor.lnum = topline;
         nvim_win_clear_valid_bits(wp, SCROLL_CURSOR_MOVED_BITS);
-        let curswant = nvim_win_get_curswant(wp);
+        let curswant = win_ref(wp).w_curswant;
         rs_coladvance(wp, curswant);
     }
 
-    let new_topline = nvim_win_get_topline(wp);
-    let new_botline = nvim_win_get_botline(wp);
+    let new_topline = win_ref(wp).w_topline;
+    let new_botline = win_ref(wp).w_botline;
     let moved = orig_topline != new_topline || orig_botline != new_botline;
 
     c_int::from(moved)
@@ -1852,10 +1809,10 @@ pub unsafe extern "C" fn rs_scroll_redraw(up: c_int, count: LinenrT) {
     }
 
     let up = up != 0;
-    let prev_topline = nvim_win_get_topline(wp);
-    let prev_skipcol = nvim_win_get_skipcol(wp);
-    let prev_topfill = nvim_win_get_topfill(wp);
-    let prev_lnum = nvim_win_get_cursor_lnum(wp);
+    let prev_topline = win_ref(wp).w_topline;
+    let prev_skipcol = win_ref(wp).w_skipcol;
+    let prev_topfill = win_ref(wp).w_topfill;
+    let prev_lnum = win_ref(wp).w_cursor.lnum;
 
     let moved = if up {
         rs_scrollup(wp, count, 1) != 0
@@ -1868,22 +1825,22 @@ pub unsafe extern "C" fn rs_scroll_redraw(up: c_int, count: LinenrT) {
         // valid, otherwise the screen jumps back at the end of the file.
         cursor_correct(wp);
         rs_check_cursor_moved(wp);
-        let valid = nvim_win_get_valid(wp);
-        nvim_win_set_valid(wp, valid | VALID_TOPLINE);
+        let valid = win_ref(wp).w_valid;
+        win_mut(wp).w_valid = valid | VALID_TOPLINE;
 
         // If moved back to where we were, at least move the cursor, otherwise
         // we get stuck at one position. Don't move the cursor up if the
         // first line of the buffer is already on the screen
         loop {
-            let topline = nvim_win_get_topline(wp);
-            let skipcol = nvim_win_get_skipcol(wp);
-            let topfill = nvim_win_get_topfill(wp);
+            let topline = win_ref(wp).w_topline;
+            let skipcol = win_ref(wp).w_skipcol;
+            let topfill = win_ref(wp).w_topfill;
 
             if topline != prev_topline || skipcol != prev_skipcol || topfill != prev_topfill {
                 break;
             }
 
-            let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+            let cursor_lnum = win_ref(wp).w_cursor.lnum;
             if up {
                 if cursor_lnum > prev_lnum || cursor_down(1, false) == 0 {
                     break;
@@ -1895,20 +1852,20 @@ pub unsafe extern "C" fn rs_scroll_redraw(up: c_int, count: LinenrT) {
             // Mark w_topline as valid, otherwise the screen jumps back at the
             // end of the file.
             rs_check_cursor_moved(wp);
-            let valid = nvim_win_get_valid(wp);
-            nvim_win_set_valid(wp, valid | VALID_TOPLINE);
+            let valid = win_ref(wp).w_valid;
+            win_mut(wp).w_valid = valid | VALID_TOPLINE;
         }
     }
 
     if moved {
-        nvim_win_set_viewport_invalid(wp, 1);
+        win_mut(wp).w_viewport_invalid = 1 != 0;
     }
 
     cursor_correct_sms(wp);
 
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
     if cursor_lnum != prev_lnum {
-        let curswant = nvim_win_get_curswant(wp);
+        let curswant = win_ref(wp).w_curswant;
         rs_coladvance(wp, curswant);
     }
 
@@ -1921,13 +1878,8 @@ pub unsafe extern "C" fn rs_scroll_redraw(up: c_int, count: LinenrT) {
 
 extern "C" {
     // Empty rows
-    fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
-    fn nvim_win_set_empty_rows(wp: WinHandle, val: c_int);
 
     // Filler rows and botfill
-    fn nvim_win_get_filler_rows(wp: WinHandle) -> c_int;
-    fn nvim_win_set_filler_rows(wp: WinHandle, val: c_int);
-    fn nvim_win_set_botfill(wp: WinHandle, val: c_int);
 
     // Mouse dragging state (implemented in mouse crate)
     fn rs_get_mouse_dragging() -> c_int;
@@ -1973,10 +1925,10 @@ pub unsafe extern "C" fn rs_scroll_cursor_halfway(
 
     let atend = atend != 0;
     let prefer_above = prefer_above != 0;
-    let old_topline = nvim_win_get_topline(wp);
+    let old_topline = win_ref(wp).w_topline;
 
     // Get cursor line, handling folding
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
     let mut loff = LineOff::new(cursor_lnum);
     let mut boff = LineOff::new(cursor_lnum);
 
@@ -2000,10 +1952,10 @@ pub unsafe extern "C" fn rs_scroll_cursor_halfway(
     let mut topline = loff.lnum;
     let mut skipcol: ColnrT = 0;
 
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let p_sms = win_ref(wp).w_p_sms() != 0;
     let do_sms = p_wrap && p_sms;
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
     let line_count = nvim_win_buf_line_count(wp);
 
     let mut want_height = 0;
@@ -2119,12 +2071,12 @@ pub unsafe extern "C" fn rs_scroll_cursor_halfway(
     ) == 0
     {
         // Not in a fold
-        let current_topline = nvim_win_get_topline(wp);
-        let current_skipcol = nvim_win_get_skipcol(wp);
+        let current_topline = win_ref(wp).w_topline;
+        let current_skipcol = win_ref(wp).w_skipcol;
         if current_topline != topline || skipcol != 0 || current_skipcol != 0 {
-            nvim_win_set_topline(wp, topline);
+            win_mut(wp).w_topline = topline;
             if skipcol != 0 {
-                nvim_win_set_skipcol(wp, skipcol);
+                win_mut(wp).w_skipcol = skipcol;
                 nvim_redraw_later(wp, upd_scroll::NOT_VALID);
             } else if do_sms {
                 rs_reset_skipcol(wp);
@@ -2132,13 +2084,13 @@ pub unsafe extern "C" fn rs_scroll_cursor_halfway(
         }
     } else {
         // In a fold, use the fold start
-        nvim_win_set_topline(wp, new_topline);
+        win_mut(wp).w_topline = new_topline;
     }
 
-    nvim_win_set_topfill(wp, topfill);
+    win_mut(wp).w_topfill = topfill;
 
-    if old_topline > nvim_win_get_topline(wp) + view_height {
-        nvim_win_set_botfill(wp, 0);
+    if old_topline > win_ref(wp).w_topline + view_height {
+        win_mut(wp).w_botfill = false;
     }
 
     check_topfill(wp, 0);
@@ -2148,8 +2100,8 @@ pub unsafe extern "C" fn rs_scroll_cursor_halfway(
         wp,
         VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP,
     );
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_TOPLINE);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_TOPLINE;
 }
 
 /// Recompute topline to put the cursor at the top of the window.
@@ -2172,12 +2124,12 @@ pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, 
     }
 
     let always = always != 0;
-    let old_topline = nvim_win_get_topline(wp);
-    let old_skipcol = nvim_win_get_skipcol(wp);
-    let old_topfill = nvim_win_get_topfill(wp);
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let old_topline = win_ref(wp).w_topline;
+    let old_skipcol = win_ref(wp).w_skipcol;
+    let old_topfill = win_ref(wp).w_topfill;
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
     let line_count = nvim_win_buf_line_count(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
 
     let mut off = rs_get_scrolloff_value(wp);
     let mouse_dragging = rs_get_mouse_dragging();
@@ -2192,7 +2144,7 @@ pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, 
     // - at least 'scrolloff' lines above and below the cursor
     validate_cheight(wp);
     let mut scrolled = 0;
-    let cline_height = nvim_win_get_cline_height(wp);
+    let cline_height = win_ref(wp).w_cline_height;
     let mut used = cline_height; // includes filler lines above
 
     if cursor_lnum < old_topline {
@@ -2281,36 +2233,36 @@ pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, 
     } else {
         // If "always" is false, only adjust topline to a lower value, higher
         // value may happen with wrapping lines.
-        let current_topline = nvim_win_get_topline(wp);
+        let current_topline = win_ref(wp).w_topline;
         if new_topline < current_topline || always {
-            nvim_win_set_topline(wp, new_topline);
+            win_mut(wp).w_topline = new_topline;
         }
 
         // Ensure topline <= cursor line
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         if topline > cursor_lnum {
-            nvim_win_set_topline(wp, cursor_lnum);
+            win_mut(wp).w_topline = cursor_lnum;
         }
 
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         let mut new_topfill = nvim_win_get_fill(wp, topline);
-        nvim_win_set_topfill(wp, new_topfill);
+        win_mut(wp).w_topfill = new_topfill;
 
         if new_topfill > 0 && extra > off {
             new_topfill -= extra - off;
             new_topfill = new_topfill.max(0);
-            nvim_win_set_topfill(wp, new_topfill);
+            win_mut(wp).w_topfill = new_topfill;
         }
 
         check_topfill(wp, 0);
 
-        let new_topline = nvim_win_get_topline(wp);
+        let new_topline = win_ref(wp).w_topline;
         if new_topline != old_topline {
             rs_reset_skipcol(wp);
         } else if new_topline == cursor_lnum {
             validate_virtcol(wp);
-            let skipcol = nvim_win_get_skipcol(wp);
-            let virtcol = nvim_win_get_virtcol(wp);
+            let skipcol = win_ref(wp).w_skipcol;
+            let virtcol = win_ref(wp).w_virtcol;
             if skipcol >= virtcol {
                 // TODO(vim): if the line doesn't fit may optimize w_skipcol
                 // instead of making it zero
@@ -2318,18 +2270,18 @@ pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, 
             }
         }
 
-        let new_topline = nvim_win_get_topline(wp);
-        let new_skipcol = nvim_win_get_skipcol(wp);
-        let new_topfill = nvim_win_get_topfill(wp);
+        let new_topline = win_ref(wp).w_topline;
+        let new_skipcol = win_ref(wp).w_skipcol;
+        let new_topfill = win_ref(wp).w_topfill;
         if new_topline != old_topline || new_skipcol != old_skipcol || new_topfill != old_topfill {
             nvim_win_clear_valid_bits(
                 wp,
                 VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP,
             );
         }
-        let valid = nvim_win_get_valid(wp);
-        nvim_win_set_valid(wp, valid | VALID_TOPLINE);
-        nvim_win_set_viewport_invalid(wp, 1);
+        let valid = win_ref(wp).w_valid;
+        win_mut(wp).w_valid = valid | VALID_TOPLINE;
+        win_mut(wp).w_viewport_invalid = 1 != 0;
     }
 }
 
@@ -2344,27 +2296,27 @@ pub unsafe extern "C" fn rs_set_empty_rows(wp: WinHandle, used: c_int) {
         return;
     }
 
-    nvim_win_set_filler_rows(wp, 0);
+    win_mut(wp).w_filler_rows = 0;
 
     if used == 0 {
-        nvim_win_set_empty_rows(wp, 0); // single line that doesn't fit
+        win_mut(wp).w_empty_rows = 0; // single line that doesn't fit
     } else {
-        let view_height = nvim_win_get_view_height(wp);
+        let view_height = win_ref(wp).w_view_height;
         let mut empty_rows = view_height - used;
-        let botline = nvim_win_get_botline(wp);
+        let botline = win_ref(wp).w_botline;
         let line_count = nvim_win_buf_line_count(wp);
 
         if botline <= line_count {
             let filler = nvim_win_get_fill(wp, botline);
             if empty_rows > filler {
                 empty_rows -= filler;
-                nvim_win_set_filler_rows(wp, filler);
+                win_mut(wp).w_filler_rows = filler;
             } else {
-                nvim_win_set_filler_rows(wp, empty_rows);
+                win_mut(wp).w_filler_rows = empty_rows;
                 empty_rows = 0;
             }
         }
-        nvim_win_set_empty_rows(wp, empty_rows);
+        win_mut(wp).w_empty_rows = empty_rows;
     }
 }
 
@@ -2388,23 +2340,23 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
     }
 
     let set_topbot = set_topbot != 0;
-    let old_topline = nvim_win_get_topline(wp);
-    let old_skipcol = nvim_win_get_skipcol(wp);
-    let old_topfill = nvim_win_get_topfill(wp);
-    let old_botline = nvim_win_get_botline(wp);
-    let old_valid = nvim_win_get_valid(wp);
-    let old_empty_rows = nvim_win_get_empty_rows(wp);
-    let cln = nvim_win_get_cursor_lnum(wp); // Cursor Line Number
+    let old_topline = win_ref(wp).w_topline;
+    let old_skipcol = win_ref(wp).w_skipcol;
+    let old_topfill = win_ref(wp).w_topfill;
+    let old_botline = win_ref(wp).w_botline;
+    let old_valid = win_ref(wp).w_valid;
+    let old_empty_rows = win_ref(wp).w_empty_rows;
+    let cln = win_ref(wp).w_cursor.lnum; // Cursor Line Number
     let line_count = nvim_win_buf_line_count(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
 
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let p_sms = win_ref(wp).w_p_sms() != 0;
     let do_sms = p_wrap && p_sms;
 
     if set_topbot {
         let mut used = 0;
-        nvim_win_set_botline(wp, cln + 1);
+        win_mut(wp).w_botline = cln + 1;
         let mut loff = LineOff {
             lnum: cln + 1,
             fill: 0,
@@ -2424,25 +2376,25 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
                     if used < view_height {
                         let plines_offset = used + loff.height - view_height;
                         used = view_height;
-                        nvim_win_set_topfill(wp, loff.fill);
-                        nvim_win_set_topline(wp, loff.lnum);
-                        nvim_win_set_skipcol(wp, rs_skipcol_from_plines(wp, plines_offset));
+                        win_mut(wp).w_topfill = loff.fill;
+                        win_mut(wp).w_topline = loff.lnum;
+                        win_mut(wp).w_skipcol = rs_skipcol_from_plines(wp, plines_offset);
                     }
                 }
                 break;
             }
-            nvim_win_set_topfill(wp, loff.fill);
-            nvim_win_set_topline(wp, loff.lnum);
+            win_mut(wp).w_topfill = loff.fill;
+            win_mut(wp).w_topline = loff.lnum;
             used += loff.height;
         }
 
         rs_set_empty_rows(wp, used);
-        let valid = nvim_win_get_valid(wp);
-        nvim_win_set_valid(wp, valid | VALID_BOTLINE | VALID_BOTLINE_AP);
+        let valid = win_ref(wp).w_valid;
+        win_mut(wp).w_valid = valid | VALID_BOTLINE | VALID_BOTLINE_AP;
 
-        let new_topline = nvim_win_get_topline(wp);
-        let new_topfill = nvim_win_get_topfill(wp);
-        let new_skipcol = nvim_win_get_skipcol(wp);
+        let new_topline = win_ref(wp).w_topline;
+        let new_topfill = win_ref(wp).w_topfill;
+        let new_skipcol = win_ref(wp).w_skipcol;
         if new_topline != old_topline
             || new_topfill != old_topfill
             || new_skipcol != old_skipcol
@@ -2466,8 +2418,8 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
     // If the cursor is on or below botline, we will at least scroll by the
     // height of the cursor line, which is "used". Correct for empty lines,
     // which are really part of botline.
-    let botline = nvim_win_get_botline(wp);
-    let empty_rows = nvim_win_get_empty_rows(wp);
+    let botline = win_ref(wp).w_botline;
+    let empty_rows = win_ref(wp).w_empty_rows;
     if cln >= botline {
         scrolled = used;
         if cln == botline {
@@ -2479,15 +2431,15 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
             // occupies. If it is occupying more than the entire window, we
             // need to scroll the additional clipped lines to scroll past the
             // top line before we can move on to the other lines.
-            let topline = nvim_win_get_topline(wp);
+            let topline = win_ref(wp).w_topline;
             let top_plines = nvim_plines_win_nofill(wp, topline, 0);
-            let view_width = nvim_win_get_view_width(wp);
+            let view_width = win_ref(wp).w_view_width;
             let width1 = view_width - win_col_off(wp);
 
             if width1 > 0 {
                 let width2 = width1 + win_col_off2(wp);
                 let mut skip_lines = 0;
-                let skipcol = nvim_win_get_skipcol(wp);
+                let skipcol = win_ref(wp).w_skipcol;
 
                 // A similar formula is used in curs_columns().
                 if skipcol > width1 {
@@ -2529,8 +2481,8 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
         height: 0,
     };
 
-    let botline = nvim_win_get_botline(wp);
-    let filler_rows = nvim_win_get_filler_rows(wp);
+    let botline = win_ref(wp).w_botline;
+    let filler_rows = win_ref(wp).w_filler_rows;
     let fill_below_window = nvim_win_get_fill(wp, botline) - filler_rows;
 
     let mut extra = 0;
@@ -2570,8 +2522,8 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
             break;
         }
 
-        let botline = nvim_win_get_botline(wp);
-        let empty_rows = nvim_win_get_empty_rows(wp);
+        let botline = win_ref(wp).w_botline;
+        let empty_rows = win_ref(wp).w_empty_rows;
         if loff.lnum >= botline && (loff.lnum > botline || loff.fill <= fill_below_window) {
             // Count screen lines that are below the window.
             scrolled += loff.height;
@@ -2596,12 +2548,12 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
 
             if extra < so_effective || scrolled < min_scroll {
                 extra += boff.height;
-                let botline = nvim_win_get_botline(wp);
-                let filler_rows = nvim_win_get_filler_rows(wp);
+                let botline = win_ref(wp).w_botline;
+                let filler_rows = win_ref(wp).w_filler_rows;
                 if boff.lnum >= botline || (boff.lnum + 1 == botline && boff.fill > filler_rows) {
                     // Count screen lines that are below the window.
                     scrolled += boff.height;
-                    let empty_rows = nvim_win_get_empty_rows(wp);
+                    let empty_rows = win_ref(wp).w_empty_rows;
                     if boff.lnum == botline && boff.fill == 0 {
                         scrolled -= empty_rows;
                     }
@@ -2622,9 +2574,9 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
     // scroll minimal number of lines
     } else {
         let mut count = 0;
-        let topfill = nvim_win_get_topfill(wp);
-        let topline = nvim_win_get_topline(wp);
-        let botline = nvim_win_get_botline(wp);
+        let topfill = win_ref(wp).w_topfill;
+        let topline = win_ref(wp).w_topline;
+        let botline = win_ref(wp).w_botline;
 
         boff.fill = topfill;
         boff.lnum = topline - 1;
@@ -2659,16 +2611,16 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
     // If topline didn't change we need to restore w_botline and w_empty_rows
     // (we changed them).
     // If topline did change, update_screen() will set botline.
-    let new_topline = nvim_win_get_topline(wp);
-    let new_skipcol = nvim_win_get_skipcol(wp);
+    let new_topline = win_ref(wp).w_topline;
+    let new_skipcol = win_ref(wp).w_skipcol;
     if new_topline == old_topline && new_skipcol == old_skipcol && set_topbot {
-        nvim_win_set_botline(wp, old_botline);
-        nvim_win_set_empty_rows(wp, old_empty_rows);
-        nvim_win_set_valid(wp, old_valid);
+        win_mut(wp).w_botline = old_botline;
+        win_mut(wp).w_empty_rows = old_empty_rows;
+        win_mut(wp).w_valid = old_valid;
     }
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_TOPLINE);
-    nvim_win_set_viewport_invalid(wp, 1);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_TOPLINE;
+    win_mut(wp).w_viewport_invalid = 1 != 0;
 
     // Make sure cursor is still visible after adjusting skipcol for "zb".
     if set_topbot {
@@ -2695,11 +2647,11 @@ pub unsafe extern "C" fn rs_set_valid_virtcol(wp: WinHandle, vcol: ColnrT) {
         return;
     }
 
-    nvim_win_set_virtcol(wp, vcol);
+    win_mut(wp).w_virtcol = vcol;
     redraw_for_cursorcolumn(wp);
 
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_VIRTCOL);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_VIRTCOL;
 }
 
 // =============================================================================
@@ -2708,7 +2660,6 @@ pub unsafe extern "C" fn rs_set_valid_virtcol(wp: WinHandle, vcol: ColnrT) {
 
 extern "C" {
     // Topline was set flag
-    fn nvim_win_set_topline_was_set(wp: WinHandle, val: c_int);
 }
 
 /// Set wp->w_topline to a certain number.
@@ -2723,7 +2674,7 @@ pub unsafe extern "C" fn rs_set_topline(wp: WinHandle, lnum: LinenrT) {
         return;
     }
 
-    let prev_topline = nvim_win_get_topline(wp);
+    let prev_topline = win_ref(wp).w_topline;
 
     // Go to first of folded lines
     let mut folded_lnum = lnum;
@@ -2735,15 +2686,15 @@ pub unsafe extern "C" fn rs_set_topline(wp: WinHandle, lnum: LinenrT) {
     );
 
     // Approximate the value of w_botline
-    let botline = nvim_win_get_botline(wp);
-    let topline = nvim_win_get_topline(wp);
-    nvim_win_set_botline(wp, botline + (folded_lnum - topline));
-    nvim_win_set_topline(wp, folded_lnum);
-    nvim_win_set_topline_was_set(wp, 1);
+    let botline = win_ref(wp).w_botline;
+    let topline = win_ref(wp).w_topline;
+    win_mut(wp).w_botline = botline + (folded_lnum - topline);
+    win_mut(wp).w_topline = folded_lnum;
+    win_mut(wp).w_topline_was_set = 1_u8;
 
     if folded_lnum != prev_topline {
         // Keep the filler lines when the topline didn't change.
-        nvim_win_set_topfill(wp, 0);
+        win_mut(wp).w_topfill = 0;
     }
 
     nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_TOPLINE);
@@ -2772,8 +2723,8 @@ pub unsafe extern "C" fn rs_scrolldown_clamp() {
         return;
     }
 
-    let topline = nvim_win_get_topline(wp);
-    let topfill = nvim_win_get_topfill(wp);
+    let topline = win_ref(wp).w_topline;
+    let topfill = win_ref(wp).w_topfill;
     let fill = nvim_win_get_fill(wp, topline);
     let can_fill = topfill < fill;
 
@@ -2786,33 +2737,33 @@ pub unsafe extern "C" fn rs_scrolldown_clamp() {
     // Compute the row number of the last row of the cursor line
     // and make sure it doesn't go off the screen. Make sure the cursor
     // doesn't go past 'scrolloff' lines from the screen end.
-    let mut end_row = nvim_win_get_wrow(wp);
+    let mut end_row = win_ref(wp).w_wrow;
     if can_fill {
         end_row += 1;
     } else {
         end_row += nvim_plines_win_nofill(wp, topline - 1, 1);
     }
 
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let view_width = nvim_win_get_view_width(wp);
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let view_width = win_ref(wp).w_view_width;
     if p_wrap && view_width != 0 {
         validate_cheight(wp);
         validate_virtcol(wp);
-        let cline_height = nvim_win_get_cline_height(wp);
-        let virtcol = nvim_win_get_virtcol(wp);
+        let cline_height = win_ref(wp).w_cline_height;
+        let virtcol = win_ref(wp).w_virtcol;
         end_row += cline_height - 1 - virtcol / view_width;
     }
 
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
     let so = rs_get_scrolloff_value(wp);
     if end_row < view_height - so {
         if can_fill {
-            nvim_win_set_topfill(wp, topfill + 1);
+            win_mut(wp).w_topfill = topfill + 1;
             check_topfill(wp, 1);
         } else {
             let mut new_topline = topline - 1;
-            nvim_win_set_topline(wp, new_topline);
-            nvim_win_set_topfill(wp, 0);
+            win_mut(wp).w_topline = new_topline;
+            win_mut(wp).w_topfill = 0;
 
             // Handle folding - go to first line of fold
             let mut first_lnum = new_topline;
@@ -2824,13 +2775,13 @@ pub unsafe extern "C" fn rs_scrolldown_clamp() {
             ) != 0
             {
                 new_topline = first_lnum;
-                nvim_win_set_topline(wp, new_topline);
+                win_mut(wp).w_topline = new_topline;
             }
         }
 
         // approximate w_botline
-        let botline = nvim_win_get_botline(wp);
-        nvim_win_set_botline(wp, botline - 1);
+        let botline = win_ref(wp).w_botline;
+        win_mut(wp).w_botline = botline - 1;
 
         nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW | VALID_BOTLINE);
     }
@@ -2848,8 +2799,8 @@ pub unsafe extern "C" fn rs_scrollup_clamp() {
         return;
     }
 
-    let topline = nvim_win_get_topline(wp);
-    let topfill = nvim_win_get_topfill(wp);
+    let topline = win_ref(wp).w_topline;
+    let topfill = win_ref(wp).w_topfill;
     let line_count = nvim_curbuf_line_count();
 
     if topline == line_count && topfill == 0 {
@@ -2861,22 +2812,22 @@ pub unsafe extern "C" fn rs_scrollup_clamp() {
     // Compute the row number of the first row of the cursor line
     // and make sure it doesn't go off the screen. Make sure the cursor
     // doesn't go before 'scrolloff' lines from the screen start.
-    let wrow = nvim_win_get_wrow(wp);
+    let wrow = win_ref(wp).w_wrow;
     let plines = nvim_plines_win_nofill(wp, topline, 1);
     let mut start_row = wrow - plines - topfill;
 
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let view_width = nvim_win_get_view_width(wp);
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let view_width = win_ref(wp).w_view_width;
     if p_wrap && view_width != 0 {
         validate_virtcol(wp);
-        let virtcol = nvim_win_get_virtcol(wp);
+        let virtcol = win_ref(wp).w_virtcol;
         start_row -= virtcol / view_width;
     }
 
     let so = rs_get_scrolloff_value(wp);
     if start_row >= so {
         if topfill > 0 {
-            nvim_win_set_topfill(wp, topfill - 1);
+            win_mut(wp).w_topfill = topfill - 1;
         } else {
             // Handle folding - go to last line of fold
             let mut last_lnum = topline;
@@ -2886,12 +2837,12 @@ pub unsafe extern "C" fn rs_scrollup_clamp() {
                 std::ptr::null_mut(),
                 std::ptr::addr_of_mut!(last_lnum),
             );
-            nvim_win_set_topline(wp, last_lnum + 1);
+            win_mut(wp).w_topline = last_lnum + 1;
         }
 
         // approximate w_botline
-        let botline = nvim_win_get_botline(wp);
-        nvim_win_set_botline(wp, botline + 1);
+        let botline = win_ref(wp).w_botline;
+        win_mut(wp).w_botline = botline + 1;
 
         nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW | VALID_BOTLINE);
     }
@@ -2907,7 +2858,6 @@ extern "C" {
     fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int;
 
     // Cursor position setters for coladd
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: ColnrT);
 }
 
 /// Make sure the cursor is in the visible part of the topline after scrolling
@@ -2921,18 +2871,18 @@ pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
         return;
     }
 
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let topline = nvim_win_get_topline(wp);
+    let p_sms = win_ref(wp).w_p_sms() != 0;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let topline = win_ref(wp).w_topline;
 
     if !p_sms || !p_wrap || cursor_lnum != topline {
         return;
     }
 
     let so = rs_get_scrolloff_value(wp);
-    let view_width = nvim_win_get_view_width(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_width = win_ref(wp).w_view_width;
+    let view_height = win_ref(wp).w_view_height;
     let width1 = view_width - win_col_off(wp);
     let width2 = width1 + win_col_off2(wp);
     let mut so_cols = if so == 0 {
@@ -2947,7 +2897,7 @@ pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
         linetabsize_eol(wp, topline)
     };
 
-    let skipcol = nvim_win_get_skipcol(wp);
+    let skipcol = win_ref(wp).w_skipcol;
     if topline == 1 && skipcol == 0 {
         so_cols = 0; // Ignore 'scrolloff' at top of buffer.
     } else if so_cols > space_cols / 2 {
@@ -2973,7 +2923,7 @@ pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
     let bot = skipcol + width1 + (view_height - 1) * width2 - so_cols;
 
     validate_virtcol(wp);
-    let virtcol = nvim_win_get_virtcol(wp);
+    let virtcol = win_ref(wp).w_virtcol;
     let mut col = virtcol;
 
     if col < top {
@@ -2990,7 +2940,7 @@ pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
     }
 
     if col != virtcol {
-        nvim_win_set_curswant(wp, col);
+        win_mut(wp).w_curswant = col;
         let rc = rs_coladvance(wp, col);
 
         // validate_virtcol() marked various things as valid, but after
@@ -3001,17 +2951,17 @@ pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
         );
 
         let line_count = nvim_win_buf_line_count(wp);
-        let skipcol = nvim_win_get_skipcol(wp);
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let skipcol = win_ref(wp).w_skipcol;
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
         if rc != 0 && skipcol > 0 && cursor_lnum < line_count {
             validate_virtcol(wp);
-            let virtcol = nvim_win_get_virtcol(wp);
+            let virtcol = win_ref(wp).w_virtcol;
             if virtcol < skipcol + overlap {
                 // Cursor still not visible: move it to the next line instead.
-                nvim_win_set_cursor_lnum(wp, cursor_lnum + 1);
-                nvim_win_set_cursor_col(wp, 0);
-                nvim_win_set_cursor_coladd(wp, 0);
-                nvim_win_set_curswant(wp, 0);
+                win_mut(wp).w_cursor.lnum = cursor_lnum + 1;
+                win_mut(wp).w_cursor.col = 0;
+                win_mut(wp).w_cursor.coladd = 0;
+                win_mut(wp).w_curswant = 0;
                 nvim_win_clear_valid_bits(wp, VALID_VIRTCOL);
             }
         }
@@ -3034,16 +2984,16 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
         return;
     }
 
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let topline = nvim_win_get_topline(wp);
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
+    let p_sms = win_ref(wp).w_p_sms() != 0;
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let topline = win_ref(wp).w_topline;
 
     if !p_wrap || !p_sms || cursor_lnum != topline {
         return;
     }
 
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
     let width1 = view_width - win_col_off(wp);
     if width1 <= 0 {
         return; // no text will be displayed
@@ -3059,8 +3009,8 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
     let mut scrolled = false;
 
     validate_cheight(wp);
-    let cline_height = nvim_win_get_cline_height(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let cline_height = win_ref(wp).w_cline_height;
+    let view_height = win_ref(wp).w_view_height;
 
     if cline_height == view_height
         // w_cline_height may be capped at w_view_height, check there aren't
@@ -3074,8 +3024,8 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
 
     validate_virtcol(wp);
     let overlap = rs_sms_marker_overlap(wp, view_width - width2);
-    let mut skipcol = nvim_win_get_skipcol(wp);
-    let virtcol = nvim_win_get_virtcol(wp);
+    let mut skipcol = win_ref(wp).w_skipcol;
+    let virtcol = win_ref(wp).w_virtcol;
 
     while skipcol > 0 && virtcol < skipcol + overlap + scrolloff_cols {
         // scroll a screen line down
@@ -3084,7 +3034,7 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
         } else {
             skipcol -= width1;
         }
-        nvim_win_set_skipcol(wp, skipcol);
+        win_mut(wp).w_skipcol = skipcol;
         scrolled = true;
     }
 
@@ -3095,7 +3045,7 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
     }
 
     let mut row = 0;
-    let virtcol = nvim_win_get_virtcol(wp);
+    let virtcol = win_ref(wp).w_virtcol;
     let mut col = virtcol + scrolloff_cols;
 
     // Avoid adjusting for 'scrolloff' beyond the text line height.
@@ -3107,7 +3057,7 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
         }
     }
 
-    let skipcol = nvim_win_get_skipcol(wp);
+    let skipcol = win_ref(wp).w_skipcol;
     col -= skipcol;
 
     if col >= width1 {
@@ -3119,16 +3069,16 @@ pub unsafe extern "C" fn rs_adjust_skipcol() {
     }
 
     if row >= view_height {
-        let mut skipcol = nvim_win_get_skipcol(wp);
+        let mut skipcol = win_ref(wp).w_skipcol;
         if skipcol == 0 {
             skipcol += width1;
-            nvim_win_set_skipcol(wp, skipcol);
+            win_mut(wp).w_skipcol = skipcol;
             row -= 1;
         }
         if row >= view_height {
-            skipcol = nvim_win_get_skipcol(wp);
+            skipcol = win_ref(wp).w_skipcol;
             skipcol += (row - view_height) * width2;
-            nvim_win_set_skipcol(wp, skipcol);
+            win_mut(wp).w_skipcol = skipcol;
         }
         nvim_redraw_later(wp, upd::NOT_VALID);
     }
@@ -3165,8 +3115,8 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
         below_wanted = mouse_dragging - 1;
     }
 
-    let topline = nvim_win_get_topline(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let topline = win_ref(wp).w_topline;
+    let view_height = win_ref(wp).w_view_height;
 
     if topline == 1 {
         above_wanted = 0;
@@ -3175,7 +3125,7 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
     }
 
     validate_botline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let botline = win_ref(wp).w_botline;
     let line_count = nvim_win_buf_line_count(wp);
 
     if botline == line_count + 1 && mouse_dragging == 0 {
@@ -3186,7 +3136,7 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
 
     // If there are sufficient file-lines above and below the cursor, we can
     // return now.
-    let cln = nvim_win_get_cursor_lnum(wp); // Cursor Line Number
+    let cln = win_ref(wp).w_cursor.lnum; // Cursor Line Number
     if cln >= topline + above_wanted
         && cln < botline - below_wanted
         && nvim_win_lines_concealed(wp) == 0
@@ -3194,12 +3144,12 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
         return;
     }
 
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let p_sms = win_ref(wp).w_p_sms() != 0;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
 
     if p_sms && !p_wrap {
         // 'smoothscroll' is active
-        let cline_height = nvim_win_get_cline_height(wp);
+        let cline_height = win_ref(wp).w_cline_height;
         if cline_height == view_height {
             // The cursor line just fits in the window, don't scroll.
             rs_reset_skipcol(wp);
@@ -3217,8 +3167,8 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
     let mut bot_lnum = botline - 1;
 
     // count filler lines as context
-    let topfill = nvim_win_get_topfill(wp);
-    let filler_rows = nvim_win_get_filler_rows(wp);
+    let topfill = win_ref(wp).w_topfill;
+    let filler_rows = win_ref(wp).w_filler_rows;
     let mut above = topfill; // screen lines above topline
     let mut below = filler_rows; // screen lines below botline
 
@@ -3262,24 +3212,24 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
     }
 
     if top_lnum == bot_lnum || bot_lnum == 0 {
-        nvim_win_set_cursor_lnum(wp, top_lnum);
+        win_mut(wp).w_cursor.lnum = top_lnum;
     } else if top_lnum > bot_lnum {
-        nvim_win_set_cursor_lnum(wp, bot_lnum);
+        win_mut(wp).w_cursor.lnum = bot_lnum;
     } else {
         if cln < top_lnum && topline > 1 {
-            nvim_win_set_cursor_lnum(wp, top_lnum);
+            win_mut(wp).w_cursor.lnum = top_lnum;
             nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW);
         }
         if cln > bot_lnum && botline <= line_count {
-            nvim_win_set_cursor_lnum(wp, bot_lnum);
+            win_mut(wp).w_cursor.lnum = bot_lnum;
             nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW);
         }
     }
 
     rs_check_cursor_moved(wp);
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_TOPLINE);
-    nvim_win_set_viewport_invalid(wp, 1);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_TOPLINE;
+    win_mut(wp).w_viewport_invalid = 1 != 0;
 }
 
 // =============================================================================
@@ -3298,7 +3248,6 @@ const DIRECTION_BACKWARD: c_int = -1;
 
 extern "C" {
     // Smoothscroll option setter
-    fn nvim_win_set_p_sms(wp: WinHandle, val: c_int);
 }
 
 // =============================================================================
@@ -3327,13 +3276,13 @@ pub unsafe extern "C" fn rs_get_scroll_overlap(dir: c_int) -> c_int {
         return 0;
     }
 
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
     let min_height = view_height - 2;
 
     validate_botline(wp);
 
-    let topline = nvim_win_get_topline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let topline = win_ref(wp).w_topline;
+    let botline = win_ref(wp).w_botline;
     let line_count = nvim_curbuf_line_count();
 
     // Check if we're at the buffer boundaries
@@ -3352,9 +3301,9 @@ pub unsafe extern "C" fn rs_get_scroll_overlap(dir: c_int) -> c_int {
 
     let fill_base = nvim_win_get_fill(wp, initial_lnum + c_int::from(dir == DIRECTION_BACKWARD));
     let fill_subtract = if dir == DIRECTION_FORWARD {
-        nvim_win_get_filler_rows(wp)
+        win_ref(wp).w_filler_rows
     } else {
-        nvim_win_get_topfill(wp)
+        win_ref(wp).w_topfill
     };
 
     let mut loff = LineOff {
@@ -3445,20 +3394,20 @@ pub unsafe extern "C" fn rs_scroll_with_sms(
         return 1;
     }
 
-    let prev_sms = nvim_win_get_p_sms(wp);
-    let prev_skipcol = nvim_win_get_skipcol(wp);
-    let prev_topline = nvim_win_get_topline(wp);
-    let prev_topfill = nvim_win_get_topfill(wp);
+    let prev_sms = win_ref(wp).w_p_sms();
+    let prev_skipcol = win_ref(wp).w_skipcol;
+    let prev_topline = win_ref(wp).w_topline;
+    let prev_topfill = win_ref(wp).w_topfill;
 
     // Temporarily enable smoothscroll
-    nvim_win_set_p_sms(wp, 1);
+    unsafe { win_mut(wp).set_w_p_sms(1) };
     rs_scroll_redraw(c_int::from(dir == DIRECTION_FORWARD), count);
 
     // Not actually smoothscrolling but ended up with partially visible line.
     // Continue scrolling until skipcol is zero.
-    if prev_sms == 0 && nvim_win_get_skipcol(wp) > 0 {
+    if prev_sms == 0 && win_ref(wp).w_skipcol > 0 {
         let mut fixdir = dir;
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
 
         // Reverse the scroll direction when topline already changed. One line
         // extra for scrolling backward so that consuming skipcol is symmetric.
@@ -3467,10 +3416,10 @@ pub unsafe extern "C" fn rs_scroll_with_sms(
             fixdir = -dir;
         }
 
-        let view_width = nvim_win_get_view_width(wp);
+        let view_width = win_ref(wp).w_view_width;
         let width1 = view_width - win_col_off(wp);
         let width2 = width1 + win_col_off2(wp);
-        let skipcol = nvim_win_get_skipcol(wp);
+        let skipcol = win_ref(wp).w_skipcol;
 
         if fixdir == DIRECTION_FORWARD {
             let tabsize = linetabsize_eol(wp, topline);
@@ -3488,12 +3437,12 @@ pub unsafe extern "C" fn rs_scroll_with_sms(
     }
 
     // Restore original sms setting
-    nvim_win_set_p_sms(wp, prev_sms);
+    unsafe { win_mut(wp).set_w_p_sms(prev_sms) };
 
     // Return true (1) if nothing changed
-    let new_topline = nvim_win_get_topline(wp);
-    let new_topfill = nvim_win_get_topfill(wp);
-    let new_skipcol = nvim_win_get_skipcol(wp);
+    let new_topline = win_ref(wp).w_topline;
+    let new_topfill = win_ref(wp).w_topfill;
+    let new_skipcol = win_ref(wp).w_skipcol;
 
     c_int::from(
         new_topline == prev_topline && new_topfill == prev_topfill && new_skipcol == prev_skipcol,
@@ -3564,10 +3513,10 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
     let half = half != 0;
     let mut nochange = true;
     let buflen = nvim_curbuf_line_count();
-    let prev_col = nvim_win_get_cursor_col(wp);
-    let prev_curswant = nvim_win_get_curswant(wp);
-    let prev_lnum = nvim_win_get_cursor_lnum(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let prev_col = win_ref(wp).w_cursor.col;
+    let prev_curswant = win_ref(wp).w_curswant;
+    let prev_lnum = win_ref(wp).w_cursor.lnum;
+    let view_height = win_ref(wp).w_view_height;
 
     if half {
         // Scroll [count], 'scroll' or current window height lines.
@@ -3581,7 +3530,7 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
         let mut curscount = count;
 
         // Adjust count so as to not reveal end of buffer lines.
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         if dir == DIRECTION_FORWARD
             && (topline + view_height + count > buflen || nvim_win_lines_concealed(wp) != 0)
         {
@@ -3597,14 +3546,14 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
         // (Try to) scroll the window unless already at the end of the buffer.
         if count > 0 {
             nochange = rs_scroll_with_sms(dir, count, std::ptr::addr_of_mut!(curscount)) != 0;
-            nvim_win_set_cursor_lnum(wp, prev_lnum);
-            nvim_win_set_cursor_col(wp, prev_col);
-            nvim_win_set_curswant(wp, prev_curswant);
+            win_mut(wp).w_cursor.lnum = prev_lnum;
+            win_mut(wp).w_cursor.col = prev_col;
+            win_mut(wp).w_curswant = prev_curswant;
         }
 
         // Move the cursor the same amount of screen lines, skipping over
         // concealed lines as those were not included in "curscount".
-        let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+        let p_wrap = win_ref(wp).w_p_wrap() != 0;
         if p_wrap {
             nvim_nv_screengo(dir, curscount, 1);
         } else if dir == DIRECTION_FORWARD {
@@ -3629,8 +3578,8 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
         if !nochange {
             // Place cursor at top or bottom of window.
             validate_botline(wp);
-            let topline = nvim_win_get_topline(wp);
-            let botline = nvim_win_get_botline(wp);
+            let topline = win_ref(wp).w_topline;
+            let botline = win_ref(wp).w_botline;
             let lnum = if dir == DIRECTION_FORWARD {
                 topline
             } else {
@@ -3638,7 +3587,7 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
             };
             // In silent Ex mode the value of w_botline - 1 may be 0,
             // but cursor lnum needs to be at least 1.
-            nvim_win_set_cursor_lnum(wp, lnum.max(1));
+            win_mut(wp).w_cursor.lnum = lnum.max(1);
         }
     }
 
@@ -3649,11 +3598,10 @@ pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int
     // Move cursor to first line of closed fold.
     rs_foldAdjustCursor(wp);
 
-    nochange = nochange
-        && prev_col == nvim_win_get_cursor_col(wp)
-        && prev_lnum == nvim_win_get_cursor_lnum(wp);
+    nochange =
+        nochange && prev_col == win_ref(wp).w_cursor.col && prev_lnum == win_ref(wp).w_cursor.lnum;
 
-    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let p_sms = win_ref(wp).w_p_sms() != 0;
     let p_sol = nvim_get_p_sol() != 0;
 
     // Error if both the viewport and cursor did not change.
@@ -3691,17 +3639,6 @@ extern "C" {
         ecol: *mut ColnrT,
     );
 
-    /// Get window row position.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Get window column position.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-
-    /// Get window row offset.
-    fn nvim_win_get_winrow_off(wp: WinHandle) -> c_int;
-
-    /// Get window column offset.
-    fn nvim_win_get_wincol_off(wp: WinHandle) -> c_int;
 }
 
 /// Compute the screen position of text character at "pos" in window "wp".
@@ -3751,8 +3688,8 @@ pub unsafe extern "C" fn rs_textpos2screenpos(
 
     let pos = &*pos;
     let mut lnum = pos.lnum;
-    let topline = nvim_win_get_topline(wp);
-    let botline = nvim_win_get_botline(wp);
+    let topline = win_ref(wp).w_topline;
+    let botline = win_ref(wp).w_botline;
 
     let mut row: c_int = if lnum >= topline && lnum <= botline {
         let mut first_lnum = lnum;
@@ -3771,7 +3708,7 @@ pub unsafe extern "C" fn rs_textpos2screenpos(
         // be negative if "lnum" is "w_topline" and "w_skipcol" is non-zero.
         r -= rs_adjust_plines_for_skipcol(wp);
         // Add filler lines above this buffer line.
-        let topfill = nvim_win_get_topfill(wp);
+        let topfill = win_ref(wp).w_topfill;
         r += if lnum == topline {
             topfill
         } else {
@@ -3782,7 +3719,7 @@ pub unsafe extern "C" fn rs_textpos2screenpos(
     } else if !local || lnum < topline {
         0
     } else {
-        let view_height = nvim_win_get_view_height(wp);
+        let view_height = win_ref(wp).w_view_height;
         view_height - 1
     };
 
@@ -3792,10 +3729,10 @@ pub unsafe extern "C" fn rs_textpos2screenpos(
     if (local || visible_row) && existing_row {
         let off = rs_win_col_off(wp);
         if is_folded {
-            let winrow = nvim_win_get_winrow(wp);
-            let winrow_off = nvim_win_get_winrow_off(wp);
-            let wincol = nvim_win_get_wincol(wp);
-            let wincol_off = nvim_win_get_wincol_off(wp);
+            let winrow = win_ref(wp).w_winrow;
+            let winrow_off = win_ref(wp).w_winrow_off;
+            let wincol = win_ref(wp).w_wincol;
+            let wincol_off = win_ref(wp).w_wincol_off;
 
             row += if local { 0 } else { winrow + winrow_off } + 1;
             coloff = if local { 0 } else { wincol + wincol_off } + 1 + off;
@@ -3812,11 +3749,11 @@ pub unsafe extern "C" fn rs_textpos2screenpos(
             // similar to what is done in validate_cursor_col()
             let mut col = scol;
             col += off;
-            let view_width = nvim_win_get_view_width(wp);
+            let view_width = win_ref(wp).w_view_width;
             let width = view_width - off + rs_win_col_off2(wp);
 
             // long line wrapping, adjust row
-            let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+            let p_wrap = win_ref(wp).w_p_wrap() != 0;
             if p_wrap && col >= view_width && width > 0 {
                 // use same formula as what is used in curs_columns()
                 let rowoff = if visible_row {
@@ -3828,15 +3765,15 @@ pub unsafe extern "C" fn rs_textpos2screenpos(
                 row += rowoff;
             }
 
-            let leftcol = nvim_win_get_leftcol(wp);
+            let leftcol = win_ref(wp).w_leftcol;
             col -= leftcol;
 
-            let view_height = nvim_win_get_view_height(wp);
+            let view_height = win_ref(wp).w_view_height;
             if col >= 0 && col < view_width && row >= 0 && row < view_height {
-                let winrow = nvim_win_get_winrow(wp);
-                let winrow_off = nvim_win_get_winrow_off(wp);
-                let wincol = nvim_win_get_wincol(wp);
-                let wincol_off = nvim_win_get_wincol_off(wp);
+                let winrow = win_ref(wp).w_winrow;
+                let winrow_off = win_ref(wp).w_winrow_off;
+                let wincol = win_ref(wp).w_wincol;
+                let wincol_off = win_ref(wp).w_wincol_off;
 
                 coloff = col - scol + if local { 0 } else { wincol + wincol_off } + 1;
                 row += if local { 0 } else { winrow + winrow_off } + 1;
@@ -3923,16 +3860,12 @@ extern "C" {
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
 
     /// Get next window in linked list.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 
     /// Get 'cursorbind' option for a window.
-    fn nvim_win_get_p_crb(wp: WinHandle) -> c_int;
 
     /// Get 'diff' option for a window.
-    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
 
     /// Get 'scrollbind' option for a window.
-    fn nvim_win_get_p_scb(wp: WinHandle) -> bool;
 
     /// Set curwin global.
     fn nvim_set_curwin(wp: WinHandle);
@@ -3964,8 +3897,6 @@ extern "C" {
     /// Set `restart_edit` global.
     fn update_topline(wp: WinHandle);
 
-    /// Set `w_redr_status` for a window.
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
 }
 
 /// Static storage for cursor bind tracking.
@@ -3990,9 +3921,9 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
         return;
     }
 
-    let cursor_lnum = nvim_win_get_cursor_lnum(curwin);
-    let cursor_col = nvim_win_get_cursor_col(curwin);
-    let cursor_coladd = nvim_win_get_cursor_coladd(curwin);
+    let cursor_lnum = win_ref(curwin).w_cursor.lnum;
+    let cursor_col = win_ref(curwin).w_cursor.col;
+    let cursor_coladd = win_ref(curwin).w_cursor.coladd;
 
     // Check if cursor has moved since last call
     if curwin == PREV_CURWIN
@@ -4012,8 +3943,8 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
     let line = cursor_lnum;
     let col = cursor_col;
     let coladd = cursor_coladd;
-    let curswant = nvim_win_get_curswant(curwin);
-    let set_curswant = nvim_win_get_set_curswant(curwin);
+    let curswant = win_ref(curwin).w_curswant;
+    let set_curswant = win_ref(curwin).w_set_curswant;
     let old_curwin = curwin;
     let old_curbuf = nvim_get_curbuf();
     let old_visual_select = nvim_get_VIsual_select();
@@ -4028,21 +3959,21 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
 
     while !wp.is_null() {
         nvim_set_curwin(wp);
-        nvim_set_curbuf(nvim_win_get_buffer(wp));
+        nvim_set_curbuf(win_ref(wp).w_buffer);
 
         // skip original window and windows with 'nocursorbind'
-        if wp != old_curwin && nvim_win_get_p_crb(wp) != 0 {
+        if wp != old_curwin && win_ref(wp).w_p_crb() != 0 {
             // Set cursor line number
-            if nvim_win_get_p_diff(wp) != 0 {
+            if win_ref(wp).w_p_diff() != 0 {
                 let new_lnum = rs_diff_get_corresponding_line(old_curbuf, line);
-                nvim_win_set_cursor_lnum(wp, new_lnum);
+                win_mut(wp).w_cursor.lnum = new_lnum;
             } else {
-                nvim_win_set_cursor_lnum(wp, line);
+                win_mut(wp).w_cursor.lnum = line;
             }
-            nvim_win_set_cursor_col(wp, col);
-            nvim_win_set_cursor_coladd(wp, coladd);
-            nvim_win_set_curswant(wp, curswant);
-            nvim_win_set_set_curswant(wp, set_curswant);
+            win_mut(wp).w_cursor.col = col;
+            win_mut(wp).w_cursor.coladd = coladd;
+            win_mut(wp).w_curswant = curswant;
+            win_mut(wp).w_set_curswant = set_curswant;
 
             // Make sure the cursor is in a valid position.
             // Temporarily set "restart_edit" to allow the cursor to be beyond EOL.
@@ -4052,7 +3983,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
 
             // Avoid a scroll here for the cursor position, 'scrollbind' is
             // more important.
-            if !nvim_win_get_p_scb(wp) {
+            if win_ref(wp).w_p_scb() == 0 {
                 rs_validate_cursor(wp);
             }
 
@@ -4063,13 +3994,13 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
             nvim_redraw_later(wp, upd::VALID);
 
             // Only scroll when 'scrollbind' hasn't done this.
-            if !nvim_win_get_p_scb(wp) {
+            if win_ref(wp).w_p_scb() == 0 {
                 update_topline(wp);
             }
-            nvim_win_set_redr_status(wp, 1);
+            win_mut(wp).w_redr_status = 1 != 0;
         }
 
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 
     // reset current-window
@@ -4085,7 +4016,6 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
 
 extern "C" {
     // w_lines[] accessors
-    fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
     fn nvim_win_get_wl_entry(wp: WinHandle, idx: c_int) -> WlineHandle;
     fn nvim_wline_get_lnum(wl: WlineHandle) -> LinenrT;
     fn nvim_wline_get_valid(wl: WlineHandle) -> bool;
@@ -4116,9 +4046,9 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
         return;
     }
 
-    let w_lines_valid = nvim_win_get_lines_valid(wp);
-    let topline = nvim_win_get_topline(wp);
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let w_lines_valid = win_ref(wp).w_lines_valid;
+    let topline = win_ref(wp).w_topline;
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
 
     // Check if wp->w_lines[].wl_size is invalid
     let first_wl = nvim_win_get_wl_entry(wp, 0);
@@ -4130,7 +4060,7 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
     let all_invalid = nvim_redrawing() == 0 || w_lines_valid == 0 || first_wl_lnum > topline;
 
     let mut i = 0;
-    nvim_win_set_cline_row(wp, 0);
+    win_mut(wp).w_cline_row = 0;
     let mut cline_row = 0;
 
     let mut lnum = topline;
@@ -4152,7 +4082,7 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
                 if wl_lnum == lnum {
                     // Check for newly inserted lines below this row, in which
                     // case we need to check for folded lines.
-                    let buf = nvim_win_get_buffer(wp);
+                    let buf = win_ref(wp).w_buffer;
                     let mod_set = nvim_buf_get_mod_set(buf) != 0;
                     let wl_lastlnum = nvim_wline_get_lastlnum(wl);
                     let mod_top = nvim_buf_get_mod_top(buf);
@@ -4167,7 +4097,7 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
             }
         }
 
-        let skipcol = nvim_win_get_skipcol(wp);
+        let skipcol = win_ref(wp).w_skipcol;
         let may_fill = win_may_fill(wp);
 
         if valid && (lnum != topline || (skipcol == 0 && !may_fill)) {
@@ -4204,11 +4134,11 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
         i += 1;
     }
 
-    nvim_win_set_cline_row(wp, cline_row);
+    win_mut(wp).w_cline_row = cline_row;
 
     rs_check_cursor_moved(wp);
 
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_CHEIGHT) == 0 {
         if all_invalid || i == w_lines_valid {
             // Need to compute cline_height
@@ -4221,8 +4151,8 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
                 1,
                 1,
             );
-            nvim_win_set_cline_height(wp, height);
-            nvim_win_set_cline_folded(wp, cline_folded);
+            win_mut(wp).w_cline_height = height;
+            win_mut(wp).w_cline_folded = cline_folded != 0;
         } else if i < w_lines_valid {
             let wl = nvim_win_get_wl_entry(wp, i);
             if !wl.is_null() {
@@ -4240,25 +4170,25 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
                         1,
                         1,
                     );
-                    nvim_win_set_cline_height(wp, height);
-                    nvim_win_set_cline_folded(wp, cline_folded);
+                    win_mut(wp).w_cline_height = height;
+                    win_mut(wp).w_cline_folded = cline_folded != 0;
                 } else {
-                    nvim_win_set_cline_height(wp, c_int::from(nvim_wline_get_size(wl)));
-                    nvim_win_set_cline_folded(wp, c_int::from(nvim_wline_get_folded(wl)));
+                    win_mut(wp).w_cline_height = c_int::from(nvim_wline_get_size(wl));
+                    win_mut(wp).w_cline_folded = c_int::from(nvim_wline_get_folded(wl)) != 0;
                 }
             }
         } else {
             // i > w_lines_valid: a line that is too long to fit on the last screen line
-            nvim_win_set_cline_height(wp, 0);
+            win_mut(wp).w_cline_height = 0;
             let folded =
                 nvim_hasFolding(wp, cursor_lnum, std::ptr::null_mut(), std::ptr::null_mut());
-            nvim_win_set_cline_folded(wp, folded);
+            win_mut(wp).w_cline_folded = folded != 0;
         }
     }
 
     rs_redraw_for_cursorline(wp);
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_CROW | VALID_CHEIGHT);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_CROW | VALID_CHEIGHT;
 }
 
 // =============================================================================
@@ -4284,7 +4214,6 @@ extern "C" {
     fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int;
 
     // Leftcol setter
-    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
 }
 
 /// Compute `w_wcol` and `w_virtcol`. Also updates `w_wrow`, `w_cline_row`, and `w_leftcol`.
@@ -4306,14 +4235,14 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
     update_topline(wp);
 
     // Next make sure that w_cline_row is valid.
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_CROW) == 0 {
         rs_curs_rows(wp);
     }
 
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let cline_folded = nvim_win_get_cline_folded(wp) != 0;
-    let leftcol = nvim_win_get_leftcol(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let cline_folded = c_int::from(win_ref(wp).w_cline_folded) != 0;
+    let leftcol = win_ref(wp).w_leftcol;
 
     // Compute the number of virtual columns.
     let startcol: ColnrT;
@@ -4326,8 +4255,8 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
         virtcol = leftcol;
         endcol = leftcol;
     } else {
-        let cursor_col = nvim_win_get_cursor_col(wp);
-        let cursor_coladd = nvim_win_get_cursor_coladd(wp);
+        let cursor_col = win_ref(wp).w_cursor.col;
+        let cursor_coladd = win_ref(wp).w_cursor.coladd;
         let mut pos = PosT {
             lnum: cursor_lnum,
             col: cursor_col,
@@ -4347,7 +4276,7 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
         virtcol = virt;
         endcol = end;
     }
-    nvim_win_set_virtcol(wp, virtcol);
+    win_mut(wp).w_virtcol = virtcol;
 
     // Remove '$' from change command when cursor moves onto it
     let dollar_vcol = nvim_get_dollar_vcol();
@@ -4360,12 +4289,12 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
     endcol += extra;
 
     // Now compute w_wrow, counting screen lines from w_cline_row.
-    let cline_row = nvim_win_get_cline_row(wp);
+    let cline_row = win_ref(wp).w_cline_row;
     let mut wrow = cline_row;
 
-    let view_width = nvim_win_get_view_width(wp);
-    let view_height = nvim_win_get_view_height(wp);
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let view_width = win_ref(wp).w_view_width;
+    let view_height = win_ref(wp).w_view_height;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
 
     let width1 = view_width - extra; // text width for first screen line
     let mut width2 = 0; // text width for second and later screen line
@@ -4378,15 +4307,15 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
         if p_wrap {
             wrow = view_height - 1;
         } else {
-            let empty_rows = nvim_win_get_empty_rows(wp);
+            let empty_rows = win_ref(wp).w_empty_rows;
             wrow = view_height - 1 - empty_rows;
         }
     } else if p_wrap && view_width != 0 {
         width2 = width1 + rs_win_col_off2(wp);
 
         // skip columns that are not visible
-        let topline = nvim_win_get_topline(wp);
-        let skipcol = nvim_win_get_skipcol(wp);
+        let topline = win_ref(wp).w_topline;
+        let skipcol = win_ref(wp).w_skipcol;
         if cursor_lnum == topline && skipcol > 0 && wcol >= skipcol {
             // Deduct by multiples of width2. This allows the long line wrapping
             // formula below to correctly calculate the w_wcol value when wrapping.
@@ -4438,13 +4367,13 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
             };
             let new_leftcol = new_leftcol.max(0);
             if new_leftcol != leftcol {
-                nvim_win_set_leftcol(wp, new_leftcol);
+                win_mut(wp).w_leftcol = new_leftcol;
                 win_check_anchored_floats(wp);
                 // screen has to be redrawn with new w_leftcol
                 nvim_redraw_later(wp, upd::NOT_VALID);
             }
         }
-        let new_leftcol = nvim_win_get_leftcol(wp);
+        let new_leftcol = win_ref(wp).w_leftcol;
         wcol -= new_leftcol;
     } else if wcol > leftcol {
         wcol -= leftcol;
@@ -4452,13 +4381,13 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
         wcol = 0;
     }
 
-    nvim_win_set_wcol(wp, wcol);
+    win_mut(wp).w_wcol = wcol;
 
     // Skip over filler lines. At the top use w_topfill, there
     // may be some filler lines above the window.
-    let topline = nvim_win_get_topline(wp);
+    let topline = win_ref(wp).w_topline;
     if cursor_lnum == topline {
-        let topfill = nvim_win_get_topfill(wp);
+        let topfill = win_ref(wp).w_topfill;
         wrow += topfill;
     } else {
         let fill = nvim_win_get_fill(wp, cursor_lnum);
@@ -4467,7 +4396,7 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
 
     let mut plines = 0;
     let so = rs_get_scrolloff_value(wp);
-    let prev_skipcol = nvim_win_get_skipcol(wp);
+    let prev_skipcol = win_ref(wp).w_skipcol;
 
     // Check if cursor is past end of screen
     let plines_check = if prev_skipcol > 0 || wrow + so >= view_height {
@@ -4490,7 +4419,7 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
         // 2: Less than "p_so" lines below
         // 3: both of them
         let mut scroll_extra = 0;
-        let skipcol = nvim_win_get_skipcol(wp);
+        let skipcol = win_ref(wp).w_skipcol;
         if skipcol + so * width2 > virtcol {
             scroll_extra = 1;
         }
@@ -4548,8 +4477,8 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
             new_skipcol = new_skipcol.max(end_col);
         }
 
-        nvim_win_set_skipcol(wp, new_skipcol);
-        let updated_skipcol = nvim_win_get_skipcol(wp);
+        win_mut(wp).w_skipcol = new_skipcol;
+        let updated_skipcol = win_ref(wp).w_skipcol;
 
         // adjust w_wrow for the changed w_skipcol
         if did_sub_skipcol {
@@ -4561,40 +4490,40 @@ pub unsafe extern "C" fn rs_curs_columns(wp: WinHandle, may_scroll: c_int) {
         if wrow >= view_height {
             // small window, make sure cursor is in it
             let extra_adj = wrow - view_height + 1;
-            nvim_win_set_skipcol(wp, updated_skipcol + extra_adj * width2);
+            win_mut(wp).w_skipcol = updated_skipcol + extra_adj * width2;
             wrow -= extra_adj;
         }
 
         // extra could be either positive or negative
-        let scroll_lines = (prev_skipcol - nvim_win_get_skipcol(wp)) / width2;
+        let scroll_lines = (prev_skipcol - win_ref(wp).w_skipcol) / width2;
         // TODO(bfredl): this is very suspicious when not called by win_update()
         // We should not randomly alter screen state outside of update_screen() :(
         if nvim_win_grid_has_target(wp) != 0 {
             nvim_win_scroll_lines(wp, 0, scroll_lines);
         }
     } else {
-        let p_sms = nvim_win_get_p_sms(wp) != 0;
+        let p_sms = win_ref(wp).w_p_sms() != 0;
         if !p_sms {
-            nvim_win_set_skipcol(wp, 0);
+            win_mut(wp).w_skipcol = 0;
         }
     }
 
-    let final_skipcol = nvim_win_get_skipcol(wp);
+    let final_skipcol = win_ref(wp).w_skipcol;
     if prev_skipcol != final_skipcol {
         nvim_redraw_later(wp, upd::SOME_VALID);
     }
 
-    nvim_win_set_wrow(wp, wrow);
+    win_mut(wp).w_wrow = wrow;
     rs_redraw_for_cursorcolumn(wp);
 
     // now w_leftcol and w_skipcol are valid, avoid check_cursor_moved()
     // thinking otherwise
-    let final_leftcol = nvim_win_get_leftcol(wp);
-    nvim_win_set_valid_leftcol(wp, final_leftcol);
-    nvim_win_set_valid_skipcol(wp, final_skipcol);
+    let final_leftcol = win_ref(wp).w_leftcol;
+    win_mut(wp).w_valid_leftcol = final_leftcol;
+    win_mut(wp).w_valid_skipcol = final_skipcol;
 
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_WCOL | VALID_WROW | VALID_VIRTCOL);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_WCOL | VALID_WROW | VALID_VIRTCOL;
 }
 
 // =============================================================================
@@ -4609,7 +4538,6 @@ extern "C" {
     fn nvim_get_default_grid_has_chars() -> c_int;
 
     // Scroll binding position
-    fn nvim_win_set_scbind_pos(wp: WinHandle, val: c_int);
 
     // Buffer empty check (operates on window's buffer)
     fn nvim_win_buf_is_empty(wp: WinHandle) -> c_int;
@@ -4653,21 +4581,21 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
         return;
     }
 
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
 
     // If there is no valid screen and when the window height is zero just use
     // the cursor line.
     if nvim_get_default_grid_has_chars() == 0 || view_height == 0 {
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-        nvim_win_set_topline(wp, cursor_lnum);
-        nvim_win_set_botline(wp, cursor_lnum);
-        nvim_win_set_viewport_invalid(wp, 1);
-        nvim_win_set_scbind_pos(wp, 1);
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
+        win_mut(wp).w_topline = cursor_lnum;
+        win_mut(wp).w_botline = cursor_lnum;
+        win_mut(wp).w_viewport_invalid = 1 != 0;
+        win_mut(wp).w_scbind_pos = 1;
         return;
     }
 
     rs_check_cursor_moved(wp);
-    let valid = nvim_win_get_valid(wp);
+    let valid = win_ref(wp).w_valid;
     if (valid & VALID_TOPLINE) != 0 {
         return;
     }
@@ -4680,29 +4608,29 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
         rs_get_scrolloff_value(wp)
     };
 
-    let old_topline = nvim_win_get_topline(wp);
-    let old_topfill = nvim_win_get_topfill(wp);
+    let old_topline = win_ref(wp).w_topline;
+    let old_topfill = win_ref(wp).w_topfill;
 
     let mut check_botline = false;
 
     // If the buffer is empty, always set topline to 1.
     if win_buf_is_empty(wp) {
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
         if topline != 1 {
             nvim_redraw_later(wp, upd::NOT_VALID);
         }
-        nvim_win_set_topline(wp, 1);
-        nvim_win_set_botline(wp, 2);
-        nvim_win_set_skipcol(wp, 0);
-        let valid = nvim_win_get_valid(wp);
-        nvim_win_set_valid(wp, valid | VALID_BOTLINE | VALID_BOTLINE_AP);
-        nvim_win_set_viewport_invalid(wp, 1);
-        nvim_win_set_scbind_pos(wp, 1);
+        win_mut(wp).w_topline = 1;
+        win_mut(wp).w_botline = 2;
+        win_mut(wp).w_skipcol = 0;
+        let valid = win_ref(wp).w_valid;
+        win_mut(wp).w_valid = valid | VALID_BOTLINE | VALID_BOTLINE_AP;
+        win_mut(wp).w_viewport_invalid = 1 != 0;
+        win_mut(wp).w_scbind_pos = 1;
     } else {
         let mut check_topline = false;
-        let topline = nvim_win_get_topline(wp);
-        let skipcol = nvim_win_get_skipcol(wp);
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let topline = win_ref(wp).w_topline;
+        let skipcol = win_ref(wp).w_skipcol;
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
 
         // If the cursor is above or near the top of the window, scroll the window
         // to show the line the cursor is in, with 'scrolloff' context.
@@ -4715,8 +4643,8 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
             } else if skipcol > 0 && cursor_lnum == topline {
                 // Check that the cursor position is visible. Add columns for
                 // the marker displayed in the top-left if needed.
-                let cursor_col = nvim_win_get_cursor_col(wp);
-                let cursor_coladd = nvim_win_get_cursor_coladd(wp);
+                let cursor_col = win_ref(wp).w_cursor.col;
+                let cursor_coladd = win_ref(wp).w_cursor.coladd;
                 let mut pos = PosT {
                     lnum: cursor_lnum,
                     col: cursor_col,
@@ -4739,8 +4667,8 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
 
         // Check if there are more filler lines than allowed.
         if !check_topline {
-            let topfill = nvim_win_get_topfill(wp);
-            let topline = nvim_win_get_topline(wp);
+            let topfill = win_ref(wp).w_topfill;
+            let topline = win_ref(wp).w_topline;
             let max_fill = nvim_win_get_fill(wp, topline);
             if topfill > max_fill {
                 check_topline = true;
@@ -4757,8 +4685,8 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
                 // Count the number of logical lines between the cursor and
                 // topline + p_so (approximation of how much will be scrolled).
                 let mut count: i64 = 0;
-                let topline = nvim_win_get_topline(wp);
-                let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+                let topline = win_ref(wp).w_topline;
+                let cursor_lnum = win_ref(wp).w_cursor.lnum;
                 let line_count = nvim_win_buf_line_count(wp);
                 let mut lnum = cursor_lnum;
 
@@ -4784,8 +4712,8 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
                 }
                 count
             } else {
-                let topline = nvim_win_get_topline(wp);
-                let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+                let topline = win_ref(wp).w_topline;
+                let cursor_lnum = win_ref(wp).w_cursor.lnum;
                 i64::from(topline + so - cursor_lnum)
             };
 
@@ -4801,7 +4729,7 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
             }
         } else {
             // Make sure topline is the first line of a fold.
-            let topline = nvim_win_get_topline(wp);
+            let topline = win_ref(wp).w_topline;
             let mut first_lnum = topline;
             nvim_hasFolding(
                 wp,
@@ -4810,7 +4738,7 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
                 std::ptr::null_mut(),
             );
             if first_lnum != topline {
-                nvim_win_set_topline(wp, first_lnum);
+                win_mut(wp).w_topline = first_lnum;
             }
             check_botline = true;
         }
@@ -4823,23 +4751,23 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
     // cases, but we don't want to spend (a lot of) time recomputing w_botline
     // for every small change.
     if check_botline {
-        let valid = nvim_win_get_valid(wp);
+        let valid = win_ref(wp).w_valid;
         if (valid & VALID_BOTLINE_AP) == 0 {
             rs_validate_botline(wp);
         }
 
-        let botline = nvim_win_get_botline(wp);
+        let botline = win_ref(wp).w_botline;
         let line_count = nvim_win_buf_line_count(wp);
 
         if botline <= line_count {
-            let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+            let cursor_lnum = win_ref(wp).w_cursor.lnum;
             if cursor_lnum < botline {
                 if cursor_lnum >= botline - so || nvim_win_lines_concealed(wp) != 0 {
                     // Cursor is (a few lines) above botline, check if there are
                     // 'scrolloff' window lines below the cursor. If not, need to
                     // scroll.
-                    let empty_rows = nvim_win_get_empty_rows(wp);
-                    let filler_rows = nvim_win_get_filler_rows(wp);
+                    let empty_rows = win_ref(wp).w_empty_rows;
+                    let filler_rows = win_ref(wp).w_filler_rows;
                     let mut n = empty_rows + filler_rows;
 
                     let mut loff = LineOff::new(cursor_lnum);
@@ -4857,7 +4785,7 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
                     loff.fill = 0;
                     loff.height = 0;
 
-                    let botline = nvim_win_get_botline(wp);
+                    let botline = win_ref(wp).w_botline;
                     while loff.lnum < botline && (loff.lnum + 1 < botline || loff.fill == 0) {
                         n += loff.height;
                         if n >= so {
@@ -4881,9 +4809,9 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
                     // Count the number of logical lines between the cursor and
                     // botline - p_so (approximation of how much will be scrolled).
                     let mut count = 0;
-                    let botline = nvim_win_get_botline(wp);
-                    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-                    let view_height = nvim_win_get_view_height(wp);
+                    let botline = win_ref(wp).w_botline;
+                    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+                    let view_height = win_ref(wp).w_view_height;
                     let mut lnum = cursor_lnum;
 
                     while lnum >= botline - so {
@@ -4908,12 +4836,12 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
                     }
                     count
                 } else {
-                    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-                    let botline = nvim_win_get_botline(wp);
+                    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+                    let botline = win_ref(wp).w_botline;
                     cursor_lnum - botline + 1 + so
                 };
 
-                let view_height = nvim_win_get_view_height(wp);
+                let view_height = win_ref(wp).w_view_height;
                 if n <= view_height + 1 {
                     let jump = rs_scrolljump_value(wp);
                     rs_scroll_cursor_bot(wp, jump, 0);
@@ -4924,32 +4852,32 @@ pub unsafe extern "C" fn rs_update_topline(wp: WinHandle) {
         }
     }
 
-    let valid = nvim_win_get_valid(wp);
-    nvim_win_set_valid(wp, valid | VALID_TOPLINE);
-    nvim_win_set_viewport_invalid(wp, 1);
+    let valid = win_ref(wp).w_valid;
+    win_mut(wp).w_valid = valid | VALID_TOPLINE;
+    win_mut(wp).w_viewport_invalid = 1 != 0;
     win_check_anchored_floats(wp);
 
     // Need to redraw when topline changed.
-    let new_topline = nvim_win_get_topline(wp);
-    let new_topfill = nvim_win_get_topfill(wp);
+    let new_topline = win_ref(wp).w_topline;
+    let new_topfill = win_ref(wp).w_topfill;
     if new_topline != old_topline || new_topfill != old_topfill {
         nvim_set_dollar_vcol(-1);
         nvim_redraw_later(wp, upd::VALID);
 
         // When 'smoothscroll' is not set, should reset w_skipcol.
-        let p_sms = nvim_win_get_p_sms(wp) != 0;
+        let p_sms = win_ref(wp).w_p_sms() != 0;
         if !p_sms {
             rs_reset_skipcol(wp);
         } else {
-            let skipcol = nvim_win_get_skipcol(wp);
+            let skipcol = win_ref(wp).w_skipcol;
             if skipcol != 0 {
                 nvim_redraw_later(wp, upd::SOME_VALID);
             }
         }
 
         // May need to set w_skipcol when cursor in w_topline.
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-        let topline = nvim_win_get_topline(wp);
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
+        let topline = win_ref(wp).w_topline;
         if cursor_lnum == topline {
             rs_validate_cursor(wp);
         }

@@ -6,6 +6,7 @@
 use std::ffi::{c_char, c_int};
 
 use nvim_buffer::BufHandle;
+use nvim_window::win_struct::win_ref;
 use nvim_window::WinHandle;
 
 use crate::LineNr;
@@ -15,9 +16,6 @@ const MAX_LEVEL: c_int = 20;
 
 // C accessor functions
 extern "C" {
-    /// Get the buffer from a window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-
     /// Get a line from a buffer.
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LineNr) -> *const c_char;
 
@@ -115,7 +113,7 @@ pub fn foldlevel_indent_result(wp: WinHandle, lnum: LineNr, off: LineNr) -> Fold
 
     let actual_lnum = lnum + off;
 
-    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
     if buf.is_null() {
         result.lvl = 0;
         result.lvl_next = -1;

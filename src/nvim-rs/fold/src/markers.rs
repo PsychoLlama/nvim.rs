@@ -8,6 +8,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use nvim_buffer::BufHandle;
+use nvim_window::win_struct::win_ref;
 use nvim_window::WinHandle;
 
 use crate::{FoldHandle, GArrayHandle, LineNr};
@@ -46,9 +47,6 @@ impl Default for FoldMarkerInfo {
 extern "C" {
     /// Get the w_p_fmr (foldmarker option) field from a window.
     fn nvim_win_get_p_fmr(wp: WinHandle) -> *const c_char;
-
-    /// Get the buffer from a window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 
     /// Get a line from a buffer.
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LineNr) -> *const c_char;
@@ -237,7 +235,7 @@ pub fn foldlevel_marker_impl(
         };
     }
 
-    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
     if buf.is_null() {
         return FoldLevelMarkerResult {
             lvl: current_lvl,
@@ -676,7 +674,7 @@ fn delete_fold_markers_recurse(
         }
     }
 
-    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
     let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
     let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
 
@@ -707,7 +705,7 @@ pub fn fold_create_markers_impl(wp: WinHandle, start_lnum: LineNr, end_lnum: Lin
         return;
     }
 
-    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
     if buf.is_null() {
         return;
     }

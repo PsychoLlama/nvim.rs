@@ -45,6 +45,7 @@ pub mod viml;
 use std::os::raw::{c_char, c_int, c_uint};
 
 use nvim_buffer::BufHandle;
+use nvim_window::win_struct::win_ref;
 use nvim_window::WinHandle;
 
 /// C `pum_want` struct (sizeof=12, matches popupmenu.h layout).
@@ -148,7 +149,6 @@ extern "C" {
     static mut g_compl_curr_win: WinHandle;
     #[link_name = "compl_curr_buf"]
     static mut g_compl_curr_buf: BufHandle;
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     // Option accessors
     // nvim_get_p_ic: inlined in vars.rs (Phase 28)
     fn nvim_get_p_inf() -> c_int;
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn rs_ins_compl_win_active(wp: WinHandle) -> c_int {
     }
     let curr_win = g_compl_curr_win;
     let curr_buf = g_compl_curr_buf;
-    let wp_buf = nvim_win_get_buffer(wp);
+    let wp_buf = BufHandle::from_ptr(win_ref(wp).w_buffer);
     c_int::from(wp == curr_win && wp_buf == curr_buf)
 }
 

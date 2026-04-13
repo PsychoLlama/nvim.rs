@@ -171,6 +171,16 @@ impl BufHandle {
         Self(std::ptr::null_mut())
     }
 
+    /// Create a handle from a raw pointer.
+    ///
+    /// # Safety
+    /// `ptr` must be a valid `buf_T*` or null.
+    #[inline]
+    #[must_use]
+    pub const unsafe fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
     /// Check if the handle is null.
     #[inline]
     #[must_use]

@@ -18,6 +18,7 @@ use std::ffi::c_int;
 
 use crate::markers::{foldlevel_marker_impl, parse_marker_impl, FoldMarkerInfo};
 use crate::GArrayHandle;
+use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
 
 /// Line number type
@@ -283,10 +284,7 @@ extern "C" {
     fn line_breakcheck();
 
     // Buffer accessors
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_fold_buf_get_line_count(buf: BufHandle) -> LinenrT;
-    fn nvim_win_get_w_foldinvalid(wp: WinHandle) -> bool;
-    fn nvim_win_set_w_foldinvalid(wp: WinHandle, val: bool);
 
     // Fold array accessors
     fn nvim_win_get_folds(wp: WinHandle) -> GArrayHandle;
@@ -309,7 +307,6 @@ extern "C" {
     fn nvim_get_diff_context() -> LinenrT;
 
     // Window option: w_p_fen (fold enable)
-    fn nvim_win_get_p_fen(wp: WinHandle) -> c_int;
 
     // Global state for foldUpdate
     fn nvim_get_disable_fold_update() -> c_int;
@@ -598,16 +595,16 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
         return;
     }
 
-    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
     if buf.is_null() {
         return;
     }
 
     // Handle w_foldinvalid
-    if unsafe { nvim_win_get_w_foldinvalid(wp) } {
+    if unsafe { win_ref(wp).w_foldinvalid } {
         top = 1;
         bot = unsafe { nvim_fold_buf_get_line_count(buf) };
-        unsafe { nvim_win_set_w_foldinvalid(wp, false) };
+        unsafe { win_mut(wp).w_foldinvalid = false };
 
         // Mark all folds as maybe-small
         let gap = unsafe { nvim_win_get_folds(wp) };
@@ -818,7 +815,7 @@ fn fold_update_iems_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT, kind
     crate::fold_remove_impl(wp, gap, start, end);
 
     // Redraw if folds changed
-    if crate::fold_changed() && unsafe { nvim_win_get_p_fen(wp) } != 0 {
+    if crate::fold_changed() && unsafe { win_ref(wp).w_p_fen() } != 0 {
         unsafe { changed_window_setting(wp) };
     }
 
@@ -864,7 +861,7 @@ fn fold_update_iems_recurse(
     topflags: c_int,
     kind: LevelGetterKind,
 ) -> LinenrT {
-    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let buf = unsafe { BufHandle::from_ptr(win_ref(wp).w_buffer) };
     let line_count = unsafe { nvim_fold_buf_get_line_count(buf) } - flp.off;
 
     let firstlnum = flp.lnum;
@@ -1126,12 +1123,12 @@ fn fold_update_iems_recurse(
                             nvim_fold_set_fd_len(fp, bot - firstlnum + 1);
 
                             if topflags == fold_flags::FD_OPEN {
-                                nvim_win_set_w_fold_manual(wp, true);
+                                win_mut(wp).w_fold_manual = true;
                                 nvim_fold_set_fd_flags(fp, fold_flags::FD_OPEN);
                             } else if idx <= 0 {
                                 nvim_fold_set_fd_flags(fp, topflags);
                                 if topflags != fold_flags::FD_LEVEL {
-                                    nvim_win_set_w_fold_manual(wp, true);
+                                    win_mut(wp).w_fold_manual = true;
                                 }
                             } else {
                                 let prev_fp = nvim_ga_fold_at(gap, idx - 1);
@@ -1160,12 +1157,12 @@ fn fold_update_iems_recurse(
                         nvim_fold_set_fd_len(fp, bot - firstlnum + 1);
 
                         if topflags == fold_flags::FD_OPEN {
-                            nvim_win_set_w_fold_manual(wp, true);
+                            win_mut(wp).w_fold_manual = true;
                             nvim_fold_set_fd_flags(fp, fold_flags::FD_OPEN);
                         } else {
                             nvim_fold_set_fd_flags(fp, topflags);
                             if topflags != fold_flags::FD_LEVEL {
-                                nvim_win_set_w_fold_manual(wp, true);
+                                win_mut(wp).w_fold_manual = true;
                             }
                         }
                         nvim_fold_set_fd_small(fp, tristate::K_NONE);
@@ -1354,9 +1351,7 @@ fn fold_update_iems_recurse(
     max(bot, flp.lnum - 1)
 }
 
-extern "C" {
-    fn nvim_win_set_w_fold_manual(wp: WinHandle, val: bool);
-}
+extern "C" {}
 
 #[cfg(test)]
 mod tests {

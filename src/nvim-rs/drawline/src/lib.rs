@@ -14,6 +14,8 @@
 #![allow(clippy::if_not_else)]
 #![allow(clippy::explicit_iter_loop)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::cast_lossless)]
 #![allow(dead_code)]
 
 use std::ffi::c_int;
@@ -30,6 +32,7 @@ use nvim_decoration::{
     VirtTextPos,
 };
 use nvim_highlight::{rs_syn_attr2entry, HlAttrs};
+use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
 
 /// schar_T is stored as a u32.
@@ -222,28 +225,11 @@ const MODE_INSERT: c_int = 0x10;
 
 // C accessor functions for window
 extern "C" {
-    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_cuc(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wrap_flags(wp: WinHandle) -> c_int;
     fn nvim_win_get_lcs_ext(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_foldclosed(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_foldopen(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_foldsep(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_foldinner(wp: WinHandle) -> ScharT;
-    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_virtcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_cursorline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_p_culopt_flags(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_nu(wp: WinHandle) -> c_int;
-    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_p_bri(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_rl(wp: WinHandle) -> c_int;
-    fn nvim_win_get_minscwidth(wp: WinHandle) -> c_int;
 
     // Highlight functions
     fn nvim_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
@@ -281,7 +267,6 @@ extern "C" {
     );
 
     // Buffer handle for decoration
-    fn nvim_win_get_buffer(wp: WinHandle) -> *mut c_void;
 
     // Buffer accessor functions (for line_putchar)
     fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
@@ -328,16 +313,8 @@ extern "C" {
     fn rs_schar_get_ascii(sc: ScharT) -> c_char;
 
     // draw_statuscol FFI (Phase 1)
-    fn nvim_win_get_nrwidth(wp: WinHandle) -> c_int;
-    fn nvim_win_set_nrwidth(wp: WinHandle, val: c_int);
-    fn nvim_win_get_statuscol_line_count(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_statuscol_line_count(wp: WinHandle, val: LinenrT);
-    fn nvim_win_set_redr_statuscol(wp: WinHandle, val: bool);
     fn nvim_win_get_p_stc(wp: WinHandle) -> *const c_char;
     // nvim_win_get_p_nu and nvim_win_get_p_rnu already declared above
-    fn nvim_win_get_nrwidth_line_count(wp: WinHandle) -> LinenrT;
-    fn nvim_win_set_nrwidth_line_count(wp: WinHandle, val: LinenrT);
-    fn nvim_win_set_nrwidth_width(wp: WinHandle, val: c_int);
     fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
     // statuscol_T opaque accessors
     fn nvim_stcp_get_width(stcp: *mut c_void) -> c_int;
@@ -564,14 +541,14 @@ const STL_SIGNCOL: c_int = b's' as c_int;
 fn get_lcs_ext_impl(wp: WinHandle) -> ScharT {
     unsafe {
         // Line never continues beyond the right of the screen with 'wrap'.
-        if nvim_win_get_p_wrap(wp) != 0 {
+        if win_ref(wp).w_p_wrap() != 0 {
             return 0;
         }
         // If 'nowrap' was set from a modeline, forcibly use '>'.
-        if nvim_win_get_wrap_flags(wp) & K_OPT_FLAG_INSECURE != 0 {
+        if win_ref(wp).w_p_wrap_flags() & K_OPT_FLAG_INSECURE != 0 {
             return rs_schar_from_char(c_int::from(b'>'));
         }
-        if nvim_win_get_p_list(wp) != 0 {
+        if win_ref(wp).w_p_list() != 0 {
             nvim_win_get_lcs_ext(wp)
         } else {
             0
@@ -584,9 +561,9 @@ fn get_lcs_ext_impl(wp: WinHandle) -> ScharT {
 fn margin_columns_win_impl(wp: WinHandle) -> (c_int, c_int) {
     unsafe {
         let cur_col_off = rs_win_col_off(wp);
-        let width1 = nvim_win_get_view_width(wp) - cur_col_off;
+        let width1 = win_ref(wp).w_view_width - cur_col_off;
         let width2 = width1 + rs_win_col_off2(wp);
-        let virtcol = nvim_win_get_virtcol(wp);
+        let virtcol = win_ref(wp).w_virtcol;
 
         let right_col = if virtcol >= width1 && width2 > 0 {
             width1 + ((virtcol - width1) / width2 + 1) as c_int * width2
@@ -663,8 +640,8 @@ fn get_rightmost_vcol_impl(wp: WinHandle, color_cols: *const c_int) -> c_int {
     let mut ret = 0;
 
     unsafe {
-        if nvim_win_get_p_cuc(wp) != 0 {
-            ret = nvim_win_get_virtcol(wp);
+        if win_ref(wp).w_p_cuc() != 0 {
+            ret = win_ref(wp).w_virtcol;
         }
 
         if !color_cols.is_null() {
@@ -688,9 +665,9 @@ fn get_rightmost_vcol_impl(wp: WinHandle, color_cols: *const c_int) -> c_int {
 /// Return true if CursorLineSign/CursorLineFold highlight is to be used.
 fn use_cursor_line_highlight_impl(wp: WinHandle, lnum: LinenrT) -> bool {
     unsafe {
-        nvim_win_get_p_cul(wp) != 0
-            && lnum == nvim_win_get_cursorline(wp)
-            && (nvim_win_get_p_culopt_flags(wp) & K_OPT_CULOPT_FLAG_NUMBER) != 0
+        win_ref(wp).w_p_cul() != 0
+            && lnum == win_ref(wp).w_cursorline
+            && (win_ref(wp).w_p_culopt_flags as c_int & K_OPT_CULOPT_FLAG_NUMBER) != 0
     }
 }
 
@@ -714,10 +691,10 @@ fn draw_col_fill_impl(wlv: *mut WinLineVars, fillchar: ScharT, width: c_int, att
 /// Return true if CursorLineNr highlight is to be used for the number column.
 fn use_cursor_line_nr_impl(wp: WinHandle, wlv: *mut WinLineVars) -> bool {
     unsafe {
-        let p_cul = nvim_win_get_p_cul(wp) != 0;
+        let p_cul = win_ref(wp).w_p_cul() != 0;
         let lnum = (*wlv).lnum;
-        let cursorline = nvim_win_get_cursorline(wp);
-        let culopt_flags = nvim_win_get_p_culopt_flags(wp);
+        let cursorline = win_ref(wp).w_cursorline;
+        let culopt_flags = win_ref(wp).w_p_culopt_flags as c_int;
         let row = (*wlv).row;
         let startrow = (*wlv).startrow;
         let filler_lines = (*wlv).filler_lines;
@@ -745,7 +722,7 @@ fn get_line_number_attr_impl(wp: WinHandle, wlv: *mut WinLineVars) -> c_int {
             let mut prev = (*wlv).prev_num_attr;
             if prev == -1 {
                 let lnum = (*wlv).lnum;
-                let buf = nvim_win_get_buffer(wp);
+                let buf = win_ref(wp).w_buffer;
                 decor_redraw_signs(
                     wp,
                     buf,
@@ -767,9 +744,9 @@ fn get_line_number_attr_impl(wp: WinHandle, wlv: *mut WinLineVars) -> c_int {
             return hl_combine_attr(nvim_win_hl_attr(wp, HLF_CLN), numhl_attr);
         }
 
-        if nvim_win_get_p_rnu(wp) != 0 {
+        if win_ref(wp).w_p_rnu() != 0 {
             let lnum = (*wlv).lnum;
-            let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+            let cursor_lnum = win_ref(wp).w_cursor.lnum;
             if lnum < cursor_lnum {
                 return hl_combine_attr(nvim_win_hl_attr(wp, HLF_LNA), numhl_attr);
             }
@@ -937,22 +914,22 @@ fn draw_lnum_col_impl(wp: WinHandle, wlv: *mut WinLineVars) {
 
         let p_cpo = nvim_get_p_cpo();
         let has_cpo_n = !vim_strchr(p_cpo, CPO_NUMCOL).is_null();
-        let p_nu = nvim_win_get_p_nu(wp) != 0;
-        let p_rnu = nvim_win_get_p_rnu(wp) != 0;
+        let p_nu = win_ref(wp).w_p_nu() != 0;
+        let p_rnu = win_ref(wp).w_p_rnu() != 0;
 
         let row = (*wlv).row;
         let startrow = (*wlv).startrow;
         let filler_lines = (*wlv).filler_lines;
         let lnum = (*wlv).lnum;
-        let p_bri = nvim_win_get_p_bri(wp) != 0;
-        let skipcol = nvim_win_get_skipcol(wp);
-        let topline = nvim_win_get_topline(wp);
+        let p_bri = win_ref(wp).w_p_bri() != 0;
+        let skipcol = win_ref(wp).w_skipcol;
+        let topline = win_ref(wp).w_topline;
 
         if (p_nu || p_rnu)
             && (row == startrow + filler_lines || !has_cpo_n)
             && !((has_cpo_n && !p_bri) && skipcol > 0 && lnum == topline)
         {
-            let minscwidth = nvim_win_get_minscwidth(wp);
+            let minscwidth = win_ref(wp).w_minscwidth;
             let sattr_text0 = (*wlv).sattrs[0].text[0];
             let filler_todo = (*wlv).filler_todo;
 
@@ -1035,7 +1012,6 @@ extern "C" {
     // Additional wlv accessors for win_line_start and fix_for_boguscols
 
     // Buffer handle for win
-    fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
 
     // State and quickfix functions for apply_cursorline_highlight
     fn rs_bt_quickfix(buf: BufHandle) -> bool;
@@ -1050,7 +1026,6 @@ extern "C" {
     fn hl_get_underline() -> c_int;
 
     // handle_breakindent accessors
-    fn nvim_win_get_briopt_sbr(wp: WinHandle) -> bool;
     fn nvim_get_breakindent_win_lnum(wp: WinHandle, lnum: LinenrT) -> c_int;
 
     // fromcol/tocol accessors
@@ -1200,9 +1175,9 @@ pub unsafe extern "C" fn rs_margin_columns_win(
     });
 
     let cur_col_off = rs_win_col_off(wp);
-    let width1 = nvim_win_get_view_width(wp) - cur_col_off;
+    let width1 = win_ref(wp).w_view_width - cur_col_off;
     let width2 = width1 + rs_win_col_off2(wp);
-    let virtcol = nvim_win_get_virtcol(wp);
+    let virtcol = win_ref(wp).w_virtcol;
 
     if cache.saved_w_virtcol.get() == virtcol
         && cache.prev_wp.get().as_ptr() == wp.as_ptr()
@@ -1290,7 +1265,7 @@ unsafe fn apply_cursorline_highlight_impl(wp: WinHandle, wlv: *mut WinLineVars) 
     } else {
         // High-priority CursorLine when fg is set
         let state = nvim_get_state();
-        let buf = nvim_win_get_w_buffer(wp);
+        let buf = BufHandle(win_ref(wp).w_buffer);
         let lnum = (*wlv).lnum;
 
         if (state & MODE_INSERT) == 0 && rs_bt_quickfix(buf) && nvim_qf_current_entry(wp) == lnum {
@@ -1342,7 +1317,7 @@ pub unsafe extern "C" fn rs_set_line_attr_for_diff(wp: WinHandle, wlv: *mut WinL
 ///
 /// If need_showbreak is set, breakindent also applies.
 unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: *mut WinLineVars) {
-    let p_bri = nvim_win_get_p_bri(wp);
+    let p_bri = win_ref(wp).w_p_bri();
     let row = (*wlv).row;
     let startrow = (*wlv).startrow;
     let filler_lines = (*wlv).filler_lines;
@@ -1409,10 +1384,10 @@ unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     }
 
     // Handle need_showbreak clearing
-    let skipcol = nvim_win_get_skipcol(wp);
+    let skipcol = win_ref(wp).w_skipcol;
     let startrow = (*wlv).startrow;
-    let p_wrap = nvim_win_get_p_wrap(wp);
-    let briopt_sbr = nvim_win_get_briopt_sbr(wp);
+    let p_wrap = win_ref(wp).w_p_wrap();
+    let briopt_sbr = win_ref(wp).w_briopt_sbr;
 
     if skipcol > 0 && startrow == 0 && p_wrap != 0 && briopt_sbr {
         (*wlv).need_showbreak = false;
@@ -1429,7 +1404,7 @@ pub unsafe extern "C" fn rs_handle_breakindent(wp: WinHandle, wlv: *mut WinLineV
 ///
 /// Draws filler content for virtual lines and 'showbreak' string.
 unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: *mut WinLineVars) {
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
     let off = (*wlv).off;
     let remaining = view_width - off;
 
@@ -1485,10 +1460,10 @@ unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: *mut WinLineVars)
     }
 
     // Clear need_showbreak flag when appropriate
-    let skipcol = nvim_win_get_skipcol(wp);
+    let skipcol = win_ref(wp).w_skipcol;
     let startrow = (*wlv).startrow;
-    let p_wrap = nvim_win_get_p_wrap(wp);
-    let briopt_sbr = nvim_win_get_briopt_sbr(wp);
+    let p_wrap = win_ref(wp).w_p_wrap();
+    let briopt_sbr = win_ref(wp).w_briopt_sbr;
 
     if skipcol == 0 || startrow > 0 || p_wrap == 0 || !briopt_sbr {
         (*wlv).need_showbreak = false;
@@ -1825,7 +1800,7 @@ unsafe fn draw_virt_text_impl(
     win_row: c_int,
 ) {
     let state = get_decor_state();
-    let max_col = nvim_win_get_view_width(wp);
+    let max_col = win_ref(wp).w_view_width;
     let mut right_pos = max_col;
     let eol_col = decor_state_eol_col(state);
     let do_eol = eol_col > -1;
@@ -1972,7 +1947,7 @@ unsafe fn win_line_start_impl(wp: WinHandle, wlv: *mut WinLineVars) {
     (*wlv).off = 0;
     (*wlv).need_lbr = false;
 
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
     let linebuf_char = nvim_get_linebuf_char();
     let linebuf_attr = nvim_get_linebuf_attr();
     let linebuf_vcol = nvim_get_linebuf_vcol();
@@ -2063,8 +2038,8 @@ unsafe fn draw_col_buf_impl(
     fold_vcol: *const ColnrT,
     inc_vcol: bool,
 ) {
-    let buf = nvim_win_get_w_buffer(wp);
-    let view_width = nvim_win_get_view_width(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
+    let view_width = win_ref(wp).w_view_width;
     let linebuf_char = nvim_get_linebuf_char();
     let linebuf_attr = nvim_get_linebuf_attr();
     let linebuf_vcol = nvim_get_linebuf_vcol();
@@ -2359,7 +2334,7 @@ unsafe fn wlv_put_linebuf_impl(
     flags: c_int,
 ) {
     let grid = nvim_win_get_w_grid(wp);
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
 
     let mut startcol: c_int = 0;
     let mut endcol_mut = endcol;
@@ -2369,18 +2344,18 @@ unsafe fn wlv_put_linebuf_impl(
     // assert!(!(flags & SLF_RIGHTLEFT));
     debug_assert!(flags & SLF_RIGHTLEFT == 0);
 
-    if nvim_win_get_p_rl(wp) != 0 {
+    if win_ref(wp).w_p_rl() != 0 {
         rs_linebuf_mirror(&mut startcol, &mut endcol_mut, &mut clear_width, view_width);
         flags_mut |= SLF_RIGHTLEFT;
     }
 
     // Take care of putting "<<<" on the first line for 'smoothscroll'.
     let wlv_row = (*wlv).row;
-    let skipcol = nvim_win_get_skipcol(wp);
+    let skipcol = win_ref(wp).w_skipcol;
     let showbreak = rs_get_showbreak_value(wp);
-    let p_nu = nvim_win_get_p_nu(wp);
-    let p_rnu = nvim_win_get_p_rnu(wp);
-    let p_list = nvim_win_get_p_list(wp);
+    let p_nu = win_ref(wp).w_p_nu();
+    let p_rnu = win_ref(wp).w_p_rnu();
+    let p_list = win_ref(wp).w_p_list();
     let lcs_prec = nvim_win_get_lcs_prec(wp);
 
     let linebuf_char = nvim_get_linebuf_char();
@@ -3204,55 +3179,55 @@ pub unsafe extern "C" fn rs_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int {
 /// Check if line numbers are enabled for this window.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_has_line_numbers(wp: WinHandle) -> c_int {
-    c_int::from(nvim_win_get_p_nu(wp) != 0 || nvim_win_get_p_rnu(wp) != 0)
+    c_int::from(win_ref(wp).w_p_nu() != 0 || win_ref(wp).w_p_rnu() != 0)
 }
 
 /// Check if absolute line numbers are enabled.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_has_number(wp: WinHandle) -> c_int {
-    c_int::from(nvim_win_get_p_nu(wp) != 0)
+    c_int::from(win_ref(wp).w_p_nu() != 0)
 }
 
 /// Check if relative line numbers are enabled.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_has_relativenumber(wp: WinHandle) -> c_int {
-    c_int::from(nvim_win_get_p_rnu(wp) != 0)
+    c_int::from(win_ref(wp).w_p_rnu() != 0)
 }
 
 /// Check if using rightleft mode.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_is_rightleft(wp: WinHandle) -> c_int {
-    nvim_win_get_p_rl(wp)
+    win_ref(wp).w_p_rl()
 }
 
 /// Get the cursor line number.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_get_cursor_lnum(wp: WinHandle) -> LinenrT {
-    nvim_win_get_cursor_lnum(wp)
+    win_ref(wp).w_cursor.lnum
 }
 
 /// Check if lnum is the cursor line.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_cursor_line(wp: WinHandle, lnum: LinenrT) -> c_int {
-    c_int::from(nvim_win_get_cursor_lnum(wp) == lnum)
+    c_int::from(win_ref(wp).w_cursor.lnum == lnum)
 }
 
 /// Get the window's view width.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_get_view_width(wp: WinHandle) -> c_int {
-    nvim_win_get_view_width(wp)
+    win_ref(wp).w_view_width
 }
 
 /// Get the window's skip column (for smooth scrolling).
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_get_skipcol(wp: WinHandle) -> ColnrT {
-    nvim_win_get_skipcol(wp)
+    win_ref(wp).w_skipcol
 }
 
 /// Check if there's a skipcol set.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_has_skipcol(wp: WinHandle) -> c_int {
-    c_int::from(nvim_win_get_skipcol(wp) > 0)
+    c_int::from(win_ref(wp).w_skipcol > 0)
 }
 
 /// Get the list characters "precedes" character.
@@ -3264,7 +3239,7 @@ pub unsafe extern "C" fn rs_win_get_lcs_prec(wp: WinHandle) -> ScharT {
 /// Check if list mode is enabled.
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_has_list(wp: WinHandle) -> c_int {
-    c_int::from(nvim_win_get_p_list(wp) != 0)
+    c_int::from(win_ref(wp).w_p_list() != 0)
 }
 
 // =============================================================================
@@ -3348,7 +3323,7 @@ pub const extern "C" fn rs_combine_char_attr(
 /// Clamp a column value to the view width.
 #[no_mangle]
 pub unsafe extern "C" fn rs_clamp_col_to_view(wp: WinHandle, col: c_int) -> c_int {
-    let view_width = nvim_win_get_view_width(wp);
+    let view_width = win_ref(wp).w_view_width;
     col.clamp(0, view_width - 1)
 }
 
@@ -3358,7 +3333,7 @@ pub unsafe extern "C" fn rs_clamp_col_to_view(wp: WinHandle, col: c_int) -> c_in
 /// given the current virtual column.
 #[no_mangle]
 pub unsafe extern "C" fn rs_tab_cells(wp: WinHandle, vcol: c_int) -> c_int {
-    let buf = nvim_win_get_w_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     // b_p_ts is OptInt (i64); clamp to c_int range (tabstop won't exceed that in practice).
     #[allow(clippy::cast_possible_truncation)]
     let tabstop = nvim_buf_get_p_ts(buf).min(i64::from(c_int::MAX)) as c_int;
@@ -3397,7 +3372,7 @@ pub unsafe extern "C" fn rs_should_conceal(
 /// Returns 1 if list mode is on and we have an eol character set.
 #[no_mangle]
 pub unsafe extern "C" fn rs_need_eol_char(wp: WinHandle) -> c_int {
-    if nvim_win_get_p_list(wp) == 0 {
+    if win_ref(wp).w_p_list() == 0 {
         return 0;
     }
     let eol_char = nvim_win_get_lcs_eol(wp);
@@ -3418,7 +3393,7 @@ pub unsafe extern "C" fn rs_get_eol_char(wp: WinHandle) -> ScharT {
 /// Returns nonzero if the buffer has any extmarks (marktree has entries).
 #[no_mangle]
 pub unsafe extern "C" fn rs_line_has_virt_text(wp: WinHandle, _lnum: LinenrT) -> c_int {
-    let buf = nvim_win_get_buffer(wp);
+    let buf = win_ref(wp).w_buffer;
     if buf.is_null() {
         return 0;
     }
@@ -3430,13 +3405,13 @@ pub unsafe extern "C" fn rs_line_has_virt_text(wp: WinHandle, _lnum: LinenrT) ->
 /// Returns the screen column for cursorcolumn highlighting, or -1 if not applicable.
 #[no_mangle]
 pub unsafe extern "C" fn rs_cursor_column_pos(wp: WinHandle) -> c_int {
-    if nvim_win_get_p_cuc(wp) == 0 {
+    if win_ref(wp).w_p_cuc() == 0 {
         return -1;
     }
 
     // Only draw cursor column when it's visible in the window
-    let virtcol = nvim_win_get_virtcol(wp);
-    let view_width = nvim_win_get_view_width(wp);
+    let virtcol = win_ref(wp).w_virtcol;
+    let view_width = win_ref(wp).w_view_width;
 
     if virtcol >= view_width {
         return -1;
@@ -3448,13 +3423,11 @@ pub unsafe extern "C" fn rs_cursor_column_pos(wp: WinHandle) -> c_int {
 /// Validate screen row is within window bounds.
 #[no_mangle]
 pub unsafe extern "C" fn rs_validate_screen_row(wp: WinHandle, row: c_int) -> c_int {
-    let view_height = nvim_win_get_view_height(wp);
+    let view_height = win_ref(wp).w_view_height;
     c_int::from(row >= 0 && row < view_height)
 }
 
-extern "C" {
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-}
+extern "C" {}
 
 // ============================================================================
 // Phase 1: draw_statuscol migration
@@ -3497,10 +3470,10 @@ pub unsafe extern "C" fn rs_draw_statuscol(
     let mut buf = [0i8; MAXPATHL];
 
     // When the buffer's line count has changed, rebuild for the widest possible line.
-    let statuscol_line_count = nvim_win_get_statuscol_line_count(wp);
-    let nrwidth_line_count = nvim_win_get_nrwidth_line_count(wp);
+    let statuscol_line_count = win_ref(wp).w_statuscol_line_count;
+    let nrwidth_line_count = win_ref(wp).w_nrwidth_line_count;
     if statuscol_line_count != nrwidth_line_count {
-        nvim_win_set_statuscol_line_count(wp, nrwidth_line_count);
+        win_mut(wp).w_statuscol_line_count = nrwidth_line_count;
         nvim_fold_set_vim_var_nr(VV_VIRTNUM, 0);
         let width = nvim_build_statuscol_str(
             wp,
@@ -3512,12 +3485,12 @@ pub unsafe extern "C" fn rs_draw_statuscol(
         let stcp_width = nvim_stcp_get_width(stcp);
         if width > stcp_width {
             let addwidth = (width - stcp_width).min(MAX_STCWIDTH - stcp_width);
-            let new_nrwidth = nvim_win_get_nrwidth(wp) + addwidth;
-            nvim_win_set_nrwidth(wp, new_nrwidth);
-            nvim_win_set_nrwidth_width(wp, new_nrwidth);
+            let new_nrwidth = win_ref(wp).w_nrwidth + addwidth;
+            win_mut(wp).w_nrwidth = new_nrwidth;
+            win_mut(wp).w_nrwidth_width = new_nrwidth;
             if col_rows > 0 {
                 // Only column is being redrawn; need to redraw text too.
-                nvim_win_set_redr_statuscol(wp, true);
+                win_mut(wp).w_redr_statuscol = true;
                 return;
             }
             nvim_stcp_set_width(stcp, stcp_width + addwidth);
@@ -3535,19 +3508,19 @@ pub unsafe extern "C" fn rs_draw_statuscol(
     if *p_stc == 0 || (width > stcp_width && stcp_width < MAX_STCWIDTH) {
         if *p_stc == 0 {
             // 'statuscolumn' reset due to error.
-            nvim_win_set_nrwidth_line_count(wp, 0);
-            let nu = nvim_win_get_p_nu(wp);
-            let rnu = nvim_win_get_p_rnu(wp);
+            win_mut(wp).w_nrwidth_line_count = 0;
+            let nu = win_ref(wp).w_p_nu();
+            let rnu = win_ref(wp).w_p_rnu();
             let new_nrwidth = c_int::from(nu != 0 || rnu != 0) * rs_number_width(wp);
-            nvim_win_set_nrwidth(wp, new_nrwidth);
+            win_mut(wp).w_nrwidth = new_nrwidth;
         } else {
             // Avoid truncating 'statuscolumn'.
             let addwidth = (width - stcp_width).min(MAX_STCWIDTH - stcp_width);
-            let new_nrwidth = nvim_win_get_nrwidth(wp) + addwidth;
-            nvim_win_set_nrwidth(wp, new_nrwidth);
-            nvim_win_set_nrwidth_width(wp, new_nrwidth);
+            let new_nrwidth = win_ref(wp).w_nrwidth + addwidth;
+            win_mut(wp).w_nrwidth = new_nrwidth;
+            win_mut(wp).w_nrwidth_width = new_nrwidth;
         }
-        nvim_win_set_redr_statuscol(wp, true);
+        win_mut(wp).w_redr_statuscol = true;
         return;
     }
 
@@ -3737,14 +3710,14 @@ unsafe fn decor_providers_setup_impl(
     col: ColnrT,
     wp: WinHandle,
 ) -> c_int {
-    let rem_vcols = if nvim_win_get_p_wrap(wp) != 0 {
-        let view_width = nvim_win_get_view_width(wp);
+    let rem_vcols = if win_ref(wp).w_p_wrap() != 0 {
+        let view_width = win_ref(wp).w_view_width;
         let width = view_width - rs_win_col_off(wp);
         let width2 = width + rs_win_col_off2(wp);
         let first_row_width = if draw_from_line_start { width } else { width2 };
         first_row_width + (rows_to_draw - 1) * width2
     } else {
-        nvim_win_get_view_height(wp) - rs_win_col_off(wp)
+        win_ref(wp).w_view_height - rs_win_col_off(wp)
     };
 
     // Call it here since we need to invalidate the line pointer anyway.
@@ -3920,8 +3893,6 @@ extern "C" {
     );
     fn nvim_cursor_is_block_during_visual(exclusive: c_int) -> c_int;
     fn nvim_gchar_pos_lnum_col(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
-    fn nvim_win_get_old_cursor_fcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_old_cursor_lcol(wp: WinHandle) -> ColnrT;
     fn nvim_get_cmdwin_win() -> WinHandle;
     fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
     // rs_diff_check_with_linestatus, rs_diff_find_change, rs_diff_change_parse
@@ -3936,8 +3907,6 @@ extern "C" {
         change_end: *mut c_int,
     ) -> bool;
     // nvim_win_get_cursor_col and nvim_win_get_cursor_coladd from win_struct.rs:
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> ColnrT;
-    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> ColnrT;
     // nvim_win_ml_get_buf already declared above at line ~392
     // nvim_win_get_cursorline, nvim_win_get_p_cul, nvim_win_get_p_culopt_flags already declared above
 
@@ -3986,21 +3955,21 @@ pub unsafe extern "C" fn rs_win_line_init(
     (*wlv).tocol = MAXCOL;
 
     // Grid not used in init (set by win_line body in C), view dimensions:
-    let view_width = nvim_win_get_view_width(wp);
-    let view_height = nvim_win_get_view_height(wp);
+    let view_width = win_ref(wp).w_view_width;
+    let view_height = win_ref(wp).w_view_height;
     state.view_width = view_width;
     state.view_height = view_height;
 
     // in_curline: wp == curwin && lnum == curwin->w_cursor.lnum
     let is_curwin = nvim_win_is_curwin(wp) != 0;
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
     state.in_curline = is_curwin && lnum == cursor_lnum;
 
     // has_fold / has_foldtext / is_wrapped
     let has_fold = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
     let p_fdt_ptr = nvim_win_get_p_fdt(wp);
     let has_foldtext = has_fold && !p_fdt_ptr.is_null() && *p_fdt_ptr != 0;
-    let is_wrapped = nvim_win_get_p_wrap(wp) != 0 && !has_fold;
+    let is_wrapped = win_ref(wp).w_p_wrap() != 0 && !has_fold;
     state.has_fold = has_fold;
     state.has_foldtext = has_foldtext;
     state.is_wrapped = is_wrapped;
@@ -4070,7 +4039,7 @@ pub unsafe extern "C" fn rs_win_line_init(
     state.conceal_attr = nvim_win_hl_attr(wp, HLF_CONCEAL);
 
     // draw_text: !concealed && lnum != buf->b_ml.ml_line_count + 1
-    let buf = nvim_win_get_w_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     let line_count = nvim_buf_get_line_count(buf);
     state.draw_text = !concealed && (lnum != line_count + 1);
 
@@ -4112,13 +4081,13 @@ pub unsafe extern "C" fn rs_win_line_init(
         advance_color_col_impl(wlv, (*wlv).vcol - (*wlv).vcol_off_co);
 
         // Visual area highlighting
-        if VIsual_active && buf == nvim_curwin_get_buffer() {
+        if VIsual_active && buf == BufHandle(win_ref(nvim_get_curwin()).w_buffer) {
             let vis_lnum = nvim_get_VIsual_lnum();
             let vis_col = nvim_get_VIsual_col();
             let vis_coladd = nvim_get_VIsual_coladd();
-            let cursor_lnum2 = nvim_win_get_cursor_lnum(wp);
-            let cursor_col = nvim_win_get_cursor_col(wp);
-            let cursor_coladd = nvim_win_get_cursor_coladd(wp);
+            let cursor_lnum2 = win_ref(wp).w_cursor.lnum;
+            let cursor_col = win_ref(wp).w_cursor.col;
+            let cursor_coladd = win_ref(wp).w_cursor.coladd;
 
             let mut top: PosT;
             let mut bot: PosT;
@@ -4154,8 +4123,8 @@ pub unsafe extern "C" fn rs_win_line_init(
             if vis_mode == i32::from(b'\x16') {
                 // Ctrl-V block mode
                 if state.lnum_in_visual_area {
-                    (*wlv).fromcol = nvim_win_get_old_cursor_fcol(wp);
-                    (*wlv).tocol = nvim_win_get_old_cursor_lcol(wp);
+                    (*wlv).fromcol = win_ref(wp).w_old_cursor_fcol;
+                    (*wlv).tocol = win_ref(wp).w_old_cursor_lcol;
                 }
             } else {
                 // non-block mode
@@ -4237,8 +4206,8 @@ pub unsafe extern "C" fn rs_win_line_init(
             if lnum == cursor_lnum {
                 let mut cur_pos = PosT {
                     lnum: cursor_lnum,
-                    col: nvim_win_get_cursor_col(wp),
-                    coladd: nvim_win_get_cursor_coladd(wp),
+                    col: win_ref(wp).w_cursor.col,
+                    coladd: win_ref(wp).w_cursor.coladd,
                 };
                 let mut scol: ColnrT = 0;
                 nvim_getvcol(
@@ -4332,16 +4301,16 @@ pub unsafe extern "C" fn rs_win_line_init(
     );
     (*wlv).n_virt_lines = n_virt_lines;
     (*wlv).filler_lines += n_virt_lines;
-    if lnum == nvim_win_get_topline(wp) {
-        (*wlv).filler_lines = nvim_win_get_topfill(wp);
+    if lnum == win_ref(wp).w_topline {
+        (*wlv).filler_lines = win_ref(wp).w_topfill;
         (*wlv).n_virt_lines = (*wlv).n_virt_lines.min((*wlv).filler_lines);
     }
     (*wlv).filler_todo = (*wlv).filler_lines;
 
     // Cursor line highlighting
-    let w_p_cul = nvim_win_get_p_cul(wp) != 0;
-    let culopt_flags = nvim_win_get_p_culopt_flags(wp);
-    let cursorline = nvim_win_get_cursorline(wp);
+    let w_p_cul = win_ref(wp).w_p_cul() != 0;
+    let culopt_flags = win_ref(wp).w_p_culopt_flags as c_int;
+    let cursorline = win_ref(wp).w_cursorline;
     let k_opt_culopt_flag_number = 0x04;
     if w_p_cul
         && (culopt_flags & k_opt_culopt_flag_number) == 0
@@ -4507,8 +4476,6 @@ extern "C" {
     fn nvim_set_did_emsg(val: bool);
     fn nvim_set_did_emsg_int(val: bool);
     fn nvim_win_get_p_cc_cols(wp: WinHandle) -> *mut c_int;
-    fn nvim_curwin_get_buffer() -> BufHandle;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_fdt_is_null(wp: WinHandle) -> bool;
 }
 
@@ -4563,23 +4530,16 @@ extern "C" {
     /// conceal_cursor_line: true if cursor line conceal should apply.
     fn conceal_cursor_line(wp: WinHandle) -> bool;
     /// wp->w_botfill
-    fn nvim_win_get_botfill(wp: WinHandle) -> bool;
     /// schar_from_char
     fn schar_from_char(c: c_int) -> ScharT;
     /// wp->w_p_cole
-    fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
     /// wp->w_leftcol
-    fn nvim_win_get_leftcol(wp: WinHandle) -> ColnrT;
     /// wp->w_virtcol (alias for nvim_win_get_virtcol which already exists)
     // (already declared above as nvim_win_get_virtcol)
     /// wp->w_wcol
-    fn nvim_win_get_wcol(wp: WinHandle) -> ColnrT;
     /// Set wp->w_wcol
-    fn nvim_win_set_wcol(wp: WinHandle, val: c_int);
     /// wp->w_wrow
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
     /// Set wp->w_wrow
-    fn nvim_win_set_wrow(wp: WinHandle, val: c_int);
     /// wp->w_valid |= bits
     fn nvim_win_set_valid_bits(wp: WinHandle, bits: c_int);
     /// Check p_cpo for character c
@@ -4624,7 +4584,7 @@ pub unsafe extern "C" fn rs_win_line_eol_highlight(
     let visual_check = {
         let vis_mode = nvim_get_VIsual_mode();
         let vis_lnum = nvim_get_VIsual_lnum();
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
         vis_mode != CTRL_V || lnum == vis_lnum || lnum == cursor_lnum
     };
 
@@ -4724,16 +4684,16 @@ pub unsafe extern "C" fn rs_win_line_eol_fill(
             (*wlv).vcol + (i - (*wlv).col);
     }
 
-    let buf = nvim_win_get_buffer(wp);
+    let buf = win_ref(wp).w_buffer;
     let terminal = nvim_buf_get_terminal(BufHandle(buf));
     let lnum = (*wlv).lnum;
-    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-    let virtcol = nvim_win_get_virtcol(wp);
+    let cursor_lnum = win_ref(wp).w_cursor.lnum;
+    let virtcol = win_ref(wp).w_virtcol;
     let vcol_hlc = (*wlv).vcol - (*wlv).vcol_off_co;
     let view_width_isize = view_width as isize;
     let row_factor = ((*wlv).row - startrow + 1) as isize;
 
-    let need_fill = (nvim_win_get_p_cuc(wp) != 0
+    let need_fill = (win_ref(wp).w_p_cuc() != 0
         && virtcol >= vcol_hlc - eol_hl_off
         && (virtcol as isize) < view_width_isize * row_factor + start_vcol as isize
         && lnum != cursor_lnum)
@@ -4772,7 +4732,7 @@ pub unsafe extern "C" fn rs_win_line_eol_fill(
             let cur_vcol_hlc = (*wlv).vcol - (*wlv).vcol_off_co;
             let mut col_attr = base_attr;
 
-            if nvim_win_get_p_cuc(wp) != 0 && cur_vcol_hlc == virtcol && lnum != cursor_lnum {
+            if win_ref(wp).w_p_cuc() != 0 && cur_vcol_hlc == virtcol && lnum != cursor_lnum {
                 col_attr = hl_combine_attr(col_attr, cuc_attr);
             } else if !(*wlv).color_cols.is_null() && cur_vcol_hlc == *(*wlv).color_cols {
                 col_attr = hl_combine_attr(col_attr, mc_attr);
@@ -4847,12 +4807,12 @@ pub unsafe extern "C" fn rs_win_line_cursorcolumn(
     let mut vcol_save_attr: c_int = -1;
 
     if !lnum_in_visual_area && search_attr == 0 && area_attr == 0 && (*wlv).filler_todo <= 0 {
-        let virtcol = nvim_win_get_virtcol(wp);
+        let virtcol = win_ref(wp).w_virtcol;
         let lnum = (*wlv).lnum;
-        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        let cursor_lnum = win_ref(wp).w_cursor.lnum;
         let vcol_hlc = (*wlv).vcol - (*wlv).vcol_off_co;
 
-        if nvim_win_get_p_cuc(wp) != 0 && vcol_hlc == virtcol && lnum != cursor_lnum {
+        if win_ref(wp).w_p_cuc() != 0 && vcol_hlc == virtcol && lnum != cursor_lnum {
             vcol_save_attr = (*wlv).char_attr;
             (*wlv).char_attr = hl_combine_attr(nvim_win_hl_attr(wp, HLF_CUC), (*wlv).char_attr);
         } else if !(*wlv).color_cols.is_null() && vcol_hlc == *(*wlv).color_cols {
@@ -4920,7 +4880,7 @@ pub unsafe extern "C" fn rs_win_line_store_char(
         }
         (*wlv).off += 1;
         (*wlv).col += 1;
-    } else if nvim_win_get_p_cole(wp) > 0 && is_concealing {
+    } else if win_ref(wp).w_p_cole() > 0 && is_concealing {
         let concealed_wide = schar_cells(mb_schar) > 1;
         (*wlv).skip_cells -= 1;
         (*wlv).vcol_off_co += 1;
@@ -5050,7 +5010,7 @@ pub unsafe extern "C" fn rs_win_line_end_check(
     let is_wrapped = (*state).is_wrapped;
     // has_foldtext is checked externally before calling this function
     let win_col_offset = (*state).win_col_offset;
-    let buf = nvim_win_get_buffer(wp);
+    let buf = win_ref(wp).w_buffer;
     let startrow = (*wlv).startrow;
 
     let grid_width = nvim_win_get_w_grid_target_cols(wp);
@@ -5059,7 +5019,7 @@ pub unsafe extern "C" fn rs_win_line_end_check(
         && lcs_eol_todo
         && (*wlv).row != endrow - 1
         && view_width == grid_width
-        && nvim_win_get_p_rl(wp) == 0;
+        && win_ref(wp).w_p_rl() == 0;
 
     let linebuf_char = nvim_get_linebuf_char();
     let linebuf_attr = nvim_get_linebuf_attr();
@@ -5089,7 +5049,7 @@ pub unsafe extern "C" fn rs_win_line_end_check(
             win_col_offset
         };
         let scroll_left = if virt_line_flags & K_VL_SCROLL != 0 {
-            nvim_win_get_leftcol(wp)
+            win_ref(wp).w_leftcol
         } else {
             0
         };
@@ -5184,7 +5144,7 @@ pub unsafe extern "C" fn rs_win_line_end_check(
         *virt_line_flags_out = 0;
     }
 
-    let botfill = nvim_win_get_botfill(wp);
+    let botfill = win_ref(wp).w_botfill;
     let draw_text = (*state).draw_text;
     if (*wlv).filler_todo == 0 && (botfill || !draw_text) {
         return true;
@@ -5230,11 +5190,11 @@ pub unsafe extern "C" fn rs_win_line_extra_attr_restore(
     let mb_schar = (*state).mb_schar;
 
     if lcs_prec_todo != 0
-        && nvim_win_get_p_list(wp) != 0
-        && (if nvim_win_get_p_wrap(wp) != 0 {
-            nvim_win_get_skipcol(wp) > 0 && (*wlv).row == 0
+        && win_ref(wp).w_p_list() != 0
+        && (if win_ref(wp).w_p_wrap() != 0 {
+            win_ref(wp).w_skipcol > 0 && (*wlv).row == 0
         } else {
-            nvim_win_get_leftcol(wp) > 0
+            win_ref(wp).w_leftcol > 0
         })
         && (*wlv).filler_todo <= 0
         && (*wlv).skip_cells <= 0
@@ -5342,23 +5302,23 @@ pub unsafe extern "C" fn rs_win_line_cursor_conceal_correct(
         return;
     }
     let mb_schar = (*state).mb_schar;
-    let virtcol = nvim_win_get_virtcol(wp);
+    let virtcol = win_ref(wp).w_virtcol;
     if (*wlv).vcol + (*wlv).skip_cells < virtcol && mb_schar != 0 {
         return;
     }
 
     let wcol = (*wlv).col - (*wlv).boguscols;
-    let wrow = nvim_win_get_wrow(wp); // use row from wlv
+    let wrow = win_ref(wp).w_wrow; // use row from wlv
     let wrow_val = (*wlv).row;
-    nvim_win_set_wcol(wp, wcol);
-    nvim_win_set_wrow(wp, wrow_val);
+    win_mut(wp).w_wcol = wcol;
+    win_mut(wp).w_wrow = wrow_val;
     let _ = wrow;
     nvim_win_set_valid_bits(wp, VALID_WCOL_WROW_VIRTCOL);
 
     if (*wlv).vcol + (*wlv).skip_cells < virtcol {
         let extra = virtcol - (*wlv).vcol - (*wlv).skip_cells;
-        let new_wcol = nvim_win_get_wcol(wp) + extra;
-        nvim_win_set_wcol(wp, new_wcol);
+        let new_wcol = win_ref(wp).w_wcol + extra;
+        win_mut(wp).w_wcol = new_wcol;
     }
 
     (*state).did_wcol = true;
@@ -5535,7 +5495,7 @@ pub unsafe extern "C" fn rs_win_line_highlight_attrs(
         let tocol = (*wlv).tocol;
         let vcol_prev = (*state).vcol_prev;
         let fromcol_prev = (*state).fromcol_prev;
-        let virtcol = nvim_win_get_virtcol(wp);
+        let virtcol = win_ref(wp).w_virtcol;
 
         let n_extra_cells = if (*wlv).n_extra == 0 {
             utf_ptr2cells_at(wp, lnum, ptr_col)
@@ -5596,7 +5556,7 @@ pub unsafe extern "C" fn rs_win_line_highlight_attrs(
         let vcol_prev = (*state).vcol_prev;
         let fromcol_prev = (*state).fromcol_prev;
         let noinvcur = (*state).noinvcur;
-        let virtcol = nvim_win_get_virtcol(wp);
+        let virtcol = win_ref(wp).w_virtcol;
 
         let n_extra_cells = if (*wlv).n_extra == 0 {
             utf_ptr2cells_at(wp, lnum, ptr_col)
@@ -5845,12 +5805,6 @@ extern "C" {
     fn nvim_win_lcs_lead(wp: WinHandle) -> ScharT;
     /// wp->w_p_lcs_chars.nbsp
     fn nvim_win_lcs_nbsp(wp: WinHandle) -> ScharT;
-    /// Set wp->w_cursor.lnum
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
-    /// Set wp->w_cursor.col
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: ColnrT);
-    /// Set wp->w_cursor.coladd
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: ColnrT);
 }
 
 /// Implement `c_win_line_pre_loop` in Rust.
@@ -5921,8 +5875,8 @@ pub unsafe extern "C" fn rs_c_win_line_pre_loop(
     // current line pointer (as byte offset into the buffer line)
     let mut ptr_col: c_int = 0; // offset of ptr into line
 
-    let p_list = nvim_win_get_p_list(wp) != 0;
-    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let p_list = win_ref(wp).w_p_list() != 0;
+    let p_wrap = win_ref(wp).w_p_wrap() != 0;
 
     if p_list && !has_foldtext && draw_text {
         // Check if any listchars that affect whitespace are set
@@ -5975,12 +5929,12 @@ pub unsafe extern "C" fn rs_c_win_line_pre_loop(
     // Determine start_vcol
     res.start_vcol = if p_wrap {
         if startrow == 0 {
-            nvim_win_get_skipcol(wp)
+            win_ref(wp).w_skipcol
         } else {
             0
         }
     } else {
-        nvim_win_get_leftcol(wp)
+        win_ref(wp).w_leftcol
     };
 
     if has_foldtext {
@@ -6024,13 +5978,13 @@ pub unsafe extern "C" fn rs_c_win_line_pre_loop(
 
             // Save/restore cursor around spell_move_to
             // (spell_move_to modifies wp->w_cursor then we restore it)
-            let save_cursor_lnum = nvim_win_get_cursor_lnum(wp);
-            let save_cursor_col = nvim_win_get_cursor_col(wp);
-            let save_cursor_coladd = nvim_win_get_cursor_coladd(wp);
+            let save_cursor_lnum = win_ref(wp).w_cursor.lnum;
+            let save_cursor_col = win_ref(wp).w_cursor.col;
+            let save_cursor_coladd = win_ref(wp).w_cursor.coladd;
 
             // Set cursor to our position
-            nvim_win_set_cursor_lnum(wp, lnum);
-            nvim_win_set_cursor_col(wp, linecol);
+            win_mut(wp).w_cursor.lnum = lnum;
+            win_mut(wp).w_cursor.col = linecol;
 
             let forward: c_int = 1;
             let smt_all: c_int = 3;
@@ -6039,7 +5993,7 @@ pub unsafe extern "C" fn rs_c_win_line_pre_loop(
             // spell_move_to() may call ml_get() and make "line" invalid
             // Re-fetch line pointer (ptr_col stays valid as byte offset)
             let line_ptr2 = nvim_win_ml_get_buf(wp, lnum);
-            let cursor_col_after = nvim_win_get_cursor_col(wp);
+            let cursor_col_after = win_ref(wp).w_cursor.col;
 
             let hlf_count: c_int = 76; // HLF_COUNT
             if len == 0 || cursor_col_after > linecol {
@@ -6056,9 +6010,9 @@ pub unsafe extern "C" fn rs_c_win_line_pre_loop(
             }
 
             // Restore cursor
-            nvim_win_set_cursor_lnum(wp, save_cursor_lnum);
-            nvim_win_set_cursor_col(wp, save_cursor_col);
-            nvim_win_set_cursor_coladd(wp, save_cursor_coladd);
+            win_mut(wp).w_cursor.lnum = save_cursor_lnum;
+            win_mut(wp).w_cursor.col = save_cursor_col;
+            win_mut(wp).w_cursor.coladd = save_cursor_coladd;
 
             // Need to restart syntax highlighting for this line.
             if state.has_syntax {
@@ -6084,7 +6038,7 @@ pub unsafe extern "C" fn rs_c_win_line_pre_loop(
     // Correct highlighting for cursor that can't be disabled.
     if (*wlv).fromcol >= 0 {
         if state.noinvcur {
-            let virtcol = nvim_win_get_virtcol(wp);
+            let virtcol = win_ref(wp).w_virtcol;
             if (*wlv).fromcol as ColnrT == virtcol {
                 state.fromcol_prev = (*wlv).fromcol;
                 (*wlv).fromcol = -1;
@@ -6318,7 +6272,7 @@ pub unsafe extern "C" fn rs_win_line_draw_cols(
             }
             (*wlv).filler_todo -= 1;
             res.virt_line_index = -1;
-            if (*wlv).filler_todo == 0 && (nvim_win_get_botfill(wp) || !draw_text) {
+            if (*wlv).filler_todo == 0 && (win_ref(wp).w_botfill || !draw_text) {
                 res.action = DRAW_COLS_ACTION_BREAK;
                 return res;
             }
@@ -6332,7 +6286,7 @@ pub unsafe extern "C" fn rs_win_line_draw_cols(
     }
 
     // Check if 'breakindent' applies and show it.
-    let briopt_sbr = nvim_win_get_briopt_sbr(wp);
+    let briopt_sbr = win_ref(wp).w_briopt_sbr;
     if !briopt_sbr {
         rs_handle_breakindent(wp, wlv);
     }
@@ -6535,7 +6489,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
     {
         // Illegal UTF-8 byte: display as <xx>. Non-printable: display as ? or fullwidth ?.
         transchar_hex((*wlv).extra.as_mut_ptr().cast(), mb_c);
-        if nvim_win_get_p_rl(wp) != 0 {
+        if win_ref(wp).w_p_rl() != 0 {
             // reverse
             rl_mirror_ascii((*wlv).extra.as_mut_ptr().cast(), std::ptr::null_mut());
         }
@@ -6712,9 +6666,9 @@ pub unsafe extern "C" fn rs_win_line_process_char(
                 let state_val = nvim_get_State();
                 if spell_hlf != hlf_count
                     && (state_val & MODE_INSERT) != 0
-                    && nvim_win_get_cursor_lnum(wp) == lnum
-                    && nvim_win_get_cursor_col(wp) >= prev_v as ColnrT
-                    && nvim_win_get_cursor_col(wp) < word_end_new as ColnrT
+                    && win_ref(wp).w_cursor.lnum == lnum
+                    && win_ref(wp).w_cursor.col >= prev_v as ColnrT
+                    && win_ref(wp).w_cursor.col < word_end_new as ColnrT
                 {
                     spell_hlf = hlf_count;
                     nvim_set_spell_redraw_lnum(lnum);
@@ -6803,7 +6757,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
             }
 
             if mb_c == c_int::from(b'\t') && (*wlv).n_extra + (*wlv).col > view_width {
-                let buf = nvim_win_get_w_buffer(wp);
+                let buf = BufHandle(win_ref(wp).w_buffer);
                 let ts = nvim_buf_get_p_ts(buf);
                 let vts = nvim_buf_get_p_vts_array(buf);
                 (*wlv).n_extra = rs_tabstop_padding((*wlv).vcol, ts, vts) - 1;
@@ -6819,7 +6773,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
                     // Tab alignment.
                     fix_for_boguscols_impl(wlv);
                 }
-                if nvim_win_get_p_list(wp) == 0 {
+                if win_ref(wp).w_p_list() == 0 {
                     mb_c = c_int::from(b' ');
                     mb_schar = rs_schar_from_ascii(mb_c);
                 }
@@ -6827,7 +6781,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
         }
 
         // Update in_multispace tracking.
-        if nvim_win_get_p_list(wp) != 0 {
+        if win_ref(wp).w_p_list() != 0 {
             let next_char = c_int::from(*line.add(res.ptr_col as usize) as u8);
             let prev_char = if ptr_col > 0 {
                 c_int::from(*line.add(ptr_col as usize - 1) as u8)
@@ -6844,7 +6798,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
         }
 
         // 'list': Change char 160/nbsp/space to listchars equivalents.
-        let p_list = nvim_win_get_p_list(wp) != 0;
+        let p_list = win_ref(wp).w_p_list() != 0;
         let ptr_after = res.ptr_col; // ptr after increment
 
         // nbsp/space listchar substitution
@@ -6921,23 +6875,22 @@ pub unsafe extern "C" fn rs_win_line_process_char(
 
     // Handling of non-printable characters.
     if !nvim_vim_isprintc(mb_c) {
-        if mb_c == c_int::from(b'\t')
-            && (nvim_win_get_p_list(wp) == 0 || nvim_win_lcs_tab1(wp) != 0)
+        if mb_c == c_int::from(b'\t') && (win_ref(wp).w_p_list() == 0 || nvim_win_lcs_tab1(wp) != 0)
         {
             // Tab handling.
             let mut tab_len: c_int;
             let mut vcol_adjusted = (*wlv).vcol; // removed showbreak length
             let sbr = rs_get_showbreak_value(wp);
-            if *sbr != 0 && (*wlv).vcol == (*wlv).vcol_sbr && nvim_win_get_p_wrap(wp) != 0 {
+            if *sbr != 0 && (*wlv).vcol == (*wlv).vcol_sbr && win_ref(wp).w_p_wrap() != 0 {
                 vcol_adjusted = (*wlv).vcol - mb_charlen(sbr);
             }
 
-            let buf = nvim_win_get_w_buffer(wp);
+            let buf = BufHandle(win_ref(wp).w_buffer);
             let ts = nvim_buf_get_p_ts(buf);
             let vts = nvim_buf_get_p_vts_array(buf);
             tab_len = rs_tabstop_padding(vcol_adjusted, ts, vts) - 1;
 
-            if nvim_win_get_p_lbr(wp) == 0 || nvim_win_get_p_list(wp) == 0 {
+            if nvim_win_get_p_lbr(wp) == 0 || win_ref(wp).w_p_list() == 0 {
                 (*wlv).n_extra = tab_len;
             } else {
                 let saved_nextra = (*wlv).n_extra;
@@ -6993,14 +6946,14 @@ pub unsafe extern "C" fn rs_win_line_process_char(
                 fix_for_boguscols_impl(wlv);
                 let lcs_tab1 = nvim_win_lcs_tab1(wp);
                 if (*wlv).n_extra == tab_len + vc_saved
-                    && nvim_win_get_p_list(wp) != 0
+                    && win_ref(wp).w_p_list() != 0
                     && lcs_tab1 != 0
                 {
                     tab_len += vc_saved;
                 }
             }
 
-            if nvim_win_get_p_list(wp) != 0 {
+            if win_ref(wp).w_p_list() != 0 {
                 let lcs_tab1 = nvim_win_lcs_tab1(wp);
                 let lcs_tab3 = nvim_win_lcs_tab3(wp);
                 let lcs_tab2 = nvim_win_lcs_tab2(wp);
@@ -7026,14 +6979,14 @@ pub unsafe extern "C" fn rs_win_line_process_char(
             }
             mb_c = schar_get_first_codepoint(mb_schar);
         } else if mb_schar == 0
-            && (nvim_win_get_p_list(wp) != 0
+            && (win_ref(wp).w_p_list() != 0
                 || (((*wlv).fromcol >= 0 || (*wls).fromcol_prev >= 0)
                     && (*wlv).tocol > (*wlv).vcol
                     && nvim_get_VIsual_mode() != c_int::from(b'\x16') // Ctrl_V
                     && (*wlv).col < view_width
                     && !((*wls).noinvcur
-                        && lnum == nvim_win_get_cursor_lnum(wp)
-                        && (*wlv).vcol == nvim_win_get_virtcol(wp))))
+                        && lnum == win_ref(wp).w_cursor.lnum
+                        && (*wlv).vcol == win_ref(wp).w_virtcol)))
             && res.lcs_eol_todo
             && nvim_win_lcs_eol(wp) != 0
         {
@@ -7050,7 +7003,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
                 (*wlv).n_extra = 0;
             }
             let lcs_eol = nvim_win_lcs_eol(wp);
-            if nvim_win_get_p_list(wp) != 0 && lcs_eol > 0 {
+            if win_ref(wp).w_p_list() != 0 && lcs_eol > 0 {
                 mb_schar = lcs_eol;
             } else {
                 mb_schar = rs_schar_from_ascii(c_int::from(b' '));
@@ -7062,11 +7015,11 @@ pub unsafe extern "C" fn rs_win_line_process_char(
             mb_c = schar_get_first_codepoint(mb_schar);
         } else if mb_schar != 0 {
             // Non-printable, non-TAB, non-NUL: display as hex or transchar.
-            (*wlv).p_extra = transchar_buf(nvim_win_get_w_buffer(wp).0, mb_c);
+            (*wlv).p_extra = transchar_buf(BufHandle(win_ref(wp).w_buffer).0, mb_c);
             if (*wlv).n_extra == 0 {
                 (*wlv).n_extra = byte2cells(mb_c) - 1;
             }
-            if (nvim_get_dy_flags() & 0x100) != 0 && nvim_win_get_p_rl(wp) != 0 {
+            if (nvim_get_dy_flags() & 0x100) != 0 && win_ref(wp).w_p_rl() != 0 {
                 // (dy_flags & kOptDyFlagUhex) = 0x100
                 rl_mirror_ascii((*wlv).p_extra, std::ptr::null_mut());
             }
@@ -7106,10 +7059,8 @@ pub unsafe extern "C" fn rs_win_line_process_char(
     } // end non-printable handling
 
     // Concealment
-    if nvim_win_get_p_cole(wp) > 0
-        && (wp != nvim_get_curwin()
-            || lnum != nvim_win_get_cursor_lnum(wp)
-            || conceal_cursor_line(wp))
+    if win_ref(wp).w_p_cole() > 0
+        && (wp != nvim_get_curwin() || lnum != win_ref(wp).w_cursor.lnum || conceal_cursor_line(wp))
         && (state.syntax_flags & 0x04 != 0 // HL_CONCEAL
             || has_match_conc > 0
             || nvim_get_decor_state_conceal() > 0)
@@ -7133,8 +7084,8 @@ pub unsafe extern "C" fn rs_win_line_process_char(
                 || (has_match_conc != 0 && (*wls).match_conc != 0)
                 || (nvim_get_decor_state_conceal() != 0
                     && nvim_get_decor_state_conceal_char() != 0)
-                || nvim_win_get_p_cole(wp) == 1)
-            && nvim_win_get_p_cole(wp) != 3
+                || win_ref(wp).w_p_cole() == 1)
+            && win_ref(wp).w_p_cole() != 3
         {
             if schar_cells(mb_schar) > 1 {
                 // Double-width concealed char: advance one more virtual column.
@@ -7218,9 +7169,7 @@ extern "C" {
     /// get dollar_vcol global.
     fn nvim_get_dollar_vcol() -> ColnrT;
     /// wp->w_cline_row.
-    fn nvim_win_get_cline_row(wp: WinHandle) -> c_int;
     /// wp->w_cline_height.
-    fn nvim_win_get_cline_height(wp: WinHandle) -> c_int;
     /// Alloc and zero-init a statuscol_T, returns opaque pointer.
     fn nvim_stcp_alloc() -> *mut c_void;
     /// Free a heap-allocated statuscol_T.
@@ -7481,12 +7430,12 @@ pub unsafe extern "C" fn rs_win_line(
 
             // When still displaying '$' of change command, stop at cursor.
             let dollar_vcol = nvim_get_dollar_vcol();
-            if dollar_vcol >= 0 && in_curline && wlv.vcol >= nvim_win_get_virtcol(wp) {
-                let buf = BufHandle(nvim_win_get_buffer(wp));
+            if dollar_vcol >= 0 && in_curline && wlv.vcol >= win_ref(wp).w_virtcol {
+                let buf = BufHandle(win_ref(wp).w_buffer);
                 rs_draw_virt_text(wp, buf, win_col_offset, &mut wlv.col, wlv.row);
                 rs_wlv_put_linebuf(wp, &mut wlv, wlv.col, false, bg_attr, 0);
-                if nvim_win_get_p_cuc(wp) != 0 {
-                    wlv.row = nvim_win_get_cline_row(wp) + nvim_win_get_cline_height(wp);
+                if win_ref(wp).w_p_cuc() != 0 {
+                    wlv.row = win_ref(wp).w_cline_row + win_ref(wp).w_cline_height;
                 } else {
                     wlv.row = view_height;
                 }
@@ -7603,7 +7552,7 @@ pub unsafe extern "C" fn rs_win_line(
                 && wlv.col < view_width
                 && (has_foldtext
                     || (ptr_is_nul
-                        && (nvim_win_get_p_list(wp) == 0 || !lcs_eol_todo || lcs_eol == 0)))
+                        && (win_ref(wp).w_p_list() == 0 || !lcs_eol_todo || lcs_eol == 0)))
             {
                 wlv.sc_extra = nvim_win_get_fcs_fold(wp);
                 wlv.sc_final = 0;
@@ -7804,7 +7753,7 @@ pub unsafe extern "C" fn rs_win_line(
                 && (wlv.col <= leftcols_width
                     || !ptr_is_nul_ec
                     || wlv.filler_todo > 0
-                    || (nvim_win_get_p_list(wp) != 0 && nvim_win_lcs_eol(wp) != 0 && lcs_eol_todo)
+                    || (win_ref(wp).w_p_list() != 0 && nvim_win_lcs_eol(wp) != 0 && lcs_eol_todo)
                     || has_n_extra
                     || (may_have_inline_virt
                         && has_more_inline_virt_impl(&mut wlv, ptr_col as isize)))
