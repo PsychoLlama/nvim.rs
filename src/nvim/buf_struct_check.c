@@ -136,6 +136,7 @@ _Static_assert(offsetof(buf_T, b_p_nf) == 10568, "b_p_nf offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_pi) == 10576, "b_p_pi offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_ro) == 10592, "b_p_ro offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_sw) == 10600, "b_p_sw offset mismatch");
+_Static_assert(offsetof(buf_T, b_p_scbk) == 10608, "b_p_scbk offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_sts) == 10624, "b_p_sts offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_sts_nopaste) == 10632, "b_p_sts_nopaste offset mismatch");
 _Static_assert(offsetof(buf_T, b_p_syn) == 10664, "b_p_syn offset mismatch");

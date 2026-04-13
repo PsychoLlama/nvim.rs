@@ -4456,7 +4456,6 @@ extern "C" {
     fn nvim_win_lines_concealed(wp: WinHandle) -> c_int;
     fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
     fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
-    fn nvim_buf_get_line_count(buf: BufHandle) -> c_int;
 
     // Phase 3: nv_up / nv_down accessors
     fn nvim_bt_quickfix_curbuf() -> c_int; // defined in window_shim.c, returns int
@@ -5214,7 +5213,7 @@ unsafe fn rs_nv_scroll_impl(cap: CapHandle) {
     let cur_buf = nvim_get_curbuf();
     let cmdchar = (*cap).cmdchar;
     let count1 = (*cap).count1;
-    let line_count = nvim_buf_get_line_count(cur_buf);
+    let line_count = unsafe { buf_ref(cur_buf).ml_line_count };
 
     if cmdchar == c_int::from(b'L') {
         nv_scroll_bottom(curwin, count1);

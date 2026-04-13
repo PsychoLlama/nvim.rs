@@ -366,8 +366,6 @@ size_t nvim_vterm_frag_len(const void *val) { return ((const VTermValue *)val)->
 int nvim_vterm_frag_initial(const void *val) { return (int)((const VTermValue *)val)->string.initial; }
 int nvim_vterm_frag_final(const void *val) { return (int)((const VTermValue *)val)->string.final; }
 int nvim_term_buf_line_count(const void *buf) { return ((const buf_T *)buf)->b_ml.ml_line_count; }
-int64_t nvim_buf_get_scrollback(const void *buf) { return ((const buf_T *)buf)->b_p_scbk; }
-void nvim_buf_set_scrollback(void *buf, int64_t val) { ((buf_T *)buf)->b_p_scbk = val; }
 void *nvim_terminal_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
 int nvim_ml_append_buf_term(void *buf, int lnum, char *line, bool newfile) { return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile); }
 int nvim_ml_replace_buf_term(void *buf, int lnum, char *line, bool copy) { return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false); }

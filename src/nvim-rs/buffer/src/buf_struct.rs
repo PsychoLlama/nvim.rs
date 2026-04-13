@@ -426,8 +426,10 @@ pub struct BufStruct {
     // offset 10600: OptInt b_p_sw  (ShiftWidth, int64_t)
     pub b_p_sw: OptInt,
 
-    // offset 10608..10623: gap (16 bytes, opaque)
-    _pad43: [u8; 16],
+    // offset 10608: OptInt b_p_scbk (scrollback, int64_t)
+    pub b_p_scbk: OptInt,
+    // offset 10616..10623: b_p_si (int) + gap (4 bytes, opaque)
+    _pad43: [u8; 8],
 
     // offset 10624: OptInt b_p_sts  (SofttabStop, int64_t)
     pub b_p_sts: OptInt,

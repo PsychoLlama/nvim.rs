@@ -3048,8 +3048,6 @@ extern "C" {
     fn xmemdup(src: *const c_void, len: usize) -> *mut c_void;
     // Phase 7: refresh pipeline
     fn nvim_term_buf_line_count(buf: *const c_void) -> c_int;
-    fn nvim_buf_get_scrollback(buf: *const c_void) -> i64;
-    fn nvim_buf_set_scrollback(buf: *mut c_void, val: i64);
     fn rs_buf_valid(buf: *mut c_void) -> c_int;
     fn nvim_terminal_get_buffer(buf_handle: c_int) -> *mut c_void;
     fn nvim_ml_append_buf_term(
@@ -4034,12 +4032,12 @@ unsafe fn rs_refresh_screen(term: TerminalHandle, buf: *mut c_void) {
 /// `term` and `buf` must be valid pointers.
 unsafe fn rs_adjust_scrollback(term: TerminalHandle, buf: *mut c_void) {
     let t = unsafe { term.as_mut() };
-    let mut scbk = unsafe { nvim_buf_get_scrollback(buf) };
+    let mut scbk = unsafe { bref_raw(buf).b_p_scbk };
     if scbk < 1 {
         #[allow(clippy::cast_possible_wrap)]
         let sb_max = TERMINAL_SB_MAX as i64;
         scbk = sb_max;
-        unsafe { nvim_buf_set_scrollback(buf, scbk) };
+        unsafe { (*buf.cast::<BufStruct>()).b_p_scbk = scbk };
     }
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     let scbk = scbk as usize;
@@ -5000,11 +4998,11 @@ pub unsafe extern "C" fn rs_terminal_open(
 
     // Allocate scrollback buffer if TermOpen autocmd didn't already.
     if term.sb_buffer.is_null() {
-        let scbk = unsafe { nvim_buf_get_scrollback(buf) };
+        let scbk = unsafe { bref_raw(buf).b_p_scbk };
         #[allow(clippy::cast_possible_wrap)]
         let sb_max_i64 = TERMINAL_SB_MAX as i64;
         let scbk = if scbk < 1 {
-            unsafe { nvim_buf_set_scrollback(buf, sb_max_i64) };
+            unsafe { (*buf.cast::<BufStruct>()).b_p_scbk = sb_max_i64 };
             sb_max_i64
         } else {
             scbk
