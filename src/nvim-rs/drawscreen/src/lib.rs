@@ -27,6 +27,7 @@ use std::ptr::{addr_of, addr_of_mut};
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
@@ -93,6 +94,25 @@ impl BufHandle {
     pub const fn is_null(self) -> bool {
         self.0.is_null()
     }
+}
+
+/// Get `&BufStruct` from a `BufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    &*(buf.0.cast::<BufStruct>())
+}
+
+/// Get `&mut BufStruct` from a `BufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+#[allow(clippy::mut_from_ref)]
+unsafe fn buf_mut_raw(buf: BufHandle) -> &'static mut BufStruct {
+    &mut *(buf.0.cast::<BufStruct>())
 }
 
 /// schar_T is stored as a u32 in Rust (matches grid crate).
@@ -1048,9 +1068,6 @@ extern "C" {
     // Buffer comparison
     fn nvim_win_buffer_eq(wp: WinHandle, buf: BufHandle) -> c_int;
 
-    // Buffer accessors
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
-
     // Floating window check
 }
 
@@ -1240,7 +1257,7 @@ pub extern "C" fn rs_redrawWinline(wp: WinHandle, lnum: LinenrT) {
 #[unsafe(export_name = "redraw_buf_line_later")]
 pub extern "C" fn rs_redraw_buf_line_later(buf: BufHandle, line: LinenrT, force: bool) {
     unsafe {
-        let ml_line_count = nvim_buf_get_ml_line_count(buf);
+        let ml_line_count = bref(buf).ml_line_count;
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             if nvim_win_buffer_eq(wp, buf) != 0 {
@@ -1453,8 +1470,6 @@ extern "C" {
     // Window clear state
 
     // Buffer mod state
-    fn nvim_buf_get_mod_set(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_mod_set(buf: BufHandle, val: c_int);
 }
 
 /// Check if screen updating is currently in progress.
@@ -1512,7 +1527,7 @@ pub extern "C" fn rs_win_reset_buf_mod_set(wp: WinHandle) {
         unsafe {
             let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
-                nvim_buf_set_mod_set(buf, 0);
+                buf_mut_raw(buf).b_mod_set = 0;
             }
         }
     }
@@ -1530,7 +1545,7 @@ pub extern "C" fn rs_win_buf_has_mod_set(wp: WinHandle) -> c_int {
         if buf.is_null() {
             return 0;
         }
-        nvim_buf_get_mod_set(buf)
+        c_int::from(bref(buf).b_mod_set)
     }
 }
 
@@ -3303,7 +3318,7 @@ pub unsafe extern "C" fn rs_win_redraw_signcols(wp: WinHandle) -> bool {
         && (has_stc || (maxscwidth > 1 && minscwidth != maxscwidth))
     {
         nvim_buf_signcols_set_autom(buf, true);
-        let line_count = nvim_buf_get_ml_line_count(buf);
+        let line_count = bref(buf).ml_line_count;
         nvim_buf_signcols_count_range(buf, 0, line_count - 1, MAXLNUM, 0 /* kFalse */);
     }
 
@@ -3393,10 +3408,6 @@ extern "C" {
     fn nvim_decor_providers_invoke_win_shim(wp: WinHandle);
     /// Call init_search_hl(wp, &screen_search_hl).
     fn nvim_init_search_hl_win(wp: WinHandle);
-    /// Get buf->b_mod_top.
-    fn nvim_buf_get_mod_top(buf: BufHandle) -> LinenrT;
-    /// Get buf->b_mod_bot.
-    fn nvim_buf_get_mod_bot(buf: BufHandle) -> LinenrT;
     /// Get buf->b_s.b_syn_sync_linebreaks.
     fn nvim_buf_get_syn_sync_linebreaks(buf: BufHandle) -> LinenrT;
     /// Get wp->w_skipcol.
@@ -3472,12 +3483,6 @@ extern "C" {
     /// nvim_win_get_topline: get wp->w_topline.
     #[link_name = "nvim_win_get_topline"]
     fn win_get_topline_body(wp: WinHandle) -> LinenrT;
-    /// nvim_buf_get_ml_line_count: get buf->b_ml.ml_line_count.
-    #[link_name = "nvim_buf_get_ml_line_count"]
-    fn buf_get_ml_line_count_body(buf: BufHandle) -> LinenrT;
-    /// nvim_buf_get_mod_set: get buf->b_mod_set.
-    #[link_name = "nvim_buf_get_mod_set"]
-    fn buf_get_mod_set_body(buf: BufHandle) -> c_int;
 }
 
 // Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize FFI
@@ -3488,8 +3493,6 @@ extern "C" {
     fn nvim_win_or_w_valid(wp: WinHandle, mask: c_int);
     /// Return true if wp->w_match_head != NULL.
     fn nvim_win_get_match_head_nonnull(wp: WinHandle) -> bool;
-    /// Get buf->b_mod_xlines.
-    fn nvim_buf_get_mod_xlines(buf: BufHandle) -> LinenrT;
     /// Return true if *wp->w_p_fdt == NUL.
     fn nvim_win_get_w_p_fdt_nul(wp: WinHandle) -> bool;
     /// Get raw w_lines pointer (unchecked, Rust must bounds-check).
@@ -3732,9 +3735,9 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
         let redraw_bot = win_get_redraw_bot(wp);
         mod_bot = if redraw_bot != 0 { redraw_bot + 1 } else { 0 };
 
-        if buf_get_mod_set_body(buf) != 0 {
-            let b_mod_top = nvim_buf_get_mod_top(buf);
-            let b_mod_bot = nvim_buf_get_mod_bot(buf);
+        if bref(buf).b_mod_set != 0 {
+            let b_mod_top = bref(buf).b_mod_top;
+            let b_mod_bot = bref(buf).b_mod_bot;
 
             if mod_top == 0 || mod_top > b_mod_top {
                 mod_top = b_mod_top;
@@ -3895,7 +3898,7 @@ unsafe fn win_update_body_scroll(wp: WinHandle, st: &mut WinUpdateBodyState) {
 
     // Compute adjusted topline (skipping concealed lines at top).
     let topline = win_get_topline_body(wp);
-    let ml_line_count = buf_get_ml_line_count_body(buf);
+    let ml_line_count = bref(buf).ml_line_count;
     let mut topline_conceal = topline;
     while topline_conceal < ml_line_count
         && nvim_decor_conceal_line(wp, topline_conceal - 1, 0) != 0
@@ -4136,7 +4139,7 @@ unsafe fn win_update_body_draw_loop(
     st: &mut WinUpdateBodyState,
 ) -> (bool, bool, LinenrT, c_int, c_int, c_int) {
     let buf = BufHandle(win_ref(wp).w_buffer);
-    let ml_line_count = buf_get_ml_line_count_body(buf);
+    let ml_line_count = bref(buf).ml_line_count;
     let view_height = win_ref(wp).w_view_height;
     let curwin = nvim_get_curwin();
 
@@ -4187,7 +4190,7 @@ unsafe fn win_update_body_draw_loop(
             } else {
                 0
             };
-            let mod_set = buf_get_mod_set_body(buf) != 0;
+            let mod_set = bref(buf).b_mod_set != 0;
             let p_nu = win_ref(wp).w_p_nu() != 0;
             let p_rnu = win_ref(wp).w_p_rnu() != 0;
             let p_cul = win_ref(wp).w_p_cul() != 0;
@@ -4212,7 +4215,7 @@ unsafe fn win_update_body_draw_loop(
                                         || syntax_check_changed(lnum)))
                                 || (nvim_win_get_match_head_nonnull(wp)
                                     && mod_set
-                                    && nvim_buf_get_mod_xlines(buf) != 0)))))
+                                    && bref(buf).b_mod_xlines != 0)))))
                 || lnum == w_cursorline
                 || lnum == w_last_cursorline;
 
@@ -4475,8 +4478,8 @@ unsafe fn win_update_body_draw_loop(
                 if (p_nu
                     && st.mod_top != 0
                     && lnum >= st.mod_bot
-                    && buf_get_mod_set_body(buf) != 0
-                    && nvim_buf_get_mod_xlines(buf) != 0)
+                    && bref(buf).b_mod_set != 0
+                    && bref(buf).b_mod_xlines != 0)
                     || (p_rnu && win_ref(wp).w_last_cursor_lnum_rnu != cursor_lnum)
                 {
                     let mut zero_spv = SpvT::default();
@@ -4558,7 +4561,7 @@ unsafe fn win_update_body_finalize(
     static mut RECURSIVE: bool = false;
 
     let buf = BufHandle(win_ref(wp).w_buffer);
-    let ml_line_count = buf_get_ml_line_count_body(buf);
+    let ml_line_count = bref(buf).ml_line_count;
     let view_height = win_ref(wp).w_view_height;
     let curwin = nvim_get_curwin();
 
@@ -4833,7 +4836,7 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
         update_window_hl(wp, type_ >= UPD_NOT_VALID || hl_changed != 0);
 
         let buf = BufHandle(win_ref(wp).w_buffer);
-        if nvim_buf_get_mod_set(buf) != 0 {
+        if bref(buf).b_mod_set != 0 {
             if nvim_buf_get_mod_tick_syn(buf) < tick && syntax_present(wp) {
                 syn_stack_apply_changes(buf);
                 nvim_buf_set_mod_tick_syn(buf, tick);
@@ -4903,7 +4906,7 @@ unsafe fn update_screen_win_loop_impl(type_: c_int, hl_changed: c_int) {
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
         let buf = BufHandle(win_ref(wp).w_buffer);
-        nvim_buf_set_mod_set(buf, 0);
+        buf_mut_raw(buf).b_mod_set = 0;
         wp = win_ref(wp).w_next;
     }
 }

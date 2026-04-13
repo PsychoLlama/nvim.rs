@@ -98,10 +98,8 @@ int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
 const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
 const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
 const char *nvim_buf_get_b_sfname(buf_T *buf) { return buf->b_sfname; }
-const char *nvim_buf_get_b_p_efm(buf_T *buf) { return buf->b_p_efm; }
 int nvim_buf_get_b_p_ro(buf_T *buf) { return buf->b_p_ro; }
 const char *nvim_buf_get_b_p_ft(buf_T *buf) { return buf->b_p_ft; }
-const char *nvim_buf_get_b_p_syn(buf_T *buf) { return buf->b_p_syn; }
 int nvim_buf_get_b_p_ma(buf_T *buf) { return buf->b_p_ma; }
 void nvim_buf_set_b_p_ml(buf_T *buf, int val) { if (buf) { buf->b_p_ml = val != 0; } }
 void nvim_buf_set_b_p_iminsert(buf_T *buf, int val) { if (buf) { buf->b_p_iminsert = val; } }
@@ -123,8 +121,6 @@ const char *nvim_curbuf_get_inex(void) { return curbuf->b_p_inex; }
 char *nvim_get_namebuff(void) { return NameBuff; }
 OptInt nvim_buf_get_p_sts(buf_T *buf) { return buf ? buf->b_p_sts : 0; }
 const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w_cursor.lnum); }
-int nvim_buf_get_ml_mfp_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
-
 void nvim_buf_set_name_body(buf_T *buf, char *name)
 {
   if (buf->b_sfname != buf->b_ffname) {
@@ -710,8 +706,6 @@ exarg_T *nvim_exarg_alloc_clear(void) {
 int nvim_BLN_DUMMY(void) { return BLN_DUMMY; }
 // BF_CHECK_RO constant
 int nvim_BF_CHECK_RO(void) { return BF_CHECK_RO; }
-// Accessor for b_did_filetype (used by rs_do_filetype_autocmd)
-void nvim_buf_set_b_did_filetype(buf_T *buf, int val) { buf->b_did_filetype = (bool)val; }
 
 // =============================================================================
 // open_buffer compound accessors (Phase N: migrate open_buffer to Rust)

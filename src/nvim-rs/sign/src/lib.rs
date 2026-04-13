@@ -26,6 +26,17 @@
 
 use std::ffi::{c_char, c_int, c_void, CStr};
 
+use nvim_buffer::buf_struct::BufStruct;
+
+/// Get `&BufStruct` from a `SignBufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn bref(buf: SignBufHandle) -> &'static BufStruct {
+    &*(buf.as_ptr().cast::<BufStruct>())
+}
+
 // =============================================================================
 // Submodules
 // =============================================================================
@@ -234,9 +245,6 @@ extern "C" {
 
     // Buffer sign accessors
     fn nvim_buf_get_marktree(buf: SignBufHandle) -> *mut c_void;
-    fn nvim_buf_get_fname(buf: SignBufHandle) -> *const c_char;
-    fn nvim_buf_get_fnum(buf: SignBufHandle) -> c_int;
-    fn nvim_buf_get_next(buf: SignBufHandle) -> SignBufHandle;
 
     // Marktree/MTKey accessors
     fn nvim_mtkey_get_row(key: MTKeyHandle) -> c_int;

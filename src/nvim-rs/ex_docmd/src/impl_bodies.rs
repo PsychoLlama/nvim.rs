@@ -11,7 +11,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use crate::ExArgHandle;
+use crate::{bref_raw, ExArgHandle};
 
 #[allow(clippy::missing_const_for_fn)]
 #[inline]
@@ -120,7 +120,6 @@ extern "C" {
 
     // --- do_exedit_split_fail_cleanup helpers ---
     fn curbufIsChanged() -> bool;
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
     fn buf_hide(buf: BufHandle) -> bool;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> *mut c_void;
@@ -134,7 +133,6 @@ extern "C" {
     fn maketitle();
 
     // --- ex_read helpers ---
-    fn nvim_buf_get_ml_empty(buf: BufHandle) -> bool;
     fn nvim_docmd_do_bang_read(eap: ExArgHandle);
     fn u_save(top: LinenrT, bot: LinenrT) -> c_int;
     fn check_fname() -> c_int;
@@ -155,7 +153,6 @@ extern "C" {
     fn setaltfname(ffname: *const c_char, fname: *const c_char, lnum: LinenrT);
     fn aborting() -> bool;
     fn nvim_docmd_e_notopen_str() -> *const c_char;
-    fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
     fn ml_get(lnum: LinenrT) -> *const c_char;
     fn u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int;
     fn ml_delete(lnum: LinenrT) -> c_int;
@@ -450,7 +447,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_handle_exmode(eap: ExArgHandle) ->
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fail_cleanup() {
     let curbuf = nvim_get_curbuf();
-    let need_hide = curbufIsChanged() && nvim_buf_get_nwindows(nvim_get_curbuf()) <= 1;
+    let need_hide = curbufIsChanged() && bref_raw(nvim_get_curbuf()).b_nwindows <= 1;
     if !need_hide || buf_hide(curbuf) {
         // cleanup_T is an opaque C struct; 64 bytes is sufficient on all platforms.
         let mut cs = [0u8; 64];
@@ -493,7 +490,7 @@ pub unsafe extern "C" fn nvim_docmd_do_exedit_split_fallback(eap: ExArgHandle) {
 /// Accesses global buffer and window state.
 #[no_mangle]
 pub unsafe extern "C" fn nvim_docmd_ex_read_impl(eap: ExArgHandle) {
-    let empty = nvim_buf_get_ml_empty(nvim_get_curbuf()) as c_int;
+    let empty = bref_raw(nvim_get_curbuf()).ml_is_empty() as c_int;
 
     if (*eap).usefilter != 0 {
         // :r!cmd
@@ -536,7 +533,7 @@ pub unsafe extern "C" fn nvim_docmd_ex_read_impl(eap: ExArgHandle) {
         if empty != 0 && crate::exmode_active {
             // Delete the empty line that remains (ex behavior, not vi).
             let lnum = if line2 == 0 {
-                nvim_buf_get_line_count(nvim_get_curbuf())
+                bref_raw(nvim_get_curbuf()).ml_line_count
             } else {
                 1
             };

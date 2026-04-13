@@ -13,5 +13,6 @@ crate-type = ["staticlib", "rlib"]
 workspace = true
 
 [dependencies]
+nvim-buffer = { path = "../buffer" }
 nvim-decoration = { path = "../decoration" }
 nvim-marktree = { path = "../marktree" }

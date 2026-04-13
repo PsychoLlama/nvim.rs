@@ -4,6 +4,36 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_buffer::buf_struct::BufStruct;
+
+/// Get `&BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn bref_raw(buf: *mut c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
+/// Get `&BufStruct` from a raw `*const c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) const unsafe fn bref_const(buf: *const c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
+/// Get `&mut BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+#[allow(clippy::mut_from_ref)]
+pub(crate) unsafe fn buf_mut_raw(buf: *mut c_void) -> &'static mut BufStruct {
+    &mut *(buf.cast::<BufStruct>())
+}
+
 #[allow(clippy::missing_const_for_fn)]
 #[inline]
 unsafe fn win_ref_const<'a>(wp: *const c_void) -> &'a nvim_window::win_struct::WinStruct {
@@ -2034,7 +2064,6 @@ extern "C" {
     static e_invarg: c_char;
 
     // Phase 10 Pass 10 Phase 4: qf_update_buffer accessors
-    fn nvim_buf_get_ml_line_count_void(buf: *const c_void) -> LinenrT;
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: LinenrT) -> c_int;
     fn get_region_bytecount(
         buf: *mut c_void,
@@ -5757,7 +5786,7 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
         return;
     }
 
-    let old_line_count = nvim_buf_get_ml_line_count_void(buf.cast_const());
+    let old_line_count = bref_const(buf.cast_const()).ml_line_count;
     let old_endcol = nvim_ml_get_buf_len(buf, old_line_count);
     let old_bytecount = get_region_bytecount(buf, 1, old_line_count, 0, old_endcol);
 
@@ -5797,7 +5826,7 @@ pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLi
     let qfl = nvim_qf_get_curlist(qi.cast_const());
     crate::display::rs_qf_fill_buffer(qfl, buf, old_last, qf_winid);
 
-    let new_line_count = nvim_buf_get_ml_line_count_void(buf.cast_const());
+    let new_line_count = bref_const(buf.cast_const()).ml_line_count;
     let new_endcol = nvim_ml_get_buf_len(buf, new_line_count);
     let delta = new_line_count - old_line_count;
 

@@ -9,6 +9,8 @@ use std::ptr;
 
 use nvim_window::{BufHandle, WinHandle};
 
+use crate::bref;
+
 use crate::{ScharT, StatuscolHandle};
 
 // =============================================================================
@@ -290,15 +292,6 @@ extern "C" {
     #[link_name = "nvim_syn_name2id_len_wrapper"]
     fn nvim_stl_syn_name2id_len(name: *const c_char, len: c_int) -> c_int;
 
-    // Buffer field accessors
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ft(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
-    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
 
     // Quickfix / keymap: direct underlying functions
@@ -515,7 +508,7 @@ unsafe fn stl_eval_with_context(
         let save_visual = nvim_get_visual_active();
 
         // Set g:actual_curbuf and g:actual_curwin
-        let curbuf_fnum = nvim_buf_get_fnum(nvim_get_curbuf_ptr());
+        let curbuf_fnum = bref(nvim_get_curbuf_ptr()).handle;
         let curwin_handle = nvim_win_get_handle(nvim_get_curwin_ptr());
 
         let mut tmp_fnum = [0u8; 24];
@@ -1293,9 +1286,9 @@ pub unsafe fn build_stl_str_hl(
                     *namebuff.add(copy_len) = NUL as c_char;
                 } else {
                     let t = if opt == STL_FULLPATH {
-                        nvim_buf_get_b_ffname(buf)
+                        bref(buf).b_ffname
                     } else {
-                        nvim_buf_get_b_fname(buf)
+                        bref(buf).b_fname
                     };
                     stl_home_replace_trans(buf, t, namebuff, MAXPATHL);
                 }
@@ -1521,7 +1514,7 @@ pub unsafe fn build_stl_str_hl(
             }
 
             STL_BUFNO => {
-                num = nvim_buf_get_fnum(buf);
+                num = bref(buf).handle;
             }
 
             STL_OFFSET_X => {
@@ -1574,7 +1567,7 @@ pub unsafe fn build_stl_str_hl(
 
             STL_ROFLAG | STL_ROFLAG_ALT => {
                 itemisflag = true;
-                if nvim_buf_get_b_p_ro(buf) != 0 {
+                if bref(buf).b_p_ro != 0 {
                     str_ptr = if opt == STL_ROFLAG_ALT {
                         b",RO\0".as_ptr().cast()
                     } else {
@@ -1585,7 +1578,7 @@ pub unsafe fn build_stl_str_hl(
 
             STL_HELPFLAG | STL_HELPFLAG_ALT => {
                 itemisflag = true;
-                if nvim_buf_get_help(buf) != 0 {
+                if bref(buf).b_help != 0 {
                     str_ptr = if opt == STL_HELPFLAG_ALT {
                         b",HLP\0".as_ptr().cast()
                     } else {
@@ -1614,7 +1607,7 @@ pub unsafe fn build_stl_str_hl(
             }
 
             STL_FILETYPE => {
-                let ft = nvim_buf_get_b_p_ft(buf);
+                let ft = bref(buf).b_p_ft;
                 if !ft.is_null() && *ft != NUL as c_char && strlen(ft) < TMPLEN - 3 {
                     let n =
                         libc_snprintf(buf_tmp.as_mut_ptr(), TMPLEN, b"[%s]\0".as_ptr().cast(), ft);
@@ -1626,7 +1619,7 @@ pub unsafe fn build_stl_str_hl(
 
             STL_FILETYPE_ALT => {
                 itemisflag = true;
-                let ft = nvim_buf_get_b_p_ft(buf);
+                let ft = bref(buf).b_p_ft;
                 if !ft.is_null() && *ft != NUL as c_char && strlen(ft) < TMPLEN - 2 {
                     let n =
                         libc_snprintf(buf_tmp.as_mut_ptr(), TMPLEN, b",%s\0".as_ptr().cast(), ft);
@@ -1665,8 +1658,8 @@ pub unsafe fn build_stl_str_hl(
             STL_MODIFIED | STL_MODIFIED_ALT => {
                 itemisflag = true;
                 let alt = if opt == STL_MODIFIED_ALT { 1 } else { 0 };
-                let changed = if nvim_buf_get_b_changed(buf) { 2 } else { 0 };
-                let not_mod = if nvim_buf_get_b_p_ma(buf) == 0 { 4 } else { 0 };
+                let changed = if bref(buf).b_changed != 0 { 2 } else { 0 };
+                let not_mod = if bref(buf).b_p_ma == 0 { 4 } else { 0 };
                 match alt + changed + not_mod {
                     2 => str_ptr = b"[+]\0".as_ptr().cast(),
                     3 => str_ptr = b",+\0".as_ptr().cast(),

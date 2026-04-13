@@ -10,7 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::derivable_impls)]
 
-use crate::ffi_types::QfListPtr;
+use crate::{bref_raw, ffi_types::QfListPtr};
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
@@ -417,7 +417,6 @@ extern "C" {
     fn nvim_qf_delete_all_lines() -> bool;
     fn nvim_qf_zero_skipcol_for_curbuf();
     fn nvim_qf_u_clearallandblockfree();
-    fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
     // Phase 11: rs_call_qftf_func accessors (replacing nvim_call_qftf_func)
     fn tv_dict_alloc_lock(scope: c_int) -> *mut c_void;
     fn nvim_callback_is_none(cb: *const c_void) -> bool;
@@ -460,8 +459,6 @@ extern "C" {
     // nvim_buflist_findnr returns buf_T* (void* in Rust) - from buffer.c
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(nr: c_int) -> BufHandle;
-    // nvim_buf_get_b_sfname takes buf_T* (void* in Rust) - from buffer.c
-    fn nvim_buf_get_b_sfname(buf: BufHandle) -> *const c_char;
     #[link_name = "nvim_qf_buf_get_fname"]
     fn qf_buf_get_fname_fill(buf: *const c_void) -> *const c_char;
     fn path_tail(fname: *const c_char) -> *mut c_char;
@@ -666,7 +663,7 @@ unsafe fn qf_buf_add_line(
                             // Shorten the file name if not done already.
                             // For optimization, only for the first entry in a buffer.
                             if first_bufline {
-                                let sfname = nvim_buf_get_b_sfname(errbuf);
+                                let sfname = bref_raw(errbuf).b_sfname;
                                 if sfname.is_null() || path_is_absolute(sfname) {
                                     if dirname[0] == 0 {
                                         os_dirname(dirname.as_mut_ptr().cast(), MAXPATHL);
@@ -782,7 +779,7 @@ pub unsafe extern "C" fn rs_qf_fill_buffer(
         } else {
             let next = (*old_last).qf_next;
             qfp = if next.is_null() { old_last } else { next };
-            lnum = nvim_buf_get_line_count(buf);
+            lnum = bref_raw(buf).ml_line_count;
         }
 
         let qf_count = (*qfl).qf_count;

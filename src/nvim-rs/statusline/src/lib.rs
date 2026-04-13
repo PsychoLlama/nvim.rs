@@ -10,8 +10,19 @@
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::io::Write;
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::{BufHandle, Frame, WinHandle, FR_COL};
+
+/// Get &BufStruct from a `nvim_window::BufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    let raw: *mut std::ffi::c_void = std::mem::transmute(buf);
+    &*(raw.cast::<BufStruct>())
+}
 
 pub mod builder;
 pub mod click;
@@ -210,16 +221,6 @@ extern "C" {
     fn nvim_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
 
-    // Buffer accessors for statusline rendering
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ft(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
-
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_get_ml_flags(buf: BufHandle) -> c_int;
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> c_int;
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;
     fn rs_ml_find_line_or_offset(
@@ -251,7 +252,7 @@ pub(crate) unsafe fn get_win_cursor_info(wp: WinHandle) -> crate::stl_build::Stl
         return info;
     }
 
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = bref(buf).ml_line_count;
     let mut lnum = win_ref(wp).w_cursor.lnum;
 
     // Clamp cursor lnum to line count
@@ -273,7 +274,7 @@ pub(crate) unsafe fn get_win_cursor_info(wp: WinHandle) -> crate::stl_build::Stl
     // cursor_invalid: lnum > line_count before clamping (already clamped, check original)
     // Note: after clamping, lnum <= line_count, so cursor_invalid = 0
     info.cursor_invalid = 0;
-    info.ml_empty = c_int::from((nvim_buf_get_ml_flags(buf) & ML_EMPTY) != 0);
+    info.ml_empty = c_int::from((bref(buf).ml_flags & ML_EMPTY) != 0);
 
     // Get cursor line text
     let line = nvim_ml_get_buf(buf, lnum);
@@ -769,8 +770,8 @@ fn stl_render_filename_impl(buf: &mut [u8], wp: WinHandle, ftype: StlFilenameTyp
         }
 
         let fname_ptr = match ftype {
-            StlFilenameType::FullPath => nvim_buf_get_b_ffname(buf_handle),
-            StlFilenameType::Short | StlFilenameType::Tail => nvim_buf_get_b_fname(buf_handle),
+            StlFilenameType::FullPath => bref(buf_handle).b_ffname,
+            StlFilenameType::Short | StlFilenameType::Tail => bref(buf_handle).b_fname,
         };
 
         if fname_ptr.is_null() {
@@ -813,8 +814,8 @@ fn stl_render_modified_impl(buf: &mut [u8], wp: WinHandle, short: bool) -> c_int
             return 0;
         }
 
-        let changed = nvim_buf_get_b_changed(buf_handle);
-        let modifiable = nvim_buf_get_b_p_ma(buf_handle) != 0;
+        let changed = bref(buf_handle).b_changed != 0;
+        let modifiable = bref(buf_handle).b_p_ma != 0;
 
         if changed {
             let marker: &[u8] = if short { b"+" } else { b"[+]" };
@@ -847,7 +848,7 @@ fn stl_render_readonly_impl(buf: &mut [u8], wp: WinHandle, short: bool) -> c_int
             return 0;
         }
 
-        let readonly = nvim_buf_get_b_p_ro(buf_handle) != 0;
+        let readonly = bref(buf_handle).b_p_ro != 0;
 
         if readonly {
             let marker: &[u8] = if short { b"RO" } else { b"[RO]" };
@@ -874,7 +875,7 @@ fn stl_render_filetype_impl(buf: &mut [u8], wp: WinHandle, bracketed: bool) -> c
             return 0;
         }
 
-        let ft_ptr = nvim_buf_get_b_p_ft(buf_handle);
+        let ft_ptr = bref(buf_handle).b_p_ft;
         if ft_ptr.is_null() {
             return 0;
         }
@@ -2197,7 +2198,7 @@ pub unsafe extern "C" fn rs_get_trans_bufname(buf: BufHandle) {
     let namebuff = nvim_get_namebuff();
     let spname = lib_buf_spname(buf);
     if spname.is_null() {
-        let bfname = nvim_buf_get_b_fname(buf);
+        let bfname = bref(buf).b_fname;
         home_replace(buf, bfname, namebuff, 4096_i32, true);
     } else {
         // xstrlcpy(NameBuff, spname, MAXPATHL)

@@ -6,6 +6,7 @@ description = "Ex command utilities for Neovim"
 build = "build.rs"
 
 [dependencies]
+nvim-buffer = { path = "../buffer" }
 nvim-normal = { path = "../normal" }
 nvim-ex-eval = { path = "../ex_eval" }
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }

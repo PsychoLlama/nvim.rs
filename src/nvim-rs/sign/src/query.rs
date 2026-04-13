@@ -7,8 +7,8 @@ use std::ffi::{c_char, c_int};
 use nvim_decoration::types::{DecorInline, DecorSignHighlight, MTKey, MTPair};
 
 use crate::{
-    text::describe_sign_text_impl, DecorSignHighlightHandle, LinenrT, MTKeyHandle, SignBufHandle,
-    NS_ALL, NS_GLOBAL, NS_INVALID,
+    bref, text::describe_sign_text_impl, DecorSignHighlightHandle, LinenrT, MTKeyHandle,
+    SignBufHandle, NS_ALL, NS_GLOBAL, NS_INVALID,
 };
 
 // Flag constants (from marktree)
@@ -110,7 +110,6 @@ extern "C" {
     // Phase 1: global state
     static mut got_int: bool;
     fn nvim_get_firstbuf() -> SignBufHandle;
-    fn nvim_buf_get_next(buf: SignBufHandle) -> SignBufHandle;
 
     // Phase 1: marktree iteration (heap-allocated iterator)
     fn nvim_marktree_itr_alloc() -> *mut std::ffi::c_void;
@@ -138,8 +137,6 @@ extern "C" {
 
     // Phase 1: buffer marktree handle
     fn nvim_buf_get_marktree(buf: SignBufHandle) -> *mut std::ffi::c_void;
-    fn nvim_buf_get_fnum(buf: SignBufHandle) -> c_int;
-    fn nvim_buf_get_fname(buf: SignBufHandle) -> *const c_char;
 
     // Phase 1: iterator validity check
     fn nvim_mtitr_has_x(itr: *const std::ffi::c_void) -> bool;
@@ -524,7 +521,7 @@ pub unsafe extern "C" fn rs_nvim_sign_get_placed_in_buf_impl(
     // Build the outer dict: { bufnr: N, signs: [...] }
     let d = tv_dict_alloc();
     tv_list_append_dict(retlist, d);
-    let fnum = nvim_buf_get_fnum(buf);
+    let fnum = bref(buf).handle;
     tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, i64::from(fnum));
     let l = tv_list_alloc(K_LIST_LEN_MAY_KNOW);
     tv_dict_add_list(d, c"signs".as_ptr(), 5, l);
@@ -598,7 +595,7 @@ pub unsafe extern "C" fn rs_nvim_sign_list_placed_impl(rbuf: SignBufHandle, grou
 
     while !buf.is_null() && !got_int {
         if rs_sign_buffer_has_signs(buf) {
-            let fname = nvim_buf_get_fname(buf);
+            let fname = bref(buf).b_fname;
             let mut lbuf = [0u8; MSG_BUF_LEN];
             vim_snprintf(
                 lbuf.as_mut_ptr().cast(),
@@ -674,7 +671,7 @@ pub unsafe extern "C" fn rs_nvim_sign_list_placed_impl(rbuf: SignBufHandle, grou
         if !rbuf.is_null() {
             return;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = SignBufHandle(bref(buf).b_next);
     }
 }
 

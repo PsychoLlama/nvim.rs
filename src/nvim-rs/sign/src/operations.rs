@@ -9,7 +9,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{LinenrT, SignHandle, SIGN_DEF_PRIO};
+use crate::{bref, LinenrT, SignBufHandle, SignHandle, SIGN_DEF_PRIO};
 
 // =============================================================================
 // C FFI declarations
@@ -54,7 +54,6 @@ extern "C" {
 
     // Buffer iteration for all-buffer operations
     fn nvim_get_firstbuf() -> crate::SignBufHandle;
-    fn nvim_buf_get_next(buf: crate::SignBufHandle) -> crate::SignBufHandle;
 
     // Jump accessors (Phase 3)
     fn rs_buf_findsign(buf: crate::SignBufHandle, id: c_int, group: *const c_char) -> LinenrT;
@@ -62,7 +61,6 @@ extern "C" {
     fn nvim_buf_jump_open_win(buf: crate::SignBufHandle) -> *mut std::ffi::c_void; // win_T*
     fn nvim_curwin_check_and_beginline();
     fn nvim_curwin_set_cursor_lnum(lnum: LinenrT); // from ex_cmds_shim.c
-    fn nvim_buf_get_fname(buf: crate::SignBufHandle) -> *const c_char;
     fn nvim_do_cmdline_cmd_str(cmd: *const c_char);
     fn xmallocz(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut std::ffi::c_void);
@@ -666,7 +664,7 @@ pub unsafe extern "C" fn rs_sign_unplace(
             if unplace_inner(cbuf, id, group, atlnum) == 0 {
                 retval = 0; // FAIL (at least one failed)
             }
-            cbuf = nvim_buf_get_next(cbuf);
+            cbuf = SignBufHandle(bref(cbuf).b_next);
         }
         retval
     } else {
@@ -695,7 +693,7 @@ pub unsafe extern "C" fn rs_sign_jump(
     }
     if nvim_buf_jump_open_win(buf).is_null() {
         // Need to open buffer
-        let fname = nvim_buf_get_fname(buf);
+        let fname = bref(buf).b_fname;
         if fname.is_null() {
             emsg(
                 b"E934: Cannot jump to a buffer that does not have a name\0"

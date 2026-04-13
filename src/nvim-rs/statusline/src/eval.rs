@@ -7,6 +7,8 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 
 use nvim_window::{BufHandle, WinHandle};
 
+use crate::bref;
+
 use crate::format::StlFlag;
 
 /// Numeric base for formatting numbers.
@@ -59,14 +61,6 @@ extern "C" {
     fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
     fn nvim_win_get_virtcol(wp: WinHandle) -> c_int;
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ft(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
-    fn nvim_buf_get_help(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
     fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
     fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
@@ -190,7 +184,7 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
         // Buffer number
         StlFlag::BufNo => unsafe {
             EvalResult::Number {
-                value: nvim_buf_get_fnum(ctx.buf),
+                value: bref(ctx.buf).handle,
                 base: NumberBase::Decimal,
             }
         },
@@ -265,8 +259,8 @@ fn eval_filename(flag: StlFlag, buf: BufHandle, _wp: WinHandle) -> EvalResult {
 
     unsafe {
         let fname_ptr = match flag {
-            StlFlag::FullPath => nvim_buf_get_b_ffname(buf),
-            _ => nvim_buf_get_b_fname(buf),
+            StlFlag::FullPath => bref(buf).b_ffname,
+            _ => bref(buf).b_fname,
         };
 
         if fname_ptr.is_null() {
@@ -296,7 +290,7 @@ fn eval_readonly(flag: StlFlag, buf: BufHandle) -> EvalResult {
     }
 
     unsafe {
-        if nvim_buf_get_b_p_ro(buf) != 0 {
+        if bref(buf).b_p_ro != 0 {
             let s = if flag == StlFlag::RoFlagAlt {
                 ",RO"
             } else {
@@ -316,8 +310,8 @@ fn eval_modified(flag: StlFlag, buf: BufHandle) -> EvalResult {
     }
 
     unsafe {
-        let changed = nvim_buf_get_b_changed(buf);
-        let modifiable = nvim_buf_get_b_p_ma(buf) != 0;
+        let changed = bref(buf).b_changed != 0;
+        let modifiable = bref(buf).b_p_ma != 0;
 
         let s = match (flag == StlFlag::ModifiedAlt, changed, modifiable) {
             (false, true, true) => "[+]",
@@ -340,7 +334,7 @@ fn eval_help(flag: StlFlag, buf: BufHandle) -> EvalResult {
     }
 
     unsafe {
-        if nvim_buf_get_help(buf) != 0 {
+        if bref(buf).b_help != 0 {
             let s = if flag == StlFlag::HelpFlagAlt {
                 ",HLP"
             } else {
@@ -380,7 +374,7 @@ fn eval_filetype(flag: StlFlag, buf: BufHandle) -> EvalResult {
     }
 
     unsafe {
-        let ft_ptr = nvim_buf_get_b_p_ft(buf);
+        let ft_ptr = bref(buf).b_p_ft;
         if ft_ptr.is_null() {
             return EvalResult::Empty;
         }

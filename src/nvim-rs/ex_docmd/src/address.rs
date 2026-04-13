@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::ExArgHandle;
+use crate::{bref_raw, ExArgHandle};
 
 #[allow(clippy::missing_const_for_fn)]
 #[inline]
@@ -250,8 +250,6 @@ extern "C" {
 
     fn nvim_get_argcount() -> c_int;
 
-    // Buffer accessors
-    fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn nvim_get_lastbuf() -> *mut c_void;
 
     // Quickfix accessors (directly exported)
@@ -396,7 +394,7 @@ pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
     match addr_type {
         x if x == ADDR_LINES || x == ADDR_OTHER => {
             let cursor_lnum = win_ref_raw(nvim_get_curwin()).w_cursor.lnum;
-            let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+            let line_count = bref_raw(nvim_get_curbuf()).ml_line_count;
             if cursor_lnum < line_count {
                 cursor_lnum
             } else {
@@ -414,7 +412,7 @@ pub unsafe extern "C" fn rs_get_cmd_default_range(eap: ExArgHandle) -> i32 {
             }
         }
         x if x == ADDR_LOADED_BUFFERS || x == ADDR_BUFFERS => {
-            nvim_buf_get_fnum(nvim_get_curbuf()) as i32
+            bref_raw(nvim_get_curbuf()).handle as i32
         }
         x if x == ADDR_TABS => nvim_docmd_current_tab_nr() as i32,
         x if x == ADDR_TABS_RELATIVE || x == ADDR_UNSIGNED => 1,
@@ -438,7 +436,7 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
 
     match addr_type {
         x if x == ADDR_LINES || x == ADDR_OTHER => {
-            (*eap).line2 = nvim_buf_get_line_count(nvim_get_curbuf());
+            (*eap).line2 = bref_raw(nvim_get_curbuf()).ml_line_count;
         }
         x if x == ADDR_LOADED_BUFFERS => {
             let first_fnum = nvim_docmd_first_loaded_buf_fnum();
@@ -447,8 +445,8 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
             (*eap).line2 = last_fnum;
         }
         x if x == ADDR_BUFFERS => {
-            (*eap).line1 = nvim_buf_get_fnum(nvim_get_firstbuf());
-            (*eap).line2 = nvim_buf_get_fnum(nvim_get_lastbuf());
+            (*eap).line1 = bref_raw(nvim_get_firstbuf()).handle;
+            (*eap).line2 = bref_raw(nvim_get_lastbuf()).handle;
         }
         x if x == ADDR_WINDOWS => {
             (*eap).line2 = nvim_docmd_last_win_nr() as i32;
@@ -654,10 +652,6 @@ extern "C" {
 
     // Buffer list navigation (for compute_buffer_local_count)
     fn nvim_get_firstbuf() -> *mut c_void;
-    fn nvim_buf_get_next(buf: *mut c_void) -> *mut c_void;
-    fn nvim_buf_get_prev(buf: *mut c_void) -> *mut c_void;
-    fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
-    fn nvim_buf_get_ml_mfp_null(buf: *mut c_void) -> c_int;
 
     // Digit parsing (direct C function)
     fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
@@ -788,16 +782,16 @@ pub unsafe extern "C" fn rs_compute_buffer_local_count(
 
     let mut buf = nvim_get_firstbuf();
     // Advance to the buffer with fnum >= lnum.
-    while !nvim_buf_get_next(buf).is_null() && nvim_buf_get_fnum(buf) < lnum {
-        buf = nvim_buf_get_next(buf);
+    while !bref_raw(buf).b_next.is_null() && bref_raw(buf).handle < lnum {
+        buf = bref_raw(buf).b_next;
     }
 
     while count != 0 {
         count += if count < 0 { 1 } else { -1 };
         let nextbuf = if offset < 0 {
-            nvim_buf_get_prev(buf)
+            bref_raw(buf).b_prev
         } else {
-            nvim_buf_get_next(buf)
+            bref_raw(buf).b_next
         };
         if nextbuf.is_null() {
             break;
@@ -807,11 +801,11 @@ pub unsafe extern "C" fn rs_compute_buffer_local_count(
             // skip over unloaded buffers
             loop {
                 let nextbuf2 = if offset < 0 {
-                    nvim_buf_get_prev(buf)
+                    bref_raw(buf).b_prev
                 } else {
-                    nvim_buf_get_next(buf)
+                    bref_raw(buf).b_next
                 };
-                if nvim_buf_get_ml_mfp_null(buf) == 0 || nextbuf2.is_null() {
+                if !bref_raw(buf).ml_mfp_is_null() || nextbuf2.is_null() {
                     break;
                 }
                 buf = nextbuf2;
@@ -823,18 +817,18 @@ pub unsafe extern "C" fn rs_compute_buffer_local_count(
     if addr_type == ADDR_LOADED_BUFFERS {
         loop {
             let nextbuf = if offset >= 0 {
-                nvim_buf_get_prev(buf)
+                bref_raw(buf).b_prev
             } else {
-                nvim_buf_get_next(buf)
+                bref_raw(buf).b_next
             };
-            if nvim_buf_get_ml_mfp_null(buf) == 0 || nextbuf.is_null() {
+            if !bref_raw(buf).ml_mfp_is_null() || nextbuf.is_null() {
                 break;
             }
             buf = nextbuf;
         }
     }
 
-    nvim_buf_get_fnum(buf)
+    bref_raw(buf).handle
 }
 
 /// Return the appropriate error message for an invalid address type.
@@ -887,7 +881,7 @@ pub unsafe fn get_address_impl(
                         lnum = win_ref_raw(nvim_get_curwin()).w_arg_idx as i32 + 1;
                     }
                     ADDR_LOADED_BUFFERS | ADDR_BUFFERS => {
-                        lnum = nvim_buf_get_fnum(nvim_get_curbuf()) as i32;
+                        lnum = bref_raw(nvim_get_curbuf()).handle as i32;
                     }
                     ADDR_TABS => {
                         lnum = nvim_docmd_current_tab_nr() as i32;
@@ -913,7 +907,7 @@ pub unsafe fn get_address_impl(
                 cmd = cmd.add(1);
                 match addr_type {
                     ADDR_LINES | ADDR_OTHER => {
-                        lnum = nvim_buf_get_line_count(nvim_get_curbuf());
+                        lnum = bref_raw(nvim_get_curbuf()).ml_line_count;
                     }
                     ADDR_WINDOWS => {
                         lnum = nvim_docmd_last_win_nr() as i32;
@@ -925,7 +919,7 @@ pub unsafe fn get_address_impl(
                         lnum = nvim_docmd_last_loaded_buf_fnum() as i32;
                     }
                     ADDR_BUFFERS => {
-                        lnum = nvim_buf_get_fnum(nvim_get_lastbuf()) as i32;
+                        lnum = bref_raw(nvim_get_lastbuf()).handle as i32;
                     }
                     ADDR_TABS => {
                         lnum = nvim_docmd_last_tab_nr() as i32;
@@ -979,7 +973,7 @@ pub unsafe fn get_address_impl(
                     let fm = nvim_docmd_mark_get(flag, *cmd as u8 as c_int);
                     cmd = cmd.add(1);
                     if !fm.is_null()
-                        && nvim_docmd_mark_fnum(fm) != nvim_buf_get_fnum(nvim_get_curbuf())
+                        && nvim_docmd_mark_fnum(fm) != bref_raw(nvim_get_curbuf()).handle
                     {
                         mark_move_to(fm, 0);
                         // Jumped to another file.
@@ -1019,7 +1013,7 @@ pub unsafe fn get_address_impl(
 
                     // When '/' or '?' follows another address, start from there.
                     if lnum > 0 && lnum != MAXLNUM {
-                        let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+                        let line_count = bref_raw(nvim_get_curbuf()).ml_line_count;
                         let set_lnum = if lnum > line_count { line_count } else { lnum };
                         win_mut_raw(nvim_get_curwin()).w_cursor.lnum = set_lnum;
                     }
@@ -1136,7 +1130,7 @@ pub unsafe fn get_address_impl(
                         lnum = win_ref_raw(nvim_get_curwin()).w_arg_idx as i32 + 1;
                     }
                     ADDR_LOADED_BUFFERS | ADDR_BUFFERS => {
-                        lnum = nvim_buf_get_fnum(nvim_get_curbuf()) as i32;
+                        lnum = bref_raw(nvim_get_curbuf()).handle as i32;
                     }
                     ADDR_TABS => {
                         lnum = nvim_docmd_current_tab_nr() as i32;
@@ -1305,15 +1299,15 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                 match addr_type {
                     ADDR_LINES | ADDR_OTHER => {
                         (*eap).line1 = 1;
-                        (*eap).line2 = nvim_buf_get_line_count(nvim_get_curbuf());
+                        (*eap).line2 = bref_raw(nvim_get_curbuf()).ml_line_count;
                     }
                     ADDR_LOADED_BUFFERS => {
                         (*eap).line1 = nvim_docmd_first_loaded_buf_fnum() as i32;
                         (*eap).line2 = nvim_docmd_last_loaded_buf_fnum() as i32;
                     }
                     ADDR_BUFFERS => {
-                        (*eap).line1 = nvim_buf_get_fnum(nvim_get_firstbuf()) as i32;
-                        (*eap).line2 = nvim_buf_get_fnum(nvim_get_lastbuf()) as i32;
+                        (*eap).line1 = bref_raw(nvim_get_firstbuf()).handle as i32;
+                        (*eap).line2 = bref_raw(nvim_get_lastbuf()).handle as i32;
                     }
                     ADDR_WINDOWS | ADDR_TABS => {
                         if (*eap).cmdidx < 0 {

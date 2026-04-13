@@ -32,8 +32,17 @@ pub mod source;
 pub mod state;
 pub mod table;
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
+
+/// Get `&BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+pub(crate) unsafe fn bref_raw(buf: *mut c_void) -> &'static nvim_buffer::buf_struct::BufStruct {
+    &*(buf.cast::<nvim_buffer::buf_struct::BufStruct>())
+}
 
 /// Rust constants for `cmdidx_T` enum values, generated from the C header.
 #[allow(non_upper_case_globals)]

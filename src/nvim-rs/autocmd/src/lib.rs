@@ -17,6 +17,27 @@ pub mod pattern;
 use std::ffi::{c_char, c_void};
 use std::os::raw::c_int;
 
+use nvim_buffer::buf_struct::BufStruct;
+
+/// Get `&BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+unsafe fn bref_raw(buf: *mut c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
+
+/// Get `&mut BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+#[allow(clippy::mut_from_ref)]
+unsafe fn buf_mut_raw(buf: *mut c_void) -> &'static mut BufStruct {
+    &mut *(buf.cast::<BufStruct>())
+}
+
 /// Opaque handle to a Neovim window (`win_T*`).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -233,8 +254,6 @@ extern "C" {
 
     // Phase 2: ex_doautoall dependencies
     fn nvim_get_firstbuf() -> *mut c_void;
-    fn nvim_buf_get_next(buf: *mut c_void) -> *mut c_void;
-    fn nvim_buf_get_ml_mfp_null(buf: *mut c_void) -> c_int;
     #[link_name = "nvim_ex2_eap_get_arg"]
     fn nvim_autocmd_eap_get_arg(eap: *mut c_void) -> *mut c_char;
     fn nvim_bw_aucmd_prepbuf(aco: *mut c_void, buf: *mut c_void);
@@ -249,9 +268,6 @@ extern "C" {
     static mut curwin: *mut c_void;
 
     // Phase 1: do_filetype_autocmd accessors
-    fn nvim_buf_get_b_p_ft(buf: *mut c_void) -> *const c_char;
-    fn nvim_buf_get_b_fname(buf: *mut c_void) -> *const c_char;
-    fn nvim_buf_set_b_did_filetype(buf: *mut c_void, val: c_int);
     #[link_name = "nvim_tag_get_secure"]
     fn nvim_get_secure() -> c_int;
     #[link_name = "nvim_tag_set_secure"]
@@ -1767,8 +1783,8 @@ pub unsafe extern "C" fn rs_ex_doautoall(eap: *mut c_void) {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
         // Only do loaded buffers and skip curbuf (done last)
-        if nvim_buf_get_ml_mfp_null(buf) != 0 || buf == curbuf {
-            buf = nvim_buf_get_next(buf);
+        if bref_raw(buf).ml_mfp_is_null() || buf == curbuf {
+            buf = bref_raw(buf).b_next;
             continue;
         }
 
@@ -1798,7 +1814,7 @@ pub unsafe extern "C" fn rs_ex_doautoall(eap: *mut c_void) {
             break;
         }
 
-        buf = nvim_buf_get_next(buf);
+        buf = bref_raw(buf).b_next;
     }
 
     // Execute autocommands for the current buffer last
@@ -2156,13 +2172,13 @@ pub unsafe extern "C" fn rs_do_filetype_autocmd(buf: *mut c_void, force: bool) {
 
     let new_recursive = ft_recursive + 1;
     FT_RECURSIVE.store(new_recursive, std::sync::atomic::Ordering::Relaxed);
-    nvim_buf_set_b_did_filetype(buf, 1);
+    buf_mut_raw(buf).b_did_filetype = 1;
 
     // Only pass true for "force" when it is true or
     // used recursively, to avoid endless recurrence.
     let apply_force = force || new_recursive == 1;
-    let ft = nvim_buf_get_b_p_ft(buf).cast_mut();
-    let fname = nvim_buf_get_b_fname(buf).cast_mut();
+    let ft = bref_raw(buf).b_p_ft.cast_mut();
+    let fname = bref_raw(buf).b_fname.cast_mut();
     rs_apply_autocmds(EVENT_FILETYPE, ft, fname, apply_force, buf);
 
     FT_RECURSIVE.store(ft_recursive, std::sync::atomic::Ordering::Relaxed);
@@ -2554,15 +2570,6 @@ extern "C" {
     #[link_name = "xstrnsave"]
     fn nvim_autocmd_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
-    // Buffer field accessors from buffer_shim.c
-    #[link_name = "nvim_buf_get_b_ffname"]
-    fn nvim_autocmd_buf_ffname(buf: *mut c_void) -> *const c_char;
-    #[link_name = "nvim_buf_get_b_sfname"]
-    fn nvim_autocmd_buf_sfname(buf: *mut c_void) -> *const c_char;
-    #[link_name = "nvim_buf_get_b_p_ft"]
-    fn nvim_autocmd_buf_p_ft(buf: *mut c_void) -> *const c_char;
-    #[link_name = "nvim_buf_get_b_p_syn"]
-    fn nvim_autocmd_buf_p_syn(buf: *mut c_void) -> *const c_char;
 }
 
 // do_cmdline flags (from ex_docmd.h)
@@ -2624,7 +2631,7 @@ unsafe fn autocmd_setup_afile_rs(
         } else if !fname.is_null() && !ends_excmd(*fname as u8) {
             fname
         } else if !buf.is_null() {
-            nvim_autocmd_buf_ffname(buf).cast_mut()
+            bref_raw(buf).b_ffname.cast_mut()
         } else {
             std::ptr::null_mut()
         }
@@ -2666,19 +2673,19 @@ unsafe fn autocmd_resolve_fname_rs(
         if buf.is_null() {
             out_fname = std::ptr::null_mut();
         } else if event == EVENT_SYNTAX {
-            let s = nvim_autocmd_buf_p_syn(buf);
+            let s = bref_raw(buf).b_p_syn;
             out_fname = nvim_autocmd_xstrdup(s);
             fname_full = true;
         } else if event == EVENT_FILETYPE {
-            let s = nvim_autocmd_buf_p_ft(buf);
+            let s = bref_raw(buf).b_p_ft;
             out_fname = nvim_autocmd_xstrdup(s);
             fname_full = true;
         } else {
-            let bs = nvim_autocmd_buf_sfname(buf);
+            let bs = bref_raw(buf).b_sfname;
             if !bs.is_null() {
                 sfname = nvim_autocmd_xstrdup(bs);
             }
-            let bf = nvim_autocmd_buf_ffname(buf);
+            let bf = bref_raw(buf).b_ffname;
             out_fname = if bf.is_null() {
                 nvim_autocmd_xstrdup(c"".as_ptr())
             } else {

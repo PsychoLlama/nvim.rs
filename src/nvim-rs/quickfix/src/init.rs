@@ -301,6 +301,7 @@ pub extern "C" fn rs_qf_init_should_create_list(options: &QfInitOptions) -> bool
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_sign_loss)]
 mod init_ext {
+    use crate::bref_raw;
     use std::ffi::{c_char, c_int, c_void};
 
     type LinenrT = i32;
@@ -337,8 +338,6 @@ mod init_ext {
         // nvim_qf_init_resolve_efm removed: logic inlined into rs_qf_init_ext (Phase 16)
         // nvim_get_p_efm deleted: use p_efm global directly
         static p_efm: *const c_char;
-        fn nvim_buf_get_b_p_efm(buf: BufHandle) -> *const c_char;
-
         // Phase 16: rs_qf_init accessors
         fn nvim_get_ql_info() -> QfInfoHandleMut;
         fn rs_ll_get_or_alloc_list(wp: *mut c_void) -> QfInfoHandleMut;
@@ -511,7 +510,7 @@ mod init_ext {
             let efm = {
                 let global_p_efm = p_efm;
                 if errorformat.cast_const() == global_p_efm && tv.is_null() && !buf.is_null() {
-                    let b_p_efm = nvim_buf_get_b_p_efm(buf);
+                    let b_p_efm = bref_raw(buf).b_p_efm;
                     if !b_p_efm.is_null() && *b_p_efm != 0 {
                         b_p_efm.cast_mut()
                     } else {

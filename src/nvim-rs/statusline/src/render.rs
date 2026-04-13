@@ -5,7 +5,18 @@
 
 use std::ffi::{c_char, c_int, CStr};
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_window::WinHandle;
+
+/// Get &BufStruct from a `nvim_window::BufHandle`.
+///
+/// # Safety
+/// `buf` must be a valid, non-null `buf_T` pointer.
+#[inline]
+unsafe fn bref(buf: nvim_window::BufHandle) -> &'static BufStruct {
+    let raw: *mut std::ffi::c_void = std::mem::transmute(buf);
+    &*(raw.cast::<BufStruct>())
+}
 
 use crate::builder::StatuslineBuilder;
 use crate::click::ClickTracker;
@@ -28,15 +39,6 @@ extern "C" {
     fn nvim_win_get_virtcol(wp: WinHandle) -> c_int;
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
 
-    // Buffer accessors
-    fn nvim_buf_get_b_fname(buf: nvim_window::BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_ffname(buf: nvim_window::BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ro(buf: nvim_window::BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_ft(buf: nvim_window::BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_p_ma(buf: nvim_window::BufHandle) -> c_int;
-    fn nvim_buf_get_b_changed(buf: nvim_window::BufHandle) -> bool;
-    fn nvim_buf_get_help(buf: nvim_window::BufHandle) -> c_int;
-    fn nvim_buf_get_fnum(buf: nvim_window::BufHandle) -> c_int;
     fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
 
     // Highlight lookup
@@ -473,7 +475,7 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 
             // Buffer number
             StlFlag::BufNo => {
-                let fnum = nvim_buf_get_fnum(buffer);
+                let fnum = bref(buffer).handle;
                 (format!("{fnum}"), true, false)
             }
 
@@ -499,22 +501,22 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 
             // Flag items
             StlFlag::RoFlag => {
-                if nvim_buf_get_b_p_ro(buffer) != 0 {
+                if bref(buffer).b_p_ro != 0 {
                     ("[RO]".to_string(), false, true)
                 } else {
                     (String::new(), false, true)
                 }
             }
             StlFlag::RoFlagAlt => {
-                if nvim_buf_get_b_p_ro(buffer) != 0 {
+                if bref(buffer).b_p_ro != 0 {
                     (",RO".to_string(), false, true)
                 } else {
                     (String::new(), false, true)
                 }
             }
             StlFlag::Modified => {
-                let changed = nvim_buf_get_b_changed(buffer);
-                let modifiable = nvim_buf_get_b_p_ma(buffer) != 0;
+                let changed = bref(buffer).b_changed != 0;
+                let modifiable = bref(buffer).b_p_ma != 0;
                 let s = match (changed, modifiable) {
                     (true, _) => "[+]",
                     (false, false) => "[-]",
@@ -523,8 +525,8 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
                 (s.to_string(), false, true)
             }
             StlFlag::ModifiedAlt => {
-                let changed = nvim_buf_get_b_changed(buffer);
-                let modifiable = nvim_buf_get_b_p_ma(buffer) != 0;
+                let changed = bref(buffer).b_changed != 0;
+                let modifiable = bref(buffer).b_p_ma != 0;
                 let s = match (changed, modifiable) {
                     (true, _) => ",+",
                     (false, false) => ",-",
@@ -533,14 +535,14 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
                 (s.to_string(), false, true)
             }
             StlFlag::HelpFlag => {
-                if nvim_buf_get_help(buffer) != 0 {
+                if bref(buffer).b_help != 0 {
                     ("[Help]".to_string(), false, true)
                 } else {
                     (String::new(), false, true)
                 }
             }
             StlFlag::HelpFlagAlt => {
-                if nvim_buf_get_help(buffer) != 0 {
+                if bref(buffer).b_help != 0 {
                     (",HLP".to_string(), false, true)
                 } else {
                     (String::new(), false, true)
@@ -666,9 +668,9 @@ fn eval_item(flag: StlFlag, ctx: &RenderContext, buf: &mut [u8]) -> (String, boo
 /// Get filename from buffer.
 unsafe fn get_filename(buf: nvim_window::BufHandle, full: bool) -> String {
     let ptr = if full {
-        nvim_buf_get_b_ffname(buf)
+        bref(buf).b_ffname
     } else {
-        nvim_buf_get_b_fname(buf)
+        bref(buf).b_fname
     };
 
     if ptr.is_null() {
@@ -683,7 +685,7 @@ unsafe fn get_filename(buf: nvim_window::BufHandle, full: bool) -> String {
 
 /// Get filetype from buffer.
 unsafe fn get_filetype(buf: nvim_window::BufHandle) -> String {
-    let ptr = nvim_buf_get_b_p_ft(buf);
+    let ptr = bref(buf).b_p_ft;
     if ptr.is_null() {
         return String::new();
     }

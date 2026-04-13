@@ -18,7 +18,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clashing_extern_declarations)]
 
-use crate::ffi_types::QfListPtr;
+use crate::{bref_const, ffi_types::QfListPtr};
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::Mutex;
@@ -85,7 +85,6 @@ extern "C" {
     // --- Buffer management (for `wipe_qf_buffer`) ---
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(bufnr: c_int) -> *mut c_void;
-    fn nvim_buf_get_nwindows(buf: *const c_void) -> c_int;
     fn nvim_curwin_get_buffer() -> *mut c_void;
     fn nvim_curwin_set_buffer(buf: *mut c_void);
     fn nvim_get_curbuf() -> *mut c_void;
@@ -260,7 +259,7 @@ pub unsafe extern "C" fn rs_wipe_qf_buffer(qi: *mut c_void) {
         return;
     }
 
-    if nvim_buf_get_nwindows(qfbuf) != 0 {
+    if bref_const(qfbuf).b_nwindows != 0 {
         return;
     }
 

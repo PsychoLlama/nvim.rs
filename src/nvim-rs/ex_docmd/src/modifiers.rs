@@ -6,8 +6,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use crate::CmdModHandle;
-use crate::ExArgHandle;
+use crate::{bref_raw, CmdModHandle, ExArgHandle};
 
 #[allow(clippy::missing_const_for_fn)]
 #[inline]
@@ -272,7 +271,6 @@ extern "C" {
     // nvim_set_ex_pressedreturn: now in Rust state module
     fn nvim_get_curwin() -> *mut c_void;
     fn nvim_get_curbuf() -> *mut c_void;
-    fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn vim_regcomp(pat: *mut c_char, flags: c_int) -> *mut c_void;
     fn xstrdup(s: *const c_char) -> *mut c_char;
@@ -332,7 +330,7 @@ pub unsafe extern "C" fn rs_parse_command_modifiers(
             && crate::exmode_active
             && nvim_docmd_getline_is_getexline(eap) != 0
             && win_ref_raw(nvim_get_curwin()).w_cursor.lnum
-                < nvim_buf_get_line_count(nvim_get_curbuf())
+                < bref_raw(nvim_get_curbuf()).ml_line_count
         {
             (*eap).cmd = crate::state::nvim_docmd_get_exmode_plus();
             if !skip_only {

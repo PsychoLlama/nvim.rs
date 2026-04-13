@@ -10,7 +10,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clashing_extern_declarations)]
 
-use crate::ffi_types::QfListPtr;
+use crate::{bref_const, ffi_types::QfListPtr};
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
@@ -156,10 +156,6 @@ extern "C" {
     // set_option_direct for cfile
     fn nvim_set_option_direct_ef(val: *const c_char);
 
-    // buf accessors for cbuffer_process_args
-    fn nvim_buf_has_ml_mfp_void(buf: *const c_void) -> bool;
-    fn nvim_buf_get_ml_line_count_void(buf: *const c_void) -> LinenrT;
-    fn nvim_buf_get_sfname_void(buf: *const c_void) -> *const c_char;
     fn nvim_buflist_findnr_ptr(nr: c_int) -> *mut c_void;
     static mut curbuf: *mut c_void;
     fn skipdigits(s: *const c_char) -> *mut c_char;
@@ -667,12 +663,12 @@ unsafe fn cbuffer_process_args(eap: EapHandle, bufp: *mut BufHandle) -> c_int {
         return FAIL;
     }
 
-    if !nvim_buf_has_ml_mfp_void(buf) {
+    if bref_const(buf).ml_mfp_is_null() {
         emsg(c"E681: Buffer is not loaded".as_ptr());
         return FAIL;
     }
 
-    let ml_line_count = nvim_buf_get_ml_line_count_void(buf);
+    let ml_line_count = bref_const(buf).ml_line_count;
 
     let addr_count = (*eap).addr_count;
     if addr_count == 0 {
@@ -743,7 +739,7 @@ pub unsafe extern "C" fn rs_ex_cbuffer(eap: EapHandle) {
     let title_base = make_cmdtitle(cmdlinep, &mut title_buf);
 
     // If buf has sfname, append " (sfname)" to title via IObuff.
-    let sfname = nvim_buf_get_sfname_void(buf);
+    let sfname = bref_const(buf).b_sfname;
     let title: *const c_char = if sfname.is_null() {
         title_base
     } else {

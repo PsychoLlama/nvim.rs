@@ -8,6 +8,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
+use crate::{bref_raw, buf_mut_raw};
 use std::ffi::{c_char, c_int, c_void};
 
 type BufHandle = *mut c_void;
@@ -50,16 +51,11 @@ extern "C" {
     fn nvim_buf_dec_locked(buf: BufHandle);
     fn nvim_close_buffer_unload(buf: BufHandle) -> c_int;
 
-    // Buffer flag accessors
-    fn nvim_buf_get_b_flags(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_flags(buf: BufHandle, val: c_int);
-
     // Window iteration
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_win_get_next_in_tab(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn win_close(win: WinHandle, free_buf: bool, force: bool) -> c_int;
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
 
     // Cleanup (exception state save/restore)
     fn nvim_cleanup_enter_alloc() -> *mut c_void;
@@ -119,7 +115,7 @@ unsafe fn restore_start_dir(dirname_start: *mut c_char) {
 pub unsafe fn wipe_dummy_buffer_internal(buf: BufHandle, dirname_start: *mut c_char) {
     // Close any windows displaying this buffer.
     loop {
-        if nvim_buf_get_nwindows(buf) == 0 {
+        if bref_raw(buf).b_nwindows == 0 {
             break;
         }
         let mut did_one = false;
@@ -140,14 +136,13 @@ pub unsafe fn wipe_dummy_buffer_internal(buf: BufHandle, dirname_start: *mut c_c
         if !did_one {
             // Cannot close all windows; fall through to fail path
             // (clear BF_DUMMY and return without wiping)
-            let flags = nvim_buf_get_b_flags(buf);
-            nvim_buf_set_b_flags(buf, flags & !BF_DUMMY);
+            buf_mut_raw(buf).b_flags &= !BF_DUMMY;
             return;
         }
     }
 
     // Safety check: curbuf must not be buf
-    if curbuf != buf && nvim_buf_get_nwindows(buf) == 0 {
+    if curbuf != buf && bref_raw(buf).b_nwindows == 0 {
         let cs = nvim_cleanup_enter_alloc();
         wipe_buffer(buf, true);
         nvim_cleanup_leave_free(cs);
@@ -157,8 +152,7 @@ pub unsafe fn wipe_dummy_buffer_internal(buf: BufHandle, dirname_start: *mut c_c
         }
     } else {
         // Keeping the buffer, remove dummy flag
-        let flags = nvim_buf_get_b_flags(buf);
-        nvim_buf_set_b_flags(buf, flags & !BF_DUMMY);
+        buf_mut_raw(buf).b_flags &= !BF_DUMMY;
     }
 }
 
@@ -239,8 +233,7 @@ unsafe fn load_dummy_buffer(
         nvim_check_need_swap_newfile();
 
         // Clear BF_DUMMY on curbuf so autocommands fire properly
-        let flags = nvim_buf_get_b_flags(curbuf);
-        nvim_buf_set_b_flags(curbuf, flags & !BF_DUMMY);
+        buf_mut_raw(curbuf).b_flags &= !BF_DUMMY;
 
         let newbuf_to_wipe_ref = nvim_qf_bufref_alloc(std::ptr::null_mut());
         nvim_qf_bufref_set_buf_null(newbuf_to_wipe_ref);
@@ -248,7 +241,7 @@ unsafe fn load_dummy_buffer(
         let readfile_result = nvim_readfile_for_dummy(fname);
         nvim_buf_dec_locked(newbuf);
 
-        if readfile_result == OK && !got_int && (nvim_buf_get_b_flags(curbuf) & BF_NEW) == 0 {
+        if readfile_result == OK && !got_int && (bref_raw(curbuf).b_flags & BF_NEW) == 0 {
             failed = false;
             if curbuf != newbuf {
                 // Autocommands changed the buffer (e.g. netrw).
@@ -272,8 +265,7 @@ unsafe fn load_dummy_buffer(
 
                 result_buf = curbuf;
                 // Set BF_DUMMY on result_buf
-                let f2 = nvim_buf_get_b_flags(result_buf);
-                nvim_buf_set_b_flags(result_buf, f2 | BF_DUMMY);
+                buf_mut_raw(result_buf).b_flags |= BF_DUMMY;
 
                 os_dirname(resulting_dir, MAXPATHL);
                 restore_start_dir(dirname_start);
@@ -298,8 +290,7 @@ unsafe fn load_dummy_buffer(
         nvim_qf_bufref_free(newbuf_to_wipe_ref);
 
         // Restore BF_DUMMY flag
-        let f = nvim_buf_get_b_flags(result_buf);
-        nvim_buf_set_b_flags(result_buf, f | BF_DUMMY);
+        buf_mut_raw(result_buf).b_flags |= BF_DUMMY;
     }
 
     os_dirname(resulting_dir, MAXPATHL);

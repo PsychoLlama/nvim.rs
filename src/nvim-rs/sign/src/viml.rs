@@ -22,7 +22,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{LinenrT, MTKeyHandle, SignBufHandle, SignHandle, SIGN_DEF_PRIO};
+use crate::{bref, LinenrT, MTKeyHandle, SignBufHandle, SignHandle, SIGN_DEF_PRIO};
 
 // =============================================================================
 // C FFI declarations
@@ -441,7 +441,6 @@ extern "C" {
 
     // Buffer iteration
     fn nvim_get_firstbuf() -> SignBufHandle;
-    fn nvim_buf_get_next(buf: SignBufHandle) -> SignBufHandle;
     fn rs_sign_buffer_has_signs(buf: SignBufHandle) -> bool;
 
     // Highlight name lookup
@@ -622,7 +621,7 @@ pub unsafe extern "C" fn rs_sign_get_placed(
             if rs_sign_buffer_has_signs(cbuf) {
                 crate::query::rs_nvim_sign_get_placed_in_buf_impl(cbuf, 0, id, group, retlist);
             }
-            cbuf = nvim_buf_get_next(cbuf);
+            cbuf = SignBufHandle(bref(cbuf).b_next);
         }
     } else {
         crate::query::rs_nvim_sign_get_placed_in_buf_impl(buf, lnum, id, group, retlist);

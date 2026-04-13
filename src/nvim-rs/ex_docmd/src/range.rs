@@ -10,7 +10,7 @@ use crate::address::{
     ADDR_ARGUMENTS, ADDR_BUFFERS, ADDR_LINES, ADDR_LOADED_BUFFERS, ADDR_NONE, ADDR_OTHER,
     ADDR_QUICKFIX, ADDR_QUICKFIX_VALID, ADDR_TABS, ADDR_TABS_RELATIVE, ADDR_UNSIGNED, ADDR_WINDOWS,
 };
-use crate::ExArgHandle;
+use crate::{bref_raw, ExArgHandle};
 
 // =============================================================================
 // FFI declarations
@@ -30,7 +30,6 @@ extern "C" {
 
     // Buffer/window/tab navigation
     fn nvim_get_curbuf() -> *mut c_void;
-    fn nvim_buf_get_line_count(buf: *mut c_void) -> i32;
     fn nvim_get_argcount() -> c_int;
     fn rs_get_highest_fnum() -> c_int;
     fn nvim_docmd_last_win_nr() -> c_int;
@@ -40,10 +39,6 @@ extern "C" {
     // Buffer traversal (for first/last loaded buf fnum)
     fn nvim_get_firstbuf() -> *mut c_void;
     fn nvim_get_lastbuf() -> *mut c_void;
-    fn nvim_buf_get_next(buf: *mut c_void) -> *mut c_void;
-    fn nvim_buf_get_prev(buf: *mut c_void) -> *mut c_void;
-    fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
-    fn nvim_buf_has_memfile(buf: *mut c_void) -> c_int;
 
     // Error messages
 }
@@ -171,10 +166,10 @@ impl LineRange {
 pub unsafe extern "C" fn rs_nvim_docmd_first_loaded_fnum_or_fail() -> c_int {
     let mut buf = nvim_get_firstbuf();
     loop {
-        if nvim_buf_has_memfile(buf) != 0 {
-            return nvim_buf_get_fnum(buf);
+        if !bref_raw(buf).ml_mfp_is_null() {
+            return bref_raw(buf).handle;
         }
-        let next = nvim_buf_get_next(buf);
+        let next = bref_raw(buf).b_next;
         if next.is_null() {
             return -1;
         }
@@ -190,10 +185,10 @@ pub unsafe extern "C" fn rs_nvim_docmd_first_loaded_fnum_or_fail() -> c_int {
 pub unsafe extern "C" fn rs_nvim_docmd_last_loaded_fnum_or_fail() -> c_int {
     let mut buf = nvim_get_lastbuf();
     loop {
-        if nvim_buf_has_memfile(buf) != 0 {
-            return nvim_buf_get_fnum(buf);
+        if !bref_raw(buf).ml_mfp_is_null() {
+            return bref_raw(buf).handle;
         }
-        let prev = nvim_buf_get_prev(buf);
+        let prev = bref_raw(buf).b_prev;
         if prev.is_null() {
             return -1;
         }
@@ -762,7 +757,7 @@ pub unsafe extern "C" fn rs_invalid_range(eap: ExArgHandle) -> *mut c_char {
                 } else {
                     0
                 };
-                if line2 > nvim_buf_get_line_count(nvim_get_curbuf()) + diff_extra {
+                if line2 > bref_raw(nvim_get_curbuf()).ml_line_count + diff_extra {
                     return crate::gt(crate::E_INVRANGE_STR.as_ptr()) as *mut c_char;
                 }
             }

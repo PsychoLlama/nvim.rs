@@ -7,7 +7,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 
-use crate::ffi_types::QfListPtr;
+use crate::{bref_raw, ffi_types::QfListPtr};
 use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_void, CStr};
 
@@ -47,9 +47,6 @@ type RegmmatchHandle = *mut c_void;
 
 extern "C" {
     static mut got_int: bool;
-    // Buffer accessors
-    fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
 
@@ -137,8 +134,8 @@ pub unsafe extern "C" fn rs_vgr_match_buflines(
     let spat_len = CStr::from_ptr(spat).to_bytes().len();
     let pat_len = spat_len.min(FUZZY_MATCH_MAX_LEN);
 
-    let line_count = nvim_buf_get_line_count(buf);
-    let buf_fnum = nvim_buf_get_fnum(buf);
+    let line_count = bref_raw(buf).ml_line_count;
+    let buf_fnum = bref_raw(buf).handle;
     let bufnum = if duplicate_name != 0 { 0 } else { buf_fnum };
 
     let mut lnum: LinenrT = 1;
@@ -335,10 +332,7 @@ extern "C" {
     // (nvim_msg_strtrunc_free, nvim_msg_outtrans, nvim_msg_set_nowait,
     //  nvim_msg_set_col_zero, nvim_msg_set_didout_false deleted)
     fn ui_flush();
-    // nvim_buf_has_ml_mfp: defined in memline_shim.c as int(buf_T*); returns 0/1
-    fn nvim_buf_has_ml_mfp(buf: BufHandle) -> c_int;
     fn nvim_buf_get_mfp_fname(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_bh_first_char(buf: BufHandle) -> c_char;
     fn nvim_cmdmod_has_cmod_hide() -> bool;
     fn nvim_buf_clear_bf_dummy(buf: BufHandle);
     fn nvim_wipe_dummy_buffer(buf: BufHandle, dirname_start: *mut c_char);
@@ -438,7 +432,7 @@ unsafe fn handle_dummy_buf_rust(
         return;
     }
 
-    let bh0 = nvim_buf_get_bh_first_char(buf) as u8;
+    let bh0 = bref_raw(buf).bufhidden_char0();
     if !nvim_cmdmod_has_cmod_hide() || bh0 == b'u' || bh0 == b'w' || bh0 == b'd' {
         if !found_match {
             nvim_wipe_dummy_buffer(buf, dirname_start);
@@ -535,7 +529,7 @@ pub unsafe extern "C" fn rs_vgr_process_files(
 
             // Find buffer (replaces nvim_vgr_find_buf)
             let found_buf = nvim_buflist_findname_exp(*fnames.add(fi as usize));
-            let has_mfp = !found_buf.is_null() && nvim_buf_has_ml_mfp(found_buf) != 0;
+            let has_mfp = !found_buf.is_null() && !bref_raw(found_buf).ml_mfp_is_null();
             let mut buf = found_buf;
             let using_dummy;
             let mut duplicate_name = false;

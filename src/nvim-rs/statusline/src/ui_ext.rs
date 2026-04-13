@@ -5,7 +5,18 @@
 
 use std::ffi::{c_char, c_int};
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_window::{BufHandle, TabpageHandle, WinHandle};
+
+/// Get &BufStruct from nvim_window::BufHandle.
+///
+/// # Safety
+/// buf must be a valid, non-null buf_T pointer.
+#[inline]
+unsafe fn bref(buf: BufHandle) -> &'static BufStruct {
+    let raw: *mut std::ffi::c_void = std::mem::transmute(buf);
+    &*(raw.cast::<BufStruct>())
+}
 
 // =============================================================================
 // External C Functions
@@ -21,9 +32,6 @@ extern "C" {
 
     // Buffer iteration
     fn nvim_get_firstbuf() -> BufHandle;
-    fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
-    fn nvim_buf_get_handle(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_p_bl(buf: BufHandle) -> c_int;
     fn nvim_get_curbuf() -> BufHandle;
 
     // Window accessors
@@ -98,10 +106,10 @@ fn count_listed_buffers() -> usize {
     unsafe {
         let mut buf = nvim_get_firstbuf();
         while !buf.is_null() {
-            if nvim_buf_get_b_p_bl(buf) != 0 {
+            if bref(buf).b_p_bl != 0 {
                 count += 1;
             }
-            buf = nvim_buf_get_next(buf);
+            buf = BufHandle::from_ptr(bref(buf).b_next);
         }
     }
     count
@@ -135,7 +143,7 @@ pub fn collect_tabline_data() -> TablineUpdateData {
         let curbuf = nvim_get_curbuf();
 
         data.current_tab = nvim_tabpage_get_handle(curtab);
-        data.current_buffer = nvim_buf_get_handle(curbuf);
+        data.current_buffer = bref(curbuf).handle;
 
         // Collect tabs
         let mut tp = nvim_get_first_tabpage();
@@ -162,12 +170,12 @@ pub fn collect_tabline_data() -> TablineUpdateData {
         let mut buf = nvim_get_firstbuf();
         while !buf.is_null() {
             // Only include listed buffers (b_p_bl == true)
-            if nvim_buf_get_b_p_bl(buf) != 0 {
-                let handle = nvim_buf_get_handle(buf);
+            if bref(buf).b_p_bl != 0 {
+                let handle = bref(buf).handle;
                 let name = get_buffer_display_name(buf);
                 data.buffers.push(TablineBufferInfo { handle, name });
             }
-            buf = nvim_buf_get_next(buf);
+            buf = BufHandle::from_ptr(bref(buf).b_next);
         }
     }
 
@@ -204,7 +212,7 @@ pub extern "C" fn rs_ui_ext_current_tab_handle() -> c_int {
 pub extern "C" fn rs_ui_ext_current_buf_handle() -> c_int {
     unsafe {
         let curbuf = nvim_get_curbuf();
-        nvim_buf_get_handle(curbuf)
+        bref(curbuf).handle
     }
 }
 
@@ -336,14 +344,14 @@ pub unsafe extern "C" fn rs_buf_iter_next(
     // Find next listed buffer
     while !it.current.is_null() {
         let buf = it.current;
-        it.current = nvim_buf_get_next(buf);
+        it.current = BufHandle::from_ptr(bref(buf).b_next);
 
         // Check if buffer is listed
-        if nvim_buf_get_b_p_bl(buf) == 0 {
+        if bref(buf).b_p_bl == 0 {
             continue;
         }
 
-        let buf_handle = nvim_buf_get_handle(buf);
+        let buf_handle = bref(buf).handle;
 
         // Get buffer name
         get_trans_bufname(buf);

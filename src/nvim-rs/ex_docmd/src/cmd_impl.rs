@@ -7,7 +7,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::ExArgHandle;
+use crate::{bref_raw, ExArgHandle};
 use nvim_normal::types::OpargT;
 
 // =============================================================================
@@ -164,7 +164,6 @@ extern "C" {
     fn strlen(s: *const c_char) -> usize;
 
     // syncbind window/buffer accessors
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
     fn nvim_curtab_first_win() -> WinHandle;
     fn nvim_win_get_next_in_tab(wp: WinHandle) -> WinHandle;
     #[link_name = "rs_get_vtopline"]
@@ -523,7 +522,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
                 let iobuff = std::ptr::addr_of_mut!(IObuff) as *mut c_char;
                 nvim_xstrlcpy(iobuff, spname, nvim_iosize());
             } else {
-                let fname = nvim_buf_get_b_fname(buf);
+                let fname = bref_raw(buf).b_fname;
                 nvim_docmd_home_replace(buf, fname);
             }
             let iobuff = std::ptr::addr_of_mut!(IObuff) as *mut c_char;
@@ -566,7 +565,7 @@ pub unsafe extern "C" fn rs_ex_syncbind_impl(_eap: ExArgHandle) {
             if win_ref_raw(wp).w_p_scb() != 0 {
                 let buf = nvim_win_get_buffer(wp);
                 if !buf.is_null() {
-                    let lcount = nvim_buf_get_ml_line_count(buf);
+                    let lcount = bref_raw(buf).ml_line_count;
                     let y =
                         plines_m_win_fill(wp, 1, lcount) - nvim_docmd_get_scrolloff_value(curwin);
                     if y < vt {
@@ -836,8 +835,6 @@ extern "C" {
     // before_quit_autocmds helpers
     fn rs_win_valid(wp: WinHandle) -> bool;
     fn nvim_curbuf_locked() -> c_int;
-    fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_get_curbuf() -> BufHandle;
     fn rs_only_one_window() -> c_int;
@@ -864,7 +861,6 @@ extern "C" {
     fn nvim_tabpage_get_curwin(tp: *mut c_void) -> WinHandle;
     fn nvim_get_lastused_tabpage() -> *mut c_void;
     fn nvim_tabpage_get_firstwin(tp: *mut c_void) -> WinHandle;
-    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
     fn msg_putchar(c: c_int);
     fn os_breakcheck();
     fn nvim_iosize() -> usize;
@@ -1244,7 +1240,7 @@ pub unsafe extern "C" fn rs_before_quit_autocmds_impl(
     // Bail out when autocommands closed the window, or the buffer is locked.
     if !rs_win_valid(wp)
         || nvim_curbuf_locked() != 0
-        || (nvim_buf_get_nwindows(buf) == 1 && nvim_buf_get_locked(buf) > 0)
+        || (bref_raw(buf).b_nwindows == 1 && bref_raw(buf).b_locked > 0)
     {
         return true;
     }
@@ -1262,7 +1258,7 @@ pub unsafe extern "C" fn rs_before_quit_autocmds_impl(
         let curbuf = nvim_get_curbuf();
         if !rs_win_valid(wp)
             || nvim_curbuf_locked() != 0
-            || (nvim_buf_get_nwindows(curbuf) == 1 && nvim_buf_get_locked(curbuf) > 0)
+            || (bref_raw(curbuf).b_nwindows == 1 && bref_raw(curbuf).b_locked > 0)
         {
             return true;
         }
@@ -1301,7 +1297,7 @@ pub unsafe extern "C" fn rs_ex_win_close_impl(forceit: c_int, win: WinHandle, tp
     }
 
     let buf = nvim_win_get_buffer(win);
-    let need_hide = bufIsChanged(buf) != 0 && nvim_buf_get_nwindows(buf) <= 1;
+    let need_hide = bufIsChanged(buf) != 0 && bref_raw(buf).b_nwindows <= 1;
     let mut need_hide = need_hide;
 
     if need_hide && !buf_hide(buf) && forceit == 0 {
@@ -2029,8 +2025,6 @@ extern "C" {
 
     // w_alt_fnum setter + curbuf b_fnum getter
     fn nvim_docmd_win_set_alt_fnum(wp: WinHandle, fnum: c_int);
-    fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
-
     // win_split: returns OK (1) on success, FAIL (0) on failure
     fn win_split(size: c_int, flags: c_int) -> c_int;
 
@@ -2135,7 +2129,7 @@ pub unsafe extern "C" fn rs_ex_splitview_impl(eap: ExArgHandle) {
                 && nvim_win_buf_is_curbuf(old_curwin) == 0
                 && (nvim_docmd_get_global_cmdmod_flags() & CMOD_KEEPALT) == 0
             {
-                nvim_docmd_win_set_alt_fnum(old_curwin, nvim_buf_get_fnum(nvim_get_curbuf()));
+                nvim_docmd_win_set_alt_fnum(old_curwin, bref_raw(nvim_get_curbuf()).handle);
             }
         }
     } else {
@@ -2275,7 +2269,7 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
             if !old_curwin.is_null() {
                 nvim_docmd_do_exedit_split_fail_cleanup();
             }
-        } else if crate::readonlymode && nvim_buf_get_nwindows(nvim_get_curbuf()) == 1 {
+        } else if crate::readonlymode && bref_raw(nvim_get_curbuf()).b_nwindows == 1 {
             nvim_docmd_set_curbuf_b_p_ro(1);
         }
         crate::readonlymode = n;
@@ -2290,7 +2284,7 @@ pub unsafe extern "C" fn rs_do_exedit_impl(eap: ExArgHandle, old_curwin: WinHand
         && nvim_win_buf_is_curbuf(old_curwin) == 0
         && (nvim_docmd_get_global_cmdmod_flags() & CMOD_KEEPALT) == 0
     {
-        nvim_docmd_win_set_alt_fnum(old_curwin, nvim_buf_get_fnum(nvim_get_curbuf()));
+        nvim_docmd_win_set_alt_fnum(old_curwin, bref_raw(nvim_get_curbuf()).handle);
     }
     nvim_set_ex_no_reprint(1);
 }

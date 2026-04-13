@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::ExArgHandle;
+use crate::{bref_raw, ExArgHandle};
 use nvim_normal::types::OpargT;
 
 // =============================================================================
@@ -190,9 +190,6 @@ extern "C" {
     #[link_name = "utfc_ptr2len"]
     fn nvim_docmd_utfc_ptr2len(p: *const c_char) -> c_int;
 
-    // eap accessors
-    fn nvim_buf_get_line_count(buf: *mut c_void) -> LinenrT;
-
     // Global state accessors
     static cmdwin_type: c_int;
     fn nvim_set_cmdwin_result(val: c_int);
@@ -255,7 +252,6 @@ extern "C" {
     fn nvim_skip_expr_arg(arg: *mut *mut c_char);
 
     // is_other_file helpers
-    fn nvim_buf_get_fnum(buf: *mut c_void) -> c_int;
     fn nvim_docmd_curbuf_file_id_valid() -> c_int;
     fn nvim_docmd_get_curbuf_sfname() -> *const c_char;
     fn path_fnamecmp(s1: *const c_char, s2: *const c_char) -> c_int;
@@ -733,7 +729,7 @@ pub unsafe extern "C" fn rs_msg_verbose_cmd(lnum: LinenrT, cmd: *const c_char) {
 #[export_name = "is_other_file"]
 pub unsafe extern "C" fn rs_is_other_file(fnum: c_int, ffname: *const c_char) -> c_int {
     if fnum != 0 {
-        if fnum == nvim_buf_get_fnum(nvim_get_curbuf()) {
+        if fnum == bref_raw(nvim_get_curbuf()).handle {
             return 0;
         }
         return 1;
@@ -2044,7 +2040,7 @@ pub unsafe extern "C" fn rs_ex_join(eap: ExArgHandle) {
         if (*eap).addr_count >= 2 {
             return;
         }
-        if line2 == nvim_buf_get_line_count(nvim_get_curbuf()) {
+        if line2 == bref_raw(nvim_get_curbuf()).ml_line_count {
             beep_flush();
             return;
         }
@@ -2159,7 +2155,6 @@ extern "C" {
     fn eval_to_string(arg: *mut c_char, join_list: bool, use_simple_function: bool) -> *mut c_char;
     static mut emsg_off: c_int;
     fn load_colors(name: *mut c_char) -> c_int;
-    fn nvim_buf_get_ml_empty(buf: *mut c_void) -> bool;
     fn os_breakcheck();
     static mut last_chdir_reason: *const c_char;
     fn nvim_curwin_get_localdir() -> *const c_char;
@@ -2253,7 +2248,7 @@ pub unsafe extern "C" fn rs_ex_mark(eap: ExArgHandle) {
 /// ":print" / ":list" / ":number".
 #[export_name = "ex_print"]
 pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
-    if nvim_buf_get_ml_empty(nvim_get_curbuf()) {
+    if bref_raw(nvim_get_curbuf()).ml_is_empty() {
         emsg(&e_empty_buffer as *const c_char);
     } else {
         let line1 = (*eap).line1;
@@ -2548,7 +2543,7 @@ pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c
             errormsg = err;
         }
     } else if (*eap).addr_count != 0 {
-        let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+        let line_count = bref_raw(nvim_get_curbuf()).ml_line_count;
         let line2 = (*eap).line2.min(line_count);
         (*eap).line2 = line2;
         if line2 < 0 {
@@ -2777,7 +2772,7 @@ pub unsafe extern "C" fn rs_ex_copymove(eap: ExArgHandle) {
     get_flags(eap);
 
     const MAXLNUM: LinenrT = 0x7fffffff;
-    let line_count = nvim_buf_get_line_count(nvim_get_curbuf());
+    let line_count = bref_raw(nvim_get_curbuf()).ml_line_count;
     if n == MAXLNUM || n < 0 || n > line_count {
         emsg(crate::errors::E_INVRANGE_STR.as_ptr());
         return;

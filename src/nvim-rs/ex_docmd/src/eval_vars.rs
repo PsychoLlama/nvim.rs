@@ -7,6 +7,8 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
+use crate::bref_raw;
+
 // ---------------------------------------------------------------------------
 // SPEC_* indices — must match SPEC_STRINGS order in commands.rs
 // ---------------------------------------------------------------------------
@@ -95,9 +97,6 @@ extern "C" {
 
     // buflist_findnr (Rust-implemented; returns buf_T*)
     fn rs_buflist_findnr(nr: c_int) -> *mut c_void;
-
-    // buf_T->b_fname accessor
-    fn nvim_buf_get_b_fname(buf: *mut c_void) -> *const c_char;
 
     // file_name_at_cursor (FNAME_MESS|FNAME_HYP=5, count=1, lnum=NULL)
     fn file_name_at_cursor(options: c_int, count: c_int, file_lnum: *mut c_void) -> *mut c_char;
@@ -280,7 +279,7 @@ pub unsafe extern "C" fn rs_eval_vars_impl(
                     if !lnump.is_null() {
                         *lnump = ECMD_LAST;
                     }
-                    let fname = nvim_buf_get_b_fname(buf);
+                    let fname = bref_raw(buf).b_fname;
                     if fname.is_null() {
                         result = c"".as_ptr().cast_mut();
                         valid = 0; // Must have ":p:h" to be valid

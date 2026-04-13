@@ -63,8 +63,6 @@ linenr_T nvim_buf_get_b_mod_xlines(buf_T *buf) { return buf->b_mod_xlines; }
 bool nvim_buf_get_b_p_bin(buf_T *buf) { return buf->b_p_bin; }
 bool nvim_buf_get_b_p_fixeol(buf_T *buf) { return buf->b_p_fixeol; }
 const char *nvim_buf_get_b_p_fenc(buf_T *buf) { return buf->b_p_fenc; }
-bool nvim_buf_get_ml_empty(buf_T *buf) { return buf->b_ml.ml_flags & ML_EMPTY; }
-
 int nvim_buf_marktree_n_keys(buf_T *buf) { return (int)buf->b_marktree->n_keys; }
 int nvim_buf_meta_total(buf_T *buf, int meta_type) { return (int)buf_meta_total(buf, meta_type); }
 
