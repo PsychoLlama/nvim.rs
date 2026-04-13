@@ -17,6 +17,7 @@
 
 use std::ffi::c_int;
 
+use nvim_window::win_struct::win_ref;
 use nvim_window::WinHandle;
 
 // =============================================================================
@@ -81,26 +82,10 @@ impl LineOff {
 }
 
 // =============================================================================
-// C Accessor Functions
+// C Accessor Functions (kept for non-field accesses)
 // =============================================================================
 
 extern "C" {
-    /// Get `w_topline` from window
-    fn nvim_win_get_topline(win: WinHandle) -> i64;
-    /// Get `w_botline` from window
-    fn nvim_win_get_botline(win: WinHandle) -> i64;
-    /// Get `w_topfill` from window
-    fn nvim_win_get_topfill(win: WinHandle) -> c_int;
-    /// Get `w_skipcol` from window
-    fn nvim_win_get_skipcol(win: WinHandle) -> c_int;
-    /// Get `w_leftcol` from window
-    fn nvim_win_get_leftcol(win: WinHandle) -> c_int;
-    /// Get `w_valid` flags from window
-    fn nvim_win_get_valid(win: WinHandle) -> c_int;
-    /// Get `w_view_height` from window
-    fn nvim_win_get_view_height(win: WinHandle) -> c_int;
-    /// Get buffer from window
-    fn nvim_win_get_buffer(win: WinHandle) -> *mut std::ffi::c_void;
     /// Get line count from buffer
     fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> i64;
     /// Get scrolloff option value for window
@@ -119,7 +104,7 @@ extern "C" {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_get_topline(win: WinHandle) -> i64 {
-    nvim_win_get_topline(win)
+    i64::from(win_ref(win).w_topline)
 }
 
 /// Get the botline (last visible line + 1) of a window.
@@ -128,7 +113,7 @@ pub unsafe extern "C" fn rs_viewport_get_topline(win: WinHandle) -> i64 {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_get_botline(win: WinHandle) -> i64 {
-    nvim_win_get_botline(win)
+    i64::from(win_ref(win).w_botline)
 }
 
 /// Get the topfill (filler lines at top) of a window.
@@ -137,7 +122,7 @@ pub unsafe extern "C" fn rs_viewport_get_botline(win: WinHandle) -> i64 {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_get_topfill(win: WinHandle) -> c_int {
-    nvim_win_get_topfill(win)
+    win_ref(win).w_topfill
 }
 
 /// Get the skipcol (columns skipped at start of first line) of a window.
@@ -146,7 +131,7 @@ pub unsafe extern "C" fn rs_viewport_get_topfill(win: WinHandle) -> c_int {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_get_skipcol(win: WinHandle) -> c_int {
-    nvim_win_get_skipcol(win)
+    win_ref(win).w_skipcol
 }
 
 /// Get the leftcol (horizontal scroll position) of a window.
@@ -155,7 +140,7 @@ pub unsafe extern "C" fn rs_viewport_get_skipcol(win: WinHandle) -> c_int {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_get_leftcol(win: WinHandle) -> c_int {
-    nvim_win_get_leftcol(win)
+    win_ref(win).w_leftcol
 }
 
 /// Check if a line is visible in the window.
@@ -166,8 +151,9 @@ pub unsafe extern "C" fn rs_viewport_get_leftcol(win: WinHandle) -> c_int {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_line_visible(win: WinHandle, lnum: i64) -> bool {
-    let topline = nvim_win_get_topline(win);
-    let botline = nvim_win_get_botline(win);
+    let ws = win_ref(win);
+    let topline = i64::from(ws.w_topline);
+    let botline = i64::from(ws.w_botline);
     lnum >= topline && lnum < botline
 }
 
@@ -177,8 +163,9 @@ pub unsafe extern "C" fn rs_viewport_line_visible(win: WinHandle, lnum: i64) -> 
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_visible_lines(win: WinHandle) -> i64 {
-    let topline = nvim_win_get_topline(win);
-    let botline = nvim_win_get_botline(win);
+    let ws = win_ref(win);
+    let topline = i64::from(ws.w_topline);
+    let botline = i64::from(ws.w_botline);
     (botline - topline).max(0)
 }
 
@@ -188,7 +175,7 @@ pub unsafe extern "C" fn rs_viewport_visible_lines(win: WinHandle) -> i64 {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_topline_valid(win: WinHandle) -> bool {
-    (nvim_win_get_valid(win) & VALID_TOPLINE) != 0
+    (win_ref(win).w_valid & VALID_TOPLINE) != 0
 }
 
 /// Check if the viewport's botline is valid.
@@ -197,7 +184,7 @@ pub unsafe extern "C" fn rs_viewport_topline_valid(win: WinHandle) -> bool {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_botline_valid(win: WinHandle) -> bool {
-    (nvim_win_get_valid(win) & VALID_BOTLINE) != 0
+    (win_ref(win).w_valid & VALID_BOTLINE) != 0
 }
 
 // =============================================================================
@@ -245,7 +232,7 @@ pub unsafe extern "C" fn rs_viewport_min_topline(win: WinHandle, cursor_lnum: i6
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_max_topline(win: WinHandle, cursor_lnum: i64) -> i64 {
-    let view_height = nvim_win_get_view_height(win);
+    let view_height = win_ref(win).w_view_height;
     let scrolloff = rs_get_scrolloff_value(win);
 
     // topline can be at most cursor_lnum - (view_height - scrolloff - 1)
@@ -262,8 +249,9 @@ pub unsafe extern "C" fn rs_viewport_max_topline(win: WinHandle, cursor_lnum: i6
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_viewport_cursor_in_margin(win: WinHandle, cursor_lnum: i64) -> bool {
-    let topline = nvim_win_get_topline(win);
-    let botline = nvim_win_get_botline(win);
+    let ws = win_ref(win);
+    let topline = i64::from(ws.w_topline);
+    let botline = i64::from(ws.w_botline);
     let scrolloff = rs_get_scrolloff_value(win);
 
     let top_margin = topline + i64::from(scrolloff);

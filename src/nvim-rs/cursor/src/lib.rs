@@ -17,6 +17,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
 
 // =============================================================================
@@ -126,14 +127,6 @@ extern "C" {
     /// Get line count from buffer (returns `linenr_T` = `int32_t`)
     fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> i32;
 
-    /// Get buffer from window
-    fn nvim_win_get_buffer(win: WinHandle) -> *mut std::ffi::c_void;
-
-    /// Get cursor position from window (`linenr_T` = `int32_t`)
-    fn nvim_win_get_cursor_lnum(win: WinHandle) -> i32;
-    fn nvim_win_get_cursor_col(win: WinHandle) -> i32;
-    fn nvim_win_get_cursor_coladd(win: WinHandle) -> i32;
-
     /// Get length of a line in bytes (lnum is `linenr_T` = `int32_t`)
     fn nvim_buf_get_line_len(buf: *mut std::ffi::c_void, lnum: i32) -> i32;
 
@@ -212,24 +205,9 @@ extern "C" {
     // Window State Functions (for set_leftcol)
     // -------------------------------------------------------------------------
 
-    /// Get window leftcol
-    fn nvim_win_get_leftcol(wp: WinHandle) -> i32;
-
-    /// Set window leftcol
-    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
-
-    /// Get window view width
-    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
-
     /// Get window col offset
     #[link_name = "win_col_off"]
     fn nvim_win_col_off(wp: WinHandle) -> c_int;
-
-    /// Get window virtcol
-    fn nvim_win_get_virtcol(wp: WinHandle) -> i32;
-
-    /// Set window `w_set_curswant` flag
-    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
 
     fn changed_cline_bef_curs(wp: WinHandle);
 
@@ -243,15 +221,6 @@ extern "C" {
     /// Call `redraw_later`
     #[link_name = "redraw_later"]
     fn nvim_redraw_later(wp: WinHandle, r#type: c_int);
-
-    /// Set window cursor line number (lnum is `linenr_T` = `int32_t`)
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: i32);
-
-    /// Set window cursor column
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: i32);
-
-    /// Set window cursor coladd
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: i32);
 
     /// Wrapper for `mark_mb_adjustpos`
     #[link_name = "mark_mb_adjustpos"]
@@ -322,14 +291,6 @@ extern "C" {
     /// UTF-8 byte-length table
     static utf8len_tab: [u8; 256];
 
-    /// Get window `w_p_wrap` option
-    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
-
-    /// Get window `w_curswant`
-    fn nvim_win_get_curswant(wp: WinHandle) -> i32;
-
-    /// Set window `w_curswant`
-    fn nvim_win_set_curswant(wp: WinHandle, val: i32);
 }
 
 // =============================================================================
@@ -482,7 +443,7 @@ unsafe fn coladvance2(
             || ((nvim_get_ve_flags(wp) & VE_ONEMORE) != 0 && wcol < MAXCOL),
     );
 
-    let buf = nvim_win_get_buffer(wp);
+    let buf = win_ref(wp).w_buffer;
     let line = nvim_ml_get_buf(buf, (*pos).lnum);
     let linelen = nvim_ml_get_buf_len(buf, (*pos).lnum);
 
@@ -492,18 +453,18 @@ unsafe fn coladvance2(
 
         if (addspaces || finetune) && !VIsual_active {
             let ts = linetabsize(wp, (*pos).lnum) + one_more;
-            nvim_win_set_curswant(wp, ts);
-            let cw = nvim_win_get_curswant(wp);
+            win_mut(wp).w_curswant = ts;
+            let cw = win_ref(wp).w_curswant;
             if cw > 0 {
-                nvim_win_set_curswant(wp, cw - 1);
+                win_mut(wp).w_curswant = cw - 1;
             }
         }
     } else {
-        let view_width = nvim_win_get_view_width(wp);
+        let view_width = win_ref(wp).w_view_width;
         let width = view_width - nvim_win_col_off(wp);
         let mut csize: c_int = 0;
 
-        if finetune && nvim_win_get_p_wrap(wp) != 0 && view_width != 0 && wcol >= width && width > 0
+        if finetune && win_ref(wp).w_p_wrap() != 0 && view_width != 0 && wcol >= width && width > 0
         {
             csize = linetabsize_eol(wp, (*pos).lnum);
             if csize > 0 {
@@ -606,14 +567,14 @@ unsafe fn coladvance2(
             }
         } else {
             let b = wcol - col;
-            if b > 0 && b < MAXCOL - 2 * nvim_win_get_view_width(wp) {
+            if b > 0 && b < MAXCOL - 2 * win_ref(wp).w_view_width {
                 (*pos).coladd = b;
             }
             col += b;
         }
     }
 
-    let buf = nvim_win_get_buffer(wp);
+    let buf = win_ref(wp).w_buffer;
     nvim_mark_mb_adjustpos(buf, pos);
 
     if wcol < 0 || col < wcol {
@@ -713,7 +674,7 @@ pub extern "C" fn rs_cursor_pos_leq(a: &CursorPos, b: &CursorPos) -> bool {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_cursor_get_line_count(win: WinHandle) -> i32 {
-    let buf = nvim_win_get_buffer(win);
+    let buf = win_ref(win).w_buffer;
     if buf.is_null() {
         return 0;
     }
@@ -816,7 +777,7 @@ pub unsafe extern "C" fn rs_cursor_clamp_col(
     col: i32,
     allow_past_end: bool,
 ) -> i32 {
-    let buf = nvim_win_get_buffer(win);
+    let buf = win_ref(win).w_buffer;
     if buf.is_null() {
         return 0;
     }
@@ -871,7 +832,7 @@ pub unsafe extern "C" fn rs_cursor_one_more(win: WinHandle) -> bool {
 /// `win` must be a valid window handle.
 #[no_mangle]
 pub unsafe extern "C" fn rs_cursor_at_eol(win: WinHandle, lnum: i32, col: i32) -> bool {
-    let buf = nvim_win_get_buffer(win);
+    let buf = win_ref(win).w_buffer;
     if buf.is_null() {
         return true;
     }
@@ -1027,7 +988,7 @@ pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
         nvim_win_clear_valid_bits(wp, VALID_VIRTCOL);
     } else {
         // Virtcol is valid when not on a TAB
-        let buf = nvim_win_get_buffer(wp);
+        let buf = win_ref(wp).w_buffer;
         let is_tab =
             *nvim_ml_get_buf(buf, (*cursor).lnum).add((*cursor).col as usize) == b'\t' as c_char;
         if !is_tab {
@@ -1140,7 +1101,7 @@ pub unsafe extern "C" fn rs_get_cursor_pos_len() -> i32 {
 #[export_name = "char_before_cursor"]
 #[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_char_before_cursor() -> c_int {
-    let col = nvim_win_get_cursor_col(curwin);
+    let col = win_ref(curwin).w_cursor.col;
     if col <= 0 {
         return -1;
     }
@@ -1162,7 +1123,7 @@ pub unsafe extern "C" fn rs_char_before_cursor() -> c_int {
 /// Requires valid global state (curwin, curbuf).
 #[export_name = "adjust_cursor_col"]
 pub unsafe extern "C" fn rs_adjust_cursor_col() {
-    let col = nvim_win_get_cursor_col(curwin);
+    let col = win_ref(curwin).w_cursor.col;
     if col > 0 {
         let visual_active = VIsual_active;
         let sel_is_old = nvim_get_p_sel_first() == i32::from(b'o');
@@ -1170,7 +1131,7 @@ pub unsafe extern "C" fn rs_adjust_cursor_col() {
         if !visual_active || sel_is_old {
             // If cursor is on NUL (end of line), move back one character
             if rs_gchar_cursor() == 0 {
-                nvim_win_set_cursor_col(curwin, col - 1);
+                win_mut(curwin).w_cursor.col = col - 1;
             }
         }
     }
@@ -1216,12 +1177,12 @@ pub unsafe extern "C" fn rs_check_pos(buf: BufHandle, pos: *mut CursorPos) {
 #[export_name = "check_cursor_lnum"]
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
-    let buf = nvim_win_get_buffer(win);
+    let buf = win_ref(win).w_buffer;
     if buf.is_null() {
         return;
     }
 
-    let cursor_lnum = nvim_win_get_cursor_lnum(win);
+    let cursor_lnum = win_ref(win).w_cursor.lnum;
     let line_count = i64::from(nvim_buf_get_line_count(buf));
 
     if i64::from(cursor_lnum) > line_count {
@@ -1236,16 +1197,16 @@ pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
             std::ptr::null_mut(),
         ) != 0
         {
-            nvim_win_set_cursor_lnum(win, first_lnum);
+            win_mut(win).w_cursor.lnum = first_lnum;
         } else {
-            nvim_win_set_cursor_lnum(win, line_count as i32);
+            win_mut(win).w_cursor.lnum = line_count as i32;
         }
     }
 
     // Re-read in case it was modified above
-    let cursor_lnum = nvim_win_get_cursor_lnum(win);
+    let cursor_lnum = win_ref(win).w_cursor.lnum;
     if cursor_lnum <= 0 {
-        nvim_win_set_cursor_lnum(win, 1);
+        win_mut(win).w_cursor.lnum = 1;
     }
 }
 
@@ -1255,20 +1216,20 @@ pub unsafe extern "C" fn rs_check_cursor_lnum(win: WinHandle) {
 /// `win` must be a valid window handle.
 #[export_name = "check_cursor_col"]
 pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
-    let buf = nvim_win_get_buffer(win);
+    let buf = win_ref(win).w_buffer;
     if buf.is_null() {
         return;
     }
 
-    let oldcol = nvim_win_get_cursor_col(win);
-    let oldcoladd = oldcol + nvim_win_get_cursor_coladd(win);
+    let oldcol = win_ref(win).w_cursor.col;
+    let oldcoladd = oldcol + win_ref(win).w_cursor.coladd;
     let cur_ve_flags = nvim_get_ve_flags(win);
-    let cursor_lnum = nvim_win_get_cursor_lnum(win);
+    let cursor_lnum = win_ref(win).w_cursor.lnum;
 
     let len = nvim_buf_get_line_len(buf, cursor_lnum);
 
     if len == 0 {
-        nvim_win_set_cursor_col(win, 0);
+        win_mut(win).w_cursor.col = 0;
     } else if oldcol >= len {
         // Allow cursor past end-of-line when:
         // - in Insert mode or restarting Insert mode
@@ -1287,23 +1248,23 @@ pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
             || (cur_ve_flags & VE_ONEMORE) != 0
             || virtual_active
         {
-            nvim_win_set_cursor_col(win, len);
+            win_mut(win).w_cursor.col = len;
         } else {
-            nvim_win_set_cursor_col(win, len - 1);
+            win_mut(win).w_cursor.col = len - 1;
             // Move the cursor to the head byte.
             let cursor = nvim_win_get_cursor_ptr(win);
             nvim_mark_mb_adjustpos(buf, cursor);
         }
     } else if oldcol < 0 {
-        nvim_win_set_cursor_col(win, 0);
+        win_mut(win).w_cursor.col = 0;
     }
 
     // If virtual editing is on, we can leave the cursor on the old position,
     // only we must set it to virtual. But don't do it when at the end of the
     // line.
-    let newcol = nvim_win_get_cursor_col(win);
+    let newcol = win_ref(win).w_cursor.col;
     if oldcol == MAXCOL {
-        nvim_win_set_cursor_coladd(win, 0);
+        win_mut(win).w_cursor.coladd = 0;
     } else if cur_ve_flags == VE_ALL {
         if oldcoladd > newcol {
             let mut coladd = oldcoladd - newcol;
@@ -1321,10 +1282,10 @@ pub unsafe extern "C" fn rs_check_cursor_col(win: WinHandle) {
                     coladd = char_width;
                 }
             }
-            nvim_win_set_cursor_coladd(win, coladd);
+            win_mut(win).w_cursor.coladd = coladd;
         } else {
             // avoid weird number when there is a miscalculation or overflow
-            nvim_win_set_cursor_coladd(win, 0);
+            win_mut(win).w_cursor.coladd = 0;
         }
     }
 }
@@ -1444,7 +1405,7 @@ pub unsafe extern "C" fn rs_pchar_cursor(c: c_char) {
 #[must_use]
 #[export_name = "get_cursor_rel_lnum"]
 pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i32) -> i32 {
-    let cursor = nvim_win_get_cursor_lnum(wp);
+    let cursor = win_ref(wp).w_cursor.lnum;
 
     // Fast path: same line or no folding
     if lnum == cursor || rs_hasAnyFolding(wp) == 0 {
@@ -1505,15 +1466,15 @@ pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i32) -> i32
 #[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
     // Return quickly when there is no change
-    if nvim_win_get_leftcol(curwin) == leftcol {
+    if win_ref(curwin).w_leftcol == leftcol {
         return false;
     }
 
-    nvim_win_set_leftcol(curwin, leftcol);
+    win_mut(curwin).w_leftcol = leftcol;
     changed_cline_bef_curs(curwin);
 
     // Calculate the last visible column
-    let view_width = nvim_win_get_view_width(curwin);
+    let view_width = win_ref(curwin).w_view_width;
     let col_off = nvim_win_col_off(curwin);
     let lastcol = i64::from(leftcol) + i64::from(view_width) - i64::from(col_off) - 1;
 
@@ -1524,7 +1485,7 @@ pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
     // If the cursor is right or left of the screen, move it to last or first
     // visible character
     let siso = rs_get_sidescrolloff_value(curwin);
-    let virtcol = i64::from(nvim_win_get_virtcol(curwin));
+    let virtcol = i64::from(win_ref(curwin).w_virtcol);
 
     if virtcol > lastcol - i64::from(siso) {
         retval = true;
@@ -1549,13 +1510,13 @@ pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
         retval = true;
         if rs_coladvance(curwin, e + 1) == FAIL {
             // there isn't another character, adjust w_leftcol instead
-            nvim_win_set_leftcol(curwin, s);
+            win_mut(curwin).w_leftcol = s;
             changed_cline_bef_curs(curwin);
         }
     }
 
     if retval {
-        nvim_win_set_set_curswant(curwin, 1);
+        win_mut(curwin).w_set_curswant = 1;
     }
     nvim_redraw_later(curwin, UPD_NOT_VALID);
     retval
