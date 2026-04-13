@@ -74,7 +74,8 @@ extern "C" {
     // do_map wrapper for lmap operations (added to digraph.c)
     fn nvim_do_map_keymap(maptype: c_int, arg: *mut c_char) -> c_int;
 
-    // ga_clear: already exists in fold_shim.c
+    // ga_clear: links directly to ga_clear in collections/garray.c
+    #[link_name = "ga_clear"]
     fn nvim_ga_clear(ga: *mut GarrayT);
 
     // do_cmdline_cmd (already in sign.c as nvim_do_cmdline_cmd_str, void return)

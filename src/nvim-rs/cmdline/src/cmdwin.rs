@@ -532,6 +532,7 @@ unsafe extern "C" {
     fn nvim_win_close_if_valid_not_last(wp: WinHandle) -> c_int;
     fn nvim_win_close_cmdwin(wp: WinHandle);
     fn nvim_close_buffer_wipe_if_valid(bufref: *mut std::ffi::c_void, curbuf: BufHandle);
+    #[link_name = "win_goto"]
     fn nvim_win_goto_cmdwin(wp: WinHandle);
     fn nvim_normal_enter_cmdwin();
 
@@ -555,6 +556,7 @@ unsafe extern "C" {
     fn nvim_get_cmdline_star() -> c_int;
 
     // beep / pum
+    #[link_name = "beep_flush"]
     fn nvim_beep_flush();
     fn nvim_pum_undisplay_true();
 
@@ -583,22 +585,28 @@ unsafe extern "C" {
     fn nvim_ml_append_cmdwin(lnum: c_int, line: *const c_char) -> c_int;
 
     // UI / redraw
+    #[link_name = "changed_line_abv_curs"]
     fn nvim_changed_line_abv_curs_cmdwin();
     fn nvim_invalidate_botline_curwin();
     fn nvim_redraw_later_curwin_some_valid();
     fn nvim_ui_has_cmdline() -> c_int;
     fn nvim_ui_call_cmdline_hide_ccline(do_flush: c_int);
     fn nvim_cmd_screencol_cmdpos() -> c_int;
+    #[link_name = "redrawcmd"]
     fn nvim_redrawcmd();
 
     // Getchar / typeahead
+    #[link_name = "stuffcharReadbuff"]
     fn nvim_stuffcharReadbuff_cmdwin(c: c_int);
 
     // Clipboard batch count
+    #[link_name = "save_batch_count"]
     fn nvim_save_batch_count() -> c_int;
+    #[link_name = "restore_batch_count"]
     fn nvim_restore_batch_count(save_count: c_int);
 
     // cmdline buffer management
+    #[link_name = "dealloc_cmdbuff"]
     fn nvim_dealloc_cmdbuff();
 
     // Misc

@@ -301,6 +301,7 @@ extern "C" {
 
     // Fold operations
     fn changed_window_setting(wp: WinHandle);
+    #[link_name = "redraw_win_range_later"]
     fn nvim_redraw_win_range_later(wp: WinHandle, top: LinenrT, bot: LinenrT);
 
     // Diff context

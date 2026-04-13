@@ -349,6 +349,7 @@ extern "C" {
     // ========================================================================
 
     /// Grow a garray to hold at least n more fold_T entries.
+    #[link_name = "ga_grow"]
     fn nvim_ga_grow_folds(gap: GArrayHandle, n: c_int);
 
     /// Set the fd_top field of a fold.
@@ -375,6 +376,7 @@ extern "C" {
     fn nvim_ga_free_data(gap: GArrayHandle);
 
     /// Clear (free and reset) a garray: frees ga_data, resets ga_len/ga_maxlen.
+    #[link_name = "ga_clear"]
     fn nvim_ga_clear(gap: GArrayHandle);
 
     // ========================================================================
@@ -2462,6 +2464,7 @@ pub extern "C" fn rs_newFoldLevel() {
 
 extern "C" {
     /// Initialize a garray with specified itemsize and growsize.
+    #[link_name = "ga_init"]
     fn nvim_ga_init_folds_ex(gap: GArrayHandle, itemsize: c_int, growsize: c_int);
 
     /// Get the ga_itemsize field from a garray.
@@ -3109,6 +3112,7 @@ extern "C" {
     fn nvim_foldmethodIsMarker(wp: WinHandle) -> c_int;
 
     /// Call check_cursor_col for window.
+    #[link_name = "check_cursor_col"]
     fn nvim_check_cursor_col(wp: WinHandle);
 
     /// Call changed_lines for buffer.
@@ -3908,6 +3912,7 @@ pub extern "C" fn rs_foldMoveRange(
 
 extern "C" {
     /// Get line number from argvars[0] (tv_get_lnum).
+    #[link_name = "tv_get_lnum"]
     fn nvim_fold_tv_get_lnum(argvars: *const c_void) -> LineNr;
 
     /// Set rettv->vval.v_number.

@@ -117,8 +117,6 @@ void nvim_close_buffer_wipe_if_valid(void *bufref_void, buf_T *curbuf_ptr)
   }
 }
 
-/// win_goto wrapper.
-void nvim_win_goto_cmdwin(win_T *wp) { win_goto(wp); }
 
 /// normal_enter(true, false) for cmdwin main loop.
 void nvim_normal_enter_cmdwin(void) { normal_enter(true, false); }
@@ -127,7 +125,6 @@ void nvim_normal_enter_cmdwin(void) { normal_enter(true, false); }
 // beep / pum
 // =============================================================================
 
-void nvim_beep_flush(void) { beep_flush(); }
 void nvim_pum_undisplay_true(void) { pum_undisplay(true); }
 
 // =============================================================================
@@ -196,7 +193,6 @@ int nvim_ml_append_cmdwin(int lnum, const char *line) { return ml_append((linenr
 // UI / redraw
 // =============================================================================
 
-void nvim_changed_line_abv_curs_cmdwin(void) { changed_line_abv_curs(); }
 void nvim_invalidate_botline_curwin(void) { invalidate_botline(curwin); }
 void nvim_redraw_later_curwin_some_valid(void) { redraw_later(curwin, UPD_SOME_VALID); }
 
@@ -208,26 +204,22 @@ void nvim_ui_call_cmdline_hide_ccline(int do_flush)
 }
 
 int nvim_cmd_screencol_cmdpos(void) { return cmd_screencol(nvim_get_ccline_cmdpos()); }
-void nvim_redrawcmd(void) { redrawcmd(); }
-
 // =============================================================================
 // Getchar / typeahead wrappers
 // =============================================================================
 
-void nvim_stuffcharReadbuff_cmdwin(int c) { stuffcharReadbuff(c); }
+
 
 // =============================================================================
 // Clipboard batch count
 // =============================================================================
 
-int nvim_save_batch_count(void) { return save_batch_count(); }
-void nvim_restore_batch_count(int save_count) { restore_batch_count(save_count); }
+
 
 // =============================================================================
 // Command-line buffer management
 // =============================================================================
 
-void nvim_dealloc_cmdbuff(void) { dealloc_cmdbuff(); }
 
 // =============================================================================
 // Misc wrappers

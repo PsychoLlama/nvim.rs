@@ -55,6 +55,7 @@ extern "C" {
     // ---- Phase 3: new accessors for marker manipulation ----
 
     /// Get the length of a buffer line.
+    #[link_name = "ml_get_buf_len"]
     fn nvim_fold_ml_get_buf_len(buf: BufHandle, lnum: LineNr) -> c_int;
 
     /// Replace a buffer line, consuming ownership of newline (must be xmalloc'd).

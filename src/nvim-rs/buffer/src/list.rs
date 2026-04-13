@@ -90,6 +90,7 @@ extern "C" {
     fn nvim_curwin_set_curswant(val: bool);
     fn mark_view_restore(fm: *mut c_void);
     fn nvim_semsg_e92_buf_not_found(n: i64);
+    #[link_name = "check_cursor_col"]
     fn nvim_check_cursor_col(win: *mut c_void);
     static mut jop_flags: u32;
 }

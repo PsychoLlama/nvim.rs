@@ -30,6 +30,7 @@ extern "C" {
     fn nvim_win_get_p_fdn(wp: WinHandle) -> c_int;
 
     /// Get the indentation of a buffer line.
+    #[link_name = "get_indent_buf"]
     fn nvim_get_indent_buf(buf: BufHandle, lnum: LineNr) -> c_int;
 
     /// Get the shiftwidth value for a buffer.
@@ -46,11 +47,13 @@ extern "C" {
 
     /// Get the syntax fold level for a line.
     /// Wraps syn_get_foldlevel(wp, lnum).
+    #[link_name = "syn_get_foldlevel"]
     fn nvim_syn_get_foldlevel(wp: WinHandle, lnum: LineNr) -> c_int;
 
     /// Evaluate 'foldexpr' for window wp at line v:lnum.
     /// Returns the numeric value; sets *out_char to the prefix character
     /// ('a', 's', '>', '<', '=', or 0 for a plain integer).
+    #[link_name = "eval_foldexpr"]
     fn nvim_fold_eval_foldexpr(wp: WinHandle, out_char: *mut c_int) -> c_int;
 
     /// Save curwin/curbuf and set them to wp/wp->w_buffer.
