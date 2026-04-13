@@ -1063,8 +1063,6 @@ extern "C" {
     /// rs_win_valid: check if window is valid.
     fn rs_win_valid(wp: WinHandle) -> c_int;
 
-    /// nvim_win_get_floating_win: get w_floating from a win_T* (avoids conflict with nvim_win_get_floating).
-    fn nvim_win_get_floating_win(wp: WinHandle) -> c_int;
 }
 
 // rs_one_window_in_tab is already declared as nvim_one_window_firstwin (link_name) above.
@@ -1144,7 +1142,7 @@ unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int 
     }
 
     let mut unflat_altfr: *mut Frame = std::ptr::null_mut();
-    if nvim_win_get_floating_win(wp) != 0 {
+    if win_ref(wp).w_floating {
         rs_win_remove(wp, TabpageHandle::null());
     } else {
         // Remove the window and frame from the tree of frames. Don't flatten
@@ -1162,7 +1160,7 @@ unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int 
 
     // Split on the desired side and put wp there.
     if win_split_ins_full_impl(size, flags, wp, dir, unflat_altfr).is_null() {
-        if nvim_win_get_floating_win(wp) == 0 {
+        if !win_ref(wp).w_floating {
             // win_split_ins doesn't change sizes or layout if it fails to insert
             // an existing window, so just undo winframe_remove.
             rs_winframe_restore(wp, dir, unflat_altfr);
@@ -1173,11 +1171,7 @@ unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int 
 
     // If splitting horizontally, try to preserve height.
     // Note: win_split_ins autocommands may have closed wp or made it floating!
-    if size == 0
-        && (flags & WSP_VERT) == 0
-        && rs_win_valid(wp) != 0
-        && nvim_win_get_floating_win(wp) == 0
-    {
+    if size == 0 && (flags & WSP_VERT) == 0 && rs_win_valid(wp) != 0 && !win_ref(wp).w_floating {
         nvim_win_setheight_win_wrapper(height, wp);
         if nvim_get_p_ea() != 0 {
             // Equalize windows.

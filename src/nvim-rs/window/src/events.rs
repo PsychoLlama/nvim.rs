@@ -72,7 +72,6 @@ extern "C" {
     fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
     fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-    fn nvim_win_get_pos_changed(wp: WinHandle) -> c_int;
     fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
@@ -248,7 +247,7 @@ unsafe fn resolve_window_relative(
 
     // When a floating window is anchored to another window,
     // update the position of its anchored window first.
-    if nvim_win_get_pos_changed(win) != 0
+    if win_ref(win).w_pos_changed
         && !nvim_screengrid_get_chars(nvim_win_get_grid_alloc(win)).is_null()
         && rs_win_valid(win) != 0
     {

@@ -8,7 +8,7 @@
 
 use std::ffi::c_int;
 
-use crate::{TabpageHandle, WinHandle};
+use crate::{win_struct::win_ref, TabpageHandle, WinHandle};
 
 // =============================================================================
 // External C Functions
@@ -28,7 +28,6 @@ extern "C" {
     // Window state accessors
     fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_external_int(wp: WinHandle) -> c_int;
-    fn nvim_win_get_pos_changed(wp: WinHandle) -> c_int;
     fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
 
     // Grid/UI accessors
@@ -129,7 +128,7 @@ unsafe fn win_ui_flush_impl(validate: c_int) {
     while !tp.is_null() {
         let mut wp = get_tabpage_firstwin(tp);
         while !wp.is_null() {
-            if (nvim_win_get_pos_changed(wp) != 0 || nvim_win_get_grid_pending_comp(wp) != 0)
+            if (win_ref(wp).w_pos_changed || nvim_win_get_grid_pending_comp(wp) != 0)
                 && nvim_win_get_grid_chars_valid(wp) != 0
             {
                 if tp == curtab {

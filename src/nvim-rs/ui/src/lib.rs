@@ -450,8 +450,6 @@ extern "C" {
     fn nvim_win_config_float(wp: *mut c_void);
     /// Call win_set_inner_size(wp, valid_cursor)
     fn nvim_win_set_inner_size(wp: *mut c_void, valid_cursor: bool);
-    /// Get floating status of window
-    fn nvim_win_get_floating_win(wp: *mut c_void) -> c_int;
     /// ui_attach_impl helpers
     fn nvim_ui_call_chdir_cwd();
     fn nvim_ui_set_ext_options_above_global(ui: *mut c_void);
@@ -1222,7 +1220,7 @@ pub unsafe extern "C" fn ui_refresh() {
 /// Calls C accessor functions and modifies window state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ui_grid_resize_win(wp: *mut c_void, width: c_int, height: c_int) {
-    if nvim_win_get_floating_win(wp) != 0 {
+    if nvim_window::win_struct::win_ref(nvim_window::WinHandle::from_ptr(wp)).w_floating {
         let cur_w = nvim_win_get_w_width(wp);
         let cur_h = nvim_win_get_w_height(wp);
         if width != cur_w || height != cur_h {

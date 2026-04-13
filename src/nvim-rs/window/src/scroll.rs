@@ -60,9 +60,6 @@ extern "C" {
     /// Get skip_win_fix_cursor global.
     fn nvim_get_skip_win_fix_cursor() -> c_int;
 
-    /// Get wp->w_do_win_fix_cursor.
-    fn nvim_win_get_do_win_fix_cursor(wp: WinHandle) -> c_int;
-
     /// Set wp->w_do_win_fix_cursor.
     fn nvim_win_set_do_win_fix_cursor(wp: WinHandle, val: c_int);
 
@@ -74,9 +71,6 @@ extern "C" {
 
     /// Get wp->w_winrow.
     fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Get wp->w_prev_winrow.
-    fn nvim_win_get_prev_winrow(wp: WinHandle) -> c_int;
 
     /// Set wp->w_prev_winrow.
     fn nvim_win_set_prev_winrow(wp: WinHandle, val: c_int);
@@ -224,7 +218,7 @@ fn win_fix_scroll_impl(resize: bool) {
 
                 // If window has moved, update botline to keep the same screenlines.
                 let winrow = nvim_win_get_winrow(wp);
-                let prev_winrow = nvim_win_get_prev_winrow(wp);
+                let prev_winrow = win_ref(wp).w_prev_winrow;
                 let botline = nvim_win_get_botline(wp);
                 let line_count = nvim_win_buf_line_count(wp);
 
@@ -306,7 +300,7 @@ fn win_fix_cursor_impl(normal: bool) {
             return;
         }
 
-        if nvim_win_get_do_win_fix_cursor(wp) == 0 {
+        if !win_ref(wp).w_do_win_fix_cursor {
             return;
         }
 

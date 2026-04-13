@@ -232,7 +232,6 @@ void nvim_msg_onlyone(void) { msg(_(m_onlyone), 0); }
 int nvim_get_split_disallowed(void) { return split_disallowed; }
 int nvim_win_buf_locked_split(win_T *wp) { return wp->w_buffer->b_locked_split ? 1 : 0; }
 int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
-int nvim_win_get_floating_win(win_T *wp) { return (wp && wp->w_floating) ? 1 : 0; }
 buf_T *nvim_buflist_findname_exp(const char *ptr) { return buflist_findname_exp((char *)ptr); }
 void nvim_reset_binding_curwin(void) { RESET_BINDING(curwin); }
 int nvim_do_ecmd_lastl_hide(const char *ptr) { return do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL); }
@@ -243,7 +242,6 @@ size_t nvim_find_ident_under_cursor(char **pp) { return rs_find_ident_under_curs
 void nvim_set_cmdmod_tab_to_curtab_idx(void) { cmdmod.cmod_tab = rs_tabpage_index(curtab) + 1; }
 int nvim_win_new_float_external(void)
 { if (curwin->w_floating || !ui_has(kUIMultigrid)) { return -1; } WinConfig config = WIN_CONFIG_INIT; config.width = curwin->w_width; config.height = curwin->w_height; config.external = true; Error err = ERROR_INIT; if (!win_new_float(curwin, false, config, &err)) { emsg(err.msg); api_clear_error(&err); return 0; } return 1; }
-int nvim_win_get_pos_changed(win_T *wp) { return wp ? wp->w_pos_changed : 0; }
 win_T *nvim_handle_get_window(int handle) { Error dummy = ERROR_INIT; win_T *wp = find_window_by_handle(handle, &dummy); api_clear_error(&dummy); return wp; }
 void nvim_win_ui_call_win_pos(int grid, int win, int row, int col, int width, int height) { ui_call_win_pos(grid, win, row, col, width, height); }
 void nvim_win_ui_call_win_float_pos(int grid_handle, int win_handle, int anchor,
@@ -258,8 +256,6 @@ void nvim_buf_set_prompt_insert(buf_T *buf, int val) { if (buf) { buf->b_prompt_
 buf_T *nvim_win_get_buf_ptr(win_T *wp) { return wp ? wp->w_buffer : NULL; }
 void nvim_win_sync_s(win_T *wp) { if (wp && wp->w_buffer) { wp->w_s = &wp->w_buffer->b_s; } }
 void nvim_win_set_script_ctx_scroll(win_T *wp) { if (wp) { wp->w_p_script_ctx[kWinOptScroll].sc_sid = SID_WINLAYOUT; wp->w_p_script_ctx[kWinOptScroll].sc_lnum = 0; } }
-int nvim_win_get_do_win_fix_cursor(win_T *wp) { return wp ? (wp->w_do_win_fix_cursor ? 1 : 0) : 0; }
-int nvim_win_get_prev_winrow(win_T *wp) { return wp ? wp->w_prev_winrow : 0; }
 int nvim_has_event_winclosed(void) { return has_event(EVENT_WINCLOSED) ? 1 : 0; }
 void nvim_apply_autocmds_winclosed_by_handle(const char *handle_str, win_T *win) { apply_autocmds(EVENT_WINCLOSED, (char *)handle_str, (char *)handle_str, false, win->w_buffer); }
 win_T *nvim_get_cmdwin_win(void) { return cmdwin_win; }
