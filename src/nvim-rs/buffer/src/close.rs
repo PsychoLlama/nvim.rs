@@ -486,7 +486,6 @@ extern "C" {
     fn nvim_free_buffer_c_parts(buf: BufHandle);
     fn nvim_free_buffer_stuff_c_parts(buf: BufHandle, free_flags: c_int);
     fn nvim_clear_wininfo_c(buf: BufHandle);
-    fn nvim_buf_init_changedtick_c(buf: BufHandle);
     /// Execute all `free_buf_options()` logic in C (batch shim).
     fn nvim_buf_do_free_options(buf: BufHandle, free_p_ff: bool);
     /// Execute the body of `buflist_new()` in C (batch shim).

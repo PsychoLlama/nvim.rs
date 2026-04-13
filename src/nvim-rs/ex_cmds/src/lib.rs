@@ -430,12 +430,6 @@ extern "C" {
     // Buffer accessors
     /// Get the current buffer
     pub fn nvim_get_curbuf() -> *mut BufHandle;
-    /// Get line count from buffer
-    pub fn nvim_buf_get_line_count(buf: *const BufHandle) -> c_int;
-    /// Check if buffer is modified
-    pub fn nvim_buf_is_modified(buf: *const BufHandle) -> c_int;
-    /// Check if buffer is readonly
-    pub fn nvim_buf_is_readonly(buf: *const BufHandle) -> c_int;
 
     // Window accessors
     /// Get the current window

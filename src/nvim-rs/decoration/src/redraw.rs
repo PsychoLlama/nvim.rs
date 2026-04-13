@@ -122,7 +122,6 @@ extern "C" {
     fn nvim_changed_window_setting(wp: WinHandle);
     fn nvim_may_force_numberwidth_recompute(buf: BufHandle, unplace: bool);
     fn nvim_buf_meta_total(buf: BufHandle, key: c_int) -> c_int;
-    fn nvim_buf_signcols_get_count0(buf: BufHandle) -> c_int;
     fn nvim_buf_signcols_set_count0(buf: BufHandle, val: c_int);
     fn nvim_buf_signcols_get_count_at(buf: BufHandle, idx: c_int) -> c_int;
     fn nvim_buf_signcols_set_count_at(buf: BufHandle, idx: c_int, val: c_int);

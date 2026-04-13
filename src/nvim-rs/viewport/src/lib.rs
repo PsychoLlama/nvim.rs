@@ -86,8 +86,6 @@ impl LineOff {
 // =============================================================================
 
 extern "C" {
-    /// Get line count from buffer
-    fn nvim_buf_get_line_count(buf: *mut std::ffi::c_void) -> i64;
     /// Get scrolloff option value for window
     fn rs_get_scrolloff_value(win: WinHandle) -> c_int;
     /// Get sidescrolloff option value for window

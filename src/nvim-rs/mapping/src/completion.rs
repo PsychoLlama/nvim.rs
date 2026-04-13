@@ -65,7 +65,6 @@ extern "C" {
     fn nvim_get_maphash_entry(index: c_int) -> MapblockHandle;
     fn nvim_get_first_abbr() -> MapblockHandle;
     fn nvim_buf_get_maphash_entry(buf: BufHandle, index: c_int) -> MapblockHandle;
-    fn nvim_buf_get_first_abbr(buf: BufHandle) -> MapblockHandle;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_mapping_get_p_cpo() -> *const c_char;
 

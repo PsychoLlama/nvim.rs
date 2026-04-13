@@ -3459,7 +3459,6 @@ extern "C" {
     fn nvim_buf_signcols_get_max(buf: BufHandle) -> c_int;
     fn nvim_buf_signcols_set_max(buf: BufHandle, val: c_int);
     fn nvim_buf_signcols_get_last_max(buf: BufHandle) -> c_int;
-    fn nvim_buf_signcols_set_last_max(buf: BufHandle, val: c_int);
     fn nvim_buf_signcols_get_count(buf: BufHandle, idx: c_int) -> c_int;
 
     /// buf_signcols_count_range wrapper: count sign columns in range.

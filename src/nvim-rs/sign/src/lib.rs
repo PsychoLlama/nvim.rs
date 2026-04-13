@@ -243,9 +243,6 @@ extern "C" {
     fn nvim_decor_sh_get_cursorline_hl_id(sh: DecorSignHighlightHandle) -> c_int;
     fn nvim_decor_sh_get_next(sh: DecorSignHighlightHandle) -> u32;
 
-    // Buffer sign accessors
-    fn nvim_buf_get_marktree(buf: SignBufHandle) -> *mut c_void;
-
     // Marktree/MTKey accessors
     fn nvim_mtkey_get_row(key: MTKeyHandle) -> c_int;
     fn nvim_mtkey_get_col(key: MTKeyHandle) -> c_int;
@@ -266,10 +263,6 @@ extern "C" {
     // Decoration helpers
     fn nvim_decor_find_sign(decor: *const c_void) -> DecorSignHighlightHandle;
     fn nvim_mt_decor(key: MTKeyHandle) -> *const c_void;
-
-    // Buffer meta totals
-    fn nvim_buf_meta_total_sign_hl(buf: SignBufHandle) -> u64;
-    fn nvim_buf_meta_total_sign_text(buf: SignBufHandle) -> u64;
 
     // Global buffer list
     fn nvim_get_firstbuf() -> SignBufHandle;
