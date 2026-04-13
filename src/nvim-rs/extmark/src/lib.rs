@@ -287,12 +287,6 @@ extern "C" {
     /// Get the marktree from a buffer.
     fn nvim_buf_get_marktree(buf: BufHandle) -> MarkTreeHandle;
 
-    /// Get the deleted_bytes2 field from a buffer.
-    fn nvim_buf_get_deleted_bytes2(buf: BufHandle) -> BcountT;
-
-    /// Set the deleted_bytes2 field on a buffer.
-    fn nvim_buf_set_deleted_bytes2(buf: BufHandle, val: BcountT);
-
     /// Get curbuf global.
     fn nvim_get_curbuf() -> BufHandle;
 
@@ -1135,7 +1129,7 @@ pub fn extmark_adjust(
 
     if amount == MAXLNUM {
         old_row = (line2 - line1 + 1) as c_int;
-        old_byte = unsafe { nvim_buf_get_deleted_bytes2(buf) };
+        old_byte = unsafe { buf_ref(buf).deleted_bytes2 as BcountT };
         new_row = amount_after as c_int + old_row;
     } else {
         assert!(line2 == MAXLNUM);
@@ -1282,7 +1276,7 @@ pub fn extmark_splice_impl(
     new_byte: BcountT,
     undo: ExtmarkOp,
 ) {
-    unsafe { nvim_buf_set_deleted_bytes2(buf, 0) };
+    unsafe { buf_mut(buf).deleted_bytes2 = 0 };
     unsafe {
         nvim_buf_updates_send_splice(
             buf, start_row, start_col, start_byte, old_row, old_col, old_byte, new_row, new_col,
@@ -1727,7 +1721,7 @@ pub fn extmark_move_region(
     new_byte: BcountT,
     undo: ExtmarkOp,
 ) {
-    unsafe { nvim_buf_set_deleted_bytes2(buf, 0) };
+    unsafe { buf_mut(buf).deleted_bytes2 = 0 };
 
     // Send splice for deletion
     unsafe {

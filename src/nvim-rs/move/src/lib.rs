@@ -20,9 +20,20 @@
 
 use std::ffi::c_int;
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_fold::WlineHandle;
 use nvim_window::win_struct::{win_mut, win_ref};
 use nvim_window::WinHandle;
+
+/// Get a `&BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid non-null `buf_T*`.
+#[inline]
+#[must_use]
+unsafe fn bref_raw(buf: *mut std::ffi::c_void) -> &'static BufStruct {
+    &*(buf.cast::<BufStruct>())
+}
 
 // Re-export validity flags from viewport crate for convenience
 pub use nvim_viewport::{
@@ -4023,10 +4034,6 @@ extern "C" {
     fn nvim_wline_get_size(wl: WlineHandle) -> u16;
     fn nvim_wline_get_lastlnum(wl: WlineHandle) -> LinenrT;
 
-    // Buffer modification state
-    fn nvim_buf_get_mod_set(buf: *mut std::ffi::c_void) -> c_int;
-    fn nvim_buf_get_mod_top(buf: *mut std::ffi::c_void) -> c_int;
-
     // Redrawing state
     fn nvim_redrawing() -> c_int;
 }
@@ -4083,9 +4090,9 @@ pub unsafe extern "C" fn rs_curs_rows(wp: WinHandle) {
                     // Check for newly inserted lines below this row, in which
                     // case we need to check for folded lines.
                     let buf = win_ref(wp).w_buffer;
-                    let mod_set = nvim_buf_get_mod_set(buf) != 0;
+                    let mod_set = bref_raw(buf).b_mod_set != 0;
                     let wl_lastlnum = nvim_wline_get_lastlnum(wl);
-                    let mod_top = nvim_buf_get_mod_top(buf);
+                    let mod_top = bref_raw(buf).b_mod_top;
 
                     if !mod_set || wl_lastlnum < cursor_lnum || mod_top > wl_lastlnum + 1 {
                         valid = true;

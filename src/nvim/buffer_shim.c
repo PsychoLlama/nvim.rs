@@ -332,8 +332,6 @@ void nvim_buf_set_b_s_spl_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spl = xs
 void nvim_buf_set_b_s_spo_dup(buf_T *buf, const char *s) { buf->b_s.b_p_spo = xstrdup(s); }
 void nvim_buf_set_b_s_spo_flags_from_global(buf_T *buf) { buf->b_s.b_p_spo_flags = spo_flags; }
 MarkTree *nvim_buf_get_marktree(buf_T *buf) { return buf->b_marktree; }
-bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf) { return buf->deleted_bytes2; }
-void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val) { buf->deleted_bytes2 = val; }
 bool nvim_buf_signcols_get_autom(buf_T *buf) { return buf->b_signcols.autom; }
 void nvim_buf_signcols_set_autom(buf_T *buf, bool val) { buf->b_signcols.autom = val; }
 int nvim_buf_signcols_get_max(buf_T *buf) { return buf->b_signcols.max; }

@@ -23,6 +23,15 @@ unsafe fn bref_raw(buf: *mut c_void) -> &'static BufStruct {
     &*(buf.cast::<BufStruct>())
 }
 
+/// Get `&mut BufStruct` from a raw `*mut c_void` buffer pointer.
+///
+/// # Safety
+/// `buf` must be a valid, non-null, uniquely-accessible `buf_T` pointer.
+#[inline]
+unsafe fn bref_raw_mut(buf: *mut c_void) -> &'static mut BufStruct {
+    &mut *(buf.cast::<BufStruct>())
+}
+
 #[allow(clippy::missing_const_for_fn)]
 #[inline]
 unsafe fn win_ref_raw<'a>(wp: *mut c_void) -> &'a nvim_window::win_struct::WinStruct {
@@ -841,12 +850,6 @@ extern "C" {
     /// &win->w_virtcol (colnr_T = c_int)
     fn nvim_win_get_virtcol(wp: *mut c_void) -> *mut c_int;
 
-    /// &buf->b_p_vsts_array (colnr_T**)
-    fn nvim_buf_get_vsts_array_ptr(buf: *mut c_void) -> *mut *mut c_int;
-
-    /// &buf->b_p_vts_array (colnr_T**)
-    fn nvim_buf_get_vts_array_ptr(buf: *mut c_void) -> *mut *mut c_int;
-
     // Cursor utilities
     fn validate_virtcol(wp: *mut c_void);
     fn coladvance(wp: *mut c_void, virtcol: c_int) -> c_int;
@@ -1284,7 +1287,11 @@ pub unsafe extern "C" fn did_set_varsofttabstop(args: *const c_void) -> *const c
 
     // Empty or "0": clear the array
     if *val == 0 || (*val == b'0' as c_char && *val.add(1) == 0) {
-        let arr_pp = nvim_buf_get_vsts_array_ptr(buf);
+        let arr_pp = if buf.is_null() {
+            std::ptr::null_mut()
+        } else {
+            std::ptr::addr_of_mut!(bref_raw_mut(buf).b_p_vsts_array)
+        };
         if !arr_pp.is_null() {
             xfree((*arr_pp).cast::<c_void>());
             *arr_pp = std::ptr::null_mut();
@@ -1310,7 +1317,11 @@ pub unsafe extern "C" fn did_set_varsofttabstop(args: *const c_void) -> *const c
         return e_invarg;
     }
 
-    let arr_pp = nvim_buf_get_vsts_array_ptr(buf);
+    let arr_pp = if buf.is_null() {
+        std::ptr::null_mut()
+    } else {
+        std::ptr::addr_of_mut!(bref_raw_mut(buf).b_p_vsts_array)
+    };
     if arr_pp.is_null() {
         return e_invarg;
     }
@@ -1341,7 +1352,11 @@ pub unsafe extern "C" fn did_set_vartabstop(args: *const c_void) -> *const c_cha
 
     // Empty or "0": clear the array
     if *val == 0 || (*val == b'0' as c_char && *val.add(1) == 0) {
-        let arr_pp = nvim_buf_get_vts_array_ptr(buf);
+        let arr_pp = if buf.is_null() {
+            std::ptr::null_mut()
+        } else {
+            std::ptr::addr_of_mut!(bref_raw_mut(buf).b_p_vts_array)
+        };
         if !arr_pp.is_null() {
             xfree((*arr_pp).cast::<c_void>());
             *arr_pp = std::ptr::null_mut();
@@ -1367,7 +1382,11 @@ pub unsafe extern "C" fn did_set_vartabstop(args: *const c_void) -> *const c_cha
         return e_invarg;
     }
 
-    let arr_pp = nvim_buf_get_vts_array_ptr(buf);
+    let arr_pp = if buf.is_null() {
+        std::ptr::null_mut()
+    } else {
+        std::ptr::addr_of_mut!(bref_raw_mut(buf).b_p_vts_array)
+    };
     if arr_pp.is_null() {
         return e_invarg;
     }

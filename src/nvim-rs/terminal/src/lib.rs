@@ -1304,7 +1304,6 @@ extern "C" {
     fn nvim_term_win_get_buf(wp: *mut c_void) -> *mut c_void;
     fn nvim_term_win_get_height(wp: *mut c_void) -> c_int;
     fn nvim_term_win_get_width(wp: *mut c_void) -> c_int;
-    fn nvim_buf_get_terminal_ptr(buf: *mut c_void) -> *mut c_void;
     fn nvim_get_vgetc_char() -> c_int;
     fn nvim_get_vgetc_mod_mask() -> c_int;
     fn nvim_key_typed() -> c_int;
@@ -2492,7 +2491,7 @@ pub unsafe extern "C" fn rs_send_mouse_event(term: TerminalHandle, c: c_int) -> 
     if !mouse_win.is_null() {
         let t = unsafe { term.as_ref() };
         let win_buf = unsafe { nvim_term_win_get_buf(mouse_win) };
-        let buf_term = unsafe { nvim_buf_get_terminal_ptr(win_buf) };
+        let buf_term = unsafe { bref_raw(win_buf).terminal };
         let winbar_height = unsafe { win_ref_raw(mouse_win).w_winbar_height };
         let win_height = unsafe { nvim_term_win_get_height(mouse_win) };
         let win_width = unsafe { nvim_term_win_get_width(mouse_win) };
@@ -2529,7 +2528,7 @@ pub unsafe extern "C" fn rs_send_mouse_event(term: TerminalHandle, c: c_int) -> 
         false
     } else {
         let win_buf = unsafe { nvim_term_win_get_buf(mouse_win) };
-        let buf_term = unsafe { nvim_buf_get_terminal_ptr(win_buf) };
+        let buf_term = unsafe { bref_raw(win_buf).terminal };
         buf_term == term.as_ptr()
     };
 
@@ -3091,7 +3090,6 @@ extern "C" {
     fn nvim_curbuf_terminal() -> *mut c_void;
     // Phase 10: terminal_destroy helpers
     fn nvim_terminal_invalidated_check_del(term: *mut c_void) -> c_int;
-    fn nvim_buf_set_terminal(buf: *mut c_void, term: *mut c_void);
     fn nvim_term_sb_destroy(sb: *mut c_void);
     fn nvim_vterm_free(vt: *mut c_void);
     fn nvim_multiqueue_free(q: *mut c_void);
@@ -3359,7 +3357,7 @@ pub unsafe extern "C" fn rs_terminal_destroy(termpp: *mut *mut c_void) {
     let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
     if !buf.is_null() {
         t.buf_handle = 0;
-        unsafe { nvim_buf_set_terminal(buf, std::ptr::null_mut()) };
+        unsafe { (*buf.cast::<BufStruct>()).terminal = std::ptr::null_mut() };
     }
 
     if t.refcount == 0 {
@@ -4308,7 +4306,7 @@ pub unsafe extern "C" fn rs_terminal_close(termpp: *mut *mut c_void, status: c_i
         let t = unsafe { term.as_mut() };
         t.buf_handle = 0;
         if !buf.is_null() {
-            unsafe { nvim_buf_set_terminal(buf, std::ptr::null_mut()) };
+            unsafe { (*buf.cast::<BufStruct>()).terminal = std::ptr::null_mut() };
         }
         if t.refcount == 0 {
             // Not inside Terminal mode event handling: destroy immediately.
@@ -4933,7 +4931,7 @@ pub unsafe extern "C" fn rs_terminal_open(
     let buf_handle = unsafe { bref_raw(buf).handle };
     term.buf_handle = buf_handle;
     // buf->terminal = term
-    unsafe { nvim_buf_set_terminal(buf, term_ptr.cast()) };
+    unsafe { (*buf.cast::<BufStruct>()).terminal = term_ptr.cast() };
 
     // Initialize vterm.
     term.vt = unsafe { vterm_new(c_int::from(height), c_int::from(width)) };

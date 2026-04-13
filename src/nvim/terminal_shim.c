@@ -340,7 +340,6 @@ int nvim_terminal_invalidated_check_del(void *term)
 { if (!set_has(ptr_t, &invalidated_terminals, (Terminal *)term)) { return 0; }
   block_autocmds(); rs_refresh_terminal((Terminal *)term); unblock_autocmds();
   set_del(ptr_t, &invalidated_terminals, (Terminal *)term); return 1; }
-void nvim_buf_set_terminal(void *buf, void *term) { ((buf_T *)buf)->terminal = (Terminal *)term; }
 void nvim_term_sb_destroy(void *sb) { kv_destroy(*(StringBuilder *)sb); }
 void nvim_vterm_free(void *vt) { vterm_free((VTerm *)vt); }
 void nvim_multiqueue_free(void *q) { multiqueue_free((MultiQueue *)q); }
@@ -510,7 +509,6 @@ void *nvim_mouse_find_win_inner(int *grid, int *row, int *col) { return mouse_fi
 void *nvim_term_win_get_buf(void *wp) { return ((win_T *)wp)->w_buffer; }
 int nvim_term_win_get_height(void *wp) { return ((win_T *)wp)->w_height; }
 int nvim_term_win_get_width(void *wp) { return ((win_T *)wp)->w_width; }
-void *nvim_buf_get_terminal_ptr(void *buf) { return ((buf_T *)buf)->terminal; }
 int nvim_get_vgetc_mod_mask(void) { return vgetc_mod_mask; }
 int nvim_key_typed(void) { return KeyTyped; }
 int nvim_ins_char_typebuf_c(int c, int mod_mask_val) { return ins_char_typebuf(c, mod_mask_val, true); }

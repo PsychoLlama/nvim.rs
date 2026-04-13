@@ -343,7 +343,6 @@ void nvim_syn_set_sst_lasttick(int tick) { if (syn_block) syn_block->b_sst_lastt
 int nvim_syn_get_display_tick(void) { return (int)display_tick; }
 int nvim_syn_get_got_int(void) { return got_int; }
 int nvim_syn_get_rows(void) { return (int)Rows; }
-int nvim_buf_get_mod_top(buf_T *buf) { return (int)buf->b_mod_top; }
 void nvim_synstate_set_lnum(synstate_T *state, int lnum) { state->sst_lnum = lnum; }
 int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b) { return a->sst_next_list == b->sst_next_list; }
 int nvim_synblock_has_containedin(synblock_T *block) { return block->b_syn_containedin ? 1 : 0; }

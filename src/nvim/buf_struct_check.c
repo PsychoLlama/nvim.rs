@@ -173,6 +173,10 @@ _Static_assert(offsetof(buf_T, b_marktree) == 12480, "b_marktree offset mismatch
 _Static_assert(offsetof(buf_T, b_prev_line_count) == 12624, "b_prev_line_count offset mismatch");
 _Static_assert(offsetof(buf_T, update_channels) == 12632, "update_channels offset mismatch");
 _Static_assert(offsetof(buf_T, update_callbacks) == 12656, "update_callbacks offset mismatch");
+_Static_assert(offsetof(buf_T, deleted_bytes) == 12688, "deleted_bytes offset mismatch");
+_Static_assert(offsetof(buf_T, deleted_bytes2) == 12696, "deleted_bytes2 offset mismatch");
+_Static_assert(offsetof(buf_T, deleted_codepoints) == 12704, "deleted_codepoints offset mismatch");
+_Static_assert(offsetof(buf_T, deleted_codeunits) == 12712, "deleted_codeunits offset mismatch");
 _Static_assert(offsetof(buf_T, flush_count) == 12720, "flush_count offset mismatch");
 
 // memline_T subfield offsets (for ml_line_count/ml_mfp/ml_flags within b_ml)

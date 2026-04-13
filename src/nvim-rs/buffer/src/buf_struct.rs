@@ -564,8 +564,21 @@ pub struct BufStruct {
     pub b_prev_line_count: c_int,
     _pad61: [u8; 4], // abs 12628..12631
 
-    // offset 12632..12719: update_channels (24), update_callbacks (24), other (40 bytes, opaque)
-    _pad62: [u8; 88],
+    // offset 12632..12655: update_channels (kvec_t(uint64_t) = 24 bytes, opaque)
+    _pad62a: [u8; 24],
+    // offset 12656..12679: update_callbacks (kvec_t(BufUpdateCallbacks) = 24 bytes, opaque)
+    _pad62b: [u8; 24],
+    // offset 12680..12687: update_need_codepoints (bool=1) + 7 bytes alignment padding
+    _pad62c: [u8; 8],
+
+    // offset 12688: size_t deleted_bytes
+    pub deleted_bytes: usize,
+    // offset 12696: size_t deleted_bytes2
+    pub deleted_bytes2: usize,
+    // offset 12704: size_t deleted_codepoints
+    pub deleted_codepoints: usize,
+    // offset 12712: size_t deleted_codeunits
+    pub deleted_codeunits: usize,
 
     // offset 12720: int flush_count
     pub flush_count: c_int,

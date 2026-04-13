@@ -249,8 +249,6 @@ char *nvim_buf_get_p_tc(buf_T *buf) { return buf ? buf->b_p_tc : NULL; }
 unsigned *nvim_buf_get_tc_flags_ptr(buf_T *buf) { return buf ? &buf->b_tc_flags : NULL; }
 char *nvim_win_get_p_ve(win_T *wp) { return wp ? wp->w_p_ve : NULL; }
 unsigned *nvim_win_get_ve_flags_ptr(win_T *wp) { return wp ? &wp->w_ve_flags : NULL; }
-colnr_T **nvim_buf_get_vsts_array_ptr(buf_T *buf) { return buf ? &buf->b_p_vsts_array : NULL; }
-colnr_T **nvim_buf_get_vts_array_ptr(buf_T *buf) { return buf ? &buf->b_p_vts_array : NULL; }
 // signcolumn helpers (nvim_win_get_virtcol, nvim_win_get_minscwidth, nvim_win_set_nrwidth_line_count are in window/src/win_struct.rs)
 char *nvim_win_get_p_scl(win_T *wp) { return wp ? wp->w_p_scl : NULL; }
 // iskeyword: check if os_varp points to global p_isk
