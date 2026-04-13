@@ -75,7 +75,7 @@ extern "C" {
     fn AppendCharToRedobuff(c: c_int);
     fn ResetRedobuff();
 
-    // stop_insert (stays C, pass end_insert_pos as opaque pointer)
+    // stop_insert (migrated to Rust in Phase 3, exported as nvim_edit_stop_insert)
     fn nvim_edit_stop_insert(end_insert_pos: *mut c_void, esc: c_int, nomove: c_int);
 
     // check_spell_redraw (already in Rust)
