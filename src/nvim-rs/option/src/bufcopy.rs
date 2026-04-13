@@ -117,9 +117,7 @@ extern "C" {
     fn nvim_buf_set_b_p_tc_empty(buf: *mut core::ffi::c_void);
     fn nvim_buf_set_b_p_cot_empty(buf: *mut core::ffi::c_void);
 
-    // Sentinel-value global-local setters:
-    fn nvim_buf_set_b_p_ac_minus1(buf: *mut core::ffi::c_void);
-    fn nvim_buf_set_b_p_ar_minus1(buf: *mut core::ffi::c_void);
+    // Sentinel-value global-local setters: none remain
 
     // Generic offset-based field writers:
     fn nvim_buf_set_string_field(buf: *mut core::ffi::c_void, offset: isize, s: *const c_char);
@@ -438,8 +436,8 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_IMSEARCH);
 
     // Global-local options: use global value (no local copy)
-    nvim_buf_set_b_p_ac_minus1(buf);
-    nvim_buf_set_b_p_ar_minus1(buf);
+    bref_raw_mut(buf).b_p_ac = -1; // global-local: use global value
+    bref_raw_mut(buf).b_p_ar = -1; // global-local: use global value
     bref_raw_mut(buf).b_p_ul = -123_456; // NO_LOCAL_UNDOLEVEL sentinel
     nvim_buf_set_b_p_bkc_empty(buf);
     nvim_buf_empty_string_field(buf, field_offset(K_OPT_GREPFORMAT));
