@@ -62,15 +62,18 @@ extern "C" {
         dir: *mut *const c_char,
         len: *mut usize,
     ) -> *const c_void;
+    #[link_name = "after_pathsep"]
     fn nvim_rt_after_pathsep(b: *const c_char, s: *const c_char) -> bool;
     fn nvim_rt_memcnt(s: *const c_void, c: c_int, n: usize) -> usize;
     fn nvim_rt_get_appname() -> *const c_char;
     fn nvim_rt_stdpaths_get_xdg_var(xdg_type: c_int) -> *mut c_char;
     fn nvim_rt_vim_getenv(name: *const c_char) -> *mut c_char;
+    #[link_name = "os_isdir"]
     fn nvim_rt_os_isdir(name: *const c_char) -> bool;
     fn nvim_rt_get_default_lib_dir() -> *const c_char;
     fn nvim_rt_vim_get_prefix_from_exepath(buf: *mut c_char);
     fn nvim_rt_append_path(path: *mut c_char, to_append: *const c_char, max_len: usize) -> c_int;
+    #[link_name = "vim_ispathsep"]
     fn nvim_rt_vim_ispathsep(c: c_int) -> bool;
     fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize);
 

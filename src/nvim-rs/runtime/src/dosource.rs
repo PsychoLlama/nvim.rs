@@ -51,7 +51,9 @@ extern "C" {
 
     // Path utilities
     fn nvim_rt_expand_env_save(fname: *const c_char) -> *mut c_char;
+    #[link_name = "fix_fname"]
     fn nvim_rt_fix_fname(fname: *const c_char) -> *mut c_char;
+    #[link_name = "os_isdir"]
     fn nvim_rt_src_os_isdir(fname: *const c_char) -> bool;
     fn nvim_rt_src_path_tail(fname: *mut c_char) -> *mut c_char;
     fn nvim_rt_STRICMP(a: *const c_char, b: *const c_char) -> c_int;

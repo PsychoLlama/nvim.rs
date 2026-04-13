@@ -283,9 +283,6 @@ void nvim_new_script_vars(int sid) { new_script_vars(sid); }
 //          nvim_scriptitem_set_name, nvim_scriptitem_set_prof_on — replaced by
 //          direct ScriptitemT/script_items field access in Rust.
 
-/// Compare two filenames (path_fnamecmp wrapper).
-int nvim_rt_path_fnamecmp(const char *a, const char *b) { return path_fnamecmp(a, b); }
-
 /// Full implementation of get_scriptname, callable from Rust.
 char *nvim_rt_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
 {
@@ -323,15 +320,11 @@ void nvim_rt_format_script_entry(int i, const char *namebuff)
   vim_snprintf(IObuff, (size_t)IOSIZE, "%3d: %s", i, namebuff);
 }
 
-bool nvim_rt_message_filtered(const char *msg) { return message_filtered(msg); }
-
 /// Output a newline.
 void nvim_rt_msg_putchar_nl(void) { msg_putchar('\n'); }
 
 /// Output a translated string.
 void nvim_rt_msg_outtrans(const char *msg) { msg_outtrans(msg, 0, false); }
-
-void nvim_rt_line_breakcheck(void) { line_breakcheck(); }
 
 /// Allocate a list and set it as the return value.
 void nvim_rt_list_alloc_ret(void *rettv, int count) { tv_list_alloc_ret((typval_T *)rettv, count); }
@@ -461,8 +454,6 @@ const void *nvim_rt_vim_env_iter_rev(const char *val, const void *iter,
   return vim_env_iter_rev(ENV_SEPCHAR, val, iter, dir, len);
 }
 
-bool nvim_rt_after_pathsep(const char *b, const char *s) { return after_pathsep(b, s); }
-
 /// Count occurrences of a character in a buffer.
 size_t nvim_rt_memcnt(const void *s, int c, size_t n) { return memcnt(s, c, n); }
 
@@ -471,8 +462,6 @@ const char *nvim_rt_get_appname(void) { return get_appname(false); }
 char *nvim_rt_stdpaths_get_xdg_var(int type) { return stdpaths_get_xdg_var((XDGVarType)type); }
 
 char *nvim_rt_vim_getenv(const char *name) { return vim_getenv(name); }
-
-bool nvim_rt_os_isdir(const char *name) { return os_isdir(name); }
 
 const char *nvim_rt_get_default_lib_dir(void) { return default_lib_dir; }
 
@@ -484,15 +473,10 @@ int nvim_rt_append_path(char *path, const char *to_append, size_t max_len)
   return append_path(path, to_append, max_len);
 }
 
-bool nvim_rt_vim_ispathsep(int c) { return vim_ispathsep(c); }
-
 _Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
 _Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
 
 bool nvim_rt_pkg_exarg_get_forceit(void *eap) { return ((exarg_T *)eap)->forceit; }
-
-/// Call fix_fname (returns allocated string).
-char *nvim_rt_pkg_fix_fname(const char *fname) { return fix_fname(fname); }
 
 /// Call vim_snprintf.
 int nvim_rt_pkg_snprintf(char *buf, size_t len, const char *fmt, const char *arg)
@@ -517,33 +501,10 @@ void nvim_rt_cmd_expand_set_context(void *xp, int context, const char *pattern)
   ((expand_T *)xp)->xp_pattern = (char *)pattern;
 }
 
-/// Advance pointer by one multibyte character (MB_PTR_ADV).
-int nvim_rt_utfc_ptr2len(const char *p) { return utfc_ptr2len(p); }
-
-bool nvim_rt_vim_ispathsep_nocolon(int c) { return vim_ispathsep_nocolon(c); }
-
-/// Add a path separator to the end of the path if not present.
-void nvim_rt_add_pathsep(char *p) { add_pathsep(p); }
-
-/// Compare first n bytes of filenames (path-aware).
-int nvim_rt_path_fnamencmp(const char *a, const char *b, size_t n) { return path_fnamencmp(a, b, n); }
-
-/// Concatenate two path components into an allocated string.
-char *nvim_rt_concat_fnames(const char *fname1, const char *fname2, bool sep)
-{
-  return concat_fnames((char *)fname1, fname2, sep);
-}
-
 void nvim_rt_set_runtimepath(const char *new_rtp)
 {
   set_option_value_give_err(kOptRuntimepath, CSTR_AS_OPTVAL(new_rtp), 0);
 }
-
-/// get_past_head: skip drive letter/UNC prefix on Windows, identity on Unix.
-char *nvim_rt_get_past_head(const char *path) { return get_past_head((char *)path); }
-
-/// fix_fname: canonicalize path (resolve symlinks, etc).
-char *nvim_rt_fix_fname(const char *fname) { return fix_fname((char *)fname); }
 
 // =============================================================================
 // Phase 2: Accessors for ex_finish / ex_scriptencoding / source_finished
@@ -606,9 +567,6 @@ void nvim_rt_emsg_finish_outside(void) { emsg(_("E168: :finish used outside of a
 
 /// expand_env_save: expand environment variables and return allocated copy.
 char *nvim_rt_expand_env_save(const char *fname) { return expand_env_save((char *)fname); }
-
-/// os_isdir wrapper.
-bool nvim_rt_src_os_isdir(const char *fname) { return os_isdir(fname); }
 
 /// path_tail wrapper.
 char *nvim_rt_src_path_tail(char *fname) { return path_tail(fname); }
@@ -913,9 +871,6 @@ char *nvim_rt_vim_strchr(const char *buf, int c) { return vim_strchr(buf, c); }
 /// p_cpo accessor.
 const char *nvim_rt_get_p_cpo(void) { return p_cpo; }
 
-/// skipwhite wrapper.
-char *nvim_rt_skipwhite(const char *p) { return skipwhite(p); }
-
 /// dbg_breakpoint wrapper.
 void nvim_rt_dbg_breakpoint(const char *fname, int lnum)
 {
@@ -937,5 +892,3 @@ void nvim_rt_script_line_end(void) { script_line_end(); }
 /// Get vc_type from vimconv_T*.
 int nvim_rt_conv_get_type(const void *vcp) { return ((vimconv_T *)vcp)->vc_type; }
 
-/// skipwhite_len wrapper.
-const char *nvim_rt_skipwhite_len(const char *p, size_t len) { return skipwhite_len(p, len); }

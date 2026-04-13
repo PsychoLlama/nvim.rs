@@ -26,6 +26,7 @@ extern "C" {
     fn nvim_new_script_vars(sid: c_int);
 
     // path comparison
+    #[link_name = "path_fnamecmp"]
     fn nvim_rt_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
 
     // get_scriptname delegate
@@ -44,9 +45,11 @@ extern "C" {
     fn nvim_rt_get_iobuff() -> *mut c_char;
     fn nvim_rt_home_replace(name: *const c_char, buf: *mut c_char, len: usize);
     fn nvim_rt_format_script_entry(i: c_int, namebuff: *const c_char);
+    #[link_name = "message_filtered"]
     fn nvim_rt_message_filtered(msg: *const c_char) -> bool;
     fn nvim_rt_msg_putchar_nl();
     fn nvim_rt_msg_outtrans(msg: *const c_char);
+    #[link_name = "line_breakcheck"]
     fn nvim_rt_line_breakcheck();
 
     // free helpers (in runtime.c, not runtime_ffi.c)

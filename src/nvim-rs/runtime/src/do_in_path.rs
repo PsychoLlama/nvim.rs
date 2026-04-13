@@ -28,6 +28,7 @@ extern "C" {
 
     // Path utilities
     fn nvim_rt_path_is_after(buf: *const c_char, buflen: usize) -> bool;
+    #[link_name = "add_pathsep"]
     fn nvim_rt_add_pathsep(p: *mut c_char);
 
     // Verbose messaging

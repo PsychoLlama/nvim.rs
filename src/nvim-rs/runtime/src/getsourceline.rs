@@ -29,7 +29,9 @@ extern "C" {
     fn ga_set_growsize(gap: *mut GarrayT, size: c_int);
 
     // Charset / path
+    #[link_name = "skipwhite"]
     fn nvim_rt_skipwhite(p: *const c_char) -> *mut c_char;
+    #[link_name = "skipwhite_len"]
     fn nvim_rt_skipwhite_len(p: *const c_char, len: usize) -> *const c_char;
     fn nvim_rt_get_p_cpo() -> *const c_char;
     fn nvim_rt_vim_strchr(buf: *const c_char, c: c_int) -> *mut c_char;
@@ -65,6 +67,7 @@ extern "C" {
     fn nvim_rt_cookie_get_buflines_len(cookie: *mut c_void) -> c_int;
     fn nvim_rt_cookie_get_bufline(cookie: *mut c_void, idx: c_int) -> *const c_char;
     fn nvim_rt_cookie_get_conv(cookie: *mut c_void) -> *mut c_void;
+    #[link_name = "line_breakcheck"]
     fn nvim_rt_line_breakcheck();
 
     // Encoding conversion

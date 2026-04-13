@@ -37,12 +37,19 @@ extern "C" {
     );
 
     // Phase 3: add_pack_dir_to_rtp helpers
+    #[link_name = "utfc_ptr2len"]
     fn nvim_rt_utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "vim_ispathsep_nocolon"]
     fn nvim_rt_vim_ispathsep_nocolon(c: c_int) -> bool;
+    #[link_name = "vim_ispathsep"]
     fn nvim_rt_vim_ispathsep(c: c_int) -> bool;
+    #[link_name = "os_isdir"]
     fn nvim_rt_os_isdir(name: *const c_char) -> bool;
+    #[link_name = "add_pathsep"]
     fn nvim_rt_add_pathsep(p: *mut c_char);
+    #[link_name = "path_fnamencmp"]
     fn nvim_rt_path_fnamencmp(a: *const c_char, b: *const c_char, n: usize) -> c_int;
+    #[link_name = "concat_fnames"]
     fn nvim_rt_concat_fnames(
         fname1: *const c_char,
         fname2: *const c_char,
@@ -50,7 +57,9 @@ extern "C" {
     ) -> *mut c_char;
     fn try_malloc(n: usize) -> *mut c_void;
     fn nvim_rt_set_runtimepath(new_rtp: *const c_char);
+    #[link_name = "get_past_head"]
     fn nvim_rt_get_past_head(path: *const c_char) -> *mut c_char;
+    #[link_name = "fix_fname"]
     fn nvim_rt_fix_fname(fname: *const c_char) -> *mut c_char;
     fn strstr(haystack: *const c_char, needle: *const c_char) -> *mut c_char;
     fn memmove(dst: *mut c_void, src: *const c_void, n: usize) -> *mut c_void;
@@ -69,6 +78,7 @@ extern "C" {
 
     // Package management accessors (in runtime_ffi.c)
     fn nvim_rt_pkg_exarg_get_forceit(eap: *mut c_void) -> bool;
+    #[link_name = "fix_fname"]
     fn nvim_rt_pkg_fix_fname(fname: *const c_char) -> *mut c_char;
     fn nvim_rt_pkg_snprintf(
         buf: *mut c_char,
