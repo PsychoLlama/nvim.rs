@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 libc = "0.2"
 nvim-ascii = { path = "../ascii" }
+nvim-buffer = { path = "../buffer" }
 nvim-window = { path = "../window" }
 
 [lints]

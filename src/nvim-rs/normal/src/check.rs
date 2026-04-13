@@ -160,8 +160,6 @@ extern "C" {
     fn nvim_update_last_cursormoved();
     fn nvim_curbuf_changedtick_changed() -> bool;
     fn nvim_curbuf_update_last_changedtick();
-    fn nvim_curbuf_b_changed_invalid_get() -> bool;
-    fn nvim_curbuf_b_changed_invalid_clear();
     static mut curbuf: *mut std::ffi::c_void;
 
     fn nvim_get_curwin() -> WinHandle;
@@ -280,7 +278,9 @@ unsafe fn normal_check_text_changed() {
 unsafe fn normal_check_buffer_modified() {
     if nvim_get_finish_op() == 0
         && has_event(EVENT_BUFMODIFIEDSET) != 0
-        && nvim_curbuf_b_changed_invalid_get()
+        && nvim_buffer::buf_struct::buf_ref(nvim_buffer::BufHandle::from_ptr(curbuf.cast()))
+            .b_changed_invalid
+            != 0
     {
         apply_autocmds(
             EVENT_BUFMODIFIEDSET,
@@ -289,7 +289,8 @@ unsafe fn normal_check_buffer_modified() {
             false,
             curbuf,
         );
-        nvim_curbuf_b_changed_invalid_clear();
+        nvim_buffer::buf_struct::buf_mut(nvim_buffer::BufHandle::from_ptr(curbuf.cast()))
+            .b_changed_invalid = 0;
     }
 }
 
