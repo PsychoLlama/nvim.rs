@@ -7,7 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::constants::MAXPATHL;
-use crate::globals;
+use crate::globals::{self, ScriptitemT};
 use crate::{LinenrT, ScidT, ScriptItemHandle};
 
 // =============================================================================
@@ -22,23 +22,8 @@ const SID_LUA: ScidT = -8;
 
 #[allow(dead_code)]
 extern "C" {
-    // --- Phase 1 accessors (existing) ---
-    fn nvim_script_items_get_len() -> c_int;
-    fn nvim_script_item_get(id: ScidT) -> ScriptItemHandle;
-    fn nvim_scriptitem_get_name(si: ScriptItemHandle) -> *const c_char;
-    fn nvim_scriptitem_is_lua(si: ScriptItemHandle) -> bool;
-    fn nvim_scriptitem_get_prof_on(si: ScriptItemHandle) -> bool;
-
-    // --- Phase 2 accessors ---
-
-    // script_items garray operations
-    fn nvim_script_items_ga_grow(n: c_int);
-    fn nvim_script_items_inc_len();
-    fn nvim_script_items_set_item(id: c_int, si: ScriptItemHandle);
-    fn nvim_xcalloc_scriptitem() -> ScriptItemHandle;
+    // Allocate script-local variables for a script.
     fn nvim_new_script_vars(sid: c_int);
-    fn nvim_scriptitem_set_name(si: ScriptItemHandle, name: *mut c_char);
-    fn nvim_scriptitem_set_prof_on(si: ScriptItemHandle, val: bool);
 
     // path comparison
     fn nvim_rt_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
@@ -98,6 +83,22 @@ extern "C" {
 }
 
 // =============================================================================
+// ScriptItemHandle <-> *mut ScriptitemT conversions
+// =============================================================================
+
+/// Convert a `*mut ScriptitemT` to a `ScriptItemHandle`.
+#[inline]
+fn si_handle(si: *mut ScriptitemT) -> ScriptItemHandle {
+    ScriptItemHandle(si.cast::<c_void>())
+}
+
+/// Convert a `ScriptItemHandle` to a `*mut ScriptitemT`.
+#[inline]
+fn si_ptr(handle: ScriptItemHandle) -> *mut ScriptitemT {
+    handle.as_ptr().cast::<ScriptitemT>()
+}
+
+// =============================================================================
 // Script Item Access (existing helpers)
 // =============================================================================
 
@@ -105,10 +106,7 @@ extern "C" {
 ///
 /// Returns null handle if ID is invalid.
 pub unsafe fn rs_script_item_get(id: ScidT) -> ScriptItemHandle {
-    if id <= 0 || id > nvim_script_items_get_len() {
-        return ScriptItemHandle::null();
-    }
-    nvim_script_item_get(id)
+    si_handle(globals::script_item_get(id))
 }
 
 /// Get the name of a script item.
@@ -116,7 +114,7 @@ pub unsafe fn rs_script_item_name(si: ScriptItemHandle) -> *const c_char {
     if si.is_null() {
         return ptr::null();
     }
-    nvim_scriptitem_get_name(si)
+    (*si_ptr(si)).sn_name
 }
 
 /// Check if a script item is a Lua script.
@@ -124,7 +122,7 @@ pub unsafe fn rs_script_item_is_lua(si: ScriptItemHandle) -> bool {
     if si.is_null() {
         return false;
     }
-    nvim_scriptitem_is_lua(si)
+    (*si_ptr(si)).sn_lua
 }
 
 /// Check if a script item has profiling enabled.
@@ -132,7 +130,7 @@ pub unsafe fn rs_script_item_profiling(si: ScriptItemHandle) -> bool {
     if si.is_null() {
         return false;
     }
-    nvim_scriptitem_get_prof_on(si)
+    (*si_ptr(si)).sn_prof_on
 }
 
 // =============================================================================
@@ -141,12 +139,12 @@ pub unsafe fn rs_script_item_profiling(si: ScriptItemHandle) -> bool {
 
 /// Get the total number of sourced scripts.
 pub unsafe fn rs_script_count() -> c_int {
-    nvim_script_items_get_len()
+    globals::script_items_get_len()
 }
 
 /// Check if a script ID is valid.
 pub unsafe fn rs_script_id_is_valid(id: ScidT) -> bool {
-    id > 0 && id <= nvim_script_items_get_len()
+    id > 0 && id <= globals::script_items_get_len()
 }
 
 /// Get the name of a script by ID.
@@ -187,26 +185,26 @@ pub unsafe extern "C" fn rs_new_script_item(
     }
 
     // Grow the garray to accommodate the new sid
-    let ga_len = nvim_script_items_get_len();
-    nvim_script_items_ga_grow(sid - ga_len);
+    let ga_len = globals::script_items_get_len();
+    globals::script_items_ga_grow(sid - ga_len);
 
     // Fill in any gaps between ga_len and sid
-    while nvim_script_items_get_len() < sid {
-        let si = nvim_xcalloc_scriptitem();
-        nvim_script_items_inc_len();
-        let current_len = nvim_script_items_get_len();
-        nvim_script_items_set_item(current_len, si);
-        nvim_scriptitem_set_name(si, ptr::null_mut());
+    while globals::script_items_get_len() < sid {
+        let si = globals::xcalloc_scriptitem();
+        globals::script_items_inc_len();
+        let current_len = globals::script_items_get_len();
+        globals::script_item_set(current_len, si);
+        (*si).sn_name = ptr::null_mut();
 
         // Allocate the local script variables to use for this script.
         nvim_new_script_vars(current_len);
 
-        nvim_scriptitem_set_prof_on(si, false);
+        (*si).sn_prof_on = false;
     }
 
-    let si = nvim_script_item_get(sid);
-    nvim_scriptitem_set_name(si, name);
-    si
+    let si = globals::script_item_get(sid);
+    (*si).sn_name = name;
+    si_handle(si)
 }
 
 // --- 2. find_script_by_name ---
@@ -225,12 +223,12 @@ pub unsafe extern "C" fn rs_find_script_by_name(name: *const c_char) -> c_int {
         return -1;
     }
 
-    let count = nvim_script_items_get_len();
+    let count = globals::script_items_get_len();
     // Search from the end (most recently loaded scripts first), matching C behavior
     let mut sid = count;
     while sid > 0 {
-        let si = nvim_script_item_get(sid);
-        let si_name = nvim_scriptitem_get_name(si);
+        let si = globals::script_item_get(sid);
+        let si_name = (*si).sn_name.cast_const();
 
         if !si_name.is_null() && nvim_rt_path_fnamecmp(si_name, name) == 0 {
             return sid;
@@ -255,8 +253,8 @@ pub unsafe extern "C" fn rs_script_is_lua(sid: ScidT) -> bool {
     if !rs_script_id_is_valid(sid) {
         return false;
     }
-    let si = nvim_script_item_get(sid);
-    nvim_scriptitem_is_lua(si)
+    let si = globals::script_item_get(sid);
+    (*si).sn_lua
 }
 
 // --- 4. get_scriptname ---
@@ -297,8 +295,8 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
                 nvim_rt_emsg_invarg();
                 return;
             }
-            let si = nvim_script_item_get(line2);
-            let sn_name = nvim_scriptitem_get_name(si);
+            let si = globals::script_item_get(line2);
+            let sn_name = (*si).sn_name.cast_const();
             nvim_rt_exarg_set_arg(eap, sn_name.cast_mut());
         } else {
             let arg = nvim_rt_exarg_get_arg(eap);
@@ -311,14 +309,14 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
     }
 
     // List all scripts
-    let count = nvim_script_items_get_len();
+    let count = globals::script_items_get_len();
     let namebuff = nvim_rt_get_namebuff();
     let iobuff = nvim_rt_get_iobuff();
 
     let mut i: c_int = 1;
     while i <= count && !globals::got_int {
-        let si = nvim_script_item_get(i);
-        let sn_name = nvim_scriptitem_get_name(si);
+        let si = globals::script_item_get(i);
+        let sn_name = (*si).sn_name.cast_const();
 
         if !sn_name.is_null() {
             nvim_rt_home_replace(sn_name, namebuff, MAXPATHL);
@@ -388,7 +386,7 @@ pub unsafe extern "C" fn rs_f_getscriptinfo(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    let count = nvim_script_items_get_len();
+    let count = globals::script_items_get_len();
     nvim_rt_list_alloc_ret(rettv, count);
 
     if !nvim_rt_check_for_opt_dict_arg(argvars) {
@@ -428,8 +426,8 @@ pub unsafe extern "C" fn rs_f_getscriptinfo(
 
     let mut i = start;
     while (i == sid as c_int || sid <= 0) && i <= count {
-        let si = nvim_script_item_get(i);
-        let sn_name = nvim_scriptitem_get_name(si);
+        let si = globals::script_item_get(i);
+        let sn_name = (*si).sn_name.cast_const();
 
         if sn_name.is_null() {
             i += 1;

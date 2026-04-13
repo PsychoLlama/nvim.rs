@@ -22,6 +22,7 @@ use crate::constants::{
 };
 use crate::doso;
 use crate::globals;
+use crate::globals::ScriptitemT;
 
 // =============================================================================
 // Type aliases
@@ -29,6 +30,15 @@ use crate::globals;
 
 type LinenrT = i32;
 type ScidT = c_int;
+
+/// Cast a `*mut c_void` script item pointer to `*mut ScriptitemT`.
+///
+/// # Safety
+/// The pointer must be a valid `scriptitem_T *` allocated by Neovim.
+#[inline]
+unsafe fn si_cast(si: *mut c_void) -> *mut ScriptitemT {
+    si.cast::<ScriptitemT>()
+}
 
 // =============================================================================
 // C FFI: globals and functions needed by do_source_ext
@@ -47,11 +57,7 @@ extern "C" {
     fn nvim_rt_STRICMP(a: *const c_char, b: *const c_char) -> c_int;
     fn path_with_extension(path: *const c_char, ext: *const c_char) -> bool;
 
-    // Script lookup / management
-    fn nvim_rt_script_item_get(sid: c_int) -> *mut c_void;
-    fn nvim_rt_si_get_sn_lua(si: *mut c_void) -> bool;
-    fn nvim_rt_si_get_sn_name(si: *mut c_void) -> *const c_char;
-    fn nvim_rt_si_set_sn_lua(si: *mut c_void, val: bool);
+    // Script lookup / management (remaining complex wrappers)
 
     // Autocmds
     fn rs_has_autocmd(event: c_int, sfname: *const c_char, buf_fnum: c_int) -> bool;
@@ -105,9 +111,6 @@ extern "C" {
     fn nvim_rt_prof_child_exit(wait_start: *mut u64);
     fn nvim_rt_save_funccal() -> *mut c_void;
     fn nvim_rt_restore_funccal(entry: *mut c_void);
-    fn nvim_rt_si_get_sn_prof_on(si: *mut c_void) -> bool;
-    fn nvim_rt_si_set_sn_pr_force(si: *mut c_void, val: bool);
-    fn nvim_rt_si_inc_pr_count(si: *mut c_void);
     fn nvim_rt_has_profiling(file: bool, name: *const c_char, forceit: *mut bool) -> bool;
     fn nvim_rt_profile_init(si: *mut c_void);
     fn nvim_rt_profile_start() -> u64;
@@ -485,7 +488,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
 
     if sid > 0 {
         // Loading the same script again
-        si = nvim_rt_script_item_get(sid);
+        si = globals::script_item_get_valid(sid).cast::<c_void>();
     } else if str_arg.is_null() {
         // It's new, generate a new SID
         let mut new_sid: ScidT = 0;
@@ -495,10 +498,10 @@ pub unsafe extern "C" fn rs_do_source_ext(
         )
         .as_ptr();
         sid = new_sid;
-        let is_lua = path_with_extension(nvim_rt_si_get_sn_name(si), c"lua".as_ptr());
-        nvim_rt_si_set_sn_lua(si, is_lua);
+        let is_lua = path_with_extension((*si_cast(si)).sn_name, c"lua".as_ptr());
+        (*si_cast(si)).sn_lua = is_lua;
         // Make a separate copy for cookie/fname_exp -- si->sn_name now owns the original.
-        fname_exp = xstrdup(nvim_rt_si_get_sn_name(si));
+        fname_exp = xstrdup((*si_cast(si)).sn_name);
         nvim_rt_cookie_set_fname(cookie, fname_exp);
         if !ret_sid.is_null() {
             *ret_sid = sid;
@@ -515,21 +518,21 @@ pub unsafe extern "C" fn rs_do_source_ext(
     let es_name = if si.is_null() {
         nvim_rt_cookie_get_fname(cookie).cast_mut()
     } else {
-        nvim_rt_si_get_sn_name(si).cast_mut()
+        (*si_cast(si)).sn_name
     };
     estack_push(ETYPE_SCRIPT, es_name, 0);
 
     // Profiling
     if l_do_profiling == PROF_YES && !si.is_null() {
         let mut forceit = false;
-        if !nvim_rt_si_get_sn_prof_on(si)
-            && nvim_rt_has_profiling(true, nvim_rt_si_get_sn_name(si), &raw mut forceit)
+        if !(*si_cast(si)).sn_prof_on
+            && nvim_rt_has_profiling(true, (*si_cast(si)).sn_name, &raw mut forceit)
         {
             nvim_rt_profile_init(si);
-            nvim_rt_si_set_sn_pr_force(si, forceit);
+            (*si_cast(si)).sn_pr_force = forceit;
         }
-        if nvim_rt_si_get_sn_prof_on(si) {
-            nvim_rt_si_inc_pr_count(si);
+        if (*si_cast(si)).sn_prof_on {
+            (*si_cast(si)).sn_pr_count += 1;
             let tm = nvim_rt_profile_start();
             let zero = nvim_rt_profile_zero();
             nvim_rt_si_set_pr_start(si, tm);
@@ -555,7 +558,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
             let flags = DOCMD_VERBOSE | DOCMD_NOWAIT | DOCMD_REPEAT;
             nvim_rt_do_cmdline_source(ptr::null_mut(), cookie, flags);
         }
-    } else if !si.is_null() && nvim_rt_si_get_sn_lua(si) {
+    } else if !si.is_null() && (*si_cast(si)).sn_lua {
         nvim_rt_nlua_exec_file(fname_cookie);
     } else {
         // Read first line to check for UTF-8 BOM
@@ -587,8 +590,8 @@ pub unsafe extern "C" fn rs_do_source_ext(
     // Post-execution profiling
     if l_do_profiling == PROF_YES && !si.is_null() {
         // Re-fetch si as script_items may have been reallocated
-        si = nvim_rt_script_item_get(globals::get_current_sctx_sid());
-        if nvim_rt_si_get_sn_prof_on(si) {
+        si = globals::script_item_get_valid(globals::get_current_sctx_sid()).cast::<c_void>();
+        if (*si_cast(si)).sn_prof_on {
             nvim_rt_si_update_profile(si, wait_start);
         }
     }

@@ -91,6 +91,61 @@ unsafe impl Send for EstackT {}
 unsafe impl Sync for EstackT {}
 
 // =============================================================================
+// ScriptitemT repr(C) mirror
+// =============================================================================
+
+/// Mirrors `scriptitem_T` from runtime_defs.h.
+///
+/// Layout (verified by `_Static_assert(offsetof(...))` in runtime_ffi.c):
+/// - offset 0:   sn_vars        (*mut c_void)
+/// - offset 8:   sn_name        (*mut c_char)
+/// - offset 16:  sn_lua         (bool)
+/// - offset 17:  sn_prof_on     (bool)
+/// - offset 18:  sn_pr_force    (bool)
+/// - offset 19:  _pad           (5 bytes, align to 8 for u64)
+/// - offset 24:  sn_pr_child    (u64 = proftime_T)
+/// - offset 32:  sn_pr_nest     (i32)
+/// - offset 36:  sn_pr_count    (i32)
+/// - offset 40:  sn_pr_total    (u64)
+/// - offset 48:  sn_pr_self     (u64)
+/// - offset 56:  sn_pr_start    (u64)
+/// - offset 64:  sn_pr_children (u64)
+/// - offset 72:  sn_prl_ga      (GarrayT = 24 bytes)
+/// - offset 96:  sn_prl_start   (u64)
+/// - offset 104: sn_prl_children (u64)
+/// - offset 112: sn_prl_wait    (u64)
+/// - offset 120: sn_prl_idx     (LinenrT = i32)
+/// - offset 124: sn_prl_execed  (i32)
+///
+/// Total: 128 bytes
+#[repr(C)]
+pub struct ScriptitemT {
+    pub sn_vars: *mut c_void,
+    pub sn_name: *mut c_char,
+    pub sn_lua: bool,
+    pub sn_prof_on: bool,
+    pub sn_pr_force: bool,
+    _pad: [u8; 5],
+    pub sn_pr_child: u64,
+    pub sn_pr_nest: i32,
+    pub sn_pr_count: i32,
+    pub sn_pr_total: u64,
+    pub sn_pr_self: u64,
+    pub sn_pr_start: u64,
+    pub sn_pr_children: u64,
+    pub sn_prl_ga: GarrayT,
+    pub sn_prl_start: u64,
+    pub sn_prl_children: u64,
+    pub sn_prl_wait: u64,
+    pub sn_prl_idx: LinenrT,
+    pub sn_prl_execed: i32,
+}
+
+// SAFETY: ScriptitemT is only accessed from a single thread in practice.
+unsafe impl Send for ScriptitemT {}
+unsafe impl Sync for ScriptitemT {}
+
+// =============================================================================
 // SctxT repr(C) mirror
 // =============================================================================
 
@@ -134,8 +189,15 @@ extern "C" {
     /// The global execution stack garray (`exestack` in C).
     pub static mut exestack: GarrayT;
 
+    /// The global script items garray (`script_items` in C).
+    /// Each element is a `*mut ScriptitemT` (pointer-to-scriptitem).
+    pub static mut script_items: GarrayT;
+
     /// `ga_grow` for growing a garray.
     fn ga_grow(gap: *mut GarrayT, n: c_int);
+
+    /// `xcalloc` for allocating zeroed memory.
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
 }
 
 // =============================================================================
@@ -270,6 +332,72 @@ pub unsafe fn exestack_has_data() -> bool {
 pub unsafe fn get_sourcing_lnum_direct() -> LinenrT {
     debug_assert!(exestack.ga_len > 0);
     (*exestack_get_entry(exestack.ga_len - 1)).es_lnum
+}
+
+// =============================================================================
+// Script items helpers
+// =============================================================================
+
+/// Grow `script_items` garray by `n` entries.
+#[inline]
+pub unsafe fn script_items_ga_grow(n: c_int) {
+    ga_grow(&raw mut script_items, n);
+}
+
+/// Get the number of script items.
+#[inline]
+pub unsafe fn script_items_get_len() -> c_int {
+    script_items.ga_len
+}
+
+/// Increment script_items ga_len.
+#[inline]
+pub unsafe fn script_items_inc_len() {
+    script_items.ga_len += 1;
+}
+
+/// Get a `*mut ScriptitemT` at 1-based `id`, or null if out of bounds.
+/// Mirrors `SCRIPT_ITEM(id)` = `ga_data[id-1]` as a pointer-to-pointer.
+///
+/// # Safety
+/// Caller must ensure `id` is valid (checked by caller or use `script_item_get`).
+#[inline]
+pub unsafe fn script_item_ptr(id: c_int) -> *mut *mut ScriptitemT {
+    script_items
+        .ga_data
+        .cast::<*mut ScriptitemT>()
+        .add((id - 1) as usize)
+}
+
+/// Get the `ScriptitemT*` at 1-based `id`, or null if out of bounds.
+#[inline]
+pub unsafe fn script_item_get(id: c_int) -> *mut ScriptitemT {
+    if id <= 0 || id > script_items.ga_len {
+        return std::ptr::null_mut();
+    }
+    *script_item_ptr(id)
+}
+
+/// Set the `ScriptitemT*` at 1-based `id`.
+#[inline]
+pub unsafe fn script_item_set(id: c_int, si: *mut ScriptitemT) {
+    *script_item_ptr(id) = si;
+}
+
+/// Get the `ScriptitemT*` at 1-based `sid` if valid (SCRIPT_ID_VALID check).
+#[inline]
+pub unsafe fn script_item_get_valid(sid: c_int) -> *mut ScriptitemT {
+    if sid > 0 && sid <= script_items.ga_len {
+        *script_item_ptr(sid)
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+/// Allocate a new zero-initialized ScriptitemT.
+#[inline]
+pub unsafe fn xcalloc_scriptitem() -> *mut ScriptitemT {
+    xcalloc(1, size_of::<ScriptitemT>()).cast::<ScriptitemT>()
 }
 
 // =============================================================================

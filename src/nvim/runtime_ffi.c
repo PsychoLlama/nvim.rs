@@ -158,21 +158,26 @@ int nvim_estack_format_entry(char *buf, size_t buflen,
                       type_name, name, lnum, dots);
 }
 
-int nvim_script_items_get_len(void) { return script_items.ga_len; }
+// Phase 4: validate scriptitem_T layout mirrored in Rust (globals.rs ScriptitemT)
+_Static_assert(sizeof(scriptitem_T) == 128, "scriptitem_T size must be 128");
+_Static_assert(offsetof(scriptitem_T, sn_vars) == 0, "scriptitem_T.sn_vars offset");
+_Static_assert(offsetof(scriptitem_T, sn_name) == 8, "scriptitem_T.sn_name offset");
+_Static_assert(offsetof(scriptitem_T, sn_lua) == 16, "scriptitem_T.sn_lua offset");
+_Static_assert(offsetof(scriptitem_T, sn_prof_on) == 17, "scriptitem_T.sn_prof_on offset");
+_Static_assert(offsetof(scriptitem_T, sn_pr_force) == 18, "scriptitem_T.sn_pr_force offset");
+_Static_assert(offsetof(scriptitem_T, sn_pr_child) == 24, "scriptitem_T.sn_pr_child offset");
+_Static_assert(offsetof(scriptitem_T, sn_pr_nest) == 32, "scriptitem_T.sn_pr_nest offset");
+_Static_assert(offsetof(scriptitem_T, sn_pr_count) == 36, "scriptitem_T.sn_pr_count offset");
+_Static_assert(offsetof(scriptitem_T, sn_pr_total) == 40, "scriptitem_T.sn_pr_total offset");
+_Static_assert(offsetof(scriptitem_T, sn_pr_children) == 64, "scriptitem_T.sn_pr_children offset");
+_Static_assert(offsetof(scriptitem_T, sn_prl_ga) == 72, "scriptitem_T.sn_prl_ga offset");
+_Static_assert(offsetof(scriptitem_T, sn_prl_start) == 96, "scriptitem_T.sn_prl_start offset");
+_Static_assert(offsetof(scriptitem_T, sn_prl_idx) == 120, "scriptitem_T.sn_prl_idx offset");
+_Static_assert(offsetof(scriptitem_T, sn_prl_execed) == 124, "scriptitem_T.sn_prl_execed offset");
 
-scriptitem_T *nvim_script_item_get(int id)
-{
-  if (id <= 0 || id > script_items.ga_len) {
-    return NULL;
-  }
-  return SCRIPT_ITEM(id);
-}
-
-const char *nvim_scriptitem_get_name(scriptitem_T *si) { return si->sn_name; }
-
-bool nvim_scriptitem_is_lua(scriptitem_T *si) { return si->sn_lua; }
-
-bool nvim_scriptitem_get_prof_on(scriptitem_T *si) { return si->sn_prof_on; }
+// Deleted: nvim_script_items_get_len, nvim_script_item_get, nvim_scriptitem_get_name,
+//          nvim_scriptitem_is_lua, nvim_scriptitem_get_prof_on — replaced by direct
+//          ScriptitemT field access in Rust.
 
 int nvim_estack_get_sctx_sid(estack_T *entry)
 {
@@ -270,23 +275,13 @@ _Static_assert(SID_LUA == -8, "SID_LUA");
 _Static_assert(SID_API_CLIENT == -9, "SID_API_CLIENT");
 _Static_assert(SID_STR == -10, "SID_STR");
 
-/// Grow script_items garray by n entries.
-void nvim_script_items_ga_grow(int n) { ga_grow(&script_items, n); }
-
-/// Increment script_items ga_len.
-void nvim_script_items_inc_len(void) { script_items.ga_len++; }
-
-void nvim_script_items_set_item(int id, scriptitem_T *si) { SCRIPT_ITEM(id) = si; }
-
-/// Allocate a new scriptitem_T (xcalloc).
-scriptitem_T *nvim_xcalloc_scriptitem(void) { return xcalloc(1, sizeof(scriptitem_T)); }
-
 /// Allocate script-local variables for a script.
 void nvim_new_script_vars(int sid) { new_script_vars(sid); }
 
-void nvim_scriptitem_set_name(scriptitem_T *si, char *name) { si->sn_name = name; }
-
-void nvim_scriptitem_set_prof_on(scriptitem_T *si, bool val) { si->sn_prof_on = val; }
+// Deleted: nvim_script_items_ga_grow, nvim_script_items_inc_len,
+//          nvim_script_items_set_item, nvim_xcalloc_scriptitem,
+//          nvim_scriptitem_set_name, nvim_scriptitem_set_prof_on — replaced by
+//          direct ScriptitemT/script_items field access in Rust.
 
 /// Compare two filenames (path_fnamecmp wrapper).
 int nvim_rt_path_fnamecmp(const char *a, const char *b) { return path_fnamecmp(a, b); }
@@ -690,18 +685,10 @@ void *nvim_rt_save_funccal(void)
 }
 void nvim_rt_restore_funccal(void *entry) { restore_funccal(); xfree(entry); }
 
-/// SCRIPT_ITEM accessor.
-void *nvim_rt_script_item_get(int sid) { return SCRIPT_ID_VALID(sid) ? SCRIPT_ITEM(sid) : NULL; }
-
-/// scriptitem profiling accessors.
-bool nvim_rt_si_get_sn_prof_on(void *si) { return ((scriptitem_T *)si)->sn_prof_on; }
-void nvim_rt_si_set_sn_prof_on(void *si, bool val) { ((scriptitem_T *)si)->sn_prof_on = val; }
-bool nvim_rt_si_get_sn_pr_force(void *si) { return ((scriptitem_T *)si)->sn_pr_force; }
-void nvim_rt_si_set_sn_pr_force(void *si, bool val) { ((scriptitem_T *)si)->sn_pr_force = val; }
-void nvim_rt_si_inc_pr_count(void *si) { ((scriptitem_T *)si)->sn_pr_count++; }
-uint64_t nvim_rt_si_get_pr_children(void *si) { return (uint64_t)((scriptitem_T *)si)->sn_pr_children; }
-const char *nvim_rt_si_get_sn_name(void *si) { return ((scriptitem_T *)si)->sn_name; }
-bool nvim_rt_si_get_sn_lua(void *si) { return ((scriptitem_T *)si)->sn_lua; }
+// Deleted: nvim_rt_script_item_get, nvim_rt_si_get_sn_prof_on, nvim_rt_si_set_sn_prof_on,
+//          nvim_rt_si_get_sn_pr_force, nvim_rt_si_set_sn_pr_force, nvim_rt_si_inc_pr_count,
+//          nvim_rt_si_get_pr_children, nvim_rt_si_get_sn_name, nvim_rt_si_get_sn_lua —
+//          replaced by direct ScriptitemT field access in Rust.
 
 /// has_profiling wrapper.
 bool nvim_rt_has_profiling(bool file, const char *name, bool *forceit) { return has_profiling(file, name, forceit); }
@@ -734,11 +721,8 @@ void nvim_rt_si_set_pr_start(void *si, uint64_t tm)
   ((scriptitem_T *)si)->sn_pr_children = profile_zero();
 }
 
-/// Set si->sn_lua.
-void nvim_rt_si_set_sn_lua(void *si, bool val) { ((scriptitem_T *)si)->sn_lua = val; }
-
-/// Set si->sn_name (takes ownership).
-void nvim_rt_si_set_sn_name(void *si, char *name) { ((scriptitem_T *)si)->sn_name = name; }
+// Deleted: nvim_rt_si_set_sn_lua, nvim_rt_si_set_sn_name —
+//          replaced by direct ScriptitemT field writes in Rust.
 
 /// emsg for E_INTERR.
 void nvim_rt_emsg_interr(void) { emsg(_(e_interr)); }
