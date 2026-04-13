@@ -85,11 +85,8 @@ extern int rs_read_buffer(bool read_stdin, exarg_T *eap, int flags);
 extern void getout(int exitval);
 
 int nvim_buf_get_handle(buf_T *buf) { return buf ? buf->b_fnum : 0; }
-char nvim_buf_get_buftype(buf_T *buf) { return buf->b_p_bt[0]; }
-char nvim_buf_get_buftype_2(buf_T *buf) { return buf->b_p_bt[2]; }
 int nvim_buf_get_help(buf_T *buf) { return buf->b_help; }
 int nvim_buf_get_terminal(buf_T *buf) { return buf->terminal != NULL; }
-char nvim_buf_get_fileformat(buf_T *buf) { return buf->b_p_ff[0]; }
 buf_T *nvim_get_lastbuf(void) { return lastbuf; }
 buf_T *nvim_buf_get_prev(buf_T *buf) { return buf->b_prev; }
 buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
@@ -127,8 +124,6 @@ char *nvim_get_namebuff(void) { return NameBuff; }
 OptInt nvim_buf_get_p_sts(buf_T *buf) { return buf ? buf->b_p_sts : 0; }
 const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w_cursor.lnum); }
 int nvim_buf_get_ml_mfp_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
-int nvim_buf_file_id_valid(buf_T *buf) { return buf->file_id_valid; }
-void nvim_buf_get_file_id(buf_T *buf, void *out) { *(FileID *)out = buf->file_id; }
 
 void nvim_buf_set_name_body(buf_T *buf, char *name)
 {
@@ -363,7 +358,6 @@ void nvim_buf_signcols_set_autom(buf_T *buf, bool val) { buf->b_signcols.autom =
 int nvim_buf_signcols_get_max(buf_T *buf) { return buf->b_signcols.max; }
 void nvim_buf_signcols_set_max(buf_T *buf, int val) { buf->b_signcols.max = val; }
 int nvim_buf_signcols_get_last_max(buf_T *buf) { return buf->b_signcols.last_max; }
-void nvim_buf_signcols_set_last_max(buf_T *buf, int val) { buf->b_signcols.last_max = val; }
 int nvim_buf_signcols_get_count(buf_T *buf, int idx) { return buf->b_signcols.count[idx]; }
 void nvim_buf_signcols_clear(buf_T *buf) { buf->b_signcols.max = 0; CLEAR_FIELD(buf->b_signcols.count); }
 size_t nvim_buf_wininfo_count(buf_T *buf) { return kv_size(buf->b_wininfo); }
@@ -373,7 +367,6 @@ bool nvim_wininfo_get_optset(WinInfo *wip) { return wip->wi_optset; }
 bool nvim_wininfo_get_wo_diff(WinInfo *wip) { return wip->wi_opt.wo_diff; }
 int nvim_wininfo_get_changelistidx(WinInfo *wip) { return wip->wi_changelistidx; }
 fmark_T *nvim_wininfo_get_mark_ptr(WinInfo *wip) { return &wip->wi_mark; }
-bool nvim_wininfo_get_fold_manual(WinInfo *wip) { return wip->wi_fold_manual; }
 bool nvim_wininfo_win_in_curtab(WinInfo *wip)
 { FOR_ALL_WINDOWS_IN_TAB(wp, curtab) { if (wip->wi_win == wp) { return true; } } return false; }
 WinInfo *nvim_buf_wininfo_find_and_detach(buf_T *buf, win_T *win, bool copy_options,
@@ -437,8 +430,6 @@ void nvim_curwin_set_changelistidx(int val) { curwin->w_changelistidx = val; }
 bool nvim_curwin_config_is_minimal(void) { return curwin->w_config.style == kWinStyleMinimal; }
 void nvim_curwin_set_p_fdl(int val) { curwin->w_p_fdl = (OptInt)val; }
 void nvim_wininfo_set_changelistidx(WinInfo *wip, int val) { wip->wi_changelistidx = val; }
-void nvim_wininfo_set_optset(WinInfo *wip, bool val) { wip->wi_optset = val; }
-void nvim_wininfo_set_fold_manual(WinInfo *wip, bool val) { wip->wi_fold_manual = val; }
 void nvim_wininfo_set_win(WinInfo *wip, win_T *win) { wip->wi_win = win; }
 void nvim_buf_wininfo_remove(buf_T *buf, size_t i) { kv_shift(buf->b_wininfo, i, 1); }
 fmark_T *nvim_get_no_position_ptr(void)
@@ -657,10 +648,6 @@ int nvim_buf_is_empty(buf_T *buf) { return buf_is_empty(buf) ? 1 : 0; }
 void nvim_wipe_buffer(buf_T *buf) { wipe_buffer(buf, false); }
 void nvim_buf_updates_unload(buf_T *buf) { buf_updates_unload(buf, true); }
 void nvim_do_modelines(void) { do_modelines(0); }
-void nvim_u_savecommon_reload(buf_T *buf) {
-  u_sync(false);
-  u_savecommon(buf, 0, buf->b_ml.ml_line_count + 1, 0, true);
-}
 int nvim_u_savecommon_reload_ok(buf_T *buf) {
   u_sync(false);
   return u_savecommon(buf, 0, buf->b_ml.ml_line_count + 1, 0, true);

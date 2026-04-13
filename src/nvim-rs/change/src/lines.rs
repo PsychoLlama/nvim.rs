@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{win_mut, win_ref, ColnrT, LinenrT, WinHandle, FAIL};
+use crate::{buf_ref, win_mut, win_ref, BufHandle, ColnrT, LinenrT, WinHandle, FAIL};
 
 // =============================================================================
 // C Accessor Functions (extern declarations)
@@ -23,9 +23,7 @@ extern "C" {
     #[link_name = "ml_delete_flags"]
     fn nvim_ml_delete_flags(lnum: LinenrT, flags: c_int) -> c_int;
 
-    // Buffer state
-    fn nvim_curbuf_get_ml_flags() -> c_int;
-    fn nvim_curbuf_get_ml_line_count() -> LinenrT;
+    fn nvim_get_curbuf() -> BufHandle;
 
     // Memory allocation
     fn nvim_xmalloc(size: usize) -> *mut c_char;
@@ -46,6 +44,7 @@ extern "C" {
 }
 
 /// ML_EMPTY flag - buffer has no lines.
+#[allow(dead_code)]
 const ML_EMPTY: c_int = 0x01;
 
 /// ML_DEL_MESSAGE flag - show deletion message.
@@ -108,6 +107,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
         }
 
         let curwin = nvim_get_curwin();
+        let curbuf = nvim_get_curbuf();
         let first = win_ref(curwin).w_cursor.lnum;
 
         // save the deleted lines for undo
@@ -117,7 +117,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
 
         let mut n = 0;
         while n < nlines {
-            if (nvim_curbuf_get_ml_flags() & ML_EMPTY) != 0 {
+            if buf_ref(curbuf).ml_is_empty() {
                 // nothing to delete
                 break;
             }
@@ -126,7 +126,7 @@ fn del_lines_impl(nlines: LinenrT, undo: bool) {
             n += 1;
 
             // If we delete the last line in the file, stop
-            if first > nvim_curbuf_get_ml_line_count() {
+            if first > buf_ref(curbuf).ml_line_count {
                 break;
             }
         }

@@ -6,7 +6,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{BcountT, ColnrT, LinenrT, OpenlineFlags, NUL, OK};
+use crate::{buf_mut, buf_ref, BcountT, ColnrT, LinenrT, OpenlineFlags, NUL, OK};
 
 // =============================================================================
 // Direction Constants
@@ -117,17 +117,6 @@ extern "C" {
     fn nvim_get_curbuf() -> crate::BufHandle;
 
     // Buffer accessors
-    fn nvim_curbuf_get_b_p_ai() -> bool;
-    fn nvim_curbuf_get_b_p_ci() -> bool;
-    fn nvim_curbuf_get_b_p_cin() -> bool;
-    fn nvim_curbuf_get_b_p_lisp() -> bool;
-    fn nvim_curbuf_get_b_p_pi() -> bool;
-    fn nvim_curbuf_set_b_p_pi(val: bool);
-    fn nvim_curbuf_get_b_p_ts() -> ColnrT;
-    fn nvim_curbuf_get_b_p_vts_array() -> *const ColnrT;
-    fn nvim_curbuf_get_b_p_inde_ptr() -> *const c_char;
-    fn nvim_curbuf_get_b_p_com() -> *mut c_char;
-    fn nvim_curbuf_get_b_ml_ml_line_count() -> LinenrT;
     fn nvim_change_bt_prompt() -> bool;
     fn nvim_get_curbuf_b_prompt_start_mark_lnum() -> LinenrT;
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
@@ -265,6 +254,18 @@ extern "C" {
 
     // Ins_bytes function
     fn nvim_ins_bytes(p: *const c_char);
+}
+
+/// Get a reference to the current buffer's BufStruct.
+#[inline]
+unsafe fn curbuf_ref<'a>() -> &'a nvim_buffer::buf_struct::BufStruct {
+    buf_ref(nvim_get_curbuf())
+}
+
+/// Get a mutable reference to the current buffer's BufStruct.
+#[inline]
+unsafe fn curbuf_mut<'a>() -> &'a mut nvim_buffer::buf_struct::BufStruct {
+    buf_mut(nvim_get_curbuf())
 }
 
 #[inline]
@@ -417,7 +418,7 @@ fn open_line_impl(
         let mut first_char: c_int = NUL as c_int;
         let vreplace_mode: c_int;
         let mut did_append: bool;
-        let saved_pi = nvim_curbuf_get_b_p_pi();
+        let saved_pi = curbuf_ref().b_p_pi != 0;
 
         let state = nvim_get_state();
         let lnum = nvim_get_curwin_cursor_lnum();
@@ -474,12 +475,12 @@ fn open_line_impl(
 
         if openline_flags.contains(OpenlineFlags::FORCE_INDENT) {
             newindent = second_line_indent;
-        } else if nvim_curbuf_get_b_p_ai() || do_si {
+        } else if curbuf_ref().b_p_ai != 0 || do_si {
             // If 'autoindent' and/or 'smartindent' is set, figure out indent
             newindent = nvim_indent_size_ts(
                 saved_line,
-                nvim_curbuf_get_b_p_ts(),
-                nvim_curbuf_get_b_p_vts_array(),
+                curbuf_ref().b_p_ts as ColnrT,
+                curbuf_ref().b_p_vts_array.cast_const(),
             );
             if newindent == 0 && !openline_flags.contains(OpenlineFlags::COM_LIST) {
                 newindent = second_line_indent;
@@ -568,7 +569,7 @@ fn open_line_impl(
                         let mut current_ptr = ptr;
 
                         while (*current_ptr == b'#' as c_char || was_backslashed)
-                            && cursor_lnum < nvim_curbuf_get_b_ml_ml_line_count()
+                            && cursor_lnum < curbuf_ref().ml_line_count
                         {
                             let len = nvim_strlen(current_ptr);
                             was_backslashed =
@@ -601,7 +602,8 @@ fn open_line_impl(
 
         // May do indenting after opening a new line
         let do_cindent = !nvim_p_paste()
-            && (nvim_curbuf_get_b_p_cin() || *nvim_curbuf_get_b_p_inde_ptr() != NUL)
+            && (curbuf_ref().b_p_cin != 0
+                || !curbuf_ref().b_p_inde.is_null() && *curbuf_ref().b_p_inde != NUL)
             && nvim_in_cinkeys(
                 if dir == FORWARD {
                     KEY_OPEN_FORW
@@ -618,7 +620,7 @@ fn open_line_impl(
         if openline_flags.contains(OpenlineFlags::DO_COM) {
             lead_len = nvim_get_leader_len(saved_line, &mut lead_flags, dir == BACKWARD, true);
             if lead_len == 0
-                && nvim_curbuf_get_b_p_cin()
+                && curbuf_ref().b_p_cin != 0
                 && do_cindent
                 && dir == FORWARD
                 && (!nvim_has_format_option(FO_NO_OPEN_COMS)
@@ -754,7 +756,7 @@ fn open_line_impl(
                     }
                     // Doing "O" on end of comment inserts middle leader
                     // Find middle leader by searching backwards
-                    let com = nvim_curbuf_get_b_p_com();
+                    let com = curbuf_ref().b_p_com.cast_mut();
                     while p > com && *p != b',' as c_char {
                         p = p.sub(1);
                     }
@@ -954,11 +956,11 @@ fn open_line_impl(
                     }
 
                     // Recompute indent
-                    if nvim_curbuf_get_b_p_ai() || do_si {
+                    if curbuf_ref().b_p_ai != 0 || do_si {
                         newindent = nvim_indent_size_ts(
                             leader,
-                            nvim_curbuf_get_b_p_ts(),
-                            nvim_curbuf_get_b_p_vts_array(),
+                            curbuf_ref().b_p_ts as ColnrT,
+                            curbuf_ref().b_p_vts_array.cast_const(),
                         );
                     }
 
@@ -1013,7 +1015,7 @@ fn open_line_impl(
                 // Finished a comment, align with start
                 if *comment_end == b'*' as c_char
                     && *comment_end.add(1) == b'/' as c_char
-                    && (nvim_curbuf_get_b_p_ai() || do_si)
+                    && (curbuf_ref().b_p_ai != 0 || do_si)
                 {
                     old_cursor = nvim_change_get_curwin_cursor();
                     let col_offset = comment_end.offset_from(saved_line) as ColnrT;
@@ -1038,7 +1040,7 @@ fn open_line_impl(
             if replace_normal(state) {
                 replace_push_nul();
             }
-            if nvim_curbuf_get_b_p_ai() || openline_flags.contains(OpenlineFlags::DELSPACES) {
+            if curbuf_ref().b_p_ai != 0 || openline_flags.contains(OpenlineFlags::DELSPACES) {
                 while (*p_extra == b' ' as c_char || *p_extra == TAB)
                     && nvim_utf_iscomposing_first(nvim_utf_ptr2char(p_extra.add(1))) == 0
                 {
@@ -1109,7 +1111,7 @@ fn open_line_impl(
             if nvim_ml_append(cursor_lnum, p_extra, 0, false) != OK {
                 // Cleanup and return on failure
                 curbuf_splice_pending -= 1;
-                nvim_curbuf_set_b_p_pi(saved_pi);
+                curbuf_mut().b_p_pi = if saved_pi { 1 } else { 0 };
                 nvim_xfree(saved_line.cast());
                 nvim_xfree(next_line.cast());
                 nvim_xfree(allocated.cast());
@@ -1152,9 +1154,9 @@ fn open_line_impl(
             }
 
             // Copy the indent
-            if nvim_curbuf_get_b_p_ci() {
+            if curbuf_ref().b_p_ci != 0 {
                 nvim_copy_indent(newindent, saved_line);
-                nvim_curbuf_set_b_p_pi(true);
+                curbuf_mut().b_p_pi = 1;
             } else {
                 nvim_set_indent(newindent, SIN_INSERT | SIN_NOMARK);
             }
@@ -1297,13 +1299,13 @@ fn open_line_impl(
         if !nvim_p_paste() {
             if leader.is_null()
                 && !use_indentexpr_for_lisp()
-                && nvim_curbuf_get_b_p_lisp()
-                && nvim_curbuf_get_b_p_ai()
+                && curbuf_ref().b_p_lisp != 0
+                && curbuf_ref().b_p_ai != 0
             {
                 // Do lisp indenting
                 nvim_fixthisline(get_lisp_indent as *const c_void);
                 nvim_set_ai_col(nvim_getwhitecols_curline() as ColnrT);
-            } else if do_cindent || (nvim_curbuf_get_b_p_ai() && use_indentexpr_for_lisp()) {
+            } else if do_cindent || (curbuf_ref().b_p_ai != 0 && use_indentexpr_for_lisp()) {
                 // Do 'cindent' or 'indentexpr' indenting
                 do_c_expr_indent();
                 nvim_set_ai_col(nvim_getwhitecols_curline() as ColnrT);
@@ -1336,7 +1338,7 @@ fn open_line_impl(
         retval = true;
 
         // Cleanup
-        nvim_curbuf_set_b_p_pi(saved_pi);
+        curbuf_mut().b_p_pi = if saved_pi { 1 } else { 0 };
         nvim_xfree(saved_line.cast());
         nvim_xfree(next_line.cast());
         nvim_xfree(allocated.cast());

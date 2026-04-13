@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 nvim-window = { path = "../window" }
+nvim-buffer = { path = "../buffer" }
 libc = "0.2"
 
 [lib]

@@ -49,40 +49,18 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
-bool nvim_buf_get_b_changed_invalid(buf_T *buf) { return buf->b_changed_invalid; }
 void nvim_buf_set_b_changed(buf_T *buf, bool val) { buf->b_changed = val; }
-void nvim_buf_set_b_changed_invalid(buf_T *buf, bool val) { buf->b_changed_invalid = val; }
-bool nvim_buf_get_b_did_warn(buf_T *buf) { return buf->b_did_warn; }
-int nvim_buf_get_b_ro_locked(buf_T *buf) { return buf->b_ro_locked; }
-void nvim_buf_set_b_ro_locked(buf_T *buf, int val) { buf->b_ro_locked = val; }
 bool nvim_buf_get_b_may_swap(buf_T *buf) { return buf->b_may_swap; }
+int nvim_buf_get_b_ro_locked(buf_T *buf) { return buf->b_ro_locked; }
+bool nvim_buf_get_b_p_eol(buf_T *buf) { return buf->b_p_eol; }
 int nvim_buf_get_b_flags(buf_T *buf) { return buf->b_flags; }
 void nvim_buf_set_b_flags(buf_T *buf, int val) { buf->b_flags = val; }
 linenr_T nvim_buf_get_b_ml_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 
-bool nvim_buf_get_b_mod_set(buf_T *buf) { return buf->b_mod_set; }
-void nvim_buf_set_b_mod_set(buf_T *buf, bool val) { buf->b_mod_set = val; }
 linenr_T nvim_buf_get_b_mod_top(buf_T *buf) { return buf->b_mod_top; }
-void nvim_buf_set_b_mod_top(buf_T *buf, linenr_T val) { buf->b_mod_top = val; }
 linenr_T nvim_buf_get_b_mod_bot(buf_T *buf) { return buf->b_mod_bot; }
-void nvim_buf_set_b_mod_bot(buf_T *buf, linenr_T val) { buf->b_mod_bot = val; }
 linenr_T nvim_buf_get_b_mod_xlines(buf_T *buf) { return buf->b_mod_xlines; }
-void nvim_buf_set_b_mod_xlines(buf_T *buf, linenr_T val) { buf->b_mod_xlines = val; }
 
-char nvim_buf_get_b_start_ffc(buf_T *buf) { return (char)buf->b_start_ffc; }
-void nvim_buf_set_b_start_ffc(buf_T *buf, char val) { buf->b_start_ffc = (unsigned char)val; }
-bool nvim_buf_get_b_start_eof(buf_T *buf) { return buf->b_start_eof; }
-void nvim_buf_set_b_start_eof(buf_T *buf, bool val) { buf->b_start_eof = val; }
-bool nvim_buf_get_b_start_eol(buf_T *buf) { return buf->b_start_eol; }
-void nvim_buf_set_b_start_eol(buf_T *buf, bool val) { buf->b_start_eol = val; }
-bool nvim_buf_get_b_start_bomb(buf_T *buf) { return buf->b_start_bomb; }
-void nvim_buf_set_b_start_bomb(buf_T *buf, bool val) { buf->b_start_bomb = val; }
-char *nvim_buf_get_b_start_fenc(buf_T *buf) { return buf->b_start_fenc; }
-void nvim_buf_set_b_start_fenc(buf_T *buf, char *val) { buf->b_start_fenc = val; }
-char nvim_buf_get_b_p_ff_first_char(buf_T *buf) { return *buf->b_p_ff; }
-bool nvim_buf_get_b_p_eof(buf_T *buf) { return buf->b_p_eof; }
-bool nvim_buf_get_b_p_eol(buf_T *buf) { return buf->b_p_eol; }
-bool nvim_buf_get_b_p_bomb(buf_T *buf) { return buf->b_p_bomb; }
 bool nvim_buf_get_b_p_bin(buf_T *buf) { return buf->b_p_bin; }
 bool nvim_buf_get_b_p_fixeol(buf_T *buf) { return buf->b_p_fixeol; }
 const char *nvim_buf_get_b_p_fenc(buf_T *buf) { return buf->b_p_fenc; }

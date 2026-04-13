@@ -5,6 +5,8 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::BufHandle;
+
 // =============================================================================
 // Comment Flags (from option_vars.h)
 // =============================================================================
@@ -48,8 +50,7 @@ pub const COM_MAX_LEN: usize = 256;
 
 #[allow(dead_code)]
 extern "C" {
-    // Buffer option accessor
-    fn nvim_curbuf_get_b_p_com() -> *mut c_char;
+    fn nvim_get_curbuf() -> BufHandle;
 
     // String functions
     fn nvim_change_copy_option_part(
@@ -108,7 +109,7 @@ fn get_leader_len_impl(
         while *line.offset(i as isize) != 0 {
             // scan through the 'comments' option for a match
             let mut found_one = false;
-            let mut list = nvim_curbuf_get_b_p_com();
+            let mut list = crate::buf_ref(nvim_get_curbuf()).b_p_com.cast_mut();
 
             while *list != 0 {
                 // Get one option part into part_buf[].  Advance "list" to next one.
@@ -275,7 +276,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
         while i >= lower_check_bound {
             // scan through the 'comments' option for a match
             let mut found_one = false;
-            let mut list = nvim_curbuf_get_b_p_com();
+            let mut list = crate::buf_ref(nvim_get_curbuf()).b_p_com.cast_mut();
 
             while *list != 0 {
                 let flags_save = list;
@@ -366,7 +367,7 @@ fn get_last_leader_offset_impl(line: *const c_char, flags: *mut *mut c_char) -> 
                     }
                     let len1 = libc::strlen(com_leader) as i32;
 
-                    let mut list = nvim_curbuf_get_b_p_com();
+                    let mut list = crate::buf_ref(nvim_get_curbuf()).b_p_com.cast_mut();
                     while *list != 0 {
                         let flags_save = list;
                         nvim_change_copy_option_part(

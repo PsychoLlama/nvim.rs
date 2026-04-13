@@ -298,8 +298,10 @@ pub struct BufStruct {
     // offset 10088: int b_p_ai_nopaste
     pub b_p_ai_nopaste: c_int,
 
-    // offset 10092..10111: other bool options (20 bytes, opaque)
-    _pad20: [u8; 20],
+    // offset 10092..10107: other bool options (16 bytes, opaque)
+    _pad20: [u8; 16],
+    // offset 10108: int b_p_ci  (CopyIndent)
+    pub b_p_ci: c_int,
 
     // offset 10112: int b_p_bin  (BINary)
     pub b_p_bin: c_int,
@@ -323,8 +325,14 @@ pub struct BufStruct {
     // offset 10152: int64_t b_p_channel
     pub b_p_channel: OptInt,
 
-    // offset 10160..10351: remaining option fields (192 bytes, opaque)
-    _pad25: [u8; 192],
+    // offset 10160: int b_p_cin  (CIndent)
+    pub b_p_cin: c_int,
+    // offset 10164..10199: gap (36 bytes, opaque)
+    _pad25a: [u8; 36],
+    // offset 10200: char* b_p_com  (Comments)
+    pub b_p_com: *const c_char,
+    // offset 10208..10351: remaining option fields (144 bytes, opaque)
+    _pad25b: [u8; 144],
 
     // offset 10352: int b_p_eof
     pub b_p_eof: c_int,
@@ -400,8 +408,10 @@ pub struct BufStruct {
     // offset 10568: char* b_p_nf  (NumberFormats)
     pub b_p_nf: *const c_char,
 
-    // offset 10576..10591: gap (16 bytes, opaque)
-    _pad41: [u8; 16],
+    // offset 10576: int b_p_pi  (PreserveIndent)
+    pub b_p_pi: c_int,
+    // offset 10580..10591: gap (12 bytes, opaque)
+    _pad41: [u8; 12],
 
     // offset 10592: int b_p_ro    (ReadOnly)
     pub b_p_ro: c_int,
@@ -499,8 +509,14 @@ pub struct BufStruct {
     // offset 11084: int b_start_eol
     pub b_start_eol: c_int,
 
-    // offset 11088..11107: b_start_ffc and gap (20 bytes, opaque)
-    _pad53: [u8; 20],
+    // offset 11088: int b_start_ffc  (first char of 'ff' when edit started)
+    pub b_start_ffc: c_int,
+    // offset 11092..11095: alignment gap (4 bytes, opaque)
+    _pad53a: [u8; 4],
+    // offset 11096: char* b_start_fenc  ('fileencoding' when edit started or NULL)
+    pub b_start_fenc: *const c_char,
+    // offset 11104..11107: gap (4 bytes, opaque)
+    _pad53b: [u8; 4],
 
     // offset 11108: int b_start_bomb
     pub b_start_bomb: c_int,

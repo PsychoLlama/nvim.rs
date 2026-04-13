@@ -21,6 +21,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_buffer::buf_struct::BufStruct;
 use nvim_window::win_struct::WinStruct;
 
 /// Convert a local WinHandle to nvim_window::WinHandle for WinStruct access.
@@ -33,6 +34,18 @@ unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
 #[inline]
 unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut WinStruct {
     nvim_window::win_struct::win_mut(std::mem::transmute::<WinHandle, nvim_window::WinHandle>(wp))
+}
+
+/// Convert a local BufHandle to a reference to BufStruct for direct field access.
+#[inline]
+unsafe fn buf_ref<'a>(bp: BufHandle) -> &'a BufStruct {
+    nvim_buffer::buf_struct::buf_ref(std::mem::transmute::<BufHandle, nvim_buffer::BufHandle>(bp))
+}
+
+/// Convert a local BufHandle to a mutable reference to BufStruct for direct field access.
+#[inline]
+unsafe fn buf_mut<'a>(bp: BufHandle) -> &'a mut BufStruct {
+    nvim_buffer::buf_struct::buf_mut(std::mem::transmute::<BufHandle, nvim_buffer::BufHandle>(bp))
 }
 
 pub mod comment;
@@ -138,122 +151,6 @@ pub const FAIL: c_int = 0;
 
 /// NUL character constant.
 pub const NUL: c_char = 0;
-
-// =============================================================================
-// C Accessor Functions (extern declarations)
-// =============================================================================
-
-#[allow(dead_code)]
-extern "C" {
-    // Buffer field accessors
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_changed(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_changed_invalid(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_changed_invalid(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_did_warn(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_did_warn(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_ro_locked(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_ro_locked(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_may_swap(buf: BufHandle) -> bool;
-    fn nvim_bt_dontwrite(buf: BufHandle) -> bool;
-
-    // Buffer modification tracking
-    fn nvim_buf_get_b_mod_set(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_mod_set(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_mod_top(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_set_b_mod_top(buf: BufHandle, val: LinenrT);
-    fn nvim_buf_get_b_mod_bot(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_set_b_mod_bot(buf: BufHandle, val: LinenrT);
-    fn nvim_buf_get_b_mod_xlines(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_set_b_mod_xlines(buf: BufHandle, val: LinenrT);
-
-    // File format accessors
-    fn nvim_buf_get_b_start_ffc(buf: BufHandle) -> c_char;
-    fn nvim_buf_set_b_start_ffc(buf: BufHandle, val: c_char);
-    fn nvim_buf_get_b_start_eof(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_start_eof(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_start_eol(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_start_eol(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_start_bomb(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_start_bomb(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_start_fenc(buf: BufHandle) -> *mut c_char;
-    fn nvim_buf_set_b_start_fenc(buf: BufHandle, val: *mut c_char);
-    fn nvim_buf_get_b_p_ff_first_char(buf: BufHandle) -> c_char;
-    fn nvim_buf_get_b_p_eof(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_eol(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_bomb(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_bin(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_fixeol(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_fenc(buf: BufHandle) -> *const c_char;
-    fn nvim_buf_get_b_flags(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_ml_ml_line_count(buf: BufHandle) -> LinenrT;
-
-    // Global state accessors
-    fn nvim_get_curbuf() -> BufHandle;
-    fn nvim_get_curwin() -> WinHandle;
-    fn nvim_get_autocmd_busy() -> bool;
-    fn nvim_get_highlight_match() -> c_int;
-    fn nvim_set_highlight_match(val: c_int);
-    fn nvim_curbufIsChanged() -> c_int;
-
-    // Message functions
-    #[link_name = "msg_start"]
-    fn nvim_msg_start();
-    fn msg_ext_set_kind(kind: *const c_char);
-    fn msg_puts_hl(msg: *const c_char, attr: c_int, right: bool);
-    fn msg_clr_eos();
-    #[link_name = "msg_end"]
-    fn nvim_msg_end();
-    fn nvim_msg_silent() -> c_int;
-    fn nvim_silent_mode() -> bool;
-    fn nvim_ui_active() -> bool;
-    fn ui_has(ext: c_int) -> bool;
-    fn set_vim_var_string(idx: c_int, val: *const c_char, len: c_int);
-
-    // Redraw functions
-    fn redraw_buf_status_later(buf: BufHandle);
-    fn nvim_set_redraw_cmdline(val: bool);
-
-    // Other functions
-    fn nvim_buf_inc_changedtick(buf: BufHandle);
-    fn showmode();
-    fn ui_flush();
-    fn os_delay(ms: u64, allow_input: bool);
-    fn wait_return(redraw: c_int);
-    static mut msg_scroll: c_int;
-    static mut need_wait_return: bool;
-    static mut emsg_silent: c_int;
-    fn nvim_in_assert_fails() -> bool;
-    static mut msg_row: c_int;
-    static mut msg_col: c_int;
-
-    // Buffer updates
-    fn nvim_buf_updates_send_changes(buf: BufHandle, lnum: LinenrT, added: i64, removed: i64);
-
-    // Extmark operations
-    fn nvim_extmark_splice_cols(
-        buf: BufHandle,
-        lnum: c_int,
-        col: ColnrT,
-        old_col: c_int,
-        new_col: c_int,
-        op: c_int,
-    );
-
-    // Window accessors
-    fn nvim_win_get_buffer(win: WinHandle) -> BufHandle;
-
-    // Memory allocation
-    fn nvim_xfree(ptr: *mut c_void);
-    fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
-
-    // String comparison (use libc::strcmp directly)
-
-    // Marktree accessors
-    fn nvim_buf_marktree_n_keys(buf: BufHandle) -> c_int;
-    fn nvim_buf_meta_total(buf: BufHandle, meta_type: c_int) -> c_int;
-}
 
 // =============================================================================
 // Constants for FFI

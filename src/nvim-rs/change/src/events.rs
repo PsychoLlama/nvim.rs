@@ -5,7 +5,7 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::{win_ref, BufHandle, ColnrT, LinenrT, WinHandle, KEXTMARK_UNDO};
+use crate::{buf_mut, buf_ref, win_ref, BufHandle, ColnrT, LinenrT, WinHandle, KEXTMARK_UNDO};
 
 // =============================================================================
 // C Accessor Functions (extern declarations)
@@ -13,17 +13,6 @@ use crate::{win_ref, BufHandle, ColnrT, LinenrT, WinHandle, KEXTMARK_UNDO};
 
 #[allow(dead_code)]
 extern "C" {
-    // Buffer field accessors
-    fn nvim_buf_get_b_mod_set(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_mod_set(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_mod_top(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_set_b_mod_top(buf: BufHandle, val: LinenrT);
-    fn nvim_buf_get_b_mod_bot(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_set_b_mod_bot(buf: BufHandle, val: LinenrT);
-    fn nvim_buf_get_b_mod_xlines(buf: BufHandle) -> LinenrT;
-    fn nvim_buf_set_b_mod_xlines(buf: BufHandle, val: LinenrT);
-    fn nvim_buf_get_b_ml_ml_line_count(buf: BufHandle) -> LinenrT;
-
     // Global state
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> WinHandle;
@@ -139,36 +128,36 @@ fn changed_lines_redraw_buf_impl(buf: BufHandle, lnum: LinenrT, lnume: LinenrT, 
             lnume_adj += 1 + meta_lines;
         }
 
-        if nvim_buf_get_b_mod_set(buf) {
+        if buf_ref(buf).b_mod_set != 0 {
             // find the maximum area that must be redisplayed
-            let cur_mod_top = nvim_buf_get_b_mod_top(buf);
+            let cur_mod_top = buf_ref(buf).b_mod_top;
             if lnum < cur_mod_top {
-                nvim_buf_set_b_mod_top(buf, lnum);
+                buf_mut(buf).b_mod_top = lnum;
             }
 
-            let cur_mod_bot = nvim_buf_get_b_mod_bot(buf);
+            let cur_mod_bot = buf_ref(buf).b_mod_bot;
             if lnum < cur_mod_bot {
                 // adjust old bot position for xtra lines
                 let mut new_bot = cur_mod_bot + xtra;
                 if new_bot < lnum {
                     new_bot = lnum;
                 }
-                nvim_buf_set_b_mod_bot(buf, new_bot);
+                buf_mut(buf).b_mod_bot = new_bot;
             }
 
-            let cur_mod_bot = nvim_buf_get_b_mod_bot(buf);
+            let cur_mod_bot = buf_ref(buf).b_mod_bot;
             if lnume_adj + xtra > cur_mod_bot {
-                nvim_buf_set_b_mod_bot(buf, lnume_adj + xtra);
+                buf_mut(buf).b_mod_bot = lnume_adj + xtra;
             }
 
-            let cur_mod_xlines = nvim_buf_get_b_mod_xlines(buf);
-            nvim_buf_set_b_mod_xlines(buf, cur_mod_xlines + xtra);
+            let cur_mod_xlines = buf_ref(buf).b_mod_xlines;
+            buf_mut(buf).b_mod_xlines = cur_mod_xlines + xtra;
         } else {
             // set the area that must be redisplayed
-            nvim_buf_set_b_mod_set(buf, true);
-            nvim_buf_set_b_mod_top(buf, lnum);
-            nvim_buf_set_b_mod_bot(buf, lnume_adj + xtra);
-            nvim_buf_set_b_mod_xlines(buf, xtra);
+            buf_mut(buf).b_mod_set = 1;
+            buf_mut(buf).b_mod_top = lnum;
+            buf_mut(buf).b_mod_bot = lnume_adj + xtra;
+            buf_mut(buf).b_mod_xlines = xtra;
         }
     }
 }
@@ -209,7 +198,7 @@ fn changed_bytes_impl(lnum: LinenrT, col: ColnrT) {
         // displayed.  Schedule the next line for redrawing just in case.
         // Don't do this when displaying '$' at the end of changed text.
         if nvim_spell_check_window(curwin)
-            && lnum < nvim_buf_get_b_ml_ml_line_count(curbuf)
+            && lnum < buf_ref(curbuf).ml_line_count
             && !nvim_vim_strchr_cpo_dollar()
         {
             nvim_redrawWinline(curwin, lnum + 1);
@@ -432,7 +421,7 @@ fn deleted_lines_mark_impl(lnum: LinenrT, count: c_int) {
     // SAFETY: All accessors are safe C functions
     unsafe {
         let curbuf = nvim_get_curbuf();
-        let ml_empty = nvim_buf_get_ml_empty(curbuf);
+        let ml_empty = buf_ref(curbuf).ml_is_empty();
         let made_empty = count > 0 && ml_empty;
 
         nvim_mark_adjust(
@@ -462,10 +451,6 @@ fn deleted_lines_mark_impl(lnum: LinenrT, count: c_int) {
             true,
         );
     }
-}
-
-extern "C" {
-    fn nvim_buf_get_ml_empty(buf: BufHandle) -> bool;
 }
 
 /// FFI wrapper for `deleted_lines_mark`.

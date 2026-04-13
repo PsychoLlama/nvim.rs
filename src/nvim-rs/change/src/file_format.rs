@@ -6,7 +6,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{BufHandle, BF_NEVERLOADED, BF_NEW, NUL};
+use crate::{buf_mut, buf_ref, BufHandle, BF_NEVERLOADED, BF_NEW, NUL};
 
 // =============================================================================
 // C Accessor Functions (extern declarations)
@@ -19,32 +19,6 @@ extern "C" {
 
 #[allow(dead_code)]
 extern "C" {
-    // Buffer field accessors
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_changed(buf: BufHandle, val: bool);
-    fn nvim_buf_set_b_changed_invalid(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_flags(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_ml_ml_line_count(buf: BufHandle) -> crate::LinenrT;
-
-    // File format accessors
-    fn nvim_buf_get_b_start_ffc(buf: BufHandle) -> c_char;
-    fn nvim_buf_set_b_start_ffc(buf: BufHandle, val: c_char);
-    fn nvim_buf_get_b_start_eof(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_start_eof(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_start_eol(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_start_eol(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_start_bomb(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_start_bomb(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_start_fenc(buf: BufHandle) -> *mut c_char;
-    fn nvim_buf_set_b_start_fenc(buf: BufHandle, val: *mut c_char);
-    fn nvim_buf_get_b_p_ff_first_char(buf: BufHandle) -> c_char;
-    fn nvim_buf_get_b_p_eof(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_eol(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_bomb(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_bin(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_fixeol(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_p_fenc(buf: BufHandle) -> *const c_char;
-
     // Other functions
     fn ml_setflags(buf: BufHandle);
     fn nvim_buf_inc_changedtick(buf: BufHandle);
@@ -73,7 +47,8 @@ extern "C" {
 fn file_ff_differs_impl(buf: BufHandle, ignore_empty: bool) -> bool {
     // SAFETY: All accessors are safe C functions
     unsafe {
-        let flags = nvim_buf_get_b_flags(buf);
+        let b = buf_ref(buf);
+        let flags = b.b_flags;
 
         // In a buffer that was never loaded the options are not valid.
         if (flags & BF_NEVERLOADED) != 0 {
@@ -81,36 +56,41 @@ fn file_ff_differs_impl(buf: BufHandle, ignore_empty: bool) -> bool {
         }
 
         // Check for new, empty buffer
-        if ignore_empty && (flags & BF_NEW) != 0 && nvim_buf_get_b_ml_ml_line_count(buf) == 1 {
+        if ignore_empty && (flags & BF_NEW) != 0 && b.ml_line_count == 1 {
             let line = nvim_ml_get_buf(buf, 1);
             if !line.is_null() && *line == NUL {
                 return false;
             }
         }
 
-        // Check if file format changed
-        if nvim_buf_get_b_start_ffc(buf) != nvim_buf_get_b_p_ff_first_char(buf) {
+        // Check if file format changed: b_start_ffc (c_int) vs b_p_ff[0]
+        let ff_char = if b.b_p_ff.is_null() {
+            0 as c_char
+        } else {
+            *b.b_p_ff
+        };
+        if b.b_start_ffc as c_char != ff_char {
             return true;
         }
 
         // Check end-of-line/end-of-file changes
-        let b_p_bin = nvim_buf_get_b_p_bin(buf);
-        let b_p_fixeol = nvim_buf_get_b_p_fixeol(buf);
+        let b_p_bin = b.b_p_bin != 0;
+        let b_p_fixeol = b.b_p_fixeol != 0;
         if (b_p_bin || !b_p_fixeol)
-            && (nvim_buf_get_b_start_eof(buf) != nvim_buf_get_b_p_eof(buf)
-                || nvim_buf_get_b_start_eol(buf) != nvim_buf_get_b_p_eol(buf))
+            && ((b.b_start_eof != 0) != (b.b_p_eof != 0)
+                || (b.b_start_eol != 0) != (b.b_p_eol != 0))
         {
             return true;
         }
 
         // Check bomb setting change
-        if !b_p_bin && nvim_buf_get_b_start_bomb(buf) != nvim_buf_get_b_p_bomb(buf) {
+        if !b_p_bin && (b.b_start_bomb != 0) != (b.b_p_bomb != 0) {
             return true;
         }
 
         // Check file encoding change
-        let start_fenc = nvim_buf_get_b_start_fenc(buf);
-        let p_fenc = nvim_buf_get_b_p_fenc(buf);
+        let start_fenc = b.b_start_fenc;
+        let p_fenc = b.b_p_fenc;
         if start_fenc.is_null() {
             return !p_fenc.is_null() && *p_fenc != NUL;
         }
@@ -134,18 +114,26 @@ pub extern "C" fn rs_file_ff_differs(buf: BufHandle, ignore_empty: bool) -> bool
 fn save_file_ff_impl(buf: BufHandle) {
     // SAFETY: All accessors are safe C functions
     unsafe {
-        nvim_buf_set_b_start_ffc(buf, nvim_buf_get_b_p_ff_first_char(buf));
-        nvim_buf_set_b_start_eof(buf, nvim_buf_get_b_p_eof(buf));
-        nvim_buf_set_b_start_eol(buf, nvim_buf_get_b_p_eol(buf));
-        nvim_buf_set_b_start_bomb(buf, nvim_buf_get_b_p_bomb(buf));
+        {
+            let b = buf_mut(buf);
+            let ff_char = if b.b_p_ff.is_null() {
+                0 as c_int
+            } else {
+                *b.b_p_ff as c_int
+            };
+            b.b_start_ffc = ff_char;
+            b.b_start_eof = b.b_p_eof;
+            b.b_start_eol = b.b_p_eol;
+            b.b_start_bomb = b.b_p_bomb;
+        }
 
         // Only use free/alloc when necessary, they take time.
-        let start_fenc = nvim_buf_get_b_start_fenc(buf);
-        let p_fenc = nvim_buf_get_b_p_fenc(buf);
+        let start_fenc = buf_ref(buf).b_start_fenc;
+        let p_fenc = buf_ref(buf).b_p_fenc;
 
         if start_fenc.is_null() || libc::strcmp(start_fenc, p_fenc) != 0 {
-            nvim_xfree(start_fenc.cast());
-            nvim_buf_set_b_start_fenc(buf, nvim_xstrdup(p_fenc));
+            nvim_xfree(start_fenc.cast_mut().cast());
+            buf_mut(buf).b_start_fenc = nvim_xstrdup(p_fenc);
         }
     }
 }
@@ -167,9 +155,9 @@ pub extern "C" fn rs_save_file_ff(buf: BufHandle) {
 fn unchanged_impl(buf: BufHandle, ff: bool, always_inc_changedtick: bool) {
     // SAFETY: All accessors are safe C functions
     unsafe {
-        if nvim_buf_get_b_changed(buf) || (ff && file_ff_differs_impl(buf, false)) {
-            nvim_buf_set_b_changed(buf, false);
-            nvim_buf_set_b_changed_invalid(buf, true);
+        if buf_ref(buf).b_changed != 0 || (ff && file_ff_differs_impl(buf, false)) {
+            buf_mut(buf).b_changed = 0;
+            buf_mut(buf).b_changed_invalid = 1;
             ml_setflags(buf);
             if ff {
                 save_file_ff_impl(buf);

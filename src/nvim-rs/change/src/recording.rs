@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{BufHandle, HLF_W, VV_WARNINGMSG};
+use crate::{buf_mut, buf_ref, BufHandle, HLF_W, VV_WARNINGMSG};
 
 /// UIExtension value for kUIMessages (ui_defs.h)
 const K_UI_MESSAGES: c_int = 4;
@@ -22,17 +22,6 @@ extern "C" {
 
 #[allow(dead_code)]
 extern "C" {
-    // Buffer field accessors
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_changed(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_changed_invalid(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_changed_invalid(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_did_warn(buf: BufHandle) -> bool;
-    fn nvim_buf_set_b_did_warn(buf: BufHandle, val: bool);
-    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_ro_locked(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_ro_locked(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_may_swap(buf: BufHandle) -> bool;
     fn nvim_bt_dontwrite(buf: BufHandle) -> bool;
 
     // Global state accessors
@@ -99,8 +88,8 @@ const W10_WARNING: &[u8] = b"W10: Warning: Changing a readonly file\0";
 fn changed_internal_impl(buf: BufHandle) {
     // SAFETY: All accessors are safe C functions
     unsafe {
-        nvim_buf_set_b_changed(buf, true);
-        nvim_buf_set_b_changed_invalid(buf, true);
+        buf_mut(buf).b_changed = 1;
+        buf_mut(buf).b_changed_invalid = 1;
         ml_setflags(buf);
         redraw_buf_status_later(buf);
         redraw_tabline = true;
@@ -133,7 +122,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
     // SAFETY: All accessors are safe C functions
     unsafe {
         // Check if we need to show a warning
-        if nvim_buf_get_b_did_warn(buf) {
+        if buf_ref(buf).b_did_warn != 0 {
             return;
         }
         if nvim_curbufIsChanged() != 0 {
@@ -142,22 +131,22 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         if nvim_get_autocmd_busy() {
             return;
         }
-        if nvim_buf_get_b_p_ro(buf) == 0 {
+        if buf_ref(buf).b_p_ro == 0 {
             return;
         }
 
         // Increment ro_locked to prevent changes during autocmd
-        let ro_locked = nvim_buf_get_b_ro_locked(buf);
-        nvim_buf_set_b_ro_locked(buf, ro_locked + 1);
+        let ro_locked = buf_ref(buf).b_ro_locked;
+        buf_mut(buf).b_ro_locked = ro_locked + 1;
 
         // Trigger FileChangedRO autocmd
         apply_autocmds_filechangedro(buf);
 
         // Decrement ro_locked
-        nvim_buf_set_b_ro_locked(buf, ro_locked);
+        buf_mut(buf).b_ro_locked = ro_locked;
 
         // Check if autocmd cleared the readonly flag
-        if nvim_buf_get_b_p_ro(buf) == 0 {
+        if buf_ref(buf).b_p_ro == 0 {
             return;
         }
 
@@ -190,7 +179,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
             os_delay(1002, true);
         }
 
-        nvim_buf_set_b_did_warn(buf, true);
+        buf_mut(buf).b_did_warn = 1;
         nvim_set_redraw_cmdline(false); // don't redraw and erase the message
 
         if msg_row < Rows - 1 {
@@ -216,7 +205,7 @@ pub extern "C" fn rs_change_warning(buf: BufHandle, col: c_int) {
 fn changed_impl(buf: BufHandle) {
     // SAFETY: All accessors are safe C functions
     unsafe {
-        if !nvim_buf_get_b_changed(buf) {
+        if buf_ref(buf).b_changed == 0 {
             let save_msg_scroll = msg_scroll;
 
             // Give a warning about changing a read-only file.  This may also
@@ -225,7 +214,7 @@ fn changed_impl(buf: BufHandle) {
 
             // Create a swap file if that is wanted.
             // Don't do this for "nofile" and "nowrite" buffer types.
-            if nvim_buf_get_b_may_swap(buf) && !nvim_bt_dontwrite(buf) {
+            if buf_ref(buf).b_may_swap != 0 && !nvim_bt_dontwrite(buf) {
                 let save_need_wait_return = need_wait_return;
 
                 need_wait_return = false;
