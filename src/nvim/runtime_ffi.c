@@ -501,12 +501,6 @@ void nvim_rt_set_runtimepath(const char *new_rtp)
 // Phase 2: Accessors for ex_finish / ex_scriptencoding / source_finished
 // =============================================================================
 
-/// Get eap->ea_getline as a void* (LineGetter is a function pointer).
-void *nvim_rt_exarg_get_getline_fn(void *eap) { return (void *)(uintptr_t)((exarg_T *)eap)->ea_getline; }
-
-/// Get eap->cookie.
-void *nvim_rt_exarg_get_cookie(void *eap) { return ((exarg_T *)eap)->cookie; }
-
 /// Get eap->cstack.
 void *nvim_rt_exarg_get_cstack(void *eap) { return ((exarg_T *)eap)->cstack; }
 
@@ -676,13 +670,6 @@ const char *nvim_rt_curbuf_get_ft(void) { return curbuf ? curbuf->b_p_ft : NULL;
 
 /// IObuff accessor.
 char *nvim_rt_src_get_iobuff(void) { return IObuff; }
-
-/// get_scriptname wrapper (from runtime.c, used by FFI).
-char *nvim_rt_src_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
-{
-  sctx_T ctx = { .sc_sid = sc_sid, .sc_chan = sc_chan };
-  return get_scriptname(ctx, should_free);
-}
 
 /// nlua_exec_file wrapper.
 

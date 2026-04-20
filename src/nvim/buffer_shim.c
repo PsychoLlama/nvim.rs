@@ -124,7 +124,6 @@ void nvim_check_arg_idx_if_curbuf(buf_T *buf)
 linenr_T nvim_buflist_findlnum(buf_T *buf) { return buflist_findfmark(buf)->mark.lnum; }
 int nvim_get_argcount(void) { return ARGCOUNT; }
 buf_T *nvim_get_cmdwin_buf(void) { return cmdwin_buf; }
-void nvim_buf_set_ml_line_count(buf_T *buf, linenr_T val) { buf->b_ml.ml_line_count = val; }
 int64_t nvim_buf_get_changedtick_direct(buf_T *buf) { return buf_get_changedtick(buf); }
 int nvim_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 buf_T *nvim_handle_get_buffer(handle_T handle) { return handle_get_buffer(handle); }

@@ -110,9 +110,6 @@ int *nvim_win_get_p_cc_cols(win_T *wp) { return wp->w_p_cc_cols; }
 // ============================================================================
 
 
-/// Return wp->w_buffer as opaque pointer.
-void *nvim_win_get_w_buffer_drawline(win_T *wp) { return wp->w_buffer; }
-
 /// Return true if wp->w_buffer->terminal is non-NULL (drawline variant).
 bool nvim_win_buf_has_terminal_drawline(win_T *wp) { return wp->w_buffer->terminal != NULL; }
 

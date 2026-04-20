@@ -479,12 +479,6 @@ char *nvim_eval_cmdcomplete_type_to_str(int ctx, void *xpc)
   return (char *)nvim_cmdexpand_cmdcomplete_type_to_str(ctx, ((expand_T *)xpc)->xp_arg);
 }
 
-/// Get cmdbuff pointer from CmdlineInfo.
-char *nvim_eval_ccline_get_cmdbuff(void *p)
-{
-  return ((CmdlineInfo *)p)->cmdbuff;
-}
-
 /// Call realloc_cmdbuff and then copy str into CmdlineInfo's cmdbuff.
 /// Sets cmdlen and does STRCPY. Returns new cmdpos clamped to cmdlen.
 int nvim_eval_setcmdline_str(void *p, const char *str, int pos)
