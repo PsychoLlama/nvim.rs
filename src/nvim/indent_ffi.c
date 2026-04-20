@@ -211,7 +211,6 @@ void nvim_curwin_set_w_virtcol(colnr_T val) { curwin->w_virtcol = val; }
 int nvim_ml_replace_curline(char *line, bool copy) { return ml_replace(curwin->w_cursor.lnum, line, copy); }
 
 // ins_str wrapper: inserts `len` bytes from `ptr` at cursor
-void nvim_ins_str(char *ptr, size_t len) { ins_str(ptr, len); }
 
 /// Advance cursor in `line` until reaching `target_vcol`.
 /// Returns the byte offset in line, and writes final vcol to *out_vcol.
@@ -249,7 +248,6 @@ _Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID must be 40");
 
 bool nvim_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
 
-int nvim_u_save(linenr_T top, linenr_T bot) { return u_save(top, bot); }
 
 colnr_T nvim_indent_win_chartabsize(const char *ptr, colnr_T vcol) { return win_chartabsize(curwin, ptr, vcol); }
 

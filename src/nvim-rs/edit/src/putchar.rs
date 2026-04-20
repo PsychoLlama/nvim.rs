@@ -71,6 +71,7 @@ extern "C" {
     /// `grid_line_puts(col`, buf, len, attr) (`edit_shim.c`).
     fn nvim_edit_grid_line_puts(col: c_int, buf: *const c_char, len: c_int, attr: c_int) -> c_int;
     /// `grid_line_flush()` (`edit_shim.c`).
+    #[link_name = "grid_line_flush"]
     fn nvim_edit_grid_line_flush();
     /// `schar_from_ascii`(' ') as `uint32_t` (`edit_shim.c`).
     fn nvim_schar_space() -> c_uint;

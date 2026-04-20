@@ -687,6 +687,7 @@ extern "C" {
 
 extern "C" {
     /// Rename a file (vim_rename wrapper)
+    #[link_name = "vim_rename"]
     fn nvim_vim_rename(from: *const c_char, to: *const c_char) -> c_int;
 
     /// mf_free_fnames: free memfile fname/ffname strings
@@ -702,6 +703,7 @@ extern "C" {
     fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
 
     /// nvim_os_set_cloexec: set close-on-exec flag on fd
+    #[link_name = "os_set_cloexec"]
     fn nvim_os_set_cloexec(fd: c_int);
 
     /// emsg: print error message
@@ -1396,6 +1398,7 @@ pub unsafe extern "C" fn rs_add_b0_fenc(b0p: *mut c_void, buf: *mut BufHandle) {
 extern "C" {
     // Phase 4: set_b0_fname accessors
     fn nvim_home_replace_b0_fname(buf: *const BufHandle, b0p: *mut c_void, maxlen: usize);
+    #[link_name = "os_get_username"]
     fn nvim_os_get_username(buf: *mut c_char, len: usize) -> c_int;
     fn nvim_set_b0_mtime_ino(buf: *mut BufHandle, b0p: *mut c_void) -> c_int;
     fn nvim_buf_set_b_mtime(buf: *mut BufHandle, val: i64);
@@ -1578,6 +1581,7 @@ extern "C" {
     fn nvim_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
 
     /// Check if paths are in same directory
+    #[link_name = "same_directory"]
     fn nvim_same_directory(a: *const c_char, b: *const c_char) -> c_int;
 
     /// Expand environment variables
@@ -1633,6 +1637,7 @@ extern "C" {
     fn nvim_flush_buffers_typeahead();
 
     /// Reset scroll position for messages
+    #[link_name = "msg_reset_scroll"]
     fn nvim_msg_reset_scroll();
 
     /// Get home-replace-save of fname (returns allocated string)
@@ -2187,9 +2192,11 @@ pub unsafe extern "C" fn rs_findswapname(
 
 extern "C" {
     /// Sync memfile blocks to disk
+    #[link_name = "mf_sync"]
     fn nvim_mf_sync(mfp: *mut c_void, flags: c_int) -> c_int;
 
     /// Check if memfile has blocks needing block number translation
+    #[link_name = "mf_need_trans"]
     fn nvim_mf_need_trans(mfp: *mut c_void) -> c_int;
 
     /// Check if memfile has dirty blocks (mf_dirty == MF_DIRTY_YES)

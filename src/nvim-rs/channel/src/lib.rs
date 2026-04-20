@@ -240,6 +240,7 @@ extern "C" {
     /// Get proc type (kProcTypePty detection). Defined in eval_shim.c.
     fn nvim_chan_get_proc_type(chan: *mut c_void) -> c_int;
     /// Close RPC layer for channel. Defined in eval_shim.c.
+    #[link_name = "rpc_close"]
     fn nvim_chan_rpc_close(chan: *mut c_void);
     /// Free a Lua reference. Defined in eval_shim.c.
     fn nvim_chan_api_free_luaref(luaref: c_int);
@@ -282,6 +283,7 @@ extern "C" {
     /// Return watcher->addr pointer. Defined in eval_shim.c.
     fn nvim_socket_watcher_get_addr(watcher: *mut c_void) -> *const std::ffi::c_char;
     /// Call rpc_start(chan). Defined in eval_shim.c.
+    #[link_name = "rpc_start"]
     fn nvim_chan_rpc_start(chan: *mut c_void);
     /// Return map_size(&channels). Defined in eval_shim.c.
     fn nvim_chan_map_size() -> usize;
@@ -310,6 +312,7 @@ extern "C" {
     /// Return chan->rpc.info (Dict, by value, 24 bytes). Defined in eval_shim.c.
     fn nvim_chan_get_rpc_info(chan: *mut c_void) -> ApiDict;
     /// arena_dict(arena, max_size). Defined in eval_shim.c.
+    #[link_name = "arena_dict"]
     fn nvim_arena_dict(arena: *mut c_void, max_size: usize) -> ApiDict;
     /// Wrap cstr_as_string(s) → ApiString. (cstr_as_string is in strings.c)
     fn cstr_as_string(s: *const std::ffi::c_char) -> ApiString;

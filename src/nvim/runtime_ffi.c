@@ -276,7 +276,6 @@ _Static_assert(SID_API_CLIENT == -9, "SID_API_CLIENT");
 _Static_assert(SID_STR == -10, "SID_STR");
 
 /// Allocate script-local variables for a script.
-void nvim_new_script_vars(int sid) { new_script_vars(sid); }
 
 // Deleted: nvim_script_items_ga_grow, nvim_script_items_inc_len,
 //          nvim_script_items_set_item, nvim_xcalloc_scriptitem,
@@ -301,7 +300,6 @@ void nvim_rt_exarg_set_arg(void *eap, char *arg) { ((exarg_T *)eap)->arg = arg; 
 bool nvim_exarg_arg_is_nul(void *eap) { return *((exarg_T *)eap)->arg == NUL; }
 
 /// Call expand_env.
-void nvim_rt_expand_env(char *src, char *dst, int dstlen) { expand_env(src, dst, dstlen); }
 
 /// Call do_exedit.
 void nvim_rt_do_exedit(void *eap) { do_exedit((exarg_T *)eap, NULL); }
@@ -406,7 +404,6 @@ void nvim_rt_dict_add_bool(dict_T *d, const char *key, size_t keylen,
                            bool val) { tv_dict_add_bool(d, key, keylen, val ? kBoolVarTrue : kBoolVarFalse); }
 
 /// Append a dict to a list.
-void nvim_rt_p2_tv_list_append_dict(list_T *l, dict_T *d) { tv_list_append_dict(l, d); }
 
 dict_T *nvim_rt_copy_script_vars(int sid)
 {
@@ -462,7 +459,6 @@ char *nvim_rt_stdpaths_get_xdg_var(int type) { return stdpaths_get_xdg_var((XDGV
 
 const char *nvim_rt_get_default_lib_dir(void) { return default_lib_dir; }
 
-void nvim_rt_vim_get_prefix_from_exepath(char *buf) { vim_get_prefix_from_exepath(buf); }
 
 /// Append path component.
 int nvim_rt_append_path(char *path, const char *to_append, size_t max_len)
@@ -485,7 +481,6 @@ int nvim_rt_pkg_snprintf(char *buf, size_t len, const char *fmt, const char *arg
 int64_t nvim_rt_pkg_eval_to_number(char *expr) { return (int64_t)eval_to_number(expr, false); }
 
 /// Call do_cmdline_cmd.
-void nvim_rt_pkg_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 
 /// Call TIME_MSG (time_msg if time_fd is set).
 void nvim_rt_pkg_time_msg(const char *msg) { TIME_MSG(msg); }
@@ -604,8 +599,6 @@ void nvim_rt_smsg_finished_sourcing(const char *fname) { smsg(0, _("finished sou
 void nvim_rt_smsg_continuing_in(const char *name) { smsg(0, _("continuing in %s"), name); }
 
 /// verbose_enter/leave wrappers.
-void nvim_rt_verbose_enter(void) { verbose_enter(); }
-void nvim_rt_verbose_leave(void) { verbose_leave(); }
 
 /// Get SOURCING_NAME (can be NULL).
 const char *nvim_rt_get_sourcing_name(void) { return HAVE_SOURCING_INFO ? SOURCING_NAME : NULL; }
@@ -644,7 +637,6 @@ void nvim_rt_restore_funccal(void *entry) { restore_funccal(); xfree(entry); }
 //          replaced by direct ScriptitemT field access in Rust.
 
 /// has_profiling wrapper.
-bool nvim_rt_has_profiling(bool file, const char *name, bool *forceit) { return has_profiling(file, name, forceit); }
 
 /// profile_init wrapper.
 void nvim_rt_profile_init(void *si) { profile_init((scriptitem_T *)si); }
@@ -702,7 +694,6 @@ char *nvim_rt_src_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free
 }
 
 /// nlua_exec_file wrapper.
-void nvim_rt_nlua_exec_file(const char *fname) { nlua_exec_file(fname); }
 
 /// nlua_exec_ga wrapper (executes buflines from a garray_T*).
 void nvim_rt_nlua_exec_ga(void *ga, const char *fname)
@@ -726,7 +717,6 @@ void nvim_rt_add_win_cmd_modifiers(char *buf, bool *multi_mods)
 }
 
 /// os_setenv wrapper.
-void nvim_rt_os_setenv(const char *name, const char *val, int overwrite) { os_setenv(name, val, overwrite); }
 
 /// SYS_OPTWIN_FILE constant.
 const char *nvim_rt_SYS_OPTWIN_FILE(void) { return SYS_OPTWIN_FILE; }
@@ -795,7 +785,6 @@ int nvim_rt_STRICMP(const char *a, const char *b) { return STRICMP(a, b); }
 // =============================================================================
 
 /// path_is_after: check if a path is in an "after" directory.
-bool nvim_rt_path_is_after(const char *buf, size_t buflen) { return path_is_after(buf, buflen); }
 
 /// smsg wrapper: "Searching for %s under %s in %s".
 void nvim_rt_smsg_searching_prefix(const char *name, const char *prefix, const char *path)
@@ -864,10 +853,8 @@ int nvim_rt_dbg_find_breakpoint(bool file, const char *fname, int after)
 }
 
 /// script_line_start wrapper.
-void nvim_rt_script_line_start(void) { script_line_start(); }
 
 /// script_line_end wrapper.
-void nvim_rt_script_line_end(void) { script_line_end(); }
 
 /// Get vc_type from vimconv_T*.
 int nvim_rt_conv_get_type(const void *vcp) { return ((vimconv_T *)vcp)->vc_type; }

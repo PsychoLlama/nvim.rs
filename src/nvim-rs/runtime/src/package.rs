@@ -87,6 +87,7 @@ extern "C" {
         arg: *const c_char,
     ) -> c_int;
     fn nvim_rt_pkg_eval_to_number(expr: *mut c_char) -> i64;
+    #[link_name = "do_cmdline_cmd"]
     fn nvim_rt_pkg_do_cmdline_cmd(cmd: *const c_char);
     fn nvim_rt_pkg_time_msg(msg: *const c_char);
 

@@ -66,6 +66,7 @@ extern "C" {
     fn nvim_qf_bufref_is_valid(br: *mut c_void) -> bool;
     fn nvim_qf_bufref_get_buf(br: *mut c_void) -> BufHandle;
     fn nvim_qf_bufref_set_buf_null(br: *mut c_void);
+    #[link_name = "xfree"]
     fn nvim_qf_bufref_free(br: *mut c_void);
 
     // wipe_buffer (already Rust-exported as rs_wipe_buffer, called via C name)

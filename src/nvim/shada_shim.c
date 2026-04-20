@@ -32,12 +32,9 @@ extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int
 extern int rs_compare_file_marks(const void *a, const void *b);
 extern var_flavour_T rs_var_flavour(const char *varname);
 
-void nvim_shada_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
-void nvim_shada_semsg_2s(const char *fmt, const char *a, const char *b) { semsg(fmt, a, b); }
 void nvim_shada_semsg_u64(const char *fmt, uint64_t val) { semsg(fmt, (unsigned long long)val); }
 void nvim_shada_semsg_2s_u64(const char *fmt, const char *a, uint64_t val, const char *b) { semsg(fmt, a, (unsigned long long)val, b); }
 void nvim_shada_smsg_1s(const char *fmt, const char *arg) { smsg(0, fmt, arg); }
-void nvim_shada_siemsg_1s(const char *fmt, const char *arg) { siemsg(fmt, arg); }
 
 typedef enum {
   kSDItemUnknown = -1,

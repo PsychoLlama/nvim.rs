@@ -169,7 +169,6 @@ void nvim_searchit_emsg_invalid(void) { semsg(_("E383: Invalid search string: %s
 void nvim_searchit_emsg_interr(void) { emsg(_(e_interr)); }
 void nvim_searchit_give_warning(int dir) { give_warning(_(dir == BACKWARD ? top_bot_msg : bot_top_msg), true); }
 void *nvim_regmmatch_alloc(void) { return xcalloc(1, sizeof(regmmatch_T)); }
-void nvim_regmmatch_free(void *rm) { xfree(rm); }
 int nvim_do_search_check_lineoff(void) { extern int rs_get_search_offset_line(int idx); return (rs_get_search_offset_line(0) && vim_strchr(p_cpo, CPO_LINEOFF) != NULL) ? 1 : 0; }
 int nvim_do_search_hasFolding_fwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, NULL, lnum) ? 1 : 0; }
 int nvim_do_search_hasFolding_bwd(linenr_T *lnum) { return hasFolding(curwin, *lnum, lnum, NULL) ? 1 : 0; }
@@ -203,7 +202,6 @@ int nvim_searchit_for_stat(int *pos_lnum, int *pos_col, int *pos_coladd,
   *end_lnum = endpos.lnum; *end_col = endpos.col; *end_coladd = endpos.coladd;
   return retval;
 }
-proftime_T nvim_profile_setlimit_ms(int timeout) { return profile_setlimit(timeout); }
 int nvim_profile_passed_limit_val(proftime_T start) { return profile_passed_limit(start) ? 1 : 0; }
 void nvim_stat_free_pat(char *pat) { xfree(pat); }
 int nvim_curwin_rl_with_rlc_s(void) { return (curwin->w_p_rl && *curwin->w_p_rlc == 's') ? 1 : 0; }

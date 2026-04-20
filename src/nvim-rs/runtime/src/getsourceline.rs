@@ -41,7 +41,9 @@ extern "C" {
     fn nvim_rt_dbg_breakpoint(fname: *const c_char, lnum: c_int);
 
     // Profiling
+    #[link_name = "script_line_start"]
     fn nvim_rt_script_line_start();
+    #[link_name = "script_line_end"]
     fn nvim_rt_script_line_end();
 
     // SOURCING_LNUM access

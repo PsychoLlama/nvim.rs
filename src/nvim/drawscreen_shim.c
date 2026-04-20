@@ -413,10 +413,8 @@ void nvim_win_update_syn_timeout_start(win_T *wp)
 }
 
 /// Call win_col_off for wp.
-int nvim_win_col_off(win_T *wp) { return win_col_off(wp); }
 
 /// Call win_col_off2 for wp.
-int nvim_win_col_off2(win_T *wp) { return win_col_off2(wp); }
 
 // nvim_buf_terminal_check_size is defined in buffer_shim.c
 
@@ -649,10 +647,8 @@ void nvim_set_empty_rows_win(win_T *wp, int srow)
 }
 
 /// Call hl_combine_attr(a, b).
-int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
 
 /// Call win_bg_attr(wp).
-int nvim_win_bg_attr(win_T *wp) { return win_bg_attr(wp); }
 
 /// Return wp->w_p_fcs_chars.lastline (as schar_T / uint32_t).
 uint32_t nvim_win_get_fcs_lastline(win_T *wp) { return (uint32_t)wp->w_p_fcs_chars.lastline; }

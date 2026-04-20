@@ -31,6 +31,7 @@ extern "C" {
         lnum_new: LinenrT,
         count_new: c_int,
     );
+    #[link_name = "tv_get_lnum"]
     fn nvim_diff_tv_get_lnum(argvars: *mut c_void) -> LinenrT;
     fn nvim_get_curwin() -> WinHandle;
     fn rs_diff_check_fill(wp: WinHandle, lnum: LinenrT) -> c_int;

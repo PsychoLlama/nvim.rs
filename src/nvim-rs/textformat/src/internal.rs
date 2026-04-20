@@ -101,6 +101,7 @@ extern "C" {
     fn nvim_xfree(ptr: *mut c_void);
     #[link_name = "ins_bytes"]
     fn nvim_ins_bytes(p: *const c_char);
+    #[link_name = "ins_str"]
     fn nvim_ins_str(p: *const c_char, len: usize);
     fn nvim_textfmt_get_leader_len_simple(line: *const c_char) -> c_int;
     #[link_name = "check_linecomment"]

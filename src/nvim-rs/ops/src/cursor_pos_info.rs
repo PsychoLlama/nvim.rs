@@ -72,6 +72,7 @@ extern "C" {
     fn nvim_curbuf_get_b_p_fixeol() -> bool;
 
     // Interrupt / breakcheck
+    #[link_name = "os_breakcheck"]
     fn nvim_os_breakcheck();
     #[link_name = "got_int"]
     static mut nvim_got_int: bool;
@@ -92,6 +93,7 @@ extern "C" {
     static mut msg_scroll: c_int;
     static mut p_ch: i64;
     fn strlen(s: *const c_char) -> usize;
+    #[link_name = "bomb_size"]
     fn nvim_bomb_size() -> c_int;
 
     // dict operations (for nvim_cpi_populate_dict absorption)

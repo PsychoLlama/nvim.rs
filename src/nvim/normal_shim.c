@@ -111,7 +111,6 @@ void nvim_set_cursor_coladd(int val) { curwin->w_cursor.coladd = val; }
 fmark_T *nvim_mark_get(int name) { return mark_get(curbuf, curwin, NULL, kMarkAll, name); }
 fmark_T *nvim_get_changelist(int count1) { return get_changelist(curbuf, curwin, count1); }
 fmark_T *nvim_get_jumplist(int count1) { return get_jumplist(curwin, count1); }
-void nvim_emsg(const char *msg) { emsg(msg); }
 bool nvim_put_get_save_fen(void) { return curwin->w_p_fen; }
 void nvim_put_do_put(int regname, void *savereg, int dir, int count, int flags) { do_put(regname, (yankreg_T *)savereg, dir, count, flags); }
 void nvim_put_free_register(void *savereg) { if (savereg != NULL) { free_register((yankreg_T *)savereg); xfree(savereg); } }
@@ -322,7 +321,6 @@ void nvim_showcmd_set_w_redr_status(void) { curwin->w_redr_status = true; }
 int nvim_get_no_check_timestamps(void) { return no_check_timestamps; }
 bool nvim_get_did_check_timestamps(void) { return did_check_timestamps; }
 int nvim_stuff_empty(void) { return stuff_empty() ? 1 : 0; }
-int nvim_typebuf_typed(void) { return typebuf_typed(); }
 int nvim_get_allbuf_lock(void) { return allbuf_lock; }
 int nvim_get_curbuf_b_ro_locked(void) { return curbuf->b_ro_locked; }
 int nvim_get_no_wait_return(void) { return no_wait_return; }
@@ -405,6 +403,7 @@ bool nvim_ident_curbuf_is_help(void) { return curbuf->b_help; }
 char *nvim_ident_get_curbuf_ft(void) { return curbuf->b_p_ft; }
 bool nvim_do_cmdline_for_colon(cmdarg_T *cap, bool is_cmdkey) { return do_cmdline(NULL, is_cmdkey ? getcmdkeycmd : getexline, NULL, cap->oap->op_type != OP_NOP ? DOCMD_KEEPLINE : 0); }
 int nvim_did_emsg_check(void) { return did_emsg; }
+void nvim_emsg(const char *s) { emsg(s); }
 bool nvim_search_hls_needs_redraw(int prev_lnum, int prev_col, int prev_coladd) { pos_T prev = { .lnum = prev_lnum, .col = (colnr_T)prev_col, .coladd = (colnr_T)prev_coladd }; return !equalpos(curwin->w_cursor, prev) && p_hls && !no_hlsearch && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L); }
 
 int nvim_do_ecmd_for_gotofile(char *ptr) { return do_ecmd(0, ptr, NULL, NULL, ECMD_LAST, buf_hide(curbuf) ? ECMD_HIDE : 0, curwin); }

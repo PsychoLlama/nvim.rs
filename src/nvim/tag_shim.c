@@ -160,11 +160,9 @@ const char *nvim_get_curbuf_tags(void) { return curbuf->b_p_tags; }
 const char *nvim_get_p_tags(void) { return p_tags; }
 extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
 bool nvim_has_bufreadcmd(const char *fname) { return rs_has_autocmd(EVENT_BUFREADCMD, fname, 0); }
-bool nvim_check_can_set_curbuf_forceit(int forceit) { return check_can_set_curbuf_forceit(forceit); }
 const char *nvim_get_curbuf_ffname(void) { return curbuf->b_ffname; }
 bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
 char *nvim_path_tail(char *path) { return path_tail(path); }
-bool nvim_path_has_wildcard(const char *fname) { return path_has_wildcard(fname); }
 void nvim_vim_findfile_cleanup(void *search_ctx) { vim_findfile_cleanup(search_ctx); }
 int nvim_get_postponed_split(void) { return postponed_split; }
 void nvim_set_postponed_split(int val) { postponed_split = val; }
@@ -332,7 +330,6 @@ void nvim_tag_set_curswant(bool val) { curwin->w_set_curswant = val; }
 int nvim_tag_get_magic_overruled(void) { return (int)magic_overruled; }
 void nvim_tag_set_magic_overruled(int val) { magic_overruled = (optmagic_T)val; }
 bool nvim_tag_get_no_hlsearch(void) { return no_hlsearch; }
-void nvim_tag_set_no_hlsearch_val(bool val) { set_no_hlsearch(val); }
 bool nvim_tag_cpo_has_tagpat(void) { return vim_strchr(p_cpo, CPO_TAGPAT) != NULL; }
 bool nvim_tag_get_p_ws(void) { return p_ws; }
 void nvim_tag_set_p_ws(bool val) { p_ws = val; }
@@ -355,7 +352,6 @@ void nvim_tag_set_msg_scroll(int val) { msg_scroll = val; }
 int nvim_tag_get_msg_scrolled(void) { return msg_scrolled; }
 int nvim_tag_get_msg_silent(void) { return msg_silent; }
 char *nvim_tag_buflist_findnr_ffname(int fnum) { buf_T *buf = buflist_findnr(fnum); return buf != NULL ? buf->b_ffname : NULL; }
-void nvim_tag_give_warning(const char *msg_str, bool ic) { give_warning(msg_str, ic); }
 bool nvim_tag_get_KeyTyped(void) { return KeyTyped; }
 bool nvim_tag_tagstack_changed(void *saved_tagstack) { return saved_tagstack != curwin->w_tagstack; }
 void *nvim_tag_get_tagstack_ptr(void) { return curwin->w_tagstack; }

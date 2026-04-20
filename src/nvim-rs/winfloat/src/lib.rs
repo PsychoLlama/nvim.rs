@@ -539,8 +539,11 @@ extern "C" {
         colp: *mut c_int,
     ) -> WinHandle;
     fn nvim_ui_has_multigrid() -> c_int;
+    #[link_name = "set_must_redraw"]
     fn nvim_set_must_redraw(type_: c_int);
+    #[link_name = "redraw_later"]
     fn nvim_redraw_later(wp: WinHandle, type_: c_int);
+    #[link_name = "win_set_inner_size"]
     fn nvim_win_set_inner_size(wp: WinHandle, valid_cursor: bool);
     fn nvim_win_grid_adjust(wp: WinHandle, row: *mut c_int, col: *mut c_int);
     fn nvim_textpos2screenpos(
@@ -1316,13 +1319,16 @@ extern "C" {
     fn nvim_emsg_and_clear_error(err: *mut c_void);
     fn nvim_api_clear_error(err: *mut c_void);
     fn nvim_win_free(wp: WinHandle);
+    #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
+    #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
     fn nvim_create_buf_wrapper(listed: bool, scratch: bool, err: *mut c_void) -> c_int;
     fn nvim_find_buffer_by_handle(b: c_int, err: *mut c_void) -> *mut c_void;
     fn nvim_buf_set_bufhidden_wipe(buf: *mut c_void);
     fn win_set_buf(wp: WinHandle, buf: *mut c_void, err: *mut c_void);
     fn nvim_wconfig_alloc_init() -> *mut c_void;
+    #[link_name = "xfree"]
     fn nvim_wconfig_free(cfg: *mut c_void);
     fn nvim_error_alloc_init() -> *mut c_void;
     fn nvim_error_free(err: *mut c_void);

@@ -64,6 +64,7 @@ extern "C" {
     fn nvim_timer_get_callback_ptr(timer: TimerHandle) -> CallbackHandle;
     fn nvim_timer_set_callback(timer: TimerHandle, cb: CallbackHandle);
     fn nvim_timer_alloc() -> TimerHandle;
+    #[link_name = "xfree"]
     fn nvim_timer_free(timer: TimerHandle);
 
     // -- TimeWatcher compound operations --

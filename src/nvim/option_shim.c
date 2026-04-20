@@ -258,7 +258,6 @@ void nvim_set_ru_wid(int val) { ru_wid = val; }
 int nvim_optset_varp_is_p_fenc(const void *args) { char **gvarp = (char **)get_option_varp_scope_from(((const optset_T *)args)->os_idx, OPT_GLOBAL, (buf_T *)((const optset_T *)args)->os_buf, NULL); return gvarp == &p_fenc ? 1 : 0; }
 int nvim_optset_varp_is_p_enc(const void *args) { return ((const optset_T *)args)->os_varp == (void *)&p_enc ? 1 : 0; }
 char *nvim_enc_canonize(char *enc) { return enc_canonize(enc); }
-void nvim_spell_reload(void) { spell_reload(); }
 // statusline default value helper
 const char *nvim_optset_stl_get_default(const void *args) { return get_option_default(((const optset_T *)args)->os_idx, ((const optset_T *)args)->os_flags).data.string.data; }
 int nvim_get_kOptStatusline(void) { return (int)kOptStatusline; }
@@ -452,7 +451,6 @@ bool nvim_regmatch_has_regprog(const void *handle)
   { if (handle == NULL) { return false; } return ((const regmatch_T *)handle)->regprog != NULL; }
 bool nvim_regmatch_exec(void *handle, const char *name)
   { if (handle == NULL || name == NULL) { return false; } return vim_regexec((regmatch_T *)handle, (char *)name, 0); }
-int nvim_do_set(char *s, int flags) { return do_set(s, flags); }
 sctx_T *nvim_modeline_sctx_save_and_set(int lnum) {
   sctx_T *saved = xmalloc(sizeof(sctx_T)); *saved = current_sctx;
   current_sctx = (sctx_T){ .sc_sid = SID_MODELINE, .sc_lnum = lnum }; return saved;
@@ -474,7 +472,6 @@ const void *nvim_get_p_fcs_addr(void) { return (const void *)&p_fcs; }
 lcs_chars_T *nvim_win_get_lcs_chars_ptr(win_T *win) { return win ? &win->w_p_lcs_chars : NULL; }
 void nvim_win_set_lcs_chars(win_T *win, const lcs_chars_T *val) { if (win && val) { win->w_p_lcs_chars = *val; } }
 void nvim_win_set_fcs_chars(win_T *win, const fcs_chars_T *val) { if (win && val) { win->w_p_fcs_chars = *val; } }
-schar_T nvim_schar_from_str(const char *str) { return schar_from_str(str); }
 bool nvim_parse_border_opt(char *border_opt) {
   WinConfig fconfig = WIN_CONFIG_INIT;
   Error err = ERROR_INIT;

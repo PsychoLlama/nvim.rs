@@ -532,7 +532,6 @@ int nvim_edit_grid_line_puts(int col, const char *buf, int len, int attr)
 }
 
 /// Flush the current grid line.
-void nvim_edit_grid_line_flush(void) { grid_line_flush(); }
 
 /// True when curwin->w_grid_alloc.chars is non-NULL.
 bool nvim_curwin_grid_alloc_has_chars(void) { return curwin->w_grid_alloc.chars != NULL; }
@@ -558,7 +557,6 @@ bool nvim_get_ins_at_eol(void) { return ins_at_eol; }
 linenr_T nvim_get_where_paste_started_lnum(void) { return where_paste_started.lnum; }
 
 /// Call update_curswant().
-void nvim_update_curswant(void) { update_curswant(); }
 
 /// Decrement curbuf->b_ml.ml_line_len by 1.
 void nvim_curbuf_dec_ml_line_len(void) { curbuf->b_ml.ml_line_len--; }
@@ -706,13 +704,11 @@ void nvim_edit_tab_rewrite_line(char *ptr, int i,
 void nvim_edit_tab_strmove(char *ptr, int i) { STRMOVE(ptr, ptr + i); }
 
 /// backspace_until_column(col) for vreplace.
-void nvim_edit_tab_backspace_until_column(colnr_T col) { backspace_until_column(col); }
 
 /// ins_bytes_len(s, len) for vreplace.
 void nvim_edit_tab_ins_bytes_len(const char *s, size_t len) { ins_bytes_len((char *)s, len); }
 
 /// replace_join(off) for replace mode.
-void nvim_edit_tab_replace_join(int off) { replace_join(off); }
 
 // ---- Phase 3 accessors: nvim_edit_init_prompt_impl ----
 

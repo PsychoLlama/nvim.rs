@@ -229,6 +229,7 @@ extern "C" {
     #[link_name = "fix_fname"]
     fn nvim_fix_fname(ffname: *const c_char) -> *mut c_char;
     fn rs_otherfile(ffname: *const c_char) -> bool;
+    #[link_name = "path_fix_case"]
     fn nvim_ecmd_path_fix_case(sfname: *mut c_char);
     fn nvim_ecmd_has_case_insensitive_filename() -> c_int;
     #[link_name = "rs_buflist_findnr"]

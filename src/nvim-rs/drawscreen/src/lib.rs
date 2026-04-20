@@ -2281,6 +2281,7 @@ pub extern "C" fn rs_win_update_cursorline(wp: WinHandle, _foldinfo: FoldinfoHan
 extern "C" {
     fn nvim_win_rl_cursor_col(wp: WinHandle) -> c_int;
     fn nvim_grid_adjust_cursor_goto(wp: WinHandle, row: c_int, col: c_int);
+    #[link_name = "validate_cursor"]
     fn nvim_validate_cursor_for_win(wp: WinHandle);
 }
 
@@ -3608,8 +3609,10 @@ extern "C" {
     #[link_name = "compute_foldcolumn"]
     fn compute_foldcolumn_init(wp: WinHandle, extra: c_int) -> c_int;
     /// nvim_win_col_off: call win_col_off(wp).
+    #[link_name = "win_col_off"]
     fn nvim_win_col_off(wp: WinHandle) -> c_int;
     /// nvim_win_col_off2: call win_col_off2(wp).
+    #[link_name = "win_col_off2"]
     fn nvim_win_col_off2(wp: WinHandle) -> c_int;
     /// nvim_win_update_syn_timeout_start: setup syntax timeout.
     fn nvim_win_update_syn_timeout_start(wp: WinHandle);
@@ -3693,8 +3696,10 @@ extern "C" {
     /// Call set_empty_rows(wp, srow).
     fn nvim_set_empty_rows_win(wp: WinHandle, srow: c_int);
     /// Call hl_combine_attr(a, b).
+    #[link_name = "hl_combine_attr"]
     fn nvim_hl_combine_attr(a: c_int, b: c_int) -> c_int;
     /// Call win_bg_attr(wp).
+    #[link_name = "win_bg_attr"]
     fn nvim_win_bg_attr(wp: WinHandle) -> c_int;
     /// Return dy_flags (cast to c_int).
     #[link_name = "nvim_get_dy_flags"]

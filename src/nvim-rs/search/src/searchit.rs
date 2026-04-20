@@ -108,6 +108,7 @@ extern "C" {
 
     // Regmmatch allocation
     fn nvim_regmmatch_alloc() -> RegmmatchHandle;
+    #[link_name = "xfree"]
     fn nvim_regmmatch_free(rm: RegmmatchHandle);
 }
 

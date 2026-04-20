@@ -287,7 +287,6 @@ void nvim_read_prompt_state(NvimPromptState *out)
 
 void nvim_write_prompt_start_lnum(int32_t lnum) { curbuf->b_prompt_start.mark.lnum = (linenr_T)lnum; }
 linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf) { return buf->b_prompt_start.mark.lnum; }
-void nvim_appended_lines_mark(linenr_T lnum, int count) { appended_lines_mark(lnum, count); }
 void nvim_curbuf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
 void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
@@ -335,7 +334,6 @@ void *nvim_save_provider_caller_scope(void)
 
 void nvim_restore_provider_caller_scope(void *saved) { provider_caller_scope = *(struct caller_scope *)saved; xfree(saved); }
 timer_T *nvim_timer_alloc(void) { return xcalloc(1, sizeof(timer_T)); }
-void nvim_timer_free(timer_T *timer) { xfree(timer); }
 
 void nvim_timer_read_fields(const timer_T *timer, NvimTimerFields *out)
 { out->timer_id = timer->timer_id; out->repeat_count = timer->repeat_count; out->refcount = timer->refcount; out->emsg_count = timer->emsg_count; out->timeout = timer->timeout; out->stopped = timer->stopped; out->paused = timer->paused; }
@@ -408,7 +406,6 @@ void nvim_chan_set_internal_closed(Channel *chan, int v) { chan->stream.internal
 // proc type accessor (kProcTypePty detection)
 int nvim_chan_get_proc_type(Channel *chan) { return (int)chan->stream.proc.type; }
 // rpc_close wrapper (rpc_close is declared in nvim/msgpack_rpc/channel.h, included via channel.h)
-void nvim_chan_rpc_close(Channel *chan) { rpc_close(chan); }
 // api_free_luaref wrapper
 void nvim_chan_api_free_luaref(int ref) { api_free_luaref((LuaRef)ref); }
 
@@ -464,7 +461,6 @@ void nvim_socket_watcher_accept_and_init(SocketWatcher *watcher, Channel *chan)
 }
 
 /// Wrap rpc_start for Rust (rpc_start is declared in msgpack_rpc/channel.h).
-void nvim_chan_rpc_start(Channel *chan) { rpc_start(chan); }
 
 /// Return the number of entries in the channels map.
 size_t nvim_chan_map_size(void) { return map_size(&channels); }
@@ -516,7 +512,6 @@ int nvim_terminal_buf_id(Channel *chan) { return (int)terminal_buf(chan->term); 
 Dict nvim_chan_get_rpc_info(Channel *chan) { return chan->rpc.info; }
 
 /// arena_dict(arena, max_size) wrapper.
-Dict nvim_arena_dict(Arena *arena, size_t max_size) { return arena_dict(arena, max_size); }
 
 /// Convert a Dict to v:event["info"] (typval dict) and mark readonly.
 /// Calls object_to_vim(DICT_OBJ(info), ...) + tv_dict_add_dict + tv_dict_set_keys_readonly.

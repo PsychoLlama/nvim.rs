@@ -70,6 +70,7 @@ extern "C" {
     // -- insert_special dependencies --
     static mut mod_mask: c_int;
     fn nvim_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
+    #[link_name = "ins_str"]
     fn nvim_ins_str(p: *const c_char, len: usize);
     fn AppendToRedobuffLit(s: *const c_char, len: c_int);
     fn insertchar(c: c_int, flags: c_int, second_indent: c_int);

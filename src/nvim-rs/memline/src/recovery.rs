@@ -165,8 +165,10 @@ extern "C" {
     fn nvim_mf_open_rdonly(fname: *mut c_char) -> *mut c_void;
     fn nvim_mf_close_nodelete(mfp: *mut c_void);
     fn nvim_mf_get_block(mfp: *mut c_void, bnum: i64, page_count: c_uint) -> *mut c_void;
+    #[link_name = "mf_put"]
     fn nvim_mf_put_block(mfp: *mut c_void, hp: *mut c_void, dirty: bool, infile: bool);
     fn nvim_mf_get_page_size(mfp: *mut c_void) -> c_uint;
+    #[link_name = "mf_new_page_size"]
     fn nvim_mf_new_page_size_wrapper(mfp: *mut c_void, new_size: c_uint);
     fn nvim_mf_get_file_size(mfp: *mut c_void) -> i64;
     fn nvim_mf_set_blocknr_max(mfp: *mut c_void, val: i64);

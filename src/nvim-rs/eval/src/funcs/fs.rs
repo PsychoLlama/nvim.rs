@@ -52,6 +52,7 @@ extern "C" {
     // Phase 2 additions
     fn os_fileinfo_link(fname: *const u8, info: *mut c_void) -> bool;
     fn nvim_fileinfo_mode(info: *const c_void) -> u64;
+    #[link_name = "os_fileinfo_size"]
     fn nvim_fileinfo_get_size(info: *const c_void) -> u64;
     fn os_remove(name: *const u8) -> c_int;
     fn os_rmdir(name: *const u8) -> c_int;

@@ -484,7 +484,6 @@ void nvim_buf_free_stuff_del(buf_T *buf)
 // FileInfo accessors
 int64_t nvim_fileinfo_get_mtime(const FileInfo *fi) { return (int64_t)fi->stat.st_mtim.tv_sec; }
 int64_t nvim_fileinfo_get_mtime_ns(const FileInfo *fi) { return (int64_t)fi->stat.st_mtim.tv_nsec; }
-uint64_t nvim_fileinfo_get_size(const FileInfo *fi) { return os_fileinfo_size(fi); }
 int32_t nvim_fileinfo_get_mode(const FileInfo *fi) { return (int32_t)fi->stat.st_mode; }
 
 // set_option_direct wrapper for fileencoding
@@ -540,7 +539,6 @@ int nvim_get_MODE_NORMAL_BUSY(void) { return MODE_NORMAL_BUSY; }
 int nvim_get_MODE_CMDLINE(void) { return MODE_CMDLINE; }
 void nvim_msg_puts_hl_e(const char *s) { msg_puts_hl(s, HLF_E, true); }
 void nvim_msg_puts_hl_w(const char *s) { msg_puts_hl(s, HLF_W, true); }
-void nvim_msg_end_wrap(void) { msg_end(); }
 // --- home_replace_save wrapper ---
 char *nvim_home_replace_save(const buf_T *buf, const char *fname) { return home_replace_save(buf, (char *)fname); }
 // --- do_dialog for file-changed warning ---
@@ -549,7 +547,6 @@ int nvim_do_dialog_file_changed(const char *tbuf) {
                    _("&OK\n&Load File\nLoad File &and Options"), 1, NULL, true);
 }
 // --- undo accessors for buf_reload (used in Phase 5/6) ---
-void nvim_u_compute_hash(buf_T *buf, uint8_t *hash) { u_compute_hash(buf, hash); }
 void nvim_u_write_undo(const char *name, int forceit, buf_T *buf, uint8_t *hash) {
   u_write_undo((char *)name, (bool)forceit, buf, hash);
 }
@@ -569,8 +566,6 @@ int nvim_u_savecommon_reload_ok(buf_T *buf) {
   u_sync(false);
   return u_savecommon(buf, 0, buf->b_ml.ml_line_count + 1, 0, true);
 }
-void nvim_u_clearallandblockfree(buf_T *buf) { u_clearallandblockfree(buf); }
-void nvim_u_unchanged(buf_T *buf) { u_unchanged(buf); }
 void nvim_unchanged(buf_T *buf) { unchanged(buf, true, true); }
 int nvim_ml_open_buf(buf_T *buf) {
   buf_T *saved = curbuf;

@@ -81,6 +81,7 @@ pub const EXFLAG_PRINT: c_int = 0x04;
 extern "C" {
     static mut got_int: bool;
     fn nvim_get_sandbox() -> c_int;
+    #[link_name = "emsg"]
     fn nvim_emsg(s: *const c_char);
 
     fn skipwhite(p: *const c_char) -> *mut c_char;

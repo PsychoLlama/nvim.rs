@@ -52,6 +52,7 @@ extern "C" {
     fn estack_pop();
 
     /// Call `do_set(s, flags)`.
+    #[link_name = "do_set"]
     fn nvim_do_set(s: *mut c_char, flags: c_int) -> c_int;
     /// Save `current_sctx` and set it to `SID_MODELINE` context for `lnum`.
     /// Returns a heap pointer; must pass to `nvim_modeline_sctx_restore()`.

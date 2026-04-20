@@ -23,6 +23,7 @@ const SID_LUA: ScidT = -8;
 #[allow(dead_code)]
 extern "C" {
     // Allocate script-local variables for a script.
+    #[link_name = "new_script_vars"]
     fn nvim_new_script_vars(sid: c_int);
 
     // path comparison
@@ -38,6 +39,7 @@ extern "C" {
     fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
     fn nvim_rt_exarg_set_arg(eap: *mut c_void, arg: *mut c_char);
     fn nvim_exarg_arg_is_nul(eap: *mut c_void) -> bool;
+    #[link_name = "expand_env"]
     fn nvim_rt_expand_env(src: *mut c_char, dst: *mut c_char, dstlen: c_int);
     fn nvim_rt_do_exedit(eap: *mut c_void);
     fn nvim_rt_emsg_invarg();
@@ -76,6 +78,7 @@ extern "C" {
     fn nvim_rt_dict_add_str(d: *mut c_void, key: *const c_char, keylen: usize, val: *const c_char);
     fn nvim_rt_dict_add_nr(d: *mut c_void, key: *const c_char, keylen: usize, nr: i64);
     fn nvim_rt_dict_add_bool(d: *mut c_void, key: *const c_char, keylen: usize, val: bool);
+    #[link_name = "tv_list_append_dict"]
     fn nvim_rt_p2_tv_list_append_dict(l: *mut c_void, d: *mut c_void);
     fn nvim_rt_copy_script_vars(sid: c_int) -> *mut c_void;
     fn nvim_rt_dict_add_dict(d: *mut c_void, key: *const c_char, keylen: usize, val: *mut c_void);

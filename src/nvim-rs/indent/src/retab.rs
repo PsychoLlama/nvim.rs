@@ -45,6 +45,7 @@ extern "C" {
     fn nvim_curbuf_get_ml_line_ptr() -> *mut c_char;
 
     // Undo
+    #[link_name = "u_save"]
     fn nvim_u_save(top: LinenrT, bot: LinenrT) -> c_int;
     fn nvim_u_clearline();
 

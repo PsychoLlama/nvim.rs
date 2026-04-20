@@ -28,7 +28,9 @@ extern "C" {
 
     // --- undo ---
     fn nvim_u_savecommon_reload_ok(buf: *mut c_void) -> c_int;
+    #[link_name = "u_clearallandblockfree"]
     fn nvim_u_clearallandblockfree(buf: *mut c_void);
+    #[link_name = "u_unchanged"]
     fn nvim_u_unchanged(buf: *mut c_void);
 
     // --- buffer list ---

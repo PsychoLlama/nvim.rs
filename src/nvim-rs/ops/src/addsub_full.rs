@@ -80,6 +80,7 @@ extern "C" {
     fn nvim_set_cursor_col(col: c_int);
     fn nvim_gchar_cursor() -> c_int;
     fn del_char(fixpos: bool) -> c_int;
+    #[link_name = "ins_str"]
     fn nvim_ins_str(ptr: *const std::ffi::c_char, len: usize);
     fn ins_char(c: c_int);
 

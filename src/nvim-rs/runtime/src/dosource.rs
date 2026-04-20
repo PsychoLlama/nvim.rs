@@ -83,7 +83,9 @@ extern "C" {
     fn nvim_rt_fclose(fp: *mut c_void) -> c_int;
 
     // Verbose messages
+    #[link_name = "verbose_enter"]
     fn nvim_rt_verbose_enter();
+    #[link_name = "verbose_leave"]
     fn nvim_rt_verbose_leave();
     fn nvim_rt_get_sourcing_name() -> *const c_char;
     fn nvim_rt_get_sourcing_lnum() -> c_int;
@@ -114,6 +116,7 @@ extern "C" {
     fn nvim_rt_prof_child_exit(wait_start: *mut u64);
     fn nvim_rt_save_funccal() -> *mut c_void;
     fn nvim_rt_restore_funccal(entry: *mut c_void);
+    #[link_name = "has_profiling"]
     fn nvim_rt_has_profiling(file: bool, name: *const c_char, forceit: *mut bool) -> bool;
     fn nvim_rt_profile_init(si: *mut c_void);
     fn nvim_rt_profile_start() -> u64;
@@ -127,6 +130,7 @@ extern "C" {
         cookie: *mut c_void,
         flags: c_int,
     ) -> c_int;
+    #[link_name = "nlua_exec_file"]
     fn nvim_rt_nlua_exec_file(fname: *const c_char);
     fn nvim_rt_nlua_exec_ga(ga: *mut c_void, fname: *const c_char);
 
@@ -195,6 +199,7 @@ extern "C" {
 
     // ex_options helpers
     fn nvim_rt_add_win_cmd_modifiers(buf: *mut c_char, multi_mods: *mut bool);
+    #[link_name = "os_setenv"]
     fn nvim_rt_os_setenv(name: *const c_char, val: *const c_char, overwrite: c_int);
     fn nvim_rt_SYS_OPTWIN_FILE() -> *const c_char;
 

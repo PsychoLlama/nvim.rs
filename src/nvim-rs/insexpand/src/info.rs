@@ -83,6 +83,7 @@ extern "C" {
     fn nvim_ci_list_append_dict(list: *mut c_void, dict: *mut c_void);
 
     // Pum / preview
+    #[link_name = "pum_visible"]
     fn nvim_pum_visible() -> c_int;
     fn nvim_win_float_find_preview() -> *mut c_void;
     fn nvim_ci_win_get_handle(wp: *mut c_void) -> c_int;

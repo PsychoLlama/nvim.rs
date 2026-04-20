@@ -369,6 +369,7 @@ extern "C" {
     fn nvim_stuff_empty() -> c_int;
     fn nvim_get_where_paste_started_lnum() -> LinenrT;
     fn nvim_validate_virtcol_curwin();
+    #[link_name = "update_curswant"]
     fn nvim_update_curswant();
     fn nvim_get_ins_at_eol() -> bool;
     fn nvim_curwin_get_curswant() -> ColnrT;

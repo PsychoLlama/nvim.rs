@@ -30,6 +30,7 @@ extern "C" {
 
     // Growarray accessors
     fn nvim_ga_init_int(gap: *mut c_void);
+    #[link_name = "ga_grow"]
     fn nvim_ga_grow(gap: *mut c_void, n: c_int);
     fn nvim_ga_get_len(gap: *mut c_void) -> c_int;
     fn nvim_ga_set_len(gap: *mut c_void, len: c_int);

@@ -821,6 +821,7 @@ const LCS_LEADMULTISPACE_NAME_IDX: usize = 10;
 
 // External functions for set_chars_option
 extern "C" {
+    #[link_name = "schar_from_str"]
     fn nvim_schar_from_str(str: *const c_char) -> ScharT;
     #[link_name = "ptr2cells"]
     fn nvim_ptr2cells(p: *const c_char) -> c_int;

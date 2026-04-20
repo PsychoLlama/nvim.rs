@@ -94,6 +94,7 @@ extern "C" {
     /// Wrapper for ui_call_grid_resize.
     fn nvim_call_grid_resize(handle: HandleT, cols: c_int, rows: c_int);
     /// Wrapper for ui_check_cursor_grid.
+    #[link_name = "ui_check_cursor_grid"]
     fn nvim_win_ui_check_cursor_grid(grid_handle: c_int);
     /// Allocate zeroed memory.
     #[link_name = "xcalloc"]

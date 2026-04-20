@@ -652,6 +652,7 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // Pre-check inlining (Phase 2)
+    #[link_name = "check_can_set_curbuf_forceit"]
     fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
     fn rs_vgr_get_auname(cmdidx: c_int) -> *const c_char;
     // nvim_apply_autocmds_quickfixcmdpre/post deleted: use apply_autocmds + aborting directly

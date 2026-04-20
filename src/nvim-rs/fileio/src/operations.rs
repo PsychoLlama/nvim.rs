@@ -862,8 +862,10 @@ extern "C" {
     /// set_fileformat(ff, opt) -- wraps C set_fileformat.
     fn nvim_set_fileformat_local(ff: c_int);
     /// get_fileformat_force(buf, eap) -- returns file format integer.
+    #[link_name = "get_fileformat_force"]
     fn nvim_get_fileformat_force(buf: *mut c_void, eap: *mut c_void) -> c_int;
     /// set_options_bin(oldval, newval, opt) -- update binary option.
+    #[link_name = "set_options_bin"]
     fn nvim_set_options_bin(oldval: c_int, newval: c_int, opt: c_int);
     /// Get eap->force_bin.
     fn nvim_exarg_get_force_bin(eap: *const c_void) -> c_int;

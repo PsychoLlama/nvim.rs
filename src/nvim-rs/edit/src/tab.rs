@@ -78,6 +78,7 @@ extern "C" {
 
     // Character insertion
     fn ins_char(c: c_int);
+    #[link_name = "ins_str"]
     fn nvim_ins_str(s: *const c_char, len: usize);
     fn replace_push_nul();
 
@@ -106,8 +107,10 @@ extern "C" {
         fpos_lnum: LinenrT,
     );
     fn nvim_edit_tab_strmove(ptr: *mut c_char, i: c_int);
+    #[link_name = "backspace_until_column"]
     fn nvim_edit_tab_backspace_until_column(col: ColnrT);
     fn nvim_edit_tab_ins_bytes_len(s: *const c_char, len: usize);
+    #[link_name = "replace_join"]
     fn nvim_edit_tab_replace_join(off: c_int);
     fn xfree(ptr: *mut std::ffi::c_void);
 }

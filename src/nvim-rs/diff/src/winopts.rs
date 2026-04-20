@@ -401,6 +401,7 @@ extern "C" {
     fn validate_cursor(wp: WinHandle);
     fn nvim_diff_set_cmdmod_tab_zero();
     fn rs_win_split(size: c_int, flags: c_int) -> c_int; // in window_shim.c
+    #[link_name = "do_exedit"]
     fn nvim_diff_do_exedit_with_old_curwin(eap: *mut ExArg, old_curwin: WinHandle);
     fn nvim_diff_get_CMD_split() -> c_int;
     fn nvim_diff_set_curwin_w_p_diff(val: bool);

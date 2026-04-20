@@ -85,6 +85,7 @@ extern "C" {
     static mut nvim_test_disable_char_avail: bool;
 
     // -- insertion --
+    #[link_name = "ins_str"]
     fn nvim_ins_str(p: *const c_char, len: usize);
     fn ins_char(c: c_int);
     fn ins_char_bytes(buf: *const c_char, charlen: usize);

@@ -59,6 +59,7 @@ impl BlockDefC {
 #[allow(clashing_extern_declarations)]
 extern "C" {
     // Undo
+    #[link_name = "u_save"]
     fn nvim_u_save(top: c_int, bot: c_int) -> c_int;
 
     // Block preparation (bdp declared as *mut BlockDefC here; shift_full uses *mut c_void)

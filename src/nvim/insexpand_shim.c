@@ -191,7 +191,6 @@ int nvim_ci_dict_add_tv(void *d, const char *key, size_t klen, void *tv) { retur
 int nvim_ci_dict_add_dict(void *d, const char *key, size_t klen, void *val_dict) { return tv_dict_add_dict((dict_T *)d, key, klen, (dict_T *)val_dict); }
 int nvim_ci_dict_add_list(void *d, const char *key, size_t klen, void *list) { return tv_dict_add_list((dict_T *)d, key, klen, (list_T *)list); }
 void nvim_ci_list_append_dict(void *list, void *dict) { tv_list_append_dict((list_T *)list, (dict_T *)dict); }
-int nvim_pum_visible(void) { return pum_visible(); }
 void *nvim_win_float_find_preview(void) { return win_float_find_preview(); }
 int nvim_ci_win_get_handle(void *wp) { return wp ? ((win_T *)wp)->handle : -1; }
 int nvim_ci_win_get_buf_handle(void *wp) { return (wp && ((win_T *)wp)->w_buffer) ? ((win_T *)wp)->w_buffer->handle : -1; }
@@ -291,7 +290,6 @@ void nvim_ins_compl_st_mark_ins_buf_scanned(void) { if (ins_compl_st.ins_buf) { 
 void nvim_clear_all_buf_scanned(void) { FOR_ALL_BUFFERS(buf) { buf->b_scanned = false; } }
 void nvim_clear_ins_compl_st(void) { CLEAR_FIELD(ins_compl_st); }
 int nvim_expand_wildcards_files(int count, char **pat, int *num_matches, char ***matches) { return expand_wildcards(count, pat, num_matches, matches, EW_FILE|EW_DIR|EW_ADDSLASH|EW_SILENT); }
-void nvim_tilde_replace_wrap(char *pat, int num_matches, char **matches) { tilde_replace(pat, num_matches, matches); }
 void *nvim_mergesort_compl_list_raw(void *head, int compare_type) { return mergesort_list(head, cp_get_next, cp_set_next, cp_get_prev, cp_set_prev, compare_type == 0 ? cp_compare_fuzzy : cp_compare_nearest); }
 void nvim_redraw_later_valid(void) { redraw_later(curwin, UPD_VALID); }
 int nvim_get_curbuf_b_p_tsrfu_nonempty(void) { return *curbuf->b_p_tsrfu != NUL ? 1 : 0; }

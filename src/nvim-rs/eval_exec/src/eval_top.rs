@@ -1144,6 +1144,7 @@ extern "C" {
     // Phase 2: prompt_invoke_callback accessors (kept)
     #[link_name = "ml_append"]
     fn nvim_ml_append(lnum: i32, line: *const c_char, len: i32, newfile: bool) -> c_int;
+    #[link_name = "appended_lines_mark"]
     fn nvim_appended_lines_mark(lnum: i32, count: c_int);
     fn nvim_set_cursor_lnum(lnum: i32); // linenr_T
     fn nvim_set_cursor_col(col: c_int);

@@ -75,11 +75,13 @@ extern "C" {
     fn rs_win_split(size: c_int, flags: c_int) -> c_int;
     fn nvim_diff_get_curwin() -> WinHandle;
     fn nvim_diff_set_cmdmod_tab_zero();
+    #[link_name = "do_exedit"]
     fn nvim_diff_do_exedit_with_old_curwin(eap: *mut ExArg, old_curwin: WinHandle);
     fn nvim_diff_get_CMD_split() -> c_int;
     fn rs_win_valid(wp: WinHandle) -> c_int;
     #[link_name = "diff_win_options"]
     fn rs_diff_win_options(wp: WinHandle, addbuf: bool);
+    #[link_name = "ex_file"]
     fn nvim_diff_ex_file(eap: *mut ExArg);
     fn nvim_diff_augroup_exists_filetypedetect() -> bool;
     fn do_cmdline_cmd(cmd: *const c_char);

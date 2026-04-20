@@ -1540,6 +1540,7 @@ extern "C" {
     fn nvim_optset_varp_is_p_fenc(args: *const c_void) -> c_int;
     fn nvim_optset_varp_is_p_enc(args: *const c_void) -> c_int;
     fn nvim_enc_canonize(enc: *mut c_char) -> *mut c_char;
+    #[link_name = "spell_reload"]
     fn nvim_spell_reload();
 
     // Statusline/rulerformat

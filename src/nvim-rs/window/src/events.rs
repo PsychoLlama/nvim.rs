@@ -155,6 +155,7 @@ extern "C" {
     fn nvim_get_ui_ext(ext: c_int) -> c_int;
 
     // UI call wrappers
+    #[link_name = "ui_call_win_pos"]
     fn nvim_win_ui_call_win_pos(
         grid: c_int,
         win: c_int,
@@ -177,7 +178,9 @@ extern "C" {
         screen_col: c_int,
     );
     fn nvim_win_ui_call_win_hide(grid_handle: c_int);
+    #[link_name = "ui_call_win_external_pos"]
     fn nvim_win_ui_call_win_external_pos(grid_handle: c_int, win_handle: c_int);
+    #[link_name = "ui_check_cursor_grid"]
     fn nvim_win_ui_check_cursor_grid(grid_handle: c_int);
 
     // Globals

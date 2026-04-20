@@ -1206,6 +1206,7 @@ mod jump_edit {
         // Phase 15 thin primitives replacing thick jump-open wrappers
         // nvim_can_abandon_curbuf deleted: use can_abandon(curbuf, forceit) directly
         fn can_abandon(buf: *mut c_void, forceit: c_int) -> bool;
+        #[link_name = "no_write_message"]
         fn nvim_no_write_message();
         fn nvim_do_ecmd_help(fnum: c_int, prev_winid: c_int) -> c_int;
         // nvim_qf_buflist_getfile deleted: use buflist_getfile directly
@@ -2330,6 +2331,7 @@ const FAIL_VAL: c_int = 0;
 extern "C" {
     fn nvim_qf_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_buf_win_get_llist(wp: WinHandleP2) -> QfInfoHandleMut;
+    #[link_name = "check_can_set_curbuf_forceit"]
     fn nvim_check_can_set_curbuf_forceit(forceit: c_int) -> bool;
     fn nvim_get_ql_info() -> QfInfoHandleMut;
     #[link_name = "nvim_qf_get_curlist"]

@@ -32,11 +32,14 @@ extern "C" {
     fn nvim_buf_set_name_body(buf: BufHandle, name: *mut c_char);
 
     // buf_name_changed helpers
+    #[link_name = "ml_setname"]
     fn nvim_ml_setname(buf: BufHandle);
     fn nvim_check_arg_idx_if_curbuf(buf: BufHandle);
     fn nvim_maketitle();
     fn nvim_status_redraw_all();
+    #[link_name = "fmarks_check_names"]
     fn nvim_fmarks_check_names(buf: BufHandle);
+    #[link_name = "ml_timestamp"]
     fn nvim_ml_timestamp(buf: BufHandle);
 
     // setfname helpers

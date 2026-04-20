@@ -850,6 +850,7 @@ const FAIL: c_int = 0;
 extern "C" {
     static mut called_emsg: c_int;
     fn nvim_regmmatch_alloc() -> *mut c_void;
+    #[link_name = "xfree"]
     fn nvim_regmmatch_free(regmatch: *mut c_void);
     fn nvim_is_zero_width_regcomp(
         pat: *const c_char,

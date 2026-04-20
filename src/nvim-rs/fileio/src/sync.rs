@@ -437,6 +437,7 @@ extern "C" {
     /// Get file modification time (nanoseconds) from a FileInfo struct.
     fn nvim_fileinfo_get_mtime_ns(fi: *const c_void) -> i64;
     /// Get file size in bytes from a FileInfo struct.
+    #[link_name = "os_fileinfo_size"]
     fn nvim_fileinfo_get_size(fi: *const c_void) -> u64;
     /// Get file mode from a FileInfo struct.
     fn nvim_fileinfo_get_mode(fi: *const c_void) -> i32;
@@ -487,6 +488,7 @@ extern "C" {
     /// Returns the `global_busy` flag.
     fn nvim_get_global_busy() -> bool;
     /// Returns non-zero if the typebuf has been typed.
+    #[link_name = "typebuf_typed"]
     fn nvim_typebuf_typed() -> c_int;
     /// Returns the `autocmd_busy` flag.
     fn nvim_get_autocmd_busy() -> bool;
@@ -668,6 +670,7 @@ extern "C" {
     /// msg_clr_eos().
     fn msg_clr_eos();
     /// msg_end().
+    #[link_name = "msg_end"]
     fn nvim_msg_end_wrap();
     /// Returns emsg_silent global.
     fn nvim_get_emsg_silent() -> c_int;
@@ -698,6 +701,7 @@ extern "C" {
     /// buf_reload via nvim_buf_reload wrapper.
     fn nvim_buf_reload(buf: *mut c_void, orig_mode: c_int, reload_options: c_int);
     /// u_compute_hash wrapper.
+    #[link_name = "u_compute_hash"]
     fn nvim_u_compute_hash(buf: *mut c_void, hash: *mut u8);
     /// u_write_undo wrapper.
     fn nvim_u_write_undo(name: *const c_char, forceit: c_int, buf: *mut c_void, hash: *mut u8);

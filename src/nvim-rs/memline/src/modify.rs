@@ -200,6 +200,7 @@ extern "C" {
     fn nvim_iemsg_pointer_block_id_wrong_four();
 
     /// Free a block in the memfile (mf_free wrapper)
+    #[link_name = "mf_free"]
     fn nvim_mf_free(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void);
 
     /// Get buf->b_ml.ml_locked_lineadd

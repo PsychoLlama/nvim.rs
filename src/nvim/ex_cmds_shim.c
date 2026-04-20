@@ -443,10 +443,8 @@ int nvim_ecmd_bufref_valid_is_curbuf(void *ref) { bufref_T *br = (bufref_T *)ref
 void nvim_ecmd_curbuf_terminal_check_size(void) { if (curbuf->terminal != NULL) { terminal_check_size(curbuf->terminal); } }
 void nvim_ecmd_handle_swap_exists(void *old_curbuf_ref) { handle_swap_exists((bufref_T *)old_curbuf_ref); }
 #ifdef CASE_INSENSITIVE_FILENAME
-void nvim_ecmd_path_fix_case(char *sfname) { path_fix_case(sfname); }
 int nvim_ecmd_has_case_insensitive_filename(void) { return 1; }
 #else
-void nvim_ecmd_path_fix_case(char *sfname) { (void)sfname; }
 int nvim_ecmd_has_case_insensitive_filename(void) { return 0; }
 #endif
 void nvim_ecmd_fold_update_all_curbuf_wins(void)
@@ -571,7 +569,6 @@ typval_T *nvim_cmdhist_tv_idx(typval_T *tv, int idx) { return &tv[idx]; }
 void nvim_cmdhist_rettv_set_number(typval_T *rettv, int64_t val) { rettv->vval.v_number = (varnumber_T)val; }
 void nvim_cmdhist_rettv_set_string(typval_T *rettv, char *s) { rettv->vval.v_string = s; }
 void nvim_cmdhist_rettv_set_type(typval_T *rettv, int typ) { rettv->v_type = (VarType)typ; }
-size_t nvim_cmdhist_strlen(const char *s) { return strlen(s); }
 
 // msg_outtrans adapter (Rust cannot call 3-arg C function directly)
 void nvim_cmdhist_msg_outtrans(const char *buf) { msg_outtrans(buf, 0, false); }

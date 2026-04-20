@@ -27,12 +27,15 @@ extern "C" {
     fn xfree(p: *mut c_void);
 
     // Path utilities
+    #[link_name = "path_is_after"]
     fn nvim_rt_path_is_after(buf: *const c_char, buflen: usize) -> bool;
     #[link_name = "add_pathsep"]
     fn nvim_rt_add_pathsep(p: *mut c_char);
 
     // Verbose messaging
+    #[link_name = "verbose_enter"]
     fn nvim_rt_verbose_enter();
+    #[link_name = "verbose_leave"]
     fn nvim_rt_verbose_leave();
 
     // Smsg wrappers for search messages

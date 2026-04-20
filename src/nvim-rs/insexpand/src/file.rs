@@ -405,6 +405,7 @@ extern "C" {
         num_matches: *mut c_int,
         matches: *mut *mut *mut c_char,
     ) -> c_int;
+    #[link_name = "tilde_replace"]
     fn nvim_tilde_replace_wrap(pat: *mut c_char, num_matches: c_int, matches: *mut *mut c_char);
     // nvim_get_p_fic_or_wic: inlined in vars.rs (Phase 29)
 

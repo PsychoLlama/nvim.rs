@@ -445,6 +445,7 @@ extern "C" {
     /// Call win_config_float(wp, wp->w_config)
     fn nvim_win_config_float(wp: *mut c_void);
     /// Call win_set_inner_size(wp, valid_cursor)
+    #[link_name = "win_set_inner_size"]
     fn nvim_win_set_inner_size(wp: *mut c_void, valid_cursor: bool);
     /// ui_attach_impl helpers
     fn nvim_ui_call_chdir_cwd();

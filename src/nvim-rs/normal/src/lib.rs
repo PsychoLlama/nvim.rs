@@ -1318,6 +1318,7 @@ extern "C" {
     fn nvim_get_changelist(count1: c_int) -> FmarkHandle;
     fn nvim_get_jumplist(count1: c_int) -> FmarkHandle;
     fn goto_tabpage_lastused() -> bool;
+    #[link_name = "emsg"]
     fn nvim_emsg(msg: *const std::ffi::c_char);
     fn gettext(s: *const std::ffi::c_char) -> *const std::ffi::c_char;
 

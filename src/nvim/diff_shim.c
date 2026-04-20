@@ -208,7 +208,6 @@ int nvim_xdiff_internal_run(const char *orig_data, int orig_size, const char *ne
 uint64_t *nvim_diffbuf_get_chartab(int idx) { if (idx < 0 || idx >= DB_COUNT || curtab->tp_diffbuf[idx] == NULL) { return NULL; } return curtab->tp_diffbuf[idx]->b_chartab; }
 void nvim_diffblock_append_change(diff_T *dp, const int *dc_start, const int *dc_end, const int *dc_start_lnum_off, const int *dc_end_lnum_off) { if (dp == NULL) { return; } diffline_change_T change = { 0 }; for (int i = 0; i < DB_COUNT; i++) { change.dc_start[i] = dc_start[i]; change.dc_end[i] = dc_end[i]; change.dc_start_lnum_off[i] = dc_start_lnum_off[i]; change.dc_end_lnum_off[i] = dc_end_lnum_off[i]; } GA_APPEND(diffline_change_T, &dp->df_changes, change); }
 void nvim_diffout_append_hunk(void *dout, linenr_T lnum_orig, int count_orig, linenr_T lnum_new, int count_new) { diffout_T *d = (diffout_T *)dout; if (d == NULL) { return; } GA_APPEND(diffhunk_T, &(d->dout_ga), ((diffhunk_T){ .lnum_orig = lnum_orig, .count_orig = count_orig, .lnum_new = lnum_new, .count_new = count_new, })); }
-linenr_T nvim_diff_tv_get_lnum(typval_T *argvars) { return tv_get_lnum(argvars); }
 void nvim_vim_beep_operator(void) { vim_beep(kOptBoFlagOperator); }
 void nvim_diff_call_nv_ex_diffgetput(int cmdidx, const char *arg, int addr_count, linenr_T line1, linenr_T line2) { exarg_T ea; CLEAR_FIELD(ea); ea.cmdidx = (cmdidx_T)cmdidx; ea.arg = (char *)arg; ea.addr_count = addr_count; ea.line1 = line1; ea.line2 = line2; ex_diffgetput(&ea); }
 bool nvim_win_get_w_p_diff_saved(win_T *wp) { return wp->w_p_diff_saved != 0; }
@@ -240,7 +239,6 @@ bool nvim_diff_sbo_has_hor(void) { return vim_strchr(p_sbo, 'h') != NULL; }
 bool nvim_diff_is_curwin(win_T *wp) { return wp == curwin; }
 void nvim_diff_changed_window_foldlevel_reset(win_T *wp) { win_T *old_curwin = curwin; curwin = wp; rs_newFoldLevel(); curwin = old_curwin; }
 void nvim_diff_set_cmdmod_tab_zero(void) { cmdmod.cmod_tab = 0; }
-void nvim_diff_do_exedit_with_old_curwin(exarg_T *eap, win_T *old_curwin) { do_exedit(eap, old_curwin); }
 void nvim_diff_set_curwin_w_p_diff(bool val) { curwin->w_p_diff = val; }
 win_T *nvim_diff_get_curwin(void) { return curwin; }
 int nvim_diff_get_CMD_split(void) { return (int)CMD_split; }
@@ -300,7 +298,6 @@ void nvim_diff_vim_snprintf_patch(char *buf, size_t buflen, const char *tmp_new,
 const char *nvim_diff_get_curbuf_fname(void) { return curbuf->b_fname; }
 void nvim_diff_emsg_e816(void) { emsg(_("E816: Cannot read patch output")); }
 void nvim_diff_emsg_prev_dir(void) { emsg(_(e_prev_dir)); }
-void nvim_diff_ex_file(exarg_T *eap) { ex_file(eap); }
 bool nvim_diff_augroup_exists_filetypedetect(void) { return augroup_exists("filetypedetect"); }
 int64_t nvim_curbuf_changedtick_i64(void) { return (int64_t)buf_get_changedtick(curbuf); }
 int nvim_diff_tv_get_number_idx(typval_T *argvars, int idx) { return (int)tv_get_number(&argvars[idx]); }

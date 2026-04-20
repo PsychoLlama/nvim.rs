@@ -522,6 +522,7 @@ extern "C" {
     fn nvim_tag_get_magic_overruled() -> c_int;
     fn nvim_tag_set_magic_overruled(val: c_int);
     fn nvim_tag_get_no_hlsearch() -> bool;
+    #[link_name = "set_no_hlsearch"]
     fn nvim_tag_set_no_hlsearch_val(val: bool);
     fn nvim_tag_cpo_has_tagpat() -> bool;
     fn nvim_tag_get_p_ws() -> bool;

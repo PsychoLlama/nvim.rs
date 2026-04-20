@@ -110,6 +110,7 @@ extern "C" {
     fn nvim_fileio_curwin_set_cursor_lnum(lnum: c_int);
 
     // --- os operations ---
+    #[link_name = "os_getperm"]
     fn nvim_fileio_os_getperm(fname: *const c_char) -> c_int;
     fn nvim_fileio_os_file_is_writable(fname: *const c_char) -> c_int;
     fn nvim_fileio_os_open_rdonly(fname: *const c_char) -> c_int;
@@ -121,6 +122,7 @@ extern "C" {
     fn nvim_fileio_is_s_issock(perm: c_int) -> c_int;
     fn nvim_fileio_is_s_isdir(perm: c_int) -> c_int;
     fn nvim_fileio_perm_is_writable(perm: c_int) -> c_int;
+    #[link_name = "close"]
     fn nvim_fileio_close(fd: c_int) -> c_int;
     fn nvim_fileio_is_chr_dev(perm: c_int, fname: *const c_char) -> c_int;
     #[cfg(unix)]
@@ -137,6 +139,7 @@ extern "C" {
     #[cfg(unix)]
     fn nvim_fileio_curbuf_swap_fname() -> *const c_char;
     #[cfg(unix)]
+    #[link_name = "os_setperm"]
     fn nvim_fileio_os_setperm(fname: *const c_char, mode: c_int);
 
     // --- autocmd ---
@@ -183,6 +186,7 @@ extern "C" {
 
     // --- memory ---
     fn nvim_fileio_verbose_try_malloc(size: usize) -> *mut c_void;
+    #[link_name = "xfree"]
     fn nvim_fileio_xfree(ptr: *mut c_void);
     fn nvim_fileio_xcalloc(nmemb: usize, size: usize) -> *mut c_void;
 
@@ -197,7 +201,9 @@ extern "C" {
 
     // --- messages ---
     fn nvim_fileio_filemess(fname: *const c_char, s: *const c_char);
+    #[link_name = "msg_end"]
     fn nvim_fileio_msg_end();
+    #[link_name = "msg_putchar"]
     fn nvim_fileio_msg_putchar(c: c_int);
     fn nvim_fileio_msg_trunc(s: *mut c_char) -> *mut c_char;
     fn nvim_fileio_set_keep_msg(s: *const c_char);
@@ -245,6 +251,7 @@ extern "C" {
 
     // --- undo ---
     fn nvim_fileio_u_clearline();
+    #[link_name = "u_find_first_changed"]
     fn nvim_fileio_u_find_first_changed();
     fn nvim_fileio_sha256_start(ctx: *mut c_void);
     fn nvim_fileio_sha256_update(ctx: *mut c_void, data: *const u8, len: usize);
@@ -258,8 +265,11 @@ extern "C" {
     fn nvim_fileio_appended_lines_mark(from: c_int, linecnt: c_int);
     fn nvim_fileio_check_cursor_lnum();
     fn nvim_fileio_beginline();
+    #[link_name = "os_set_cloexec"]
     fn nvim_fileio_os_set_cloexec(fd: c_int);
+    #[link_name = "os_breakcheck"]
     fn nvim_fileio_os_breakcheck();
+    #[link_name = "os_remove"]
     fn nvim_fileio_os_remove(fname: *const c_char) -> c_int;
 
     // --- iconv ---
@@ -273,15 +283,18 @@ extern "C" {
         outbuf: *mut *mut c_char,
         outbytesleft: *mut usize,
     ) -> usize;
+    #[link_name = "iconv_close"]
     fn nvim_fileio_iconv_close(fd: usize) -> c_int;
     fn nvim_fileio_iconv_errno() -> c_int;
     fn nvim_fileio_iconv_einval() -> c_int;
 
     // --- utf8/mbyte ---
+    #[link_name = "utf_byte2len"]
     fn nvim_fileio_utf_byte2len(c: c_int) -> c_int;
     fn nvim_fileio_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_fileio_utf_ptr2char(p: *const c_char) -> c_int;
     fn nvim_fileio_utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
+    #[link_name = "utf_char2len"]
     fn nvim_fileio_utf_char2len(c: c_int) -> c_int;
     fn nvim_fileio_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 

@@ -324,6 +324,7 @@ extern "C" {
     fn nvim_hlrec_get_userhl(sp: *mut c_void) -> c_int;
     fn nvim_hlrec_next(sp: *mut c_void) -> *mut c_void;
     // build_statuscol_str wrapper
+    #[link_name = "build_statuscol_str"]
     fn nvim_build_statuscol_str(
         wp: WinHandle,
         lnum: LinenrT,
@@ -332,6 +333,7 @@ extern "C" {
         stcp: *mut c_void,
     ) -> c_int;
     // get_cursor_rel_lnum wrapper
+    #[link_name = "get_cursor_rel_lnum"]
     fn nvim_get_cursor_rel_lnum(wp: WinHandle, lnum: LinenrT) -> LinenrT;
     // transstr_buf wrapper
     fn nvim_transstr_buf(s: *const c_char, slen: isize, buf: *mut c_char, buflen: usize) -> usize;
@@ -7175,6 +7177,7 @@ extern "C" {
     /// Alloc and zero-init a statuscol_T, returns opaque pointer.
     fn nvim_stcp_alloc() -> *mut c_void;
     /// Free a heap-allocated statuscol_T.
+    #[link_name = "xfree"]
     fn nvim_stcp_free(stcp: *mut c_void);
     /// Set stcp->draw.
     fn nvim_stcp_set_draw(stcp: *mut c_void, val: bool);

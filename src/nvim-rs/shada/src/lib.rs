@@ -945,8 +945,11 @@ extern "C" {
     // nvim_shada_semsg_rcerr_incomplete removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
     // nvim_shada_semsg_rcerr_parse_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
     /// Generic semsg wrapper: one string argument.
+    #[link_name = "semsg"]
     fn nvim_shada_semsg_1s(fmt: *const c_char, arg: *const c_char);
     /// Generic semsg wrapper: two string arguments.
+    #[allow(clashing_extern_declarations)]
+    #[link_name = "semsg"]
     fn nvim_shada_semsg_2s(fmt: *const c_char, a: *const c_char, b: *const c_char);
     /// Generic semsg wrapper: one u64 argument.
     fn nvim_shada_semsg_u64(fmt: *const c_char, val: u64);
@@ -955,6 +958,7 @@ extern "C" {
     /// Generic smsg wrapper: one string argument.
     fn nvim_shada_smsg_1s(fmt: *const c_char, arg: *const c_char);
     /// Generic siemsg wrapper: one string argument.
+    #[link_name = "siemsg"]
     fn nvim_shada_siemsg_1s(fmt: *const c_char, arg: *const c_char);
     /// Unpack a msgpack dict into a typed keydict struct via field hash.
     /// Returns true on success; writes error string (xmalloc'd) to *error on failure.

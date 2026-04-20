@@ -72,6 +72,7 @@ extern "C" {
 
     // Undo / stop_arrow
     fn stop_arrow() -> c_int;
+    #[link_name = "u_save"]
     fn nvim_u_save(lnum1: c_int, lnum2: c_int) -> c_int;
 
     // Indent
@@ -133,6 +134,7 @@ extern "C" {
 
     // Character insertion (for softtabstop insert loop)
     fn ins_char(c: c_int);
+    #[link_name = "ins_str"]
     fn nvim_ins_str(s: *const c_char, len: usize);
     fn replace_push_nul();
 

@@ -1349,6 +1349,7 @@ extern "C" {
     // expand_filename helpers
     #[link_name = "skip_grep_pat"]
     fn rs_skip_grep_pat(eap: ExArgHandle) -> *mut c_char;
+    #[link_name = "path_has_wildcard"]
     fn nvim_path_has_wildcard(p: *const c_char) -> bool;
     fn nvim_is_expand_char(c: c_int) -> bool;
     // nvim_eval_vars_wrap replaced by direct eval_vars call in Rust

@@ -74,6 +74,7 @@ extern "C" {
     fn nvim_replace_push_nul();
     #[link_name = "ins_bytes"]
     fn nvim_ins_bytes(p: *const c_char);
+    #[link_name = "ins_str"]
     fn nvim_ins_str(ptr: *mut c_char, len: usize);
 
     // ml_replace for cursor line

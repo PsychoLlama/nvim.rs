@@ -22,6 +22,7 @@ extern "C" {
     fn nvim_ml_get(lnum: c_int) -> *const c_char;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+    #[link_name = "u_save"]
     fn nvim_u_save(top: c_int, bot: c_int) -> c_int;
 
     // Finish: restore cursor, changed_lines, set marks (absorbed below)

@@ -100,6 +100,7 @@ pub const E_FAILED_STR: &std::ffi::CStr = c"E472: Command failed";
 extern "C" {
     pub fn gettext(s: *const c_char) -> *const c_char;
 
+    #[link_name = "emsg"]
     fn nvim_emsg(s: *const c_char);
 
     // Direct IObuff access

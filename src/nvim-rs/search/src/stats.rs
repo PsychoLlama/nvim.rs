@@ -541,6 +541,7 @@ extern "C" {
         end_col: *mut c_int,
         end_coladd: *mut c_int,
     ) -> c_int;
+    #[link_name = "profile_setlimit"]
     fn nvim_profile_setlimit_ms(timeout: c_int) -> u64;
     fn nvim_profile_passed_limit_val(start: u64) -> c_int;
     fn nvim_stat_free_pat(pat: *mut c_char);

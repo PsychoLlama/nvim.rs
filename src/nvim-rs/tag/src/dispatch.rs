@@ -121,6 +121,7 @@ extern "C" {
     ) -> c_int;
     fn set_vim_var_string(idx: c_int, val: *const c_char, len: i64);
     fn nvim_tag_clear_swap_command();
+    #[link_name = "give_warning"]
     fn nvim_tag_give_warning(msg: *const c_char, ic: bool);
     fn nvim_tag_get_KeyTyped() -> bool;
     fn nvim_taggy_get_fmark(tg: *const c_void) -> *const c_void;
