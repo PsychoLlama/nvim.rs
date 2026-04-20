@@ -61,9 +61,6 @@ void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T 
 int nvim_eval_buf_ml_valid(const buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
 int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count; }
 
-static char *saved_eval_p_cpo;
-void nvim_eval_save_set_cpo(void) { saved_eval_p_cpo = p_cpo; p_cpo = empty_string_option; }
-void nvim_eval_restore_cpo(void) { p_cpo = saved_eval_p_cpo; }
 
 void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
 { if (*p_cpo == NUL) { set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0); } free_string_option(save_cpo); }

@@ -51,9 +51,9 @@ extern "C" {
     fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: c_int) -> c_int;
     fn vim_regfree(prog: *mut c_void);
 
-    // p_cpo save/restore accessors (defined in eval.c)
-    fn nvim_eval_save_set_cpo();
-    fn nvim_eval_restore_cpo();
+    // p_cpo option globals (for cpo save/restore inlined from nvim_eval_save_set_cpo)
+    static mut p_cpo: *mut c_char;
+    static empty_string_option: [c_char; 1];
 }
 
 /// Structure matching regmatch_T for single-line matching.
@@ -173,8 +173,9 @@ pub unsafe extern "C" fn rs_buf_charidx_to_byteidx(
 pub unsafe extern "C" fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -> c_int {
     let mut matches: c_int = 0;
 
-    // avoid 'l' flag in 'cpoptions'
-    nvim_eval_save_set_cpo();
+    // avoid 'l' flag in 'cpoptions' (inlined from nvim_eval_save_set_cpo)
+    let save_cpo = p_cpo;
+    p_cpo = std::ptr::addr_of!(empty_string_option[0]).cast_mut();
 
     let prog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
     if !prog.is_null() {
@@ -187,7 +188,8 @@ pub unsafe extern "C" fn pattern_match(pat: *const c_char, text: *const c_char, 
         vim_regfree(regmatch.regprog);
     }
 
-    nvim_eval_restore_cpo();
+    // restore cpo (inlined from nvim_eval_restore_cpo)
+    p_cpo = save_cpo;
     matches
 }
 
