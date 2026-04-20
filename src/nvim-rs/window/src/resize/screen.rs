@@ -3,6 +3,7 @@
 //! Rust ports of win_comp_scroll, win_new_screensize, win_new_screen_cols,
 //! win_init_size, and snapshot_windows_scroll_size from window_shim.c.
 
+use crate::win_struct::{win_mut, win_ref};
 use std::ffi::c_int;
 
 use crate::{Frame, TabpageHandle, WinHandle};
@@ -40,28 +41,13 @@ extern "C" {
     fn option_was_set(opt_idx: c_int) -> bool;
 
     // --- Window field setters ---
-    fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_view_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_view_width(wp: WinHandle, val: c_int);
-    fn nvim_win_set_height_outer(wp: WinHandle, val: c_int);
-    fn nvim_win_set_width_outer(wp: WinHandle, val: c_int);
-    fn nvim_win_set_winrow_off(wp: WinHandle, val: c_int);
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
 
     // --- Bulk snapshot accessors ---
     fn nvim_win_set_snapshot(wp: WinHandle, s: *const WinSnapshot);
     fn nvim_win_get_scroll_fields(wp: WinHandle, out: *mut WinSnapshot);
 
     // --- Snapshot field getters ---
-    fn nvim_win_get_topline(wp: WinHandle) -> i32;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
     fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
 
     // --- win_comp_scroll accessors ---
@@ -257,19 +243,19 @@ unsafe fn win_init_size_impl() {
     let topframe = nvim_get_topframe();
     let rows_avail = nvim_get_rows_avail();
     let columns = Columns;
-    let winbar_height = nvim_win_get_winbar_height(firstwin);
+    let winbar_height = win_ref(firstwin).w_winbar_height;
 
-    nvim_win_set_field_height(firstwin, rows_avail);
-    nvim_win_set_prev_height(firstwin, rows_avail);
-    nvim_win_set_view_height(firstwin, rows_avail - winbar_height);
-    nvim_win_set_height_outer(firstwin, rows_avail);
-    nvim_win_set_winrow_off(firstwin, winbar_height);
+    win_mut(firstwin).w_height = rows_avail;
+    win_mut(firstwin).w_prev_height = rows_avail;
+    win_mut(firstwin).w_view_height = rows_avail - winbar_height;
+    win_mut(firstwin).w_height_outer = rows_avail;
+    win_mut(firstwin).w_winrow_off = winbar_height;
     if !topframe.is_null() {
         (*topframe).fr_height = rows_avail;
     }
-    nvim_win_set_field_width(firstwin, columns);
-    nvim_win_set_view_width(firstwin, columns);
-    nvim_win_set_width_outer(firstwin, columns);
+    win_mut(firstwin).w_width = columns;
+    win_mut(firstwin).w_view_width = columns;
+    win_mut(firstwin).w_width_outer = columns;
     if !topframe.is_null() {
         (*topframe).fr_width = columns;
     }
@@ -311,7 +297,7 @@ unsafe fn snapshot_windows_scroll_size_impl() {
         let mut cur = WinSnapshot::default();
         nvim_win_get_scroll_fields(wp, std::ptr::addr_of_mut!(cur));
         nvim_win_set_snapshot(wp, std::ptr::addr_of!(cur));
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 }
 

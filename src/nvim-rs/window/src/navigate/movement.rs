@@ -5,9 +5,10 @@
 
 #![allow(clippy::missing_const_for_fn)]
 
+use crate::win_struct::win_ref;
 use std::ffi::c_int;
 
-use crate::{Frame, WinHandle};
+use crate::WinHandle;
 
 // =============================================================================
 // External C Functions
@@ -23,29 +24,6 @@ extern "C" {
     /// Get lastwin.
     fn nvim_get_lastwin() -> WinHandle;
 
-    /// Get w_next from window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-
-    /// Get w_prev from window.
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
-
-    /// Get w_floating from window.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-
-    /// Get w_frame from window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
-
-    /// Get window row position.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Get window column position.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-
-    /// Get window height.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-
-    /// Get window width.
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -58,11 +36,11 @@ extern "C" {
 fn find_in_direction_impl(dir: u8) -> WinHandle {
     unsafe {
         let curwin = nvim_get_curwin();
-        if curwin.is_null() || nvim_win_get_floating(curwin) != 0 {
+        if curwin.is_null() || win_ref(curwin).w_floating {
             return WinHandle::null();
         }
 
-        let frame = nvim_win_get_frame(curwin);
+        let frame = win_ref(curwin).w_frame;
         if frame.is_null() {
             return WinHandle::null();
         }
@@ -84,9 +62,9 @@ fn find_left_impl(wp: WinHandle) -> WinHandle {
     }
 
     unsafe {
-        let col = nvim_win_get_wincol(wp);
-        let row = nvim_win_get_winrow(wp);
-        let height = nvim_win_get_w_height(wp);
+        let col = win_ref(wp).w_wincol;
+        let row = win_ref(wp).w_winrow;
+        let height = win_ref(wp).w_height;
         let mid_row = row + height / 2;
 
         // Find rightmost window left of current that overlaps vertically
@@ -95,11 +73,11 @@ fn find_left_impl(wp: WinHandle) -> WinHandle {
 
         let mut w = nvim_get_firstwin();
         while !w.is_null() {
-            if w != wp && nvim_win_get_floating(w) == 0 {
-                let w_col = nvim_win_get_wincol(w);
-                let w_width = nvim_win_get_w_width(w);
-                let w_row = nvim_win_get_winrow(w);
-                let w_height = nvim_win_get_w_height(w);
+            if w != wp && c_int::from(win_ref(w).w_floating) == 0 {
+                let w_col = win_ref(w).w_wincol;
+                let w_width = win_ref(w).w_width;
+                let w_row = win_ref(w).w_winrow;
+                let w_height = win_ref(w).w_height;
 
                 // Must be left of current window
                 if w_col + w_width <= col {
@@ -116,7 +94,7 @@ fn find_left_impl(wp: WinHandle) -> WinHandle {
                     }
                 }
             }
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         best
     }
@@ -129,10 +107,10 @@ fn find_right_impl(wp: WinHandle) -> WinHandle {
     }
 
     unsafe {
-        let col = nvim_win_get_wincol(wp);
-        let width = nvim_win_get_w_width(wp);
-        let row = nvim_win_get_winrow(wp);
-        let height = nvim_win_get_w_height(wp);
+        let col = win_ref(wp).w_wincol;
+        let width = win_ref(wp).w_width;
+        let row = win_ref(wp).w_winrow;
+        let height = win_ref(wp).w_height;
         let mid_row = row + height / 2;
         let right_edge = col + width;
 
@@ -142,10 +120,10 @@ fn find_right_impl(wp: WinHandle) -> WinHandle {
 
         let mut w = nvim_get_firstwin();
         while !w.is_null() {
-            if w != wp && nvim_win_get_floating(w) == 0 {
-                let w_col = nvim_win_get_wincol(w);
-                let w_row = nvim_win_get_winrow(w);
-                let w_height = nvim_win_get_w_height(w);
+            if w != wp && c_int::from(win_ref(w).w_floating) == 0 {
+                let w_col = win_ref(w).w_wincol;
+                let w_row = win_ref(w).w_winrow;
+                let w_height = win_ref(w).w_height;
 
                 // Must be right of current window
                 if w_col >= right_edge {
@@ -162,7 +140,7 @@ fn find_right_impl(wp: WinHandle) -> WinHandle {
                     }
                 }
             }
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         best
     }
@@ -175,9 +153,9 @@ fn find_above_impl(wp: WinHandle) -> WinHandle {
     }
 
     unsafe {
-        let col = nvim_win_get_wincol(wp);
-        let width = nvim_win_get_w_width(wp);
-        let row = nvim_win_get_winrow(wp);
+        let col = win_ref(wp).w_wincol;
+        let width = win_ref(wp).w_width;
+        let row = win_ref(wp).w_winrow;
         let mid_col = col + width / 2;
 
         // Find bottommost window above current that overlaps horizontally
@@ -186,11 +164,11 @@ fn find_above_impl(wp: WinHandle) -> WinHandle {
 
         let mut w = nvim_get_firstwin();
         while !w.is_null() {
-            if w != wp && nvim_win_get_floating(w) == 0 {
-                let w_col = nvim_win_get_wincol(w);
-                let w_width = nvim_win_get_w_width(w);
-                let w_row = nvim_win_get_winrow(w);
-                let w_height = nvim_win_get_w_height(w);
+            if w != wp && c_int::from(win_ref(w).w_floating) == 0 {
+                let w_col = win_ref(w).w_wincol;
+                let w_width = win_ref(w).w_width;
+                let w_row = win_ref(w).w_winrow;
+                let w_height = win_ref(w).w_height;
 
                 // Must be above current window
                 if w_row + w_height <= row {
@@ -207,7 +185,7 @@ fn find_above_impl(wp: WinHandle) -> WinHandle {
                     }
                 }
             }
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         best
     }
@@ -220,10 +198,10 @@ fn find_below_impl(wp: WinHandle) -> WinHandle {
     }
 
     unsafe {
-        let col = nvim_win_get_wincol(wp);
-        let width = nvim_win_get_w_width(wp);
-        let row = nvim_win_get_winrow(wp);
-        let height = nvim_win_get_w_height(wp);
+        let col = win_ref(wp).w_wincol;
+        let width = win_ref(wp).w_width;
+        let row = win_ref(wp).w_winrow;
+        let height = win_ref(wp).w_height;
         let mid_col = col + width / 2;
         let bottom_edge = row + height;
 
@@ -233,10 +211,10 @@ fn find_below_impl(wp: WinHandle) -> WinHandle {
 
         let mut w = nvim_get_firstwin();
         while !w.is_null() {
-            if w != wp && nvim_win_get_floating(w) == 0 {
-                let w_col = nvim_win_get_wincol(w);
-                let w_width = nvim_win_get_w_width(w);
-                let w_row = nvim_win_get_winrow(w);
+            if w != wp && c_int::from(win_ref(w).w_floating) == 0 {
+                let w_col = win_ref(w).w_wincol;
+                let w_width = win_ref(w).w_width;
+                let w_row = win_ref(w).w_winrow;
 
                 // Must be below current window
                 if w_row >= bottom_edge {
@@ -253,7 +231,7 @@ fn find_below_impl(wp: WinHandle) -> WinHandle {
                     }
                 }
             }
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         best
     }
@@ -270,7 +248,7 @@ fn get_next_win_impl(wp: WinHandle, wrap: bool) -> WinHandle {
     }
 
     unsafe {
-        let next = nvim_win_get_next(wp);
+        let next = win_ref(wp).w_next;
         if !next.is_null() {
             return next;
         }
@@ -290,7 +268,7 @@ fn get_prev_win_impl(wp: WinHandle, wrap: bool) -> WinHandle {
     }
 
     unsafe {
-        let prev = nvim_win_get_prev(wp);
+        let prev = win_ref(wp).w_prev;
         if !prev.is_null() {
             return prev;
         }
@@ -310,11 +288,11 @@ fn get_next_nonfloat_impl(wp: WinHandle, wrap: bool) -> WinHandle {
     }
 
     unsafe {
-        let mut w = nvim_win_get_next(wp);
+        let mut w = win_ref(wp).w_next;
 
         // Skip floating windows
-        while !w.is_null() && nvim_win_get_floating(w) != 0 {
-            w = nvim_win_get_next(w);
+        while !w.is_null() && win_ref(w).w_floating {
+            w = win_ref(w).w_next;
         }
 
         if !w.is_null() {
@@ -323,8 +301,8 @@ fn get_next_nonfloat_impl(wp: WinHandle, wrap: bool) -> WinHandle {
 
         if wrap {
             w = nvim_get_firstwin();
-            while !w.is_null() && w != wp && nvim_win_get_floating(w) != 0 {
-                w = nvim_win_get_next(w);
+            while !w.is_null() && w != wp && win_ref(w).w_floating {
+                w = win_ref(w).w_next;
             }
             if !w.is_null() && w != wp {
                 return w;
@@ -342,11 +320,11 @@ fn get_prev_nonfloat_impl(wp: WinHandle, wrap: bool) -> WinHandle {
     }
 
     unsafe {
-        let mut w = nvim_win_get_prev(wp);
+        let mut w = win_ref(wp).w_prev;
 
         // Skip floating windows
-        while !w.is_null() && nvim_win_get_floating(w) != 0 {
-            w = nvim_win_get_prev(w);
+        while !w.is_null() && win_ref(w).w_floating {
+            w = win_ref(w).w_prev;
         }
 
         if !w.is_null() {
@@ -356,8 +334,8 @@ fn get_prev_nonfloat_impl(wp: WinHandle, wrap: bool) -> WinHandle {
         if wrap {
             // Find last non-floating window
             let mut last = nvim_get_lastwin();
-            while !last.is_null() && nvim_win_get_floating(last) != 0 {
-                last = nvim_win_get_prev(last);
+            while !last.is_null() && win_ref(last).w_floating {
+                last = win_ref(last).w_prev;
             }
             if !last.is_null() && last != wp {
                 return last;

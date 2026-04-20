@@ -65,16 +65,6 @@ extern "C" {
     static Rows: c_int;
     static Columns: c_int;
     // Window field accessors
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
-    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-    fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_height_outer(wp: WinHandle) -> c_int;
     fn nvim_win_get_w_width_outer(wp: WinHandle) -> c_int;
 
@@ -305,17 +295,17 @@ unsafe fn handle_non_floating(wp: WinHandle) {
         // Windows on the default grid don't necessarily have comp_col/comp_row set,
         // but the rest of the calculations relies on it.
         let grid = nvim_win_get_grid_alloc(wp);
-        nvim_screengrid_set_comp_col(grid, nvim_win_get_wincol(wp));
-        nvim_screengrid_set_comp_row(grid, nvim_win_get_winrow(wp));
+        nvim_screengrid_set_comp_col(grid, win_ref(wp).w_wincol);
+        nvim_screengrid_set_comp_row(grid, win_ref(wp).w_winrow);
     }
     let grid_handle = nvim_screengrid_get_handle(nvim_win_get_grid_alloc(wp));
     nvim_win_ui_call_win_pos(
         grid_handle,
-        nvim_win_get_handle(wp),
-        nvim_win_get_winrow(wp),
-        nvim_win_get_wincol(wp),
-        nvim_win_get_w_width(wp),
-        nvim_win_get_w_height(wp),
+        win_ref(wp).handle,
+        win_ref(wp).w_winrow,
+        win_ref(wp).w_wincol,
+        win_ref(wp).w_width,
+        win_ref(wp).w_height,
     );
 }
 
@@ -323,7 +313,7 @@ unsafe fn handle_non_floating(wp: WinHandle) {
 unsafe fn handle_external(wp: WinHandle) {
     let grid_alloc = nvim_win_get_grid_alloc(wp);
     let grid_handle = nvim_screengrid_get_handle(grid_alloc);
-    let win_handle = nvim_win_get_handle(wp);
+    let win_handle = win_ref(wp).handle;
     nvim_win_ui_call_win_external_pos(grid_handle, win_handle);
 }
 
@@ -363,10 +353,10 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
         rs_ui_comp_layers_adjust(comp_index, raise);
     }
 
-    let redr_type = nvim_win_get_redr_type(wp);
+    let redr_type = win_ref(wp).w_redr_type;
     let valid = redr_type == 0 || nvim_get_ui_ext(K_UI_MULTIGRID) != 0;
     if !valid && !validate {
-        nvim_win_set_pos_changed(wp, 1);
+        win_mut(wp).w_pos_changed = true;
         return;
     }
 
@@ -403,8 +393,8 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
         comp_col = comp_col.min(max_col).max(0);
     }
 
-    nvim_win_set_winrow(wp, comp_row);
-    nvim_win_set_wincol(wp, comp_col);
+    win_mut(wp).w_winrow = comp_row;
+    win_mut(wp).w_wincol = comp_col;
 
     let hide = nvim_win_get_config_hide(wp) != 0;
     if hide {
@@ -426,7 +416,7 @@ unsafe fn handle_internal_float(wp: WinHandle, validate: bool) {
         if nvim_get_ui_ext(K_UI_MULTIGRID) != 0 {
             let anchor_grid_handle = nvim_screengrid_get_handle(anchor_grid);
             let grid_handle = nvim_screengrid_get_handle(grid_alloc);
-            let win_handle = nvim_win_get_handle(wp);
+            let win_handle = win_ref(wp).handle;
             let comp_idx = nvim_screengrid_get_comp_index(grid_alloc) as c_int;
             let mouse_flag = nvim_win_get_config_mouse_flag(wp);
             nvim_win_ui_call_win_float_pos(
@@ -486,7 +476,7 @@ fn do_autocmd_winclosed_impl(win: WinHandle) {
     DO_AUTOCMD_WINCLOSED_RECURSIVE.store(true, Ordering::SeqCst);
     // Format the window handle as a string and fire the autocmd.
     // SAFETY: nvim_win_get_handle and nvim_apply_autocmds_winclosed_by_handle are C accessors.
-    let handle = unsafe { nvim_win_get_handle(win) };
+    let handle = unsafe { win_ref(win).handle };
     // Format as decimal string with NUL terminator (max 20 digits + NUL for i32).
     let s = format!("{handle}\0");
     unsafe { nvim_apply_autocmds_winclosed_by_handle(s.as_ptr(), win) };
@@ -513,9 +503,9 @@ pub extern "C" fn rs_do_autocmd_winclosed(win: WinHandle) {
 #[export_name = "ui_ext_win_position"]
 pub unsafe extern "C" fn rs_ui_ext_win_position(wp: WinHandle, validate: bool) {
     // Clear pos_changed flag
-    nvim_win_set_pos_changed(wp, 0);
+    win_mut(wp).w_pos_changed = false;
 
-    if nvim_win_get_floating(wp) == 0 {
+    if c_int::from(win_ref(wp).w_floating) == 0 {
         handle_non_floating(wp);
         return;
     }
@@ -546,13 +536,6 @@ struct WinViewportSnapshot {
 
 extern "C" {
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_win_get_topline(wp: WinHandle) -> i32;
-    fn nvim_win_get_botline(wp: WinHandle) -> i32;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> i32;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
-    fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
     fn nvim_win_get_viewport_snapshot(wp: WinHandle, out: *mut WinViewportSnapshot);
     fn nvim_win_set_viewport_snapshot(wp: WinHandle, s: *const WinViewportSnapshot);
     fn nvim_ui_call_win_viewport_wrapper(
@@ -599,15 +582,15 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
     if !win_ref(wp).w_viewport_invalid {
         return;
     }
-    if nvim_win_get_redr_type(wp) != 0 {
+    if win_ref(wp).w_redr_type != 0 {
         return;
     }
 
     let line_count = nvim_win_buf_line_count(wp);
 
     // Avoid ml_get errors when producing "scroll_delta".
-    let cur_topline = nvim_win_get_topline(wp).min(line_count);
-    let cur_botline = nvim_win_get_botline(wp).min(line_count);
+    let cur_topline = win_ref(wp).w_topline.min(line_count);
+    let cur_botline = win_ref(wp).w_botline.min(line_count);
 
     let mut delta: i64 = 0;
 
@@ -625,7 +608,7 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
     };
     last_botline = last_botline.min(line_count);
 
-    let skipcol = i64::from(nvim_win_get_skipcol(wp));
+    let skipcol = i64::from(win_ref(wp).w_skipcol);
 
     if cur_topline < last_topline || (cur_topline == last_topline && skipcol < last_skipcol) {
         let mut vcole: i64 = last_skipcol;
@@ -667,34 +650,34 @@ unsafe fn ui_ext_win_viewport_impl(wp: WinHandle) {
     }
 
     delta += i64::from(last_topfill);
-    delta -= i64::from(nvim_win_get_topfill(wp));
+    delta -= i64::from(win_ref(wp).w_topfill);
 
-    let mut ev_botline = nvim_win_get_botline(wp);
-    if ev_botline == line_count + 1 && nvim_win_get_empty_rows(wp) == 0 {
+    let mut ev_botline = win_ref(wp).w_botline;
+    if ev_botline == line_count + 1 && win_ref(wp).w_empty_rows == 0 {
         // TODO(bfredl): There might be more cases to consider, like how does
         // this interact with incomplete final line? Diff filler lines?
         ev_botline = line_count;
     }
 
     let grid_handle = get_grid_alloc_handle(wp);
-    let win_handle = nvim_win_get_handle(wp);
+    let win_handle = win_ref(wp).handle;
     nvim_ui_call_win_viewport_wrapper(
         grid_handle,
         win_handle,
-        nvim_win_get_topline(wp) - 1,
+        win_ref(wp).w_topline - 1,
         ev_botline,
-        nvim_win_get_cursor_lnum(wp) - 1,
-        nvim_win_get_cursor_col(wp),
+        win_ref(wp).w_cursor.lnum - 1,
+        win_ref(wp).w_cursor.col,
         line_count,
         delta,
     );
 
     win_mut(wp).w_viewport_invalid = false;
     let new_vsnap = WinViewportSnapshot {
-        topline: nvim_win_get_topline(wp),
-        botline: nvim_win_get_botline(wp),
-        topfill: nvim_win_get_topfill(wp),
-        skipcol: nvim_win_get_skipcol(wp),
+        topline: win_ref(wp).w_topline,
+        botline: win_ref(wp).w_botline,
+        topfill: win_ref(wp).w_topfill,
+        skipcol: win_ref(wp).w_skipcol,
     };
     nvim_win_set_viewport_snapshot(wp, std::ptr::addr_of!(new_vsnap));
 }

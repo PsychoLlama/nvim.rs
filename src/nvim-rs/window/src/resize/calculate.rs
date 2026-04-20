@@ -5,6 +5,7 @@
 
 #![allow(clippy::missing_const_for_fn)]
 
+use crate::win_struct::win_ref;
 use std::ffi::c_int;
 
 use crate::{Frame, WinHandle, FR_COL, FR_ROW};
@@ -21,16 +22,12 @@ extern "C" {
     fn nvim_get_topframe() -> *mut Frame;
 
     /// Get w_frame from window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get w_height from window.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
 
     /// Get w_width from window.
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 
     /// Get w_floating from window.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Get frame minimum height.
     fn rs_frame_minheight(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
@@ -178,7 +175,7 @@ fn find_vertical_parent_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let mut fr = nvim_win_get_frame(wp);
+        let mut fr = win_ref(wp).w_frame;
         if fr.is_null() {
             return std::ptr::null_mut();
         }
@@ -202,7 +199,7 @@ fn find_horizontal_parent_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let mut fr = nvim_win_get_frame(wp);
+        let mut fr = win_ref(wp).w_frame;
         if fr.is_null() {
             return std::ptr::null_mut();
         }
@@ -238,7 +235,7 @@ fn can_grow_height_impl(wp: WinHandle) -> bool {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return false;
         }
@@ -270,7 +267,7 @@ fn can_grow_width_impl(wp: WinHandle) -> bool {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return false;
         }
@@ -306,7 +303,7 @@ fn validate_height_change_impl(wp: WinHandle, delta: c_int) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 0;
         }
@@ -330,7 +327,7 @@ fn validate_width_change_impl(wp: WinHandle, delta: c_int) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 0;
         }
@@ -437,7 +434,7 @@ pub extern "C" fn rs_resize_curwin_room_height() -> c_int {
         if curwin.is_null() {
             return 0;
         }
-        let frame = nvim_win_get_frame(curwin);
+        let frame = win_ref(curwin).w_frame;
         frame_room_height_impl(frame)
     }
 }
@@ -450,7 +447,7 @@ pub extern "C" fn rs_resize_curwin_room_width() -> c_int {
         if curwin.is_null() {
             return 0;
         }
-        let frame = nvim_win_get_frame(curwin);
+        let frame = win_ref(curwin).w_frame;
         frame_room_width_impl(frame)
     }
 }

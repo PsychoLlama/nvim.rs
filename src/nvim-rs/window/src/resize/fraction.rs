@@ -6,7 +6,8 @@
 use std::ffi::{c_int, c_long, c_longlong};
 use std::ptr;
 
-use crate::{win_struct::win_ref, WinHandle};
+use crate::win_struct::{win_mut, win_ref};
+use crate::WinHandle;
 
 // =============================================================================
 // Constants
@@ -36,23 +37,11 @@ type ColnrT = c_int;
 // =============================================================================
 
 extern "C" {
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
-    fn nvim_win_set_fraction(wp: WinHandle, val: c_int);
 
     // Accessors used by scroll_to_fraction
     fn nvim_win_get_p_scb(wp: WinHandle) -> c_int;
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> ColnrT;
-    fn nvim_win_set_wrow(wp: WinHandle, val: c_int);
-    fn nvim_win_get_skipcol(wp: WinHandle) -> ColnrT;
-    fn nvim_win_set_skipcol(wp: WinHandle, val: ColnrT);
-    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_set_prev_fraction_row(wp: WinHandle, val: c_int);
 
     // plines functions (C wrappers)
     fn nvim_plines_win_col(wp: WinHandle, lnum: LinenrT, column: c_long) -> c_int;
@@ -101,11 +90,11 @@ fn set_fraction_impl(wp: WinHandle) {
     }
 
     unsafe {
-        let view_height = nvim_win_get_view_height(wp);
+        let view_height = win_ref(wp).w_view_height;
         if view_height > 1 {
-            let wrow = nvim_win_get_wrow(wp);
+            let wrow = win_ref(wp).w_wrow;
             let fraction = (wrow * FRACTION_MULT + FRACTION_MULT / 2) / view_height;
-            nvim_win_set_fraction(wp, fraction);
+            win_mut(wp).w_fraction = fraction;
         }
     }
 }
@@ -119,7 +108,7 @@ fn win_default_scroll_impl(wp: WinHandle) -> c_longlong {
     }
 
     unsafe {
-        let view_height = c_longlong::from(nvim_win_get_view_height(wp));
+        let view_height = c_longlong::from(win_ref(wp).w_view_height);
         (view_height / 2).max(1)
     }
 }
@@ -134,11 +123,11 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
     }
 
     unsafe {
-        let height = nvim_win_get_view_height(wp);
+        let height = win_ref(wp).w_view_height;
         let p_scb = nvim_win_get_p_scb(wp) != 0;
         let is_curwin = nvim_get_curwin() == wp;
         let line_count = nvim_win_buf_line_count(wp);
-        let topline = nvim_win_get_topline(wp);
+        let topline = win_ref(wp).w_topline;
 
         // Don't change w_topline in any of these cases:
         // - window height is 0
@@ -148,14 +137,14 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
         if height > 0 && (!p_scb || is_curwin) && (height < line_count || topline > 1) {
             // Find a value for w_topline that shows the cursor at the same
             // relative position in the window as before (more or less).
-            let cursor_lnum = nvim_win_get_cursor_lnum(wp);
-            let cursor_col = nvim_win_get_cursor_col(wp);
+            let cursor_lnum = win_ref(wp).w_cursor.lnum;
+            let cursor_col = win_ref(wp).w_cursor.col;
             // can happen when starting up
             let mut lnum: LinenrT = cursor_lnum.max(1);
 
             let fraction = win_ref(wp).w_fraction;
             let wrow = (fraction * height - 1) / FRACTION_MULT;
-            nvim_win_set_wrow(wp, wrow);
+            win_mut(wp).w_wrow = wrow;
 
             let line_size = nvim_plines_win_col(wp, lnum, c_long::from(cursor_col)) - 1;
             let mut sline = wrow - line_size;
@@ -163,40 +152,40 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
             if sline >= 0 {
                 // Make sure the whole cursor line is visible, if possible.
                 let rows = nvim_plines_win(wp, lnum, 0);
-                let view_height = nvim_win_get_view_height(wp);
+                let view_height = win_ref(wp).w_view_height;
 
                 if sline > view_height - rows {
                     sline = view_height - rows;
-                    nvim_win_set_wrow(wp, wrow - (rows - line_size));
+                    win_mut(wp).w_wrow = wrow - (rows - line_size);
                 }
             }
 
-            let view_height = nvim_win_get_view_height(wp);
+            let view_height = win_ref(wp).w_view_height;
 
             match sline.cmp(&0) {
                 std::cmp::Ordering::Less => {
                     // Cursor line would go off top of screen if w_wrow was this high.
                     // Make cursor line the first line in the window.  If not enough
                     // room use w_skipcol.
-                    nvim_win_set_wrow(wp, line_size);
-                    let new_wrow = nvim_win_get_wrow(wp);
-                    let view_width = nvim_win_get_view_width(wp);
+                    win_mut(wp).w_wrow = line_size;
+                    let new_wrow = win_ref(wp).w_wrow;
+                    let view_width = win_ref(wp).w_view_width;
                     let col_off = nvim_win_col_off(wp);
 
                     if new_wrow >= view_height && (view_width - col_off) > 0 {
-                        let skipcol = nvim_win_get_skipcol(wp);
-                        nvim_win_set_skipcol(wp, skipcol + view_width - col_off);
-                        nvim_win_set_wrow(wp, new_wrow - 1);
+                        let skipcol = win_ref(wp).w_skipcol;
+                        win_mut(wp).w_skipcol = skipcol + view_width - col_off;
+                        win_mut(wp).w_wrow = new_wrow - 1;
 
                         loop {
-                            let cur_wrow = nvim_win_get_wrow(wp);
+                            let cur_wrow = win_ref(wp).w_wrow;
                             if cur_wrow < view_height {
                                 break;
                             }
                             let col_off2 = nvim_win_col_off2(wp);
-                            let skipcol = nvim_win_get_skipcol(wp);
-                            nvim_win_set_skipcol(wp, skipcol + view_width - col_off + col_off2);
-                            nvim_win_set_wrow(wp, cur_wrow - 1);
+                            let skipcol = win_ref(wp).w_skipcol;
+                            win_mut(wp).w_skipcol = skipcol + view_width - col_off + col_off2;
+                            win_mut(wp).w_wrow = cur_wrow - 1;
                         }
                     }
                 }
@@ -212,10 +201,10 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
                             break;
                         }
                         lnum -= 1;
-                        let cur_topline = nvim_win_get_topline(wp);
+                        let cur_topline = win_ref(wp).w_topline;
                         if lnum == cur_topline {
                             line_size_mut =
-                                nvim_plines_win_nofill(wp, lnum, 1) + nvim_win_get_topfill(wp);
+                                nvim_plines_win_nofill(wp, lnum, 1) + win_ref(wp).w_topfill;
                         } else {
                             line_size_mut = nvim_plines_win(wp, lnum, 1);
                         }
@@ -228,14 +217,14 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
                             // line instead.
                             nvim_hasFolding(wp, lnum, ptr::null_mut(), ptr::addr_of_mut!(lnum));
                             lnum += 1;
-                            let cur_wrow = nvim_win_get_wrow(wp);
-                            nvim_win_set_wrow(wp, cur_wrow - (line_size_mut + sline));
+                            let cur_wrow = win_ref(wp).w_wrow;
+                            win_mut(wp).w_wrow = cur_wrow - (line_size_mut + sline);
                         }
                         std::cmp::Ordering::Greater => {
                             // First line of file reached, use that as topline.
                             lnum = 1;
-                            let cur_wrow = nvim_win_get_wrow(wp);
-                            nvim_win_set_wrow(wp, cur_wrow - sline);
+                            let cur_wrow = win_ref(wp).w_wrow;
+                            win_mut(wp).w_wrow = cur_wrow - sline;
                         }
                         std::cmp::Ordering::Equal => {}
                     }
@@ -252,8 +241,8 @@ fn scroll_to_fraction_impl(wp: WinHandle, prev_height: c_int) {
             nvim_curs_columns(wp, 0); // validate w_wrow
         }
         if prev_height > 0 {
-            let final_wrow = nvim_win_get_wrow(wp);
-            nvim_win_set_prev_fraction_row(wp, final_wrow);
+            let final_wrow = win_ref(wp).w_wrow;
+            win_mut(wp).w_prev_fraction_row = final_wrow;
         }
 
         nvim_redraw_later(wp, UPD_SOME_VALID);

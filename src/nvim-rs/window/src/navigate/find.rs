@@ -5,9 +5,10 @@
 
 #![allow(clippy::missing_const_for_fn)]
 
+use crate::win_struct::win_ref;
 use std::ffi::c_int;
 
-use crate::{BufHandle, Frame, TabpageHandle, WinHandle};
+use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // =============================================================================
 // External C Functions
@@ -35,35 +36,6 @@ extern "C" {
     /// Get tp_firstwin from tabpage.
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
 
-    /// Get w_next from window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-
-    /// Get w_prev from window.
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
-
-    /// Get w_buffer from window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-
-    /// Get w_floating from window.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-
-    /// Get w_frame from window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
-
-    /// Get window handle.
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-
-    /// Get window row position.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Get window column position.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-
-    /// Get window height.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-
-    /// Get window width.
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -75,10 +47,10 @@ fn find_by_handle_curtab_impl(handle: c_int) -> WinHandle {
     unsafe {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            if nvim_win_get_handle(wp) == handle {
+            if win_ref(wp).handle == handle {
                 return wp;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         WinHandle::null()
     }
@@ -92,10 +64,10 @@ fn find_by_handle_impl(handle: c_int) -> WinHandle {
             let first = nvim_tabpage_get_firstwin(tp);
             let mut wp = first;
             while !wp.is_null() {
-                if nvim_win_get_handle(wp) == handle {
+                if win_ref(wp).handle == handle {
                     return wp;
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
             tp = nvim_tabpage_get_next(tp);
         }
@@ -117,7 +89,7 @@ fn find_by_nr_impl(nr: c_int) -> WinHandle {
             if count == 0 {
                 return wp;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         WinHandle::null()
     }
@@ -143,7 +115,7 @@ fn find_by_nr_in_tab_impl(nr: c_int, tp: TabpageHandle) -> WinHandle {
             if count == 0 {
                 return wp;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         WinHandle::null()
     }
@@ -162,10 +134,10 @@ fn find_by_buffer_curtab_impl(buf: BufHandle) -> WinHandle {
     unsafe {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            if nvim_win_get_buffer(wp) == buf {
+            if BufHandle(win_ref(wp).w_buffer) == buf {
                 return wp;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         WinHandle::null()
     }
@@ -183,10 +155,10 @@ fn find_by_buffer_impl(buf: BufHandle) -> WinHandle {
             let first = nvim_tabpage_get_firstwin(tp);
             let mut wp = first;
             while !wp.is_null() {
-                if nvim_win_get_buffer(wp) == buf {
+                if BufHandle(win_ref(wp).w_buffer) == buf {
                     return wp;
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
             tp = nvim_tabpage_get_next(tp);
         }
@@ -204,10 +176,10 @@ fn count_windows_for_buffer_impl(buf: BufHandle) -> c_int {
         let mut count = 0;
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            if nvim_win_get_buffer(wp) == buf {
+            if BufHandle(win_ref(wp).w_buffer) == buf {
                 count += 1;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         count
     }
@@ -226,10 +198,10 @@ fn count_windows_for_buffer_all_impl(buf: BufHandle) -> c_int {
             let first = nvim_tabpage_get_firstwin(tp);
             let mut wp = first;
             while !wp.is_null() {
-                if nvim_win_get_buffer(wp) == buf {
+                if BufHandle(win_ref(wp).w_buffer) == buf {
                     count += 1;
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
             tp = nvim_tabpage_get_next(tp);
         }
@@ -246,16 +218,16 @@ fn find_at_pos_impl(row: c_int, col: c_int) -> WinHandle {
     unsafe {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            let winrow = nvim_win_get_winrow(wp);
-            let wincol = nvim_win_get_wincol(wp);
-            let height = nvim_win_get_w_height(wp);
-            let width = nvim_win_get_w_width(wp);
+            let winrow = win_ref(wp).w_winrow;
+            let wincol = win_ref(wp).w_wincol;
+            let height = win_ref(wp).w_height;
+            let width = win_ref(wp).w_width;
 
             // Check if position is within window bounds
             if row >= winrow && row < winrow + height && col >= wincol && col < wincol + width {
                 return wp;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         WinHandle::null()
     }
@@ -279,7 +251,7 @@ fn get_winnr_impl(wp: WinHandle) -> c_int {
                 return nr;
             }
             nr += 1;
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         0
     }
@@ -305,7 +277,7 @@ fn get_winnr_in_tab_impl(wp: WinHandle, tp: TabpageHandle) -> c_int {
                 return nr;
             }
             nr += 1;
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         0
     }
@@ -318,7 +290,7 @@ fn count_windows_impl() -> c_int {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             count += 1;
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         count
     }
@@ -337,7 +309,7 @@ fn count_windows_in_tab_impl(tp: TabpageHandle) -> c_int {
         let mut wp = first;
         while !wp.is_null() {
             count += 1;
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         count
     }
@@ -473,7 +445,7 @@ fn buf_jump_open_win_impl(buf: BufHandle) -> WinHandle {
         let curtab = nvim_get_curtab();
         // Check curwin first.
         let curwin = nvim_get_curwin();
-        if !curwin.is_null() && nvim_win_get_buffer(curwin) == buf {
+        if !curwin.is_null() && BufHandle(win_ref(curwin).w_buffer) == buf {
             nvim_win_enter(curwin, 0);
             return nvim_get_curwin(); // re-read after enter
         }
@@ -486,11 +458,11 @@ fn buf_jump_open_win_impl(buf: BufHandle) -> WinHandle {
         };
         let mut wp = first;
         while !wp.is_null() {
-            if nvim_win_get_buffer(wp) == buf {
+            if BufHandle(win_ref(wp).w_buffer) == buf {
                 nvim_win_enter(wp, 0);
                 return wp;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         WinHandle::null()
     }
@@ -519,7 +491,7 @@ fn buf_jump_open_tab_impl(buf: BufHandle) -> WinHandle {
                 let first = nvim_tabpage_get_firstwin(tp);
                 let mut wp = first;
                 while !wp.is_null() {
-                    if nvim_win_get_buffer(wp) == buf {
+                    if BufHandle(win_ref(wp).w_buffer) == buf {
                         rs_goto_tabpage_win(tp, wp);
                         // If curwin didn't switch, something went wrong.
                         let curwin = nvim_get_curwin();
@@ -528,7 +500,7 @@ fn buf_jump_open_tab_impl(buf: BufHandle) -> WinHandle {
                         }
                         return wp;
                     }
-                    wp = nvim_win_get_next(wp);
+                    wp = win_ref(wp).w_next;
                 }
             }
             tp = nvim_tabpage_get_next(tp);

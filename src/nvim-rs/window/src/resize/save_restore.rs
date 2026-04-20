@@ -3,6 +3,7 @@
 //! This module provides Rust implementations of `win_size_save` and
 //! `win_size_restore` from `src/nvim/window.c`.
 
+use crate::win_struct::win_ref;
 use std::ffi::{c_int, c_void};
 
 use crate::WinHandle;
@@ -13,13 +14,7 @@ use crate::WinHandle;
 
 extern "C" {
     fn nvim_get_curwin() -> WinHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut crate::Frame;
     fn nvim_get_rows_avail() -> c_int;
     fn rs_win_count() -> c_int;
     fn rs_global_stl_height() -> c_int;
@@ -64,14 +59,14 @@ fn win_size_save_impl(gap: *mut c_void) {
 
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            let width = nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp);
-            let height = nvim_win_get_w_height(wp);
+            let width = win_ref(wp).w_width + win_ref(wp).w_vsep_width;
+            let height = win_ref(wp).w_height;
             nvim_ga_set_int(gap, len, width);
             len += 1;
             nvim_ga_set_int(gap, len, height);
             len += 1;
             nvim_ga_set_len(gap, len);
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -109,11 +104,11 @@ fn win_size_restore_impl(gap: *mut c_void) {
                 i += 1;
                 let height = nvim_ga_get_int(gap, i);
                 i += 1;
-                if nvim_win_get_floating(wp) == 0 {
-                    rs_frame_setwidth(nvim_win_get_frame(wp), width);
+                if c_int::from(win_ref(wp).w_floating) == 0 {
+                    rs_frame_setwidth(win_ref(wp).w_frame, width);
                     rs_win_setheight_win(height, wp);
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
         }
         // Recompute the window positions.
