@@ -265,7 +265,6 @@ void nvim_eap_set_cmdlinep_deref(exarg_T *eap, char *val) { *eap->cmdlinep = val
 LineGetter nvim_eap_get_getline(const exarg_T *eap) { return eap->ea_getline; }
 void *nvim_eap_get_cookie(const exarg_T *eap) { return eap->cookie; }
 
-void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv) { set_var(name, name_len, tv, false); }
 const char *nvim_sourcing_name_get(void) { return SOURCING_NAME; }
 linenr_T nvim_sourcing_lnum_get(void) { return SOURCING_LNUM; }
 
@@ -300,8 +299,6 @@ void nvim_foldtext_make_obj(typval_T *tv, int tv_type, Object *out)
 
 void nvim_smsg_system_cmd(const char *cmdstr) { smsg(0, _("Executing command: \"%s\""), cmdstr); }
 bool nvim_eval_os_can_exe(const char *name, char **abspath) { return os_can_exe(name, abspath, true); }
-int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
-                       bool import_script) { return eval_variable(name, len, rettv, NULL, verbose, import_script); }
 
 
 void *nvim_save_provider_caller_scope(void)

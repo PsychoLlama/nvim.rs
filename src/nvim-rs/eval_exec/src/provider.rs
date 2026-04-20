@@ -23,10 +23,12 @@ extern "C" {
     #[link_name = "nlua_is_deferred_safe"]
     fn nvim_eval_nlua_is_deferred_safe() -> bool;
     // nvim_semsg_fast_api_disabled: now in nvim_eval::errors
-    fn nvim_eval_variable(
+    #[link_name = "eval_variable"]
+    fn provider_eval_variable(
         name: *const c_char,
         len: c_int,
         rettv: *mut c_void,
+        dip: *mut *mut c_void,
         verbose: bool,
         import_script: bool,
     ) -> c_int;
@@ -181,10 +183,11 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
 
     // Try to get g:loaded_<name>_provider
     if unsafe {
-        nvim_eval_variable(
+        provider_eval_variable(
             varname_buf.as_ptr() as *const c_char,
             varname_len,
             rettv,
+            std::ptr::null_mut(),
             false,
             true,
         )
@@ -206,10 +209,11 @@ pub unsafe extern "C" fn rs_eval_has_provider(feat: *const c_char, throw_if_fast
 
         // Retry the variable lookup
         if unsafe {
-            nvim_eval_variable(
+            provider_eval_variable(
                 varname_buf.as_ptr() as *const c_char,
                 varname_len,
                 rettv,
+                std::ptr::null_mut(),
                 false,
                 true,
             )

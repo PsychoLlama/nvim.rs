@@ -863,7 +863,7 @@ extern "C" {
     fn set_vim_var_list(idx: c_int, val: *mut c_void);
 
     // Phase 1: var_set_global accessors
-    fn nvim_set_var_wrapper(name: *const c_char, name_len: usize, tv: TypevalHandle);
+    fn set_var(name: *const c_char, name_len: usize, tv: TypevalHandle, copy: bool);
 
     // Phase 1: eval_fmt_source_name_line accessors
     fn nvim_sourcing_name_get() -> *const c_char;
@@ -1019,7 +1019,7 @@ pub unsafe extern "C" fn rs_var_set_global(name: *const c_char, vartv: TypevalHa
     let entry = xcalloc(1, std::mem::size_of::<FunccalEntryT>());
     nvim_save_funccal_inner(entry);
     let name_len = libc_strlen(name);
-    nvim_set_var_wrapper(name, name_len, vartv);
+    set_var(name, name_len, vartv, false);
     nvim_restore_funccal_inner();
     xfree(entry);
 }
