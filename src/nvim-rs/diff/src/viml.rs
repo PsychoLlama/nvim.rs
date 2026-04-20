@@ -40,7 +40,8 @@ extern "C" {
     // Phase 3: f_diff_hlID accessors
     fn nvim_get_diff_flags() -> c_int;
     fn nvim_curbuf_changedtick_i64() -> i64;
-    fn nvim_curbuf_fnum() -> c_int;
+    // curbuf: b_fnum (handle_T=i32) at offset 0
+    static curbuf: *mut c_void;
     fn nvim_diff_tv_get_number_idx(argvars: *mut c_void, idx: c_int) -> c_int;
     fn nvim_diff_hlf_add() -> c_int;
     fn nvim_diff_hlf_chd() -> c_int;
@@ -533,7 +534,7 @@ pub unsafe extern "C" fn rs_f_diff_hl_id(
 
     let curwin = nvim_get_curwin();
     let cur_changedtick = nvim_curbuf_changedtick_i64();
-    let cur_fnum = nvim_curbuf_fnum();
+    let cur_fnum = *curbuf.cast::<c_int>(); // b_fnum at offset 0
 
     let need_recompute = !cache_results
         || lnum != HLID_PREV_LNUM

@@ -25,6 +25,15 @@ unsafe fn tv_get_list_field(tv: *const c_void) -> *mut c_void {
     (*tv.cast::<TypvalTRepr>()).vval.v_list
 }
 
+/// Inline: get b_fnum (handle_T=i32) at offset 0 of buf_T.
+///
+/// Replaces `nvim_curbuf_fnum()` (which returned `curbuf->b_fnum`).
+/// `handle_T` is `int` = i32, and `b_fnum` is the first field of `buf_T`.
+#[inline]
+unsafe fn buf_fnum(buf: BufHandle) -> c_int {
+    *buf.cast::<c_int>()
+}
+
 /// Maximum number of subexpressions in a regexp (from regexp_defs.h)
 const NSUBEXP: usize = 10;
 
@@ -246,7 +255,8 @@ extern "C" {
     fn nvim_tv_list_len(l: *const c_void) -> c_int;
 
     // Buffer accessors (Phase 3)
-    fn nvim_curbuf_fnum() -> c_int;
+    // curbuf: buf_T*, b_fnum (handle_T=i32) is at offset 0
+    static curbuf: BufHandle;
     fn nvim_get_line_count() -> i32;
     #[link_name = "rs_buflist_findnr"]
     fn nvim_buflist_findnr(fnum: c_int) -> BufHandle;
@@ -421,9 +431,9 @@ pub unsafe extern "C" fn rs_var2fpos(
             // Convert byte column to character column using current buffer.
             // We can reuse rs_buf_byteidx_to_charidx but it takes a BufHandle.
             // Instead replicate the logic: just call through the existing Rust fn.
-            // Use curbuf (accessed via nvim_curbuf_fnum to get fnum, then buflist_findnr).
-            let curbuf = nvim_buflist_findnr(nvim_curbuf_fnum());
-            pos.col = rs_buf_byteidx_to_charidx(curbuf, pos.lnum, pos.col);
+            // Use curbuf directly (b_fnum at offset 0 = handle_T = i32).
+            let curbuf_local = nvim_buflist_findnr(buf_fnum(curbuf));
+            pos.col = rs_buf_byteidx_to_charidx(curbuf_local, pos.lnum, pos.col);
         }
         *out = pos;
         return true;
@@ -550,7 +560,7 @@ pub unsafe extern "C" fn rs_list2fpos(
         if n < 0 {
             return FAIL;
         }
-        let n = if n == 0 { nvim_curbuf_fnum() } else { n };
+        let n = if n == 0 { buf_fnum(curbuf) } else { n };
         *fnump = n;
     }
 
@@ -572,7 +582,7 @@ pub unsafe extern "C" fn rs_list2fpos(
     if charcol {
         // Get the text for the specified line in a loaded buffer.
         let fnum = if fnump.is_null() {
-            nvim_curbuf_fnum()
+            buf_fnum(curbuf)
         } else {
             *fnump
         };

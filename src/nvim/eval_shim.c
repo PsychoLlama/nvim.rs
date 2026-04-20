@@ -212,7 +212,6 @@ char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
 { out->cursor_lnum = curwin->w_cursor.lnum; out->cursor_col = curwin->w_cursor.col; out->cursor_coladd = curwin->w_cursor.coladd; out->topline = curwin->w_topline; out->botline = curwin->w_botline; out->visual_active = VIsual_active; out->visual_lnum = VIsual.lnum; out->visual_col = VIsual.col; out->visual_coladd = VIsual.coladd; out->curbuf_fnum = curbuf->b_fnum; }
 
-int nvim_curbuf_fnum(void) { return curbuf->b_fnum; }
 
 bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *coladd_out, int *fnum_out)
 {
