@@ -19,9 +19,10 @@ use std::ptr;
 
 use nvim_collections::garray::GArray;
 use nvim_eval::typval::TypvalT as TypvalTRepr;
+use nvim_ex_cmds_types::ExArg;
 
 use crate::callback::CallbackT;
-use crate::eval::{EvalargHandle, EvalargT, ExargHandle, LineGetter, TypevalHandle};
+use crate::eval::{EvalargHandle, EvalargT, ExargHandle, TypevalHandle};
 use crate::funcexe::FuncExeT;
 
 /// Return type of rs_find_option_end (mirrors C struct in option crate).
@@ -125,7 +126,7 @@ extern "C" {
         funcexe: *mut FuncExeT,
     ) -> c_int;
     fn skipwhite(p: *const c_char) -> *mut c_char;
-    fn nvim_eap_get_skip_local(eap: ExargHandle) -> c_int;
+    // (eap accessors inlined via ExArg field access)
 
     // Error globals
     fn aborting() -> c_int;
@@ -134,12 +135,6 @@ extern "C" {
 
     // Phase 5: fill_evalarg_from_eap / clear_evalarg accessors
     fn sourcing_a_script(eap: ExargHandle) -> c_int;
-    fn nvim_eap_get_getline(eap: ExargHandle) -> LineGetter;
-    fn nvim_eap_get_cookie(eap: ExargHandle) -> *mut c_void;
-    fn nvim_eap_get_cmdline_tofree(eap: ExargHandle) -> *mut c_char;
-    fn nvim_eap_set_cmdline_tofree(eap: ExargHandle, val: *mut c_char);
-    fn nvim_eap_get_cmdlinep_deref(eap: ExargHandle) -> *mut c_char;
-    fn nvim_eap_set_cmdlinep_deref(eap: ExargHandle, val: *mut c_char);
 
     // Phase 5: may_call_simple_func / eval_expr_ext accessors
     #[link_name = "call_simple_luafunc"]
@@ -471,7 +466,7 @@ pub unsafe extern "C" fn rs_eval_to_string_eap(
     let tv = TypevalHandle::from_ptr(tv_storage.as_mut_ptr() as *mut c_void);
 
     // Determine eap->skip (matches C: eap != NULL && eap->skip)
-    let eap_skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
+    let eap_skip = !eap.is_null() && (*eap.as_ptr().cast::<ExArg>()).skip != 0;
     let evalarg = alloc_evalarg(eap, eap_skip);
 
     let r = if use_simple_function {
@@ -589,7 +584,7 @@ pub unsafe extern "C" fn rs_eval1_emsg(
     let did_emsg_before = did_emsg;
     let called_emsg_before = called_emsg;
 
-    let skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
+    let skip = !eap.is_null() && (*eap.as_ptr().cast::<ExArg>()).skip != 0;
     let evalarg = alloc_evalarg(eap, skip);
 
     let ret = eval1(arg, rettv, evalarg);
@@ -686,8 +681,9 @@ pub unsafe extern "C" fn fill_evalarg_from_eap(
     }
     if sourcing_a_script(eap) != 0 {
         // Copy the getline function pointer and cookie from eap.
-        (*evalarg.as_ptr()).eval_getline = nvim_eap_get_getline(eap);
-        (*evalarg.as_ptr()).eval_cookie = nvim_eap_get_cookie(eap);
+        let eap_ref = &*eap.as_ptr().cast::<ExArg>();
+        (*evalarg.as_ptr()).eval_getline = eap_ref.ea_getline;
+        (*evalarg.as_ptr()).eval_cookie = eap_ref.cookie;
     }
 }
 
@@ -709,11 +705,11 @@ pub unsafe extern "C" fn clear_evalarg(evalarg: EvalargHandle, eap: ExargHandle)
     }
     if !eap.is_null() {
         // Keep both the old and new cmdline; nextcmd may point into the new one.
-        let old_cmdline_tofree = nvim_eap_get_cmdline_tofree(eap);
-        xfree(old_cmdline_tofree as *mut c_void);
-        let current_cmdlinep = nvim_eap_get_cmdlinep_deref(eap);
-        nvim_eap_set_cmdline_tofree(eap, current_cmdlinep);
-        nvim_eap_set_cmdlinep_deref(eap, tofree);
+        let eap_ref = &mut *eap.as_ptr().cast::<ExArg>();
+        xfree(eap_ref.cmdline_tofree as *mut c_void);
+        let current_cmdlinep = *eap_ref.cmdlinep;
+        eap_ref.cmdline_tofree = current_cmdlinep;
+        *eap_ref.cmdlinep = tofree;
     } else {
         xfree(tofree as *mut c_void);
     }
@@ -810,7 +806,7 @@ pub unsafe extern "C" fn rs_eval_expr_ext(
     let tv = xmalloc(16); // sizeof(typval_T) = 16 bytes
     let tv_handle = TypevalHandle::from_ptr(tv);
 
-    let eap_skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
+    let eap_skip = !eap.is_null() && (*eap.as_ptr().cast::<ExArg>()).skip != 0;
 
     let evalarg = alloc_evalarg(eap, eap_skip);
 

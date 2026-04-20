@@ -192,8 +192,6 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
   return wrong;
 }
 
-int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
-char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 
 void nvim_read_cursor_visual_state(NvimCursorVisualState *out)
 { out->cursor_lnum = curwin->w_cursor.lnum; out->cursor_col = curwin->w_cursor.col; out->cursor_coladd = curwin->w_cursor.coladd; out->topline = curwin->w_topline; out->botline = curwin->w_botline; out->visual_active = VIsual_active; out->visual_lnum = VIsual.lnum; out->visual_col = VIsual.col; out->visual_coladd = VIsual.coladd; out->curbuf_fnum = curbuf->b_fnum; }
@@ -246,12 +244,6 @@ dict_T *nvim_dict_get_copydict(const dict_T *dict) { return dict->dv_copydict; }
 listitem_T *nvim_list_first_item(const list_T *l) { return tv_list_first(l); }
 const char *nvim_list_item_get_string(listitem_T *item) { return tv_get_string(TV_LIST_ITEM_TV(item)); }
 
-char *nvim_eap_get_cmdline_tofree(exarg_T *eap) { return eap->cmdline_tofree; }
-void nvim_eap_set_cmdline_tofree(exarg_T *eap, char *val) { eap->cmdline_tofree = val; }
-char *nvim_eap_get_cmdlinep_deref(const exarg_T *eap) { return *eap->cmdlinep; }
-void nvim_eap_set_cmdlinep_deref(exarg_T *eap, char *val) { *eap->cmdlinep = val; }
-LineGetter nvim_eap_get_getline(const exarg_T *eap) { return eap->ea_getline; }
-void *nvim_eap_get_cookie(const exarg_T *eap) { return eap->cookie; }
 
 const char *nvim_sourcing_name_get(void) { return SOURCING_NAME; }
 linenr_T nvim_sourcing_lnum_get(void) { return SOURCING_LNUM; }

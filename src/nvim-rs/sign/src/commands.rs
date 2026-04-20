@@ -4,6 +4,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use nvim_ex_cmds_types::ExArg;
+
 use crate::{LinenrT, SignBufHandle, SignCmd, SIGN_DEF_PRIO};
 
 // =============================================================================
@@ -86,8 +88,7 @@ extern "C" {
     fn nvim_xp_set_context(xp: *mut c_void, ctx: c_int);
     fn nvim_xp_set_pattern(xp: *mut c_void, pat: *mut c_char);
 
-    // exarg_T accessor
-    fn nvim_eap_get_arg_local(eap: *const c_void) -> *mut c_char;
+    // (nvim_eap_get_arg_local inlined via ExArg field access)
 
     // sign_map/sign_ns iteration
     fn nvim_sign_map_get_nth_key(idx: c_int) -> *mut c_char;
@@ -949,7 +950,7 @@ pub unsafe extern "C" fn rs_ex_sign(eap: *mut c_void) {
         return;
     }
 
-    let arg = nvim_eap_get_arg_local(eap);
+    let arg = (*eap.cast::<ExArg>()).arg;
     if arg.is_null() {
         return;
     }

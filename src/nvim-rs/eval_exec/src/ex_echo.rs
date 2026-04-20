@@ -55,13 +55,8 @@ extern "C" {
 
     // semsg with e_invexpr2: now in nvim_eval::errors
 
-    // EAP accessors
-    fn nvim_eap_get_skip_local(eap: ExargHandle) -> c_int;
-    fn nvim_eap_get_arg_local(eap: ExargHandle) -> *mut c_char;
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
-    // (nvim_eap_set_nextcmd_checked inlined via ExargNextcmdAccess.nextcmd + check_nextcmd)
-    fn nvim_eap_get_getline(eap: ExargHandle) -> LineGetter;
-    fn nvim_eap_get_cookie(eap: ExargHandle) -> *mut c_void;
+    // (eap accessors inlined via ExArg field access)
 
     // Message functions
     fn msg_ext_set_kind(kind: *const c_char);
@@ -137,7 +132,7 @@ pub unsafe extern "C" fn rs_get_echo_hl_id() -> c_int {
 /// - `eap` must be a valid exarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ex_echohl(eap: ExargHandle) {
-    let arg = nvim_eap_get_arg_local(eap);
+    let arg = (*eap.as_ptr().cast::<ExArg>()).arg;
     ECHO_HL_ID = syn_name2id(arg);
 }
 
@@ -205,8 +200,8 @@ unsafe fn cstr_len(s: *const c_char) -> usize {
 /// # Safety
 /// - `eap` must be a valid exarg_T pointer
 pub unsafe fn ex_echo_impl(eap: ExargHandle) {
-    let mut arg = nvim_eap_get_arg_local(eap);
-    let skip = nvim_eap_get_skip_local(eap) != 0;
+    let mut arg = (*eap.as_ptr().cast::<ExArg>()).arg;
+    let skip = (*eap.as_ptr().cast::<ExArg>()).skip != 0;
     let cmdidx = (*(eap.as_ptr() as *const ExArg)).cmdidx;
     let cmd_echo = CMD_ECHO;
 
@@ -317,8 +312,8 @@ pub unsafe extern "C" fn rs_ex_echo(eap: ExargHandle) {
 /// # Safety
 /// - `eap` must be a valid exarg_T pointer
 pub unsafe fn ex_execute_impl(eap: ExargHandle) {
-    let mut arg = nvim_eap_get_arg_local(eap);
-    let skip = nvim_eap_get_skip_local(eap) != 0;
+    let mut arg = (*eap.as_ptr().cast::<ExArg>()).arg;
+    let skip = (*eap.as_ptr().cast::<ExArg>()).skip != 0;
     let cmdidx = (*(eap.as_ptr() as *const ExArg)).cmdidx;
     let cmd_execute = CMD_EXECUTE;
     let cmd_echomsg = CMD_ECHOMSG;
@@ -402,7 +397,8 @@ pub unsafe fn ex_execute_impl(eap: ExargHandle) {
             }
         } else if cmdidx == cmd_execute {
             // inline nvim_do_cmdline_execute: DOCMD_NOWAIT(2)|DOCMD_VERBOSE(1) = 3
-            do_cmdline(data, nvim_eap_get_getline(eap), nvim_eap_get_cookie(eap), 3);
+            let eap_ref = &*eap.as_ptr().cast::<ExArg>();
+            do_cmdline(data, eap_ref.ea_getline, eap_ref.cookie, 3);
         }
     }
 

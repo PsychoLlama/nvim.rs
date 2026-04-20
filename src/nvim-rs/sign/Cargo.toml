@@ -15,4 +15,5 @@ workspace = true
 [dependencies]
 nvim-buffer = { path = "../buffer" }
 nvim-decoration = { path = "../decoration" }
+nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 nvim-marktree = { path = "../marktree" }
