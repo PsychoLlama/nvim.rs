@@ -161,7 +161,6 @@ const char *nvim_get_p_tags(void) { return p_tags; }
 extern bool rs_has_autocmd(int event, const char *sfname, int buf_fnum);
 bool nvim_has_bufreadcmd(const char *fname) { return rs_has_autocmd(EVENT_BUFREADCMD, fname, 0); }
 const char *nvim_get_curbuf_ffname(void) { return curbuf->b_ffname; }
-bool nvim_ignorecase(const char *pat) { return ignorecase((char *)pat); }
 char *nvim_path_tail(char *path) { return path_tail(path); }
 void nvim_vim_findfile_cleanup(void *search_ctx) { vim_findfile_cleanup(search_ctx); }
 int nvim_get_postponed_split(void) { return postponed_split; }
@@ -215,7 +214,6 @@ void nvim_findtags_inc_match_count(void *st_void) { findtags_state_T *st = (find
 void nvim_findtags_set_match_count(void *st_void, int count) { findtags_state_T *st = (findtags_state_T *)st_void; st->match_count = count; }
 int nvim_get_current_State(void) { return State; }
 bool nvim_get_p_sft(void) { return p_sft; }
-int nvim_help_heuristic(const char *tagname, int match_offset, bool wrong_case) { return help_heuristic((char *)tagname, match_offset, wrong_case); }
 _Static_assert(sizeof(hash_T) == sizeof(size_t), "hash_T must be size_t");
 bool nvim_findtags_add_match_entry(void *st_void, int mtt, char *mfp, hash_T *hash)
 { findtags_state_T *st = (findtags_state_T *)st_void; *hash = hash_hash(mfp); hashitem_T *hi = hash_lookup(&st->ht_match[mtt], mfp, strlen(mfp), *hash); if (HASHITEM_EMPTY(hi)) { hash_add_item(&st->ht_match[mtt], hi, mfp, *hash); GA_APPEND(char *, &st->ga_match[mtt], mfp); st->match_count++; return true; } return false; }
@@ -253,7 +251,6 @@ int nvim_get_curbuf_b_help(void) { return curbuf->b_help; }
 void nvim_findtags_prepare_pats(void *st_void, bool has_re) { findtags_state_T *st = (findtags_state_T *)st_void; rs_prepare_pats(st->orgpat, has_re); }
 void *nvim_tag_get_curwin(void) { return (void *)curwin; }
 bool nvim_tag_tv_dict_find(void *dict, const char *key, int key_len) { return tv_dict_find((dict_T *)dict, key, key_len) != NULL; }
-int nvim_tag_tv_dict_add_nr(void *dict, const char *key, size_t key_len, int64_t nr) { return tv_dict_add_nr((dict_T *)dict, key, key_len, (varnumber_T)nr); }
 void nvim_tag_set_errorlist(void *list, const char *title) { set_errorlist(curwin, (list_T *)list, ' ', (char *)title, NULL); }
 void nvim_tag_dec_RedrawingDisabled(void) { RedrawingDisabled--; }
 void nvim_tag_set_topline_curwin(void) { set_topline(curwin, curwin->w_cursor.lnum); }

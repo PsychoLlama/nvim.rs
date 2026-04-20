@@ -185,6 +185,7 @@ extern "C" {
         lnum: c_int,
         col: c_int,
     ) -> *mut std::ffi::c_char;
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: *mut core::ffi::c_void, lnum: c_int) -> c_int;
     fn skipwhite(p: *const std::ffi::c_char) -> *mut std::ffi::c_char;
     fn vim_iswordp(p: *const std::ffi::c_char) -> bool;

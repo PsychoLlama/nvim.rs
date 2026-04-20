@@ -332,14 +332,11 @@ int nvim_tv_dict_add_number(void *dict, const char *key, size_t key_len, int nr)
 int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, void *child)
 { if (!dict || !key || !child) { return 0; } if (tv_dict_add_dict((dict_T *)dict, key, key_len, (dict_T *)child) == FAIL) { return 0; } ((dict_T *)child)->dv_refcount--; return 1; }
 void *nvim_get_v_event_opaque(void *buf) { return get_v_event((save_v_event_T *)buf); }
-void nvim_restore_v_event_opaque(void *dict, void *buf) { restore_v_event((dict_T *)dict, (save_v_event_T *)buf); }
 buf_T *nvim_buflist_findnr_win(int nr) { return buflist_findnr(nr); }
-void nvim_set_bufref_win(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
 int nvim_bufref_valid_win(void *br) { return bufref_valid((bufref_T *)br) ? 1 : 0; }
 buf_T *nvim_bufref_get_buf_win(void *br) { return ((bufref_T *)br)->br_buf; }
 void *nvim_tv_dict_add_list_win(void *dict, const char *key, size_t key_len, void *list) { tv_dict_add_list((dict_T *)dict, key, key_len, (list_T *)list); return dict; }
 void nvim_tv_dict_extend_win(void *dst, void *src) { tv_dict_extend((dict_T *)dst, (dict_T *)src, "move"); }
-void nvim_tv_dict_set_keys_readonly_win(void *dict) { tv_dict_set_keys_readonly((dict_T *)dict); }
 buf_T *nvim_get_curbuf_ptr(void) { return curbuf; }
 void nvim_buf_set_p_bl(buf_T *buf, int val) { if (buf) { buf->b_p_bl = (val != 0); } }
 int nvim_win_buf_has_terminal_safe(win_T *win) { return (win && win->w_buffer && win->w_buffer->terminal) ? 1 : 0; }
@@ -366,7 +363,6 @@ int nvim_redrawing(void) { return redrawing() ? 1 : 0; }
 int nvim_win_rl_cursor_col(win_T *wp) { if (!wp) { return 0; } char *cursor = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) + wp->w_cursor.col; return wp->w_view_width - wp->w_wcol - ((utf_ptr2cells(cursor) == 2 && vim_isprintc(utf_ptr2char(cursor))) ? 2 : 1); }
 void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col) { ScreenGrid *grid = grid_adjust(&wp->w_grid, &row, &col); if (grid) { ui_grid_cursor_goto(grid->handle, row, col); } }
 int nvim_VIsual_active(void) { return VIsual_active ? 1 : 0; }
-void nvim_trans_characters(char *buf, size_t bufsize) { trans_characters(buf, (int)bufsize); }
 void nvim_ui_call_set_title(const char *s) { ui_call_set_title(cstr_as_string(s ? s : "")); }
 void nvim_ui_call_set_icon(const char *s) { ui_call_set_icon(cstr_as_string(s ? s : "")); }
 int nvim_utf_cp_bounds_end_off(const char *str, const char *ptr) { return utf_cp_bounds((char *)str, (char *)ptr).end_off; }
@@ -380,7 +376,6 @@ void nvim_emsg_no_spell(void) { emsg(_(e_no_spell)); }
 regprog_T *nvim_win_get_b_cap_prog(const win_T *wp) { return wp->w_s->b_cap_prog; }
 int nvim_win_spell_capcol_regexec(win_T *wp, char *ptr)
 { regmatch_T regmatch = { .regprog = wp->w_s->b_cap_prog, .rm_ic = false }; bool r = vim_regexec(&regmatch, ptr, 0); wp->w_s->b_cap_prog = regmatch.regprog; return r ? (int)(regmatch.endp[0] - ptr) : -1; }
-void nvim_set_topline(win_T *wp, int lnum) { set_topline(wp, (linenr_T)lnum); }
 typval_T *nvim_eval_tv_idx(typval_T *argvars, int i) { return &argvars[i]; }
 void nvim_eval_tv_set_number(typval_T *tv, int64_t n) { tv->v_type = VAR_NUMBER; tv->vval.v_number = (varnumber_T)n; }
 void nvim_eval_tv_set_string(typval_T *tv, char *s) { tv->vval.v_string = s; }

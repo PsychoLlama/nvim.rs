@@ -152,7 +152,6 @@ int nvim_search_regcomp_compile(const char *pat, int magic, regmmatch_T *regmatc
 void nvim_inc_emsg_off(void) { emsg_off++; }
 void nvim_dec_emsg_off(void) { emsg_off--; }
 int nvim_search_regcomp(char *pat, size_t patlen, int pat_use, int options, void *regmatch_out) { return search_regcomp(pat, patlen, NULL, RE_SEARCH, pat_use, options, (regmmatch_T *)regmatch_out); }
-int nvim_searchit_regexec_multi(void *regmatch, void *win, void *buf, linenr_T lnum, colnr_T col, void *tm, int *timed_out) { return vim_regexec_multi((regmmatch_T *)regmatch, (win_T *)win, (buf_T *)buf, lnum, col, (proftime_T *)tm, timed_out); }
 void nvim_searchit_regfree(void *regmatch) { vim_regfree(((regmmatch_T *)regmatch)->regprog); }
 int nvim_regmatch_regprog_is_null(const void *regmatch) { return ((const regmmatch_T *)regmatch)->regprog == NULL ? 1 : 0; }
 colnr_T nvim_regmatch_rmm_matchcol(const void *regmatch) { return ((const regmmatch_T *)regmatch)->rmm_matchcol; }
@@ -180,12 +179,10 @@ char *nvim_do_search_skip_regexp(char *pat, int delim, char **newp) { return ski
 void nvim_do_search_set_searchcmdlen(int val) { searchcmdlen = val; }
 int nvim_do_search_get_searchcmdlen(void) { return searchcmdlen; }
 char *nvim_search_ml_get(linenr_T lnum) { return ml_get(lnum); }
-colnr_T nvim_search_ml_get_len(linenr_T lnum) { return ml_get_len(lnum); }
 linenr_T nvim_search_get_line_count(void) { return curbuf->b_ml.ml_line_count; }
 char *nvim_search_get_curbuf_b_p_mps(void) { return curbuf->b_p_mps; }
 int nvim_search_get_curbuf_b_p_lisp(void) { return curbuf->b_p_lisp ? 1 : 0; }
 int nvim_search_get_curwin_w_p_rl(void) { return curwin->w_p_rl ? 1 : 0; }
-int nvim_search_check_linecomment(const char *line) { return check_linecomment(line); }
 void nvim_search_set_oap_motion_type(void *oap, int motion_type) { if (oap != NULL) { ((oparg_T *)oap)->motion_type = (MotionType)motion_type; } }
 const char *nvim_cap_get_nchar_composing_ptr(cmdarg_T *cap) { return cap ? cap->nchar_composing : NULL; }
 void nvim_set_p_ws(int val) { p_ws = val; }
@@ -203,10 +200,8 @@ int nvim_searchit_for_stat(int *pos_lnum, int *pos_col, int *pos_coladd,
   return retval;
 }
 int nvim_profile_passed_limit_val(proftime_T start) { return profile_passed_limit(start) ? 1 : 0; }
-void nvim_stat_free_pat(char *pat) { xfree(pat); }
 int nvim_curwin_rl_with_rlc_s(void) { return (curwin->w_p_rl && *curwin->w_p_rlc == 's') ? 1 : 0; }
 void nvim_cmdline_stat_display(const char *msgbuf) { msg_hist_off = true; msg_ext_overwrite = true; msg_ext_set_kind("search_count"); give_warning(msgbuf, false); msg_hist_off = false; }
-int nvim_is_pos_in_string(const char *line, int col) { return is_pos_in_string(line, (colnr_T)col); }
 int nvim_is_zero_width_regcomp(const char *pat, size_t patlen, void *regmatch) { return search_regcomp((char *)pat, patlen, NULL, RE_SEARCH, RE_SEARCH, SEARCH_KEEP, (regmmatch_T *)regmatch); }
 void nvim_regmatch_set_startcol(void *regmatch, int col) { ((regmmatch_T *)regmatch)->startpos[0].col = (colnr_T)col; }
 int nvim_regmatch_get_startcol(const void *regmatch) { return ((const regmmatch_T *)regmatch)->startpos[0].col; }
@@ -227,8 +222,6 @@ const char *nvim_buf_get_line_skipwhite(void *buf, int lnum, int *skipwhite_off)
   char *ptr = ml_get_buf((buf_T *)buf, (linenr_T)lnum);
   char *p = skipwhite(ptr); *skipwhite_off = (int)(p - ptr); return p;
 }
-int nvim_mb_strcmp_ic_wrapper(int ic, const char *s1, const char *s2) { return mb_strcmp_ic((bool)ic, s1, s2); }
-int nvim_mb_strnicmp_wrapper(const char *s1, const char *s2, size_t len) { return mb_strnicmp(s1, s2, len); }
 int nvim_search_get_p_ic(void) { return p_ic ? 1 : 0; }
 int nvim_shortmess_search(void) { return shortmess(SHM_SEARCH) ? 1 : 0; }
 void nvim_give_search_wrap_warning(int at_top) { give_warning(_(at_top ? top_bot_msg : bot_top_msg), true); }
@@ -289,3 +282,4 @@ int nvim_search_current_searchit(int dir, int flags, int count,
   *end_lnum = end_pos.lnum; *end_col = end_pos.col; *end_coladd = end_pos.coladd;
   return result;
 }
+void nvim_stat_free_pat(char *pat) { xfree(pat); }

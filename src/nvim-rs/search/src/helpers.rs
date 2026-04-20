@@ -736,6 +736,7 @@ pub unsafe extern "C" fn linewhite_export(lnum: i32) -> bool {
 
 extern "C" {
     fn nvim_search_get_curbuf_b_p_lisp() -> c_int;
+    #[link_name = "is_pos_in_string"]
     fn nvim_is_pos_in_string(line: *const c_char, col: c_int) -> c_int;
 }
 

@@ -547,6 +547,7 @@ unsafe extern "C" {
     fn nvim_free_garray(gap: *mut std::ffi::c_void);
     fn nvim_alloc_bufref() -> *mut std::ffi::c_void;
     fn nvim_free_bufref(br: *mut std::ffi::c_void);
+    #[link_name = "set_bufref"]
     fn nvim_set_bufref_cmdwin(br: *mut std::ffi::c_void, buf: BufHandle);
     fn nvim_bufref_valid_cmdwin(br: *mut std::ffi::c_void) -> c_int;
     fn nvim_bufref_get_buf_cmdwin(br: *mut std::ffi::c_void) -> BufHandle;

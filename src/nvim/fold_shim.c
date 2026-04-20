@@ -89,7 +89,6 @@ int nvim_get_disable_fold_update(void) { return disable_fold_update; }
 int nvim_get_need_diff_redraw(void) { return need_diff_redraw; }
 
 int64_t nvim_fold_get_vim_var_nr(int vv_idx) { return (int64_t)get_vim_var_nr(vv_idx); }
-void nvim_fold_set_vim_var_nr(int vv_idx, int64_t val) { set_vim_var_nr(vv_idx, (varnumber_T)val); }
 char *nvim_fold_get_vim_var_str(int vv_idx) { return get_vim_var_str(vv_idx); }
 const char *nvim_fold_ngettext_foldtext(int count) { return NGETTEXT("+-%s%3d line: ", "+-%s%3d lines: ", count); }
 const char *nvim_fold_ngettext_default(int count) { return NGETTEXT("+--%3d line folded", "+--%3d lines folded ", count); }

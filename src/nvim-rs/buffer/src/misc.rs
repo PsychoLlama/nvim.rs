@@ -417,6 +417,7 @@ extern "C" {
     #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
     // nvim_ml_get_buf_len: takes *mut c_void in quickfix_shim.c
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
     fn nvim_buf_ml_is_empty(buf: BufHandle) -> bool;
     fn nvim_sb_push_byte(sb: *mut c_void, byte: c_char);

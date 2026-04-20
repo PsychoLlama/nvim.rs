@@ -2064,6 +2064,7 @@ extern "C" {
     static e_invarg: c_char;
 
     // Phase 10 Pass 10 Phase 4: qf_update_buffer accessors
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: LinenrT) -> c_int;
     fn get_region_bytecount(
         buf: *mut c_void,

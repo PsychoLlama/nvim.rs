@@ -26,6 +26,7 @@
 #include "nvim/path.h"
 #include "nvim/popupmenu.h"
 #include "nvim/register.h"
+#include "nvim/search.h"
 #include "nvim/spell.h"
 #include "nvim/tag.h"
 #include "nvim/winfloat.h"
@@ -183,14 +184,6 @@ void nvim_compl_match_set_cp_text_copy(void *m, int i, const char *s) { if (m) (
 void nvim_compl_match_set_user_data_move(void *m, void *tv) { if (m && tv) ((compl_T *)m)->cp_user_data = *(typval_T *)tv; }
 void *nvim_ci_dict_alloc(void) { return tv_dict_alloc(); }
 void *nvim_ci_list_alloc_known(void) { return tv_list_alloc(kListLenMayKnow); }
-int nvim_ci_dict_add_str(void *d, const char *key, size_t klen, const char *val) { return tv_dict_add_str((dict_T *)d, key, klen, val); }
-int nvim_ci_dict_add_str_len(void *d, const char *key, size_t klen, const char *val, int vlen) { return tv_dict_add_str_len((dict_T *)d, key, klen, val, vlen); }
-int nvim_ci_dict_add_nr(void *d, const char *key, size_t klen, int64_t nr) { return tv_dict_add_nr((dict_T *)d, key, klen, (varnumber_T)nr); }
-int nvim_ci_dict_add_bool(void *d, const char *key, size_t klen, int val) { return tv_dict_add_bool((dict_T *)d, key, klen, (BoolVarValue)val); }
-int nvim_ci_dict_add_tv(void *d, const char *key, size_t klen, void *tv) { return tv_dict_add_tv((dict_T *)d, key, klen, (typval_T *)tv); }
-int nvim_ci_dict_add_dict(void *d, const char *key, size_t klen, void *val_dict) { return tv_dict_add_dict((dict_T *)d, key, klen, (dict_T *)val_dict); }
-int nvim_ci_dict_add_list(void *d, const char *key, size_t klen, void *list) { return tv_dict_add_list((dict_T *)d, key, klen, (list_T *)list); }
-void nvim_ci_list_append_dict(void *list, void *dict) { tv_list_append_dict((list_T *)list, (dict_T *)dict); }
 void *nvim_win_float_find_preview(void) { return win_float_find_preview(); }
 int nvim_ci_win_get_handle(void *wp) { return wp ? ((win_T *)wp)->handle : -1; }
 int nvim_ci_win_get_buf_handle(void *wp) { return (wp && ((win_T *)wp)->w_buffer) ? ((win_T *)wp)->w_buffer->handle : -1; }
@@ -305,7 +298,6 @@ int nvim_yankreg_y_array_null(void *reg) { return (!reg || ((yankreg_T *)reg)->y
 const char *nvim_yankreg_y_array_entry_data(void *reg, size_t j)
   { yankreg_T *r = (yankreg_T *)reg; return (!r || j >= r->y_size || !r->y_array) ? NULL : r->y_array[j].data; }
 int nvim_get_curwin_w_wrow(void) { return curwin->w_wrow; }
-size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep) { return copy_option_part(src, buf, (size_t)maxlen, sep); }
 int nvim_get_complete_funcname_empty(int t) { const char *fn = t == CTRL_X_FUNCTION ? curbuf->b_p_cfu : t == CTRL_X_OMNI ? curbuf->b_p_ofu : t == CTRL_X_THESAURUS ? (*curbuf->b_p_tsrfu == NUL ? p_tsrfu : curbuf->b_p_tsrfu) : ""; return *fn == NUL ? 1 : 0; }
 void *nvim_get_insert_callback_opaque(int t) { return t == CTRL_X_FUNCTION ? (void *)&curbuf->b_cfu_cb : t == CTRL_X_OMNI ? (void *)&curbuf->b_ofu_cb : (void *)((*curbuf->b_p_tsrfu != NUL) ? &curbuf->b_tsrfu_cb : &tsrfu_cb); }
 int nvim_callback_call_findstart(void *cb_opaque)
@@ -401,3 +393,5 @@ void nvim_ins_apply_insertleave(void) { ins_apply_autocmds(EVENT_INSERTLEAVE); }
 int nvim_ins_apply_autocmds_insertcharpre(void) { return ins_apply_autocmds(EVENT_INSERTCHARPRE); }
 int nvim_get_cpt_first_char(void) { return (unsigned char)*curbuf->b_p_cpt; }
 int nvim_get_pum_want_finish(void) { return pum_want.finish ? 1 : 0; }
+bool nvim_ignorecase(const char *pat) { return (bool)ignorecase((char *)pat); }
+size_t nvim_copy_option_part_ffi(char **src, char *buf, int maxlen, const char *sep) { return copy_option_part(src, buf, (size_t)maxlen, (char *)sep); }

@@ -431,8 +431,10 @@ extern "C" {
 
     // save_v_event_T / bufref_T opaque accessors
     fn nvim_get_v_event_opaque(buf: *mut u8) -> DictHandle;
+    #[link_name = "restore_v_event"]
     fn nvim_restore_v_event_opaque(dict: DictHandle, buf: *mut u8);
     fn nvim_buflist_findnr_win(nr: c_int) -> *mut std::ffi::c_void;
+    #[link_name = "set_bufref"]
     fn nvim_set_bufref_win(br: *mut u8, buf: *mut std::ffi::c_void);
     fn nvim_bufref_valid_win(br: *mut u8) -> c_int;
     fn nvim_bufref_get_buf_win(br: *mut u8) -> *mut std::ffi::c_void;
@@ -443,6 +445,7 @@ extern "C" {
         list: ListHandle,
     ) -> DictHandle;
     fn nvim_tv_dict_extend_win(dst: DictHandle, src: DictHandle);
+    #[link_name = "tv_dict_set_keys_readonly"]
     fn nvim_tv_dict_set_keys_readonly_win(dict: DictHandle);
     fn nvim_apply_autocmds_winresized(
         winid_str: *const std::ffi::c_char,

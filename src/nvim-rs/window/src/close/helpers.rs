@@ -63,6 +63,7 @@ extern "C" {
         ignore_abort: bool,
     ) -> bool;
     /// set_bufref(&br, buf).
+    #[link_name = "set_bufref"]
     fn nvim_set_bufref_win(br: *mut u8, buf: BufHandle);
     /// bufref_valid(&br).
     fn nvim_bufref_valid_win(br: *mut u8) -> c_int;

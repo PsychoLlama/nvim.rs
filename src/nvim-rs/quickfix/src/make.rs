@@ -168,6 +168,7 @@ extern "C" {
     fn nvim_tv_get_type_void(tv: *const c_void) -> c_int;
     fn nvim_tv_get_vval_string(tv: *const c_void) -> *const c_char;
     fn nvim_tv_is_list(tv: *const c_void) -> bool;
+    #[link_name = "tv_free"]
     fn nvim_tv_free_void(tv: *mut c_void);
     // (nvim_emsg_e777 deleted: use emsg directly)
     // emsg declared earlier in this file
@@ -200,6 +201,7 @@ extern "C" {
     #[link_name = "nvim_qf_get_list_at"]
     fn nvim_qi_get_list_qi(qi: *mut c_void, idx: c_int) -> *mut c_void;
     fn nvim_qf_get_maxcount(qi: *const c_void) -> c_int;
+    #[link_name = "qf_free_all"]
     fn nvim_qf_free_all_win(to_win: *mut c_void);
     fn nvim_win_set_p_lhi(win: *mut c_void, v: c_int);
     fn nvim_win_get_p_lhi(win: *const c_void) -> c_int;

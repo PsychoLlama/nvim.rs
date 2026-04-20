@@ -331,10 +331,8 @@ void *nvim_eval_expr(const void *arg_ptr, void *eap) { return (void *)eval_expr(
 int nvim_tv_get_type_void(const void *tv) { return ((const typval_T *)tv)->v_type; }
 const char *nvim_tv_get_vval_string(const void *tv) { return ((const typval_T *)tv)->vval.v_string; }
 bool nvim_tv_is_list(const void *tv) { return ((const typval_T *)tv)->v_type == VAR_LIST; }
-void nvim_tv_free_void(void *tv) { tv_free((typval_T *)tv); }
 void nvim_qf_snprintf_iobuff(const char *title, const char *sfname) { vim_snprintf(IObuff, IOSIZE, "%s (%s)", title, sfname); }
 void *nvim_win_get_llist_or_ref(const void *from_win) { const win_T *from = (const win_T *)from_win; return (void *)(IS_LL_WINDOW(from) ? from->w_llist_ref : from->w_llist); }
-void nvim_qf_free_all_win(void *to_win) { qf_free_all((win_T *)to_win); }
 bool nvim_qf_curwin_is_ll(void) { return IS_LL_WINDOW(curwin); }
 bool nvim_qf_is_ll_window(const void *wp_void) { return wp_void != NULL && IS_LL_WINDOW((const win_T *)wp_void); }
 void *nvim_qf_curwin_get_loclist(void) { return GET_LOC_LIST(curwin); }
@@ -366,13 +364,11 @@ linenr_T nvim_regmatch_startpos_lnum(const regmmatch_T *rm, int idx) { return rm
 colnr_T nvim_regmatch_startpos_col(const regmmatch_T *rm, int idx) { return rm->startpos[idx].col; }
 linenr_T nvim_regmatch_endpos_lnum(const regmmatch_T *rm, int idx) { return rm->endpos[idx].lnum; }
 colnr_T nvim_regmatch_endpos_col(const regmmatch_T *rm, int idx) { return rm->endpos[idx].col; }
-colnr_T nvim_ml_get_buf_len(void *buf, linenr_T lnum) { return ml_get_buf_len((buf_T *)buf, lnum); }
 void *nvim_vgr_regcomp_init(const char *pat) { regmmatch_T *rm = xcalloc(1, sizeof(regmmatch_T)); if (pat == NULL || *pat == NUL) { if (last_search_pat() == NULL) { emsg(_(e_noprevre)); xfree(rm); return NULL; } rm->regprog = vim_regcomp(last_search_pat(), RE_MAGIC); } else { rm->regprog = vim_regcomp((char *)pat, RE_MAGIC); } if (rm->regprog == NULL) { xfree(rm); return NULL; } rm->rmm_ic = p_ic; rm->rmm_maxcol = 0; return rm; }
 void nvim_vgr_regmatch_free(void *rm_void) { if (rm_void == NULL) { return; } regmmatch_T *rm = (regmmatch_T *)rm_void; vim_regfree(rm->regprog); xfree(rm); }
 void *nvim_tv_list_first(const void *list) { return list == NULL ? NULL : tv_list_first((const list_T *)list); }
 void *nvim_tv_list_item_next(const void *list, const void *li) { return (list == NULL || li == NULL) ? NULL : TV_LIST_ITEM_NEXT((const list_T *)list, (const listitem_T *)li); }
 void *nvim_tv_list_item_dict(const void *li) { if (li == NULL) { return NULL; } const typval_T *tv = TV_LIST_ITEM_TV((const listitem_T *)li); return tv->v_type != VAR_DICT ? NULL : tv->vval.v_dict; }
-void nvim_xfree_char(char *ptr) { xfree(ptr); }
 bool nvim_tv_list_item_is_first(const void *list, const void *li) { return (list != NULL && li != NULL) && li == tv_list_first((const list_T *)list); }
 void *nvim_qf_get_global_qftf_cb_ptr(void) { return (void *)&qftf_cb; }
 void *nvim_qf_win_get_llist_mut(void *win_void) { return win_void == NULL ? NULL : ((win_T *)win_void)->w_llist; }
@@ -380,3 +376,5 @@ void *nvim_qf_win_get_llist_ref_mut(void *win_void) { return win_void == NULL ? 
 bool nvim_qf_win_is_ll_and_refcount_one(const void *win_void) { if (win_void == NULL) { return false; } const win_T *win = (const win_T *)win_void; return IS_LL_WINDOW(win) && win->w_llist_ref->qf_refcount == 1; }
 void *nvim_save_cpo_set_empty(void) { char *save_cpo = p_cpo; p_cpo = empty_string_option; return save_cpo; }
 void nvim_restore_cpo(void *saved_cpo_void) { char *save_cpo = (char *)saved_cpo_void; if (p_cpo == empty_string_option) { p_cpo = save_cpo; } else { if (*p_cpo == NUL) { set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0); } free_string_option(save_cpo); } }
+
+void nvim_xfree_char(char *ptr) { xfree(ptr); }

@@ -1330,6 +1330,7 @@ extern "C" {
     fn nvim_put_get_save_fen() -> bool;
     static cb_flags: c_uint;
     fn copy_register(regname: c_int) -> *mut std::ffi::c_void;
+    #[link_name = "do_put"]
     fn nvim_put_do_put(
         regname: c_int,
         savereg: *mut std::ffi::c_void,

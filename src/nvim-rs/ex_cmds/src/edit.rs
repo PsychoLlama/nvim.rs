@@ -223,6 +223,7 @@ extern "C" {
     fn nvim_ecmd_bufref_terminal_check_size(r: *mut std::ffi::c_void);
     fn nvim_ecmd_bufref_valid_is_curbuf(r: *mut std::ffi::c_void) -> c_int;
     fn nvim_ecmd_curbuf_terminal_check_size();
+    #[link_name = "handle_swap_exists"]
     fn nvim_ecmd_handle_swap_exists(old_curbuf_ref: *mut std::ffi::c_void);
     fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: c_int) -> *mut crate::BufHandle;
     fn rs_delbuf_msg(name: *mut c_char);

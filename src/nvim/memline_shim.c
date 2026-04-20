@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <inttypes.h>
+#include <unistd.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -271,7 +272,6 @@ void nvim_inc_no_wait_return(void) { no_wait_return++; }
 void nvim_dec_no_wait_return(void) { no_wait_return--; }
 int nvim_os_fileinfo_link(const char *fname) { FileInfo fi; return os_fileinfo_link(fname, &fi) ? 1 : 0; }
 int nvim_read_block0(int fd, ZeroBlock *b0p) { ssize_t n = read_eintr(fd, b0p, sizeof(*b0p)); return (n == (ssize_t)sizeof(*b0p)) ? 1 : 0; }
-void nvim_expand_env_maxpathl(const char *src, char *dst, int len) { expand_env((char *)src, dst, len); }
 int nvim_os_isdir(const char *name) { return os_isdir(name) ? 1 : 0; }
 
 int nvim_os_mkdir_recurse(const char *dir, int mode, char **failed_dir) { return os_mkdir_recurse(dir, mode, failed_dir, NULL); }
@@ -294,9 +294,7 @@ void nvim_flush_buffers_typeahead(void) { flush_buffers(FLUSH_TYPEAHEAD); }
 
 void nvim_msg_multiline(const char *s, int hl_id) { bool need_clear = false; msg_multiline(cbuf_as_string((char *)s, strlen(s)), hl_id, false, false, &need_clear); }
 
-void nvim_verb_msg(const char *s) { verb_msg((char *)s); }
 int nvim_os_open_rdonly(const char *fname) { return os_open(fname, O_RDONLY, 0); }
-void nvim_close_fd(int fd) { close(fd); }
 
 void *nvim_alloc_stringbuilder_iosize(void) { StringBuilder *sb = xmalloc(sizeof(StringBuilder)); *sb = (StringBuilder)KV_INITIAL_VALUE; kv_resize(*sb, IOSIZE); return sb; }
 
@@ -406,3 +404,4 @@ void nvim_sb_concat_len(void *sb, const char *ptr, size_t len) { kv_concat_len(*
 const char *nvim_get_p_ffs(void) { return p_ffs; }
 int nvim_exarg_get_force_bin(const exarg_T *eap) { return eap->force_bin; }
 int nvim_exarg_get_force_ff(const exarg_T *eap) { return eap->force_ff; }
+void nvim_close_fd(int fd) { (void)close(fd); }

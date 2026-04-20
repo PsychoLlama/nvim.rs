@@ -338,6 +338,7 @@ extern "C" {
     // transstr_buf wrapper
     fn nvim_transstr_buf(s: *const c_char, slen: isize, buf: *mut c_char, buflen: usize) -> usize;
     // set_vim_var_nr wrapper (from fold_shim.c)
+    #[link_name = "set_vim_var_nr"]
     fn nvim_fold_set_vim_var_nr(vv_idx: c_int, val: i64);
     // number_width (already available as rs_number_width, keep consistent)
     // use_cursor_line_highlight and get_line_number_attr are Rust-exported; we use them directly

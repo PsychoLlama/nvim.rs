@@ -42,6 +42,7 @@ extern "C" {
 
     // Patch application
     fn nvim_diff_is_patchexpr_set() -> bool;
+    #[link_name = "eval_patch"]
     fn nvim_diff_eval_patch(orig: *const c_char, diff: *const c_char, out: *const c_char);
     fn nvim_diff_call_shell_filter(cmd: *const c_char);
 

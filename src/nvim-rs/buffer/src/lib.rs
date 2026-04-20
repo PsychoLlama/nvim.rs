@@ -118,7 +118,8 @@ extern "C" {
     fn nvim_bufref_get_buf_free_count(bufref: *const std::ffi::c_void) -> c_int;
 
     /// Emit an error message.
-    fn nvim_emsg(msg: *const c_char);
+    #[link_name = "emsg"]
+    fn nvim_emsg(msg: *const c_char) -> bool;
 
     /// Get the current buffer.
     fn nvim_get_curbuf() -> BufHandle;

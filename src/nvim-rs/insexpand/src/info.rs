@@ -47,12 +47,14 @@ extern "C" {
     // Dict/list operations (nvim_ci_ prefix avoids name conflicts)
     fn nvim_ci_dict_alloc() -> *mut c_void;
     fn nvim_ci_list_alloc_known() -> *mut c_void;
+    #[link_name = "tv_dict_add_str"]
     fn nvim_ci_dict_add_str(
         d: *mut c_void,
         key: *const c_char,
         klen: usize,
         val: *const c_char,
     ) -> c_int;
+    #[link_name = "tv_dict_add_str_len"]
     fn nvim_ci_dict_add_str_len(
         d: *mut c_void,
         key: *const c_char,
@@ -60,26 +62,32 @@ extern "C" {
         val: *const c_char,
         vlen: c_int,
     ) -> c_int;
+    #[link_name = "tv_dict_add_nr"]
     fn nvim_ci_dict_add_nr(d: *mut c_void, key: *const c_char, klen: usize, nr: i64) -> c_int;
+    #[link_name = "tv_dict_add_bool"]
     fn nvim_ci_dict_add_bool(d: *mut c_void, key: *const c_char, klen: usize, val: c_int) -> c_int;
+    #[link_name = "tv_dict_add_tv"]
     fn nvim_ci_dict_add_tv(
         d: *mut c_void,
         key: *const c_char,
         klen: usize,
         tv: *mut c_void,
     ) -> c_int;
+    #[link_name = "tv_dict_add_dict"]
     fn nvim_ci_dict_add_dict(
         d: *mut c_void,
         key: *const c_char,
         klen: usize,
         val: *mut c_void,
     ) -> c_int;
+    #[link_name = "tv_dict_add_list"]
     fn nvim_ci_dict_add_list(
         d: *mut c_void,
         key: *const c_char,
         klen: usize,
         list: *mut c_void,
     ) -> c_int;
+    #[link_name = "tv_list_append_dict"]
     fn nvim_ci_list_append_dict(list: *mut c_void, dict: *mut c_void);
 
     // Pum / preview

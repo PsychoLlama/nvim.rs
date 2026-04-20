@@ -1587,6 +1587,7 @@ extern "C" {
     fn nvim_get_p_tl() -> i64;
 
     // Help heuristic
+    #[link_name = "help_heuristic"]
     fn nvim_help_heuristic(tagname: *const c_char, match_offset: c_int, wrong_case: bool) -> c_int;
 
     // Match entry operations

@@ -29,6 +29,7 @@ extern "C" {
 
     // Encoding functions
     fn nvim_rt_enc_canonize(enc: *mut c_char) -> *mut c_char;
+    #[link_name = "convert_setup"]
     fn nvim_rt_convert_setup(vcp: *mut c_void, from: *mut c_char, to: *const c_char) -> c_int;
     fn nvim_rt_cookie_get_conv(cookie: *mut c_void) -> *mut c_void;
     fn nvim_rt_get_p_enc() -> *const c_char;

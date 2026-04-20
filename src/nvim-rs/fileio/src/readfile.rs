@@ -178,6 +178,7 @@ extern "C" {
     // --- memline ---
     fn nvim_fileio_ml_line_count() -> c_int;
     fn nvim_fileio_ml_get(lnum: c_int) -> *const c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_fileio_ml_get_len(lnum: c_int) -> c_int;
     fn nvim_fileio_ml_append(lnum: c_int, line: *const c_char, len: c_int, newfile: c_int)
         -> c_int;
@@ -241,6 +242,7 @@ extern "C" {
     fn nvim_fileio_msg_long_lines_split() -> *const c_char;
     fn nvim_fileio_msg_not_converted() -> *const c_char;
     fn nvim_fileio_msg_converted() -> *const c_char;
+    #[link_name = "emsg"]
     fn nvim_fileio_emsg(s: *const c_char);
     fn nvim_fileio_vim_strchr(s: *const c_char, c: c_int) -> c_int;
     fn nvim_fileio_SHM_OVER() -> c_int;
@@ -253,6 +255,7 @@ extern "C" {
     fn nvim_fileio_u_clearline();
     #[link_name = "u_find_first_changed"]
     fn nvim_fileio_u_find_first_changed();
+    #[link_name = "sha256_start"]
     fn nvim_fileio_sha256_start(ctx: *mut c_void);
     fn nvim_fileio_sha256_update(ctx: *mut c_void, data: *const u8, len: usize);
     fn nvim_fileio_sha256_finish(ctx: *mut c_void, hash: *mut u8);
@@ -292,10 +295,12 @@ extern "C" {
     #[link_name = "utf_byte2len"]
     fn nvim_fileio_utf_byte2len(c: c_int) -> c_int;
     fn nvim_fileio_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    #[link_name = "utf_ptr2char"]
     fn nvim_fileio_utf_ptr2char(p: *const c_char) -> c_int;
     fn nvim_fileio_utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
     #[link_name = "utf_char2len"]
     fn nvim_fileio_utf_char2len(c: c_int) -> c_int;
+    #[link_name = "utf_char2bytes"]
     fn nvim_fileio_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
 
     // --- constants ---

@@ -209,7 +209,6 @@ bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *
   return wrong;
 }
 
-void nvim_msg_echomsg(const char *str, int hl_id) { msg(str, hl_id); }
 int nvim_eap_get_skip_local(const exarg_T *eap) { return eap->skip; }
 char *nvim_eap_get_arg_local(const exarg_T *eap) { return eap->arg; }
 
@@ -407,7 +406,6 @@ void nvim_chan_set_internal_closed(Channel *chan, int v) { chan->stream.internal
 int nvim_chan_get_proc_type(Channel *chan) { return (int)chan->stream.proc.type; }
 // rpc_close wrapper (rpc_close is declared in nvim/msgpack_rpc/channel.h, included via channel.h)
 // api_free_luaref wrapper
-void nvim_chan_api_free_luaref(int ref) { api_free_luaref((LuaRef)ref); }
 
 // channel_send error strings (translated)
 #include "nvim/gettext_defs.h"
@@ -717,3 +715,4 @@ void nvim_chan_job_semsg_spawn_error(int status, const char *cmd)
 {
   semsg(_(e_jobspawn), os_strerror(status), cmd);
 }
+void nvim_msg_echomsg(const char *str, int hl_id) { msg(str, hl_id); }

@@ -431,7 +431,6 @@ void nvim_call_bind_textdomain_codeset(void)
 void nvim_call_curbuf_tabstop_set_vsts(void) { xfree(curbuf->b_p_vsts_array); tabstop_set(curbuf->b_p_vsts, &curbuf->b_p_vsts_array); }
 void nvim_call_curbuf_tabstop_set_vts(void) { xfree(curbuf->b_p_vts_array); tabstop_set(curbuf->b_p_vts, &curbuf->b_p_vts_array); }
 #if defined(EXITFREE)
-void nvim_call_free_operatorfunc_option(void) { free_operatorfunc_option(); }
 #else
 void nvim_call_free_operatorfunc_option(void) {}
 #endif

@@ -44,6 +44,7 @@ extern "C" {
     fn nvim_wipe_buffer(buf: *mut c_void);
 
     // --- bufref ---
+    #[link_name = "set_bufref"]
     fn nvim_set_bufref(br: *mut c_void, buf: *mut c_void);
     fn nvim_bufref_valid(br: *mut c_void) -> c_int;
 

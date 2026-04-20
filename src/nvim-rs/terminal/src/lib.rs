@@ -1288,6 +1288,7 @@ extern "C" {
     fn nvim_curbuf_update_changedtick_i();
     fn nvim_curbuf_update_changedtick();
     fn nvim_curbuf_last_changedtick_i() -> c_int;
+    #[link_name = "state_enter"]
     fn nvim_state_enter_c(state: *mut c_void);
     #[link_name = "merge_modifiers"]
     fn nvim_merge_modifiers_c(key: c_int, tmp_mod_mask: *mut c_int) -> c_int;
@@ -1295,7 +1296,9 @@ extern "C" {
     fn state_handle_k_event();
     fn nvim_do_cmdline_key_cmd();
     fn nvim_map_execute_lua_c();
+    #[link_name = "rs_set_terminal_winopts"]
     fn nvim_terminal_set_winopts(s: *mut c_void);
+    #[link_name = "rs_unset_terminal_winopts"]
     fn nvim_terminal_unset_winopts(s: *mut c_void);
     fn nvim_terminal_check_cursor_c();
     fn nvim_curwin_handle() -> c_int;
@@ -3072,7 +3075,9 @@ extern "C" {
         amount: c_int,
         amount_after: c_int,
     );
+    #[link_name = "appended_lines_buf"]
     fn nvim_appended_lines_buf_term(buf: *mut c_void, lnum: c_int, count: c_int);
+    #[link_name = "deleted_lines_buf"]
     fn nvim_deleted_lines_buf_term(buf: *mut c_void, lnum: c_int, count: c_int);
     fn nvim_changed_lines_term(buf: *mut c_void, first: c_int, last: c_int, added: c_int);
     fn nvim_multiqueue_move_events_term(term: *mut c_void);
@@ -3101,7 +3106,9 @@ extern "C" {
     // Phase 10: terminal_destroy helpers
     fn nvim_terminal_invalidated_check_del(term: *mut c_void) -> c_int;
     fn nvim_term_sb_destroy(sb: *mut c_void);
+    #[link_name = "vterm_free"]
     fn nvim_vterm_free(vt: *mut c_void);
+    #[link_name = "multiqueue_free"]
     fn nvim_multiqueue_free(q: *mut c_void);
     // Phase 4 (terminal_shim cleanup): fetch_cell/fetch_row migration
     fn nvim_vterm_screen_get_cell_c(vts: *mut c_void, row: c_int, col: c_int, cell: *mut c_void);

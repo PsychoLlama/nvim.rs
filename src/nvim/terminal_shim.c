@@ -341,8 +341,6 @@ int nvim_terminal_invalidated_check_del(void *term)
   block_autocmds(); rs_refresh_terminal((Terminal *)term); unblock_autocmds();
   set_del(ptr_t, &invalidated_terminals, (Terminal *)term); return 1; }
 void nvim_term_sb_destroy(void *sb) { kv_destroy(*(StringBuilder *)sb); }
-void nvim_vterm_free(void *vt) { vterm_free((VTerm *)vt); }
-void nvim_multiqueue_free(void *q) { multiqueue_free((MultiQueue *)q); }
 int nvim_terminal_get_tpf_flags(void) { return (int)tpf_flags; }
 Terminal *nvim_curbuf_terminal(void) { return curbuf->terminal; }
 void nvim_terminal_timer_start(void) { time_watcher_start(&refresh_timer, refresh_timer_cb, REFRESH_DELAY, 0); }
@@ -371,8 +369,6 @@ int nvim_ml_delete_buf_term(void *buf, int lnum) { return ml_delete_buf((buf_T *
 void nvim_mark_adjust_buf_term(void *buf, int line1, int line2, int amount, int amount_after)
   { mark_adjust_buf((buf_T *)buf, (linenr_T)line1, (linenr_T)line2, (linenr_T)amount,
                     (linenr_T)amount_after, true, kMarkAdjustTerm, kExtmarkUndo); }
-void nvim_appended_lines_buf_term(void *buf, int lnum, int count) { appended_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count); }
-void nvim_deleted_lines_buf_term(void *buf, int lnum, int count) { deleted_lines_buf((buf_T *)buf, (linenr_T)lnum, (linenr_T)count); }
 void nvim_changed_lines_term(void *buf, int first, int last, int added) { changed_lines((buf_T *)buf, (linenr_T)first, 0, (linenr_T)last, (linenr_T)added, true); }
 void nvim_multiqueue_move_events_term(void *term) { Terminal *t = (Terminal *)term; multiqueue_move_events(loop_get_events(&main_loop), t->pending.events); }
 void *nvim_terminal_sb_get(void *term, size_t idx) { return ((Terminal *)term)->sb_buffer[idx]; }
@@ -448,14 +444,11 @@ int nvim_has_event_textchangedt(void) { return (int)has_event(EVENT_TEXTCHANGEDT
 void nvim_curbuf_update_changedtick_i(void) { curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf); }
 void nvim_curbuf_update_changedtick(void) { curbuf->b_last_changedtick = buf_get_changedtick(curbuf); }
 int nvim_curbuf_last_changedtick_i(void) { return (int)curbuf->b_last_changedtick_i; }
-void nvim_state_enter_c(void *state) { state_enter((VimState *)state); }
 void nvim_paste_repeat_c(void) { paste_repeat(1); }
 void nvim_do_cmdline_key_cmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
 void nvim_map_execute_lua_c(void) { map_execute_lua(false, false); }
 extern void rs_set_terminal_winopts(void *s);
 extern void rs_unset_terminal_winopts(void *s);
-void nvim_terminal_set_winopts(void *s) { rs_set_terminal_winopts(s); }
-void nvim_terminal_unset_winopts(void *s) { rs_unset_terminal_winopts(s); }
 win_T *nvim_curwin_ptr(void) { return curwin; }
 void nvim_win_redraw_later_some_valid(win_T *wp) { redraw_later(wp, UPD_SOME_VALID); }
 void nvim_win_redraw_later_valid(win_T *wp) { redraw_later(wp, UPD_VALID); }

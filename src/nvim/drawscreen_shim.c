@@ -419,7 +419,6 @@ void nvim_win_update_syn_timeout_start(win_T *wp)
 // nvim_buf_terminal_check_size is defined in buffer_shim.c
 
 /// Call win_scroll_lines(wp, row, count).
-void nvim_win_scroll_lines(win_T *wp, int row, int count) { win_scroll_lines(wp, row, count); }
 
 /// Call win_lines_concealed(wp).
 int nvim_win_lines_concealed(win_T *wp) { return win_lines_concealed(wp) ? 1 : 0; }

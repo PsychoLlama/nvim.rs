@@ -32,8 +32,6 @@ extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int
 extern int rs_compare_file_marks(const void *a, const void *b);
 extern var_flavour_T rs_var_flavour(const char *varname);
 
-void nvim_shada_semsg_u64(const char *fmt, uint64_t val) { semsg(fmt, (unsigned long long)val); }
-void nvim_shada_semsg_2s_u64(const char *fmt, const char *a, uint64_t val, const char *b) { semsg(fmt, a, (unsigned long long)val, b); }
 void nvim_shada_smsg_1s(const char *fmt, const char *arg) { smsg(0, fmt, arg); }
 
 typedef enum {
@@ -483,3 +481,5 @@ int nvim_shada_jumplist_marklist_insert(int i) { return rs_marklist_insert(curwi
 int nvim_shada_changelist_marklist_insert(void *buf_handle, int i) { buf_T *buf = (buf_T *)buf_handle; return rs_marklist_insert(buf->b_changelist, sizeof(*buf->b_changelist), buf->b_changelistlen, i); }
 char *nvim_shada_file_try_read_buffered(void *fd, size_t len) { return file_try_read_buffered((FileDescriptor *)fd, len); }
 uint64_t nvim_shada_file_bytes_read(void *fd) { return (uint64_t)((FileDescriptor *)fd)->bytes_read; }
+void nvim_shada_semsg_u64(const char *fmt, uint64_t val) { semsg(fmt, (unsigned long long)val); }
+void nvim_shada_semsg_2s_u64(const char *fmt, const char *a, uint64_t val, const char *b) { semsg(fmt, a, (unsigned long long)val, b); }

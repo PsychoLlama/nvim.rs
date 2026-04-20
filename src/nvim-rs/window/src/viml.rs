@@ -151,6 +151,7 @@ extern "C" {
     fn update_curswant();
 
     // view restoration helpers
+    #[link_name = "set_topline"]
     fn nvim_set_topline(wp: WinHandle, lnum: c_int);
     fn nvim_check_cursor_win_wrapper(wp: WinHandle);
     #[link_name = "check_topfill"]

@@ -182,6 +182,7 @@ extern "C" {
     // Phase 3 (diff_file, diff_write) accessors
     fn nvim_diffio_get_orig_fname(dio: DiffioHandle) -> *const c_char;
     fn nvim_diffio_is_internal(dio: DiffioHandle) -> bool;
+    #[link_name = "eval_diff"]
     fn nvim_diff_eval_diff(orig: *const c_char, new_f: *const c_char, diff: *const c_char);
     fn nvim_diffio_get_diff_fname(dio: DiffioHandle) -> *const c_char;
 

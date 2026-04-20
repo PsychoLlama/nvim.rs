@@ -619,6 +619,7 @@ extern "C" {
     fn rs_compl_status_adding() -> c_int;
     fn rs_compl_status_sol() -> c_int;
     fn rs_ins_compl_len() -> c_int;
+    #[link_name = "mb_strcmp_ic"]
     fn nvim_mb_strcmp_ic_wrapper(ic: c_int, s1: *const c_char, s2: *const c_char) -> c_int;
     #[link_name = "mb_strnicmp"]
     fn nvim_mb_strnicmp_wrapper(s1: *const c_char, s2: *const c_char, len: usize) -> c_int;

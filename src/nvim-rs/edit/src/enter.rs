@@ -131,6 +131,7 @@ extern "C" {
     fn showmode() -> c_int;
     fn nvim_change_warning_col(col: c_int);
     fn pum_check_clear();
+    #[link_name = "state_enter"]
     fn nvim_state_enter(state: *mut c_void);
     fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c_int) -> c_int;
     fn nvim_get_inserted_size() -> c_int;

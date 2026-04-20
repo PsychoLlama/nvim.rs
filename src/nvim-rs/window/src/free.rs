@@ -103,6 +103,7 @@ extern "C" {
     fn nvim_free_jumplist_win(wp: WinHandle);
 
     /// qf_free_all(wp) -- from quickfix_shim.c, takes void*.
+    #[link_name = "qf_free_all"]
     fn nvim_qf_free_all_win(wp: *mut std::ffi::c_void);
 
     /// Get au_pending_free_win global.

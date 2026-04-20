@@ -52,6 +52,7 @@ extern "C" {
         options: c_int,
         regmatch: RegmmatchHandle,
     ) -> c_int;
+    #[link_name = "vim_regexec_multi"]
     fn nvim_searchit_regexec_multi(
         regmatch: RegmmatchHandle,
         win: WinHandle,
@@ -72,6 +73,7 @@ extern "C" {
     // Buffer / line accessors
     #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
     fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
 

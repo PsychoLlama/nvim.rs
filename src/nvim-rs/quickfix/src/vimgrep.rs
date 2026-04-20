@@ -50,6 +50,7 @@ extern "C" {
     static mut got_int: bool;
     #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
 
     // Regex accessors

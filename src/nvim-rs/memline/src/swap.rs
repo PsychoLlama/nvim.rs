@@ -1585,6 +1585,7 @@ extern "C" {
     fn nvim_same_directory(a: *const c_char, b: *const c_char) -> c_int;
 
     /// Expand environment variables
+    #[link_name = "expand_env"]
     fn nvim_expand_env_maxpathl(src: *const c_char, dst: *mut c_char, len: c_int);
 
     /// Check if path is a directory
@@ -1648,6 +1649,7 @@ extern "C" {
     fn nvim_msg_multiline(s: *const c_char, hl_id: c_int);
 
     /// Verbose message
+    #[link_name = "verb_msg"]
     fn nvim_verb_msg(s: *const c_char);
 
     /// Open file for reading, return fd
@@ -1672,7 +1674,8 @@ extern "C" {
     fn nvim_sb_append(sb: *mut c_void, s: *const c_char);
 
     /// emsg wrapper
-    fn nvim_emsg(s: *const c_char);
+    #[link_name = "emsg"]
+    fn nvim_emsg(s: *const c_char) -> bool;
 
     /// msg_puts("\n")
     fn nvim_msg_puts_newline();

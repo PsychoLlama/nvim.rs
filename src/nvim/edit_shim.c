@@ -227,9 +227,6 @@ int nvim_merge_modifiers(int c) { return merge_modifiers(c, &mod_mask); }
 int nvim_MB_BYTE2LEN_CHECK(int c) { return MB_BYTE2LEN_CHECK(c); }
 int nvim_get_K_ZERO(void) { return K_ZERO; }
 char *nvim_get_special_key_name(int c, int modifiers) { return get_special_key_name(c, modifiers); }
-int nvim_comp_textwidth(int ff) { return comp_textwidth((bool)ff); }
-void nvim_internal_format(int textwidth, int second_indent, int flags, int format_only, int c) { internal_format(textwidth, second_indent, flags, (bool)format_only, c); }
-int nvim_byte2cells(int b) { return byte2cells((uint8_t)b); }
 int nvim_mb_get_class_cursor(void) { return mb_get_class(get_cursor_pos_ptr()); }
 int nvim_cursor_has_composing(void) { if (!p_deco) { return 0; } char *p0 = get_cursor_pos_ptr(); return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0; }
 void *nvim_get_yank_register_paste(int regname) { return get_yank_register(regname, YREG_PASTE); }
@@ -245,7 +242,6 @@ void nvim_map_execute_lua_false(void) { map_execute_lua(false, false); }
 void nvim_auto_format_ins(int force_format) { auto_format(false, force_format != 0); }
 int nvim_get_need_highlight_changed(void) { return need_highlight_changed ? 1 : 0; }
 void nvim_set_need_start_insertmode(int val) { need_start_insertmode = (val != 0); }
-void nvim_state_enter(void *state) { state_enter((VimState *)state); }
 int nvim_ww_allows(int ch) { return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0; }
 int nvim_vv_char_is_empty(void) { return (*get_vim_var_str(VV_CHAR) == NUL) ? 1 : 0; }
 int nvim_cursor_on_tab_or_inline(void) { return (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) ? 1 : 0; }
@@ -706,7 +702,6 @@ void nvim_edit_tab_strmove(char *ptr, int i) { STRMOVE(ptr, ptr + i); }
 /// backspace_until_column(col) for vreplace.
 
 /// ins_bytes_len(s, len) for vreplace.
-void nvim_edit_tab_ins_bytes_len(const char *s, size_t len) { ins_bytes_len((char *)s, len); }
 
 /// replace_join(off) for replace mode.
 

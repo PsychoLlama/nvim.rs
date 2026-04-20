@@ -325,7 +325,6 @@ void nvim_rt_msg_putchar_nl(void) { msg_putchar('\n'); }
 void nvim_rt_msg_outtrans(const char *msg) { msg_outtrans(msg, 0, false); }
 
 /// Allocate a list and set it as the return value.
-void nvim_rt_list_alloc_ret(void *rettv, int count) { tv_list_alloc_ret((typval_T *)rettv, count); }
 
 bool nvim_rt_check_for_opt_dict_arg(void *argvars) { return tv_check_for_opt_dict_arg((typval_T *)argvars, 0) != FAIL; }
 
@@ -527,7 +526,6 @@ void *nvim_rt_getline_get_source_cookie(void *fgetline, void *cookie) { return g
 char *nvim_rt_enc_canonize(char *enc) { return enc_canonize(enc); }
 
 /// Setup encoding conversion.
-int nvim_rt_convert_setup(void *vcp, char *from, const char *to) { return convert_setup((vimconv_T *)vcp, from, (char *)to); }
 
 /// Get p_enc (the 'encoding' option value).
 const char *nvim_rt_get_p_enc(void) { return p_enc; }
@@ -578,10 +576,8 @@ int nvim_rt_EVENT_SOURCEPOST(void) { return EVENT_SOURCEPOST; }
 
 
 /// vimrc_found wrapper.
-void nvim_rt_vimrc_found(const char *fname_exp, const char *env) { vimrc_found((char *)fname_exp, (char *)env); }
 
 /// fclose wrapper.
-int nvim_rt_fclose(void *fp) { return fclose((FILE *)fp); }
 
 /// smsg wrapper for do_source verbose messages.
 void nvim_rt_smsg_cannot_source(const char *fname) { smsg(0, _("Cannot source a directory: \"%s\""), fname); }
@@ -610,8 +606,6 @@ int nvim_rt_get_sourcing_lnum(void) { return SOURCING_LNUM; }
 void *nvim_rt_get_time_fd(void) { return time_fd; }
 
 /// time_push/pop/msg wrappers.
-void nvim_rt_time_push(uint64_t *rel_time, uint64_t *start_time) { time_push((proftime_T *)rel_time, (proftime_T *)start_time); }
-void nvim_rt_time_pop(uint64_t rel_time) { time_pop((proftime_T)rel_time); }
 void nvim_rt_time_msg_iobuff(const char *fname)
 {
   vim_snprintf(IObuff, (size_t)IOSIZE, "sourcing %s", fname);
@@ -619,8 +613,6 @@ void nvim_rt_time_msg_iobuff(const char *fname)
 }
 
 /// prof_child_enter/exit wrappers.
-void nvim_rt_prof_child_enter(uint64_t *wait_start) { prof_child_enter((proftime_T *)wait_start); }
-void nvim_rt_prof_child_exit(uint64_t *wait_start) { prof_child_exit((proftime_T *)wait_start); }
 
 /// save_funccal / restore_funccal wrappers.
 void *nvim_rt_save_funccal(void)
@@ -639,7 +631,6 @@ void nvim_rt_restore_funccal(void *entry) { restore_funccal(); xfree(entry); }
 /// has_profiling wrapper.
 
 /// profile_init wrapper.
-void nvim_rt_profile_init(void *si) { profile_init((scriptitem_T *)si); }
 
 /// profile_start/zero wrappers.
 uint64_t nvim_rt_profile_start(void) { return (uint64_t)profile_start(); }

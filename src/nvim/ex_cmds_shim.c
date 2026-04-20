@@ -222,7 +222,6 @@ void nvim_excmds_do_cmdline_global(const char *cmd) { if (cmd == NULL || *cmd ==
 char *nvim_excmds_save_set_shortmess_F(void) { char *saved = xstrdup(p_shm); set_option_direct(kOptShortmess, STATIC_CSTR_AS_OPTVAL("F"), 0, SID_NONE); return saved; }
 void nvim_excmds_restore_shortmess(char *saved) { set_option_direct(kOptShortmess, CSTR_AS_OPTVAL(saved), 0, SID_NONE); xfree(saved); }
 int nvim_excmds_get_p_icm_first(void) { return (unsigned char)p_icm[0]; }
-void nvim_excmds_bufhl_add_hl_pos_offset(buf_T *buf, int ns_id, int hl_id, linenr_T start_lnum, colnr_T start_col, linenr_T end_lnum, colnr_T end_col, colnr_T offset) { rs_bufhl_add_hl_pos_offset(buf, ns_id, hl_id, start_lnum, start_col, end_lnum, end_col, offset); }
 size_t nvim_excmds_preview_lines_size(const void *pl) { return ((const PreviewLines *)pl)->subresults.size; }
 void nvim_excmds_preview_lines_item(const void *pl, size_t idx, linenr_T *start_lnum, colnr_T *start_col, linenr_T *end_lnum, colnr_T *end_col, linenr_T *pre_match) { SubResult item = ((const PreviewLines *)pl)->subresults.items[idx]; *start_lnum = item.start.lnum; *start_col = item.start.col; *end_lnum = item.end.lnum; *end_col = item.end.col; *pre_match = item.pre_match; }
 const char *nvim_exarg_get_cmd(const exarg_T *eap) { return eap->cmd; }
@@ -387,7 +386,6 @@ int nvim_regmmatch_get_rmm_ic(void *rm) { return ((regmmatch_T *)rm)->rmm_ic ? 1
 int nvim_regmmatch_re_multiline(void *rm) { return re_multiline(((regmmatch_T *)rm)->regprog) ? 1 : 0; }
 void *nvim_do_sub_search_regcomp(const char *pat, size_t patlen, int which_pat, int flags) { regmmatch_T *rm = xmalloc(sizeof(regmmatch_T)); memset(rm, 0, sizeof(*rm)); if (search_regcomp((char *)pat, patlen, NULL, RE_SUBST, which_pat, flags, rm) == FAIL) { xfree(rm); return NULL; } return rm; }
 int nvim_do_sub_vim_regexec_multi(void *rm, int lnum, int col) { return vim_regexec_multi((regmmatch_T *)rm, curwin, curbuf, (linenr_T)lnum, (colnr_T)col, NULL, NULL); }
-int nvim_do_sub_vim_regsub_multi(void *rm, int source_lnum, const char *sub, char *dest, int destlen, int flags) { return vim_regsub_multi((regmmatch_T *)rm, (linenr_T)source_lnum, (char *)sub, dest, destlen, flags); }
 int nvim_ecmd_curbuf_get_b_flags(void) { return curbuf->b_flags; }
 int nvim_ecmd_curbuf_get_terminal(void) { return curbuf->terminal != NULL ? 1 : 0; }
 void nvim_ecmd_curbuf_set_did_filetype(int val) { curbuf->b_did_filetype = (bool)val; }
@@ -441,7 +439,6 @@ int nvim_ecmd_bufref_has_terminal(void *ref) { bufref_T *br = (bufref_T *)ref; r
 void nvim_ecmd_bufref_terminal_check_size(void *ref) { terminal_check_size(((bufref_T *)ref)->br_buf->terminal); }
 int nvim_ecmd_bufref_valid_is_curbuf(void *ref) { bufref_T *br = (bufref_T *)ref; return (bufref_valid(br) && br->br_buf == curbuf) ? 1 : 0; }
 void nvim_ecmd_curbuf_terminal_check_size(void) { if (curbuf->terminal != NULL) { terminal_check_size(curbuf->terminal); } }
-void nvim_ecmd_handle_swap_exists(void *old_curbuf_ref) { handle_swap_exists((bufref_T *)old_curbuf_ref); }
 #ifdef CASE_INSENSITIVE_FILENAME
 int nvim_ecmd_has_case_insensitive_filename(void) { return 1; }
 #else

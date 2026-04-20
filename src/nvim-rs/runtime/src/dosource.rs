@@ -75,11 +75,13 @@ extern "C" {
     fn nvim_rt_EVENT_SOURCEPOST() -> c_int;
     #[link_name = "aborting"]
     fn nvim_rt_aborting() -> bool;
+    #[link_name = "vimrc_found"]
     fn nvim_rt_vimrc_found(fname_exp: *const c_char, env: *const c_char);
     fn nvim_rt_get_curbuf() -> *mut c_void;
 
     // File I/O
     // nvim_rt_fopen_noinh_readbin: migrated to Rust (see bottom of this file)
+    #[link_name = "fclose"]
     fn nvim_rt_fclose(fp: *mut c_void) -> c_int;
 
     // Verbose messages
@@ -109,15 +111,20 @@ extern "C" {
 
     // Profiling
     fn nvim_rt_get_time_fd() -> *mut c_void;
+    #[link_name = "time_push"]
     fn nvim_rt_time_push(rel_time: *mut u64, start_time: *mut u64);
+    #[link_name = "time_pop"]
     fn nvim_rt_time_pop(rel_time: u64);
     fn nvim_rt_time_msg_iobuff(fname: *const c_char);
+    #[link_name = "prof_child_enter"]
     fn nvim_rt_prof_child_enter(wait_start: *mut u64);
+    #[link_name = "prof_child_exit"]
     fn nvim_rt_prof_child_exit(wait_start: *mut u64);
     fn nvim_rt_save_funccal() -> *mut c_void;
     fn nvim_rt_restore_funccal(entry: *mut c_void);
     #[link_name = "has_profiling"]
     fn nvim_rt_has_profiling(file: bool, name: *const c_char, forceit: *mut bool) -> bool;
+    #[link_name = "profile_init"]
     fn nvim_rt_profile_init(si: *mut c_void);
     fn nvim_rt_profile_start() -> u64;
     fn nvim_rt_profile_zero() -> u64;
@@ -159,6 +166,7 @@ extern "C" {
     fn nvim_rt_check_utf8_bom(line: *const u8, len: usize) -> bool;
 
     // Encoding
+    #[link_name = "convert_setup"]
     fn nvim_rt_convert_setup(vcp: *mut c_void, from: *mut c_char, to: *const c_char) -> c_int;
     fn nvim_rt_string_convert(vcp: *mut c_void, s: *mut c_char, len: *mut usize) -> *mut c_char;
     fn nvim_rt_get_p_enc() -> *const c_char;

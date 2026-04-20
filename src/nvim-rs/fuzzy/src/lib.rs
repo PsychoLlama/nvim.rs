@@ -696,6 +696,7 @@ extern "C" {
     fn rs_equalpos(a: PosT, b: PosT) -> c_int;
     #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *mut c_char;
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: c_int) -> c_int;
     fn nvim_buf_get_ml_line_count(buf: BufHandle) -> c_int;
     fn nvim_get_curbuf() -> BufHandle;

@@ -103,6 +103,7 @@ extern "C" {
         len: c_int,
         newfile: bool,
     ) -> c_int;
+    #[link_name = "rs_bufhl_add_hl_pos_offset"]
     fn nvim_excmds_bufhl_add_hl_pos_offset(
         buf: *mut crate::BufHandle,
         ns_id: c_int,
@@ -201,6 +202,7 @@ extern "C" {
         col: c_int,
     ) -> c_int;
     /// Wrap vim_regsub_multi for do_sub
+    #[link_name = "vim_regsub_multi"]
     pub fn nvim_do_sub_vim_regsub_multi(
         rm: *mut crate::RegmmatchHandle,
         source_lnum: c_int,

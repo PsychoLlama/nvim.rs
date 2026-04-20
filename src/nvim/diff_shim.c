@@ -197,7 +197,6 @@ const char *nvim_diffio_get_diff_fname(void *dio_ptr) { diffio_T *dio = (diffio_
 int nvim_diff_write_to_file(buf_T *buf, const char *fname, linenr_T start, linenr_T end) { if (end < 0) { end = buf->b_ml.ml_line_count; } int save_ml_flags = buf->b_ml.ml_flags; char *save_ff = buf->b_p_ff; buf->b_p_ff = xstrdup("unix"); const bool save_cmod_flags = cmdmod.cmod_flags; cmdmod.cmod_flags |= CMOD_LOCKMARKS; if (end < start) { end = start; buf->b_ml.ml_flags |= ML_EMPTY; } int r = buf_write(buf, (char *)fname, NULL, start, end, NULL, false, false, false, true); cmdmod.cmod_flags = save_cmod_flags; free_string_option(buf->b_p_ff); buf->b_p_ff = save_ff; buf->b_ml.ml_flags = (buf->b_ml.ml_flags & ~ML_EMPTY) | (save_ml_flags & ML_EMPTY); return r; }
 int nvim_diff_get_a_works(void) { return (int)diff_a_works; }
 void nvim_diff_set_a_works(int val) { diff_a_works = (TriState)val; }
-void nvim_diff_eval_diff(const char *orig, const char *new_f, const char *diff) { eval_diff((char *)orig, (char *)new_f, (char *)diff); }
 const char *nvim_diff_get_p_srr(void) { return p_srr; }
 void nvim_diff_env_clear_diff_options(void) { if (os_env_exists("DIFF_OPTIONS", true)) { os_unsetenv("DIFF_OPTIONS"); } }
 void nvim_diff_call_shell_diff(const char *cmd) { block_autocmds(); call_shell((char *)cmd, kShellOptFilter | kShellOptSilent | kShellOptDoOut, NULL); unblock_autocmds(); }
@@ -289,7 +288,6 @@ win_T *nvim_diff_get_firstwin(void) { return firstwin; }
 int nvim_diff_buf_write_curbuf(const char *fname) { return buf_write(curbuf, (char *)fname, NULL, 1, curbuf->b_ml.ml_line_count, NULL, false, false, false, true); }
 char *nvim_diff_FullName_save(const char *fname) { return FullName_save((char *)fname, false); }
 bool nvim_diff_is_patchexpr_set(void) { return *p_pex != NUL; }
-void nvim_diff_eval_patch(const char *orig, const char *diff, const char *out) { eval_patch((char *)orig, (char *)diff, (char *)out); }
 void nvim_diff_call_shell_filter(const char *cmd) { block_autocmds(); call_shell((char *)cmd, kShellOptFilter, NULL); unblock_autocmds(); }
 bool nvim_diff_os_fileinfo_size(const char *fname, uint64_t *size_out) { FileInfo fi; bool ok = os_fileinfo(fname, &fi); if (ok && size_out != NULL) { *size_out = os_fileinfo_size(&fi); } return ok; }
 int nvim_diff_get_MAXPATHL(void) { return MAXPATHL; }

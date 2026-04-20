@@ -254,6 +254,7 @@ extern "C" {
     fn nvim_ml_get_buf(buf: *mut c_void, lnum: i32) -> *mut c_char;
 
     /// Get length of a line in a buffer (`ml_get_buf_len`)
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: *mut c_void, lnum: i32) -> c_int;
 
     /// Get line width as displayed (`linetabsize(wp, lnum)`)

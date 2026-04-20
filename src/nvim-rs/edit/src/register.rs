@@ -62,6 +62,7 @@ extern "C" {
     fn nvim_reg_y_size(reg: *const std::ffi::c_void) -> usize;
     fn nvim_is_literal_register(regname: c_int) -> bool;
     fn AppendCharToRedobuff(c: c_int);
+    #[link_name = "do_put"]
     fn nvim_put_do_put(
         regname: c_int,
         savereg: *mut std::ffi::c_void,

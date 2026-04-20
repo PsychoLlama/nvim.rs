@@ -65,6 +65,7 @@ extern "C" {
     fn nvim_rt_get_script_local_funcs(sid: c_int) -> *mut c_void;
 
     // f_getscriptinfo helpers
+    #[link_name = "tv_list_alloc_ret"]
     fn nvim_rt_list_alloc_ret(rettv: *mut c_void, count: c_int);
     fn nvim_rt_check_for_opt_dict_arg(argvars: *mut c_void) -> bool;
     fn nvim_rt_get_rettv_list(rettv: *mut c_void) -> *mut c_void;

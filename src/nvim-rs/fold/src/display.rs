@@ -57,6 +57,7 @@ extern "C" {
     /// Get a vim variable as a number by index.
     fn nvim_fold_get_vim_var_nr(vv_idx: c_int) -> i64;
     /// Set a vim variable as a number by index.
+    #[link_name = "set_vim_var_nr"]
     fn nvim_fold_set_vim_var_nr(vv_idx: c_int, val: i64);
     /// Get a vim variable as a string by index.
     fn nvim_fold_get_vim_var_str(vv_idx: c_int) -> *const c_char;

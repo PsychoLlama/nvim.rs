@@ -109,6 +109,7 @@ extern "C" {
     fn nvim_edit_tab_strmove(ptr: *mut c_char, i: c_int);
     #[link_name = "backspace_until_column"]
     fn nvim_edit_tab_backspace_until_column(col: ColnrT);
+    #[link_name = "ins_bytes_len"]
     fn nvim_edit_tab_ins_bytes_len(s: *const c_char, len: usize);
     #[link_name = "replace_join"]
     fn nvim_edit_tab_replace_join(off: c_int);

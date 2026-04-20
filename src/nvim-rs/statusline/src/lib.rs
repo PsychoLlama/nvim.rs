@@ -221,6 +221,7 @@ extern "C" {
     fn nvim_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
 
+    #[link_name = "ml_get_buf_len"]
     fn nvim_ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> c_int;
     #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: BufHandle, lnum: LinenrT) -> *const c_char;

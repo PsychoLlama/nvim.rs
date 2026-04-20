@@ -103,6 +103,7 @@ extern "C" {
         tabtab: *mut c_void,
         stcp: *mut c_void,
     ) -> c_int;
+    #[link_name = "trans_characters"]
     fn nvim_trans_characters(buf: *mut c_char, bufsize: usize);
     fn nvim_ui_call_set_title(s: *const c_char);
     fn nvim_ui_call_set_icon(s: *const c_char);

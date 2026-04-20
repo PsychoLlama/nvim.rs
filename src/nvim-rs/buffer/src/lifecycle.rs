@@ -1724,6 +1724,7 @@ extern "C" {
     fn rs_foldUpdateAll(win: *mut c_void);
     fn rs_diff_buf_add(buf: BufHandle);
     fn nvim_ecmd_curwin_set_ws_to_buf(buf: BufHandle);
+    #[link_name = "set_topline"]
     fn nvim_set_topline(wp: *mut c_void, lnum: c_int);
     fn nvim_ecmd_curwin_set_coladd_curswant();
     fn nvim_excmds_buf_ft_is_empty(buf: BufHandle) -> c_int;

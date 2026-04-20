@@ -98,6 +98,7 @@ unsafe extern "C" {
     fn do_digraph(c: c_int) -> c_int;
 
     // state_enter (C function that runs the state machine)
+    #[link_name = "state_enter"]
     fn nvim_state_enter(state: *mut c_void);
 
     // command_line_check / command_line_execute are Rust functions already exported

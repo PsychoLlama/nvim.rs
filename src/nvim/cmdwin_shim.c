@@ -290,10 +290,9 @@ void nvim_free_garray(void *gap_void)
 void *nvim_alloc_bufref(void) { return xcalloc(1, sizeof(bufref_T)); }
 
 /// Free a heap-allocated bufref_T.
-void nvim_free_bufref(void *br_void) { xfree(br_void); }
+void nvim_free_bufref(void *br) { xfree(br); }
 
 /// set_bufref wrapper using heap-allocated bufref (opaque handle).
-void nvim_set_bufref_cmdwin(void *br, buf_T *buf) { set_bufref((bufref_T *)br, buf); }
 
 /// bufref_valid wrapper using heap-allocated bufref (opaque handle).
 int nvim_bufref_valid_cmdwin(void *br) { return bufref_valid((bufref_T *)br) ? 1 : 0; }

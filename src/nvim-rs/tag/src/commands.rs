@@ -981,6 +981,7 @@ extern "C" {
         key_len: usize,
         val: *mut c_char,
     ) -> c_int;
+    #[link_name = "tv_dict_add_nr"]
     fn nvim_tag_tv_dict_add_nr(
         dict: DictHandle,
         key: *const c_char,

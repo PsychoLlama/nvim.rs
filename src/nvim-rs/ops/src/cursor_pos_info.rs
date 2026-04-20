@@ -97,6 +97,7 @@ extern "C" {
     fn nvim_bomb_size() -> c_int;
 
     // dict operations (for nvim_cpi_populate_dict absorption)
+    #[link_name = "tv_dict_add_nr"]
     fn nvim_tag_tv_dict_add_nr(
         dict: *mut c_void,
         key: *const c_char,

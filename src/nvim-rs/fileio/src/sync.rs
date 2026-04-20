@@ -507,6 +507,7 @@ extern "C" {
     /// Returns the first buffer (firstbuf).
     fn nvim_get_firstbuf() -> *mut c_void;
     /// Initializes a bufref_T (opaque) to point to buf.
+    #[link_name = "set_bufref"]
     fn nvim_set_bufref(br: *mut c_void, buf: *mut c_void);
     /// Returns non-zero if the bufref still points to a valid buffer.
     fn nvim_bufref_valid(br: *mut c_void) -> c_int;

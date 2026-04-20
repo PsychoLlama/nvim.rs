@@ -243,6 +243,7 @@ extern "C" {
     #[link_name = "rpc_close"]
     fn nvim_chan_rpc_close(chan: *mut c_void);
     /// Free a Lua reference. Defined in eval_shim.c.
+    #[link_name = "api_free_luaref"]
     fn nvim_chan_api_free_luaref(luaref: c_int);
     /// C fclose. From libc.
     fn fclose(stream: *mut c_void) -> c_int;

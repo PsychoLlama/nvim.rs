@@ -304,7 +304,6 @@ int nvim_fileio_aborting(void) { return aborting() ? 1 : 0; }
 
 int nvim_fileio_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
 const char *nvim_fileio_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
-int nvim_fileio_ml_get_len(int lnum) { return ml_get_len((linenr_T)lnum); }
 int nvim_fileio_ml_append(int lnum, const char *line, int len, int newfile) {
   return ml_append((linenr_T)lnum, (char *)line, (colnr_T)len, newfile != 0);
 }
@@ -406,7 +405,6 @@ const char *nvim_fileio_msg_converted(void) { return _("[converted]"); }
 // emsg wrapper
 // =============================================================================
 
-void nvim_fileio_emsg(const char *s) { emsg((char *)s); }
 
 // =============================================================================
 // vim_strchr wrapper
@@ -419,7 +417,6 @@ int nvim_fileio_vim_strchr(const char *s, int c) { return vim_strchr(s, c) != NU
 // =============================================================================
 
 void nvim_fileio_u_clearline(void) { u_clearline(curbuf); }
-void nvim_fileio_sha256_start(void *ctx) { sha256_start((context_sha256_T *)ctx); }
 void nvim_fileio_sha256_update(void *ctx, const uint8_t *data, size_t len) {
   sha256_update((context_sha256_T *)ctx, data, len);
 }
@@ -485,11 +482,9 @@ int nvim_fileio_iconv_einval(void) { return ICONV_EINVAL; }
 int nvim_fileio_utf_head_off(const char *base, const char *p) {
   return utf_head_off((char *)base, (char *)p);
 }
-int nvim_fileio_utf_ptr2char(const char *p) { return utf_ptr2char((char *)p); }
 int nvim_fileio_utf_ptr2len_len(const char *p, int size) {
   return utf_ptr2len_len((char *)p, size);
 }
-int nvim_fileio_utf_char2bytes(int c, char *buf) { return utf_char2bytes(c, (char *)buf); }
 
 // =============================================================================
 // SHM_* constants

@@ -52,10 +52,12 @@ extern "C" {
     fn nvim_get_p_ri() -> c_int;
 
     // -- textformat --
+    #[link_name = "comp_textwidth"]
     fn nvim_comp_textwidth(force_format: c_int) -> c_int;
     fn get_nolist_virtcol() -> c_int;
     fn char2cells(c: c_int) -> c_int;
     fn gchar_cursor() -> c_int;
+    #[link_name = "internal_format"]
     fn nvim_internal_format(
         textwidth: c_int,
         second_indent: c_int,
@@ -79,6 +81,7 @@ extern "C" {
     fn vpeekc() -> c_int;
     fn vgetc() -> c_int;
     fn nvim_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
+    #[link_name = "byte2cells"]
     fn nvim_byte2cells(c: c_int) -> c_int;
     fn do_digraph(c: c_int) -> c_int;
     #[link_name = "test_disable_char_avail"]
