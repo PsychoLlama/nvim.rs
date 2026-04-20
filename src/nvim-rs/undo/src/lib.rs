@@ -334,6 +334,51 @@ const _: () = {
 #[derive(Clone, Copy)]
 pub struct WinHandle(*mut c_void);
 
+// =============================================================================
+// Direct BufStruct/WinStruct field access helpers
+// =============================================================================
+
+use nvim_buffer::buf_struct::BufStruct;
+use nvim_window::win_struct::WinStruct;
+
+/// Get an immutable reference to `BufStruct` from the undo crate's `BufHandle`.
+///
+/// # Safety
+/// `bp` must be a valid non-null `buf_T*`.
+#[inline]
+unsafe fn buf_ref<'a>(bp: BufHandle) -> &'a BufStruct {
+    &*(bp.0.cast::<BufStruct>())
+}
+
+/// Get a mutable reference to `BufStruct` from the undo crate's `BufHandle`.
+///
+/// # Safety
+/// `bp` must be a valid non-null `buf_T*` with exclusive access.
+#[inline]
+unsafe fn buf_mut<'a>(bp: BufHandle) -> &'a mut BufStruct {
+    &mut *(bp.0.cast::<BufStruct>())
+}
+
+/// Get an immutable reference to `WinStruct` from the undo crate's `WinHandle`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*`.
+#[allow(dead_code)]
+#[inline]
+unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
+    &*(wp.0.cast::<WinStruct>())
+}
+
+/// Get a mutable reference to `WinStruct` from the undo crate's `WinHandle`.
+///
+/// # Safety
+/// `wp` must be a valid non-null `win_T*` with exclusive access.
+#[allow(dead_code)]
+#[inline]
+unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut WinStruct {
+    &mut *(wp.0.cast::<WinStruct>())
+}
+
 /// Type alias for time_t (platform-dependent).
 #[cfg(target_pointer_width = "64")]
 pub type TimeT = i64;
@@ -489,23 +534,6 @@ impl FileHandle {
 // FFI declarations for C accessor functions
 #[allow(dead_code)]
 extern "C" {
-    // Buffer undo field accessors
-    fn nvim_buf_get_b_u_oldhead(buf: BufHandle) -> UHeaderHandle;
-    fn nvim_buf_get_b_u_newhead(buf: BufHandle) -> UHeaderHandle;
-    fn nvim_buf_get_b_u_curhead(buf: BufHandle) -> UHeaderHandle;
-    fn nvim_buf_get_b_u_numhead(buf: BufHandle) -> c_int;
-    fn nvim_buf_get_b_u_synced(buf: BufHandle) -> bool;
-    fn nvim_buf_get_b_u_line_ptr(buf: BufHandle) -> *mut c_char;
-    fn nvim_buf_get_b_u_line_lnum(buf: BufHandle) -> LinenrT;
-
-    fn nvim_buf_set_b_u_oldhead(buf: BufHandle, val: UHeaderHandle);
-    fn nvim_buf_set_b_u_newhead(buf: BufHandle, val: UHeaderHandle);
-    fn nvim_buf_set_b_u_curhead(buf: BufHandle, val: UHeaderHandle);
-    fn nvim_buf_set_b_u_numhead(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_b_u_synced(buf: BufHandle, val: bool);
-    fn nvim_buf_set_b_u_line_ptr(buf: BufHandle, val: *mut c_char);
-    fn nvim_buf_set_b_u_line_lnum(buf: BufHandle, val: LinenrT);
-
     // Buffer state accessors
     fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
     fn nvim_bt_dontwrite(buf: BufHandle) -> bool;
@@ -528,9 +556,6 @@ extern "C" {
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
     fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 
-    // Buffer memline accessor
-    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
-
     // Error message wrappers
     fn nvim_iemsg_undo_list_corrupt();
     fn nvim_iemsg_undo_line_missing();
@@ -539,13 +564,7 @@ extern "C" {
     fn nvim_get_no_u_sync() -> c_int;
     fn nvim_get_undolevel(buf: BufHandle) -> i64;
 
-    // Buffer b_did_warn accessor
-    fn nvim_buf_set_b_did_warn(buf: BufHandle, val: bool);
-
-    // Buffer save_nr accessors
-    fn nvim_buf_get_b_u_save_nr_last(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_save_nr_last(buf: BufHandle, val: c_int);
-    fn nvim_buf_set_b_u_save_nr_cur(buf: BufHandle, val: c_int);
+    // Buffer b_did_warn accessor (Phase 3 will remove this too)
 
     // undo_allowed accessors
     fn nvim_buf_is_modifiable(buf: BufHandle) -> bool;
@@ -564,12 +583,6 @@ extern "C" {
 
     // u_undo/u_redo accessors
     fn nvim_has_cpo_undo() -> bool;
-
-    // u_undo_and_forget accessors
-    fn nvim_buf_get_b_u_seq_cur(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_seq_cur(buf: BufHandle, val: c_int);
-    fn nvim_buf_get_b_u_seq_last(buf: BufHandle) -> c_int;
-    fn nvim_buf_set_b_u_seq_last(buf: BufHandle, val: c_int);
 
     // u_doit accessors
     fn nvim_buf_ml_is_empty(buf: BufHandle) -> bool;
@@ -597,17 +610,13 @@ extern "C" {
     fn nvim_internal_error(where_: *const c_char);
 
     // u_savecommon infrastructure
-    fn nvim_buf_set_b_new_change(buf: BufHandle, val: bool);
-    fn nvim_buf_set_b_u_time_cur(buf: BufHandle, val: TimeT);
     // nvim_uhp_copy_marks_visual: migrated to Rust (rs_uhp_copy_marks_visual)
     fn nvim_emsg_line_count_changed();
     fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
 
     // u_find_first_changed infrastructure (cursor now accessed via direct field access)
 
-    // u_undoline accessors
-    fn nvim_buf_get_b_u_line_colnr(buf: BufHandle) -> ColnrT;
-    fn nvim_buf_set_b_u_line_colnr(buf: BufHandle, val: ColnrT);
+    // u_undoline accessors (line_colnr now via direct field access)
     fn nvim_undo_curwin_get_cursor_col() -> ColnrT;
     fn nvim_undo_curwin_set_cursor_col(col: ColnrT);
     fn nvim_undo_curwin_get_cursor_lnum() -> LinenrT;
@@ -629,9 +638,7 @@ extern "C" {
     #[link_name = "changed_bytes"]
     fn nvim_changed_bytes(lnum: LinenrT, col: ColnrT);
 
-    // undo_time accessors
-    fn nvim_buf_get_b_u_time_cur(buf: BufHandle) -> TimeT;
-    fn nvim_buf_get_b_u_save_nr_cur(buf: BufHandle) -> c_int;
+    // undo_time accessors (time_cur and save_nr_cur now via direct field access)
     #[link_name = "text_locked"]
     fn nvim_text_locked() -> bool;
     #[link_name = "text_locked_msg"]
@@ -700,8 +707,7 @@ extern "C" {
 
     // u_sync wrapper
 
-    // Buffer line count and line accessors for hash computation
-    fn nvim_buf_get_b_ml_line_count(buf: BufHandle) -> LinenrT;
+    // Buffer line accessors for hash computation (ml_line_count via direct field access)
     #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf_line(buf: BufHandle, lnum: LinenrT) -> *const c_char;
 
@@ -1117,7 +1123,7 @@ unsafe fn rs_undoredo_swap_visual_impl(
 ///
 /// `buf` must be a valid non-null pointer.
 unsafe fn rs_undoredo_init_op_marks_impl(buf: BufHandle) {
-    nvim_buf_set_op_start_lnum(buf, nvim_buf_get_b_ml_line_count(buf));
+    nvim_buf_set_op_start_lnum(buf, buf_ref(buf).ml_line_count);
     nvim_buf_set_op_start_col(buf, 0);
     nvim_buf_set_op_end_lnum(buf, 0);
     nvim_buf_set_op_end_col(buf, 0);
@@ -1171,13 +1177,13 @@ pub unsafe extern "C" fn rs_curbuf_is_changed() -> bool {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[export_name = "u_clearall"]
 pub unsafe extern "C" fn rs_u_clearall(buf: BufHandle) {
-    nvim_buf_set_b_u_newhead(buf, std::ptr::null_mut());
-    nvim_buf_set_b_u_oldhead(buf, std::ptr::null_mut());
-    nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
-    nvim_buf_set_b_u_synced(buf, true);
-    nvim_buf_set_b_u_numhead(buf, 0);
-    nvim_buf_set_b_u_line_ptr(buf, std::ptr::null_mut());
-    nvim_buf_set_b_u_line_lnum(buf, 0);
+    buf_mut(buf).b_u_newhead = std::ptr::null_mut();
+    buf_mut(buf).b_u_oldhead = std::ptr::null_mut();
+    buf_mut(buf).b_u_curhead = std::ptr::null_mut();
+    buf_mut(buf).b_u_synced = u8::from(true);
+    buf_mut(buf).b_u_numhead = 0;
+    buf_mut(buf).b_u_line_ptr = std::ptr::null_mut();
+    buf_mut(buf).b_u_line_lnum = 0;
 }
 
 /// Clear the line saved for the "U" command.
@@ -1188,14 +1194,14 @@ pub unsafe extern "C" fn rs_u_clearall(buf: BufHandle) {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[export_name = "u_clearline"]
 pub unsafe extern "C" fn rs_u_clearline(buf: BufHandle) {
-    let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
+    let line_ptr = buf_ref(buf).b_u_line_ptr;
     if line_ptr.is_null() {
         return;
     }
 
     nvim_xfree(line_ptr as *mut c_void);
-    nvim_buf_set_b_u_line_ptr(buf, std::ptr::null_mut());
-    nvim_buf_set_b_u_line_lnum(buf, 0);
+    buf_mut(buf).b_u_line_ptr = std::ptr::null_mut();
+    buf_mut(buf).b_u_line_lnum = 0;
 }
 
 /// Save a line for the "U" command.
@@ -1205,25 +1211,25 @@ pub unsafe extern "C" fn rs_u_clearline(buf: BufHandle) {
 ///
 /// Must be called with valid buffer handle and line number.
 unsafe fn u_saveline(buf: BufHandle, lnum: LinenrT) {
-    if lnum == nvim_buf_get_b_u_line_lnum(buf) {
+    if lnum == buf_ref(buf).b_u_line_lnum {
         // line is already saved
         return;
     }
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = buf_ref(buf).ml_line_count;
     if lnum < 1 || lnum > line_count {
         // should never happen
         return;
     }
     rs_u_clearline(buf);
-    nvim_buf_set_b_u_line_lnum(buf, lnum);
+    buf_mut(buf).b_u_line_lnum = lnum;
     let win = nvim_undo_get_curwin();
     let win_buf = nvim_undo_win_get_buffer(win);
     if win_buf.0 == buf.0 && nvim_undo_win_get_cursor_lnum(win) == lnum {
-        nvim_buf_set_b_u_line_colnr(buf, nvim_undo_curwin_get_cursor_col());
+        buf_mut(buf).b_u_line_colnr = nvim_undo_curwin_get_cursor_col();
     } else {
-        nvim_buf_set_b_u_line_colnr(buf, 0);
+        buf_mut(buf).b_u_line_colnr = 0;
     }
-    nvim_buf_set_b_u_line_ptr(buf, nvim_undo_xstrdup(nvim_ml_get_buf_line(buf, lnum)));
+    buf_mut(buf).b_u_line_ptr = nvim_undo_xstrdup(nvim_ml_get_buf_line(buf, lnum));
 }
 
 /// Free entry 'uep' and 'n' lines in uep->ue_array[].
@@ -1260,14 +1266,14 @@ pub unsafe extern "C" fn rs_u_freeentries(
     uhpp: *mut UHeaderHandle,
 ) {
     // Check for pointers to the header that become invalid now.
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
     if curhead == uhp {
-        nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
+        buf_mut(buf).b_u_curhead = std::ptr::null_mut();
     }
 
-    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
     if newhead == uhp {
-        nvim_buf_set_b_u_newhead(buf, std::ptr::null_mut());
+        buf_mut(buf).b_u_newhead = std::ptr::null_mut();
     }
 
     if !uhpp.is_null() && *uhpp == uhp {
@@ -1293,8 +1299,8 @@ pub unsafe extern "C" fn rs_u_freeentries(
     nvim_xfree(uhp as *mut c_void);
 
     // Decrement header count
-    let numhead = nvim_buf_get_b_u_numhead(buf);
-    nvim_buf_set_b_u_numhead(buf, numhead - 1);
+    let numhead = buf_ref(buf).b_u_numhead;
+    buf_mut(buf).b_u_numhead = numhead - 1;
 }
 
 /// Free one header "uhp" and its entry list and adjust the pointers.
@@ -1325,13 +1331,13 @@ pub unsafe extern "C" fn rs_u_freeheader(
     let uh_prev = (*uhp).uh_prev.ptr;
 
     if uh_next.is_null() {
-        nvim_buf_set_b_u_oldhead(buf, uh_prev);
+        buf_mut(buf).b_u_oldhead = (uh_prev) as *mut c_void;
     } else {
         (*uh_next).uh_prev.ptr = uh_prev;
     }
 
     if uh_prev.is_null() {
-        nvim_buf_set_b_u_newhead(buf, uh_next);
+        buf_mut(buf).b_u_newhead = (uh_next) as *mut c_void;
     } else {
         let mut uhap = uh_prev;
         while !uhap.is_null() {
@@ -1356,10 +1362,10 @@ pub unsafe extern "C" fn rs_u_freebranch(
 ) {
     // If this is the top branch we may need to use u_freeheader() to update
     // all the pointers.
-    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
     if uhp == oldhead {
         loop {
-            let current_oldhead = nvim_buf_get_b_u_oldhead(buf);
+            let current_oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
             if current_oldhead.is_null() {
                 break;
             }
@@ -1393,7 +1399,7 @@ pub unsafe extern "C" fn rs_u_freebranch(
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_u_get_headentry(buf: BufHandle) -> UEntryHandle {
-    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
     if newhead.is_null() {
         nvim_iemsg_undo_list_corrupt();
         return ptr::null_mut();
@@ -1422,13 +1428,13 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
         return;
     }
 
-    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
     let uep = (*newhead).uh_getbot_entry;
     if !uep.is_null() {
         // The new ue_bot is computed from the number of lines that has been
         // inserted (0 - deleted) since calling u_save. This is equal to the
         // old line count subtracted from the current line count.
-        let ml_line_count = nvim_buf_get_ml_line_count(buf);
+        let ml_line_count = buf_ref(buf).ml_line_count;
         let ue_lcount = (*uep).ue_lcount;
         let extra = ml_line_count - ue_lcount;
 
@@ -1447,7 +1453,7 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
         (*newhead).uh_getbot_entry = ptr::null_mut();
     }
 
-    nvim_buf_set_b_u_synced(buf, true);
+    buf_mut(buf).b_u_synced = u8::from(true);
 }
 
 /// Free all undo headers and entries for the buffer.
@@ -1458,7 +1464,7 @@ pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
 #[export_name = "u_blockfree"]
 pub unsafe extern "C" fn rs_u_blockfree(buf: BufHandle) {
     loop {
-        let oldhead = nvim_buf_get_b_u_oldhead(buf);
+        let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
         if oldhead.is_null() {
             break;
         }
@@ -1466,7 +1472,7 @@ pub unsafe extern "C" fn rs_u_blockfree(buf: BufHandle) {
     }
 
     // Free the line saved for "U" command
-    let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
+    let line_ptr = buf_ref(buf).b_u_line_ptr;
     nvim_xfree(line_ptr as *mut c_void);
 }
 
@@ -1480,7 +1486,7 @@ pub unsafe extern "C" fn rs_u_sync(force: bool) {
     let buf = nvim_get_curbuf();
 
     // Skip it when already synced or syncing is disabled.
-    if nvim_buf_get_b_u_synced(buf) {
+    if buf_ref(buf).b_u_synced != 0 {
         return;
     }
     if !force && nvim_get_no_u_sync() > 0 {
@@ -1489,11 +1495,11 @@ pub unsafe extern "C" fn rs_u_sync(force: bool) {
 
     if nvim_get_undolevel(buf) < 0 {
         // No entries, nothing to do
-        nvim_buf_set_b_u_synced(buf, true);
+        buf_mut(buf).b_u_synced = u8::from(true);
     } else {
         // Compute ue_bot of previous u_save
         rs_u_getbot(buf);
-        nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
+        buf_mut(buf).b_u_curhead = std::ptr::null_mut();
     }
 }
 
@@ -1540,9 +1546,9 @@ pub unsafe extern "C" fn rs_u_unch_branch(uhp: UHeaderHandle) {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[export_name = "u_unchanged"]
 pub unsafe extern "C" fn rs_u_unchanged(buf: BufHandle) {
-    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
     rs_u_unch_branch(oldhead);
-    nvim_buf_set_b_did_warn(buf, false);
+    buf_mut(buf).b_did_warn = 0;
 }
 
 /// Increase the write count, store it in the last undo header.
@@ -1553,15 +1559,15 @@ pub unsafe extern "C" fn rs_u_unchanged(buf: BufHandle) {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[export_name = "u_update_save_nr"]
 pub unsafe extern "C" fn rs_u_update_save_nr(buf: BufHandle) {
-    let save_nr_last = nvim_buf_get_b_u_save_nr_last(buf) + 1;
-    nvim_buf_set_b_u_save_nr_last(buf, save_nr_last);
-    nvim_buf_set_b_u_save_nr_cur(buf, save_nr_last);
+    let save_nr_last = buf_ref(buf).b_u_save_nr_last + 1;
+    buf_mut(buf).b_u_save_nr_last = save_nr_last;
+    buf_mut(buf).b_u_save_nr_cur = save_nr_last;
 
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
     let uhp = if !curhead.is_null() {
         (*curhead).uh_next.ptr
     } else {
-        nvim_buf_get_b_u_newhead(buf)
+        buf_ref(buf).b_u_newhead.cast::<UHeader>()
     };
 
     if !uhp.is_null() {
@@ -1639,20 +1645,20 @@ pub unsafe extern "C" fn rs_ex_undojoin(_eap: ExargHandle) {
     let buf = nvim_get_curbuf();
 
     // Nothing changed before
-    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
     if newhead.is_null() {
         return;
     }
 
     // Not allowed after undo
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
     if !curhead.is_null() {
         nvim_emsg_undojoin_after_undo();
         return;
     }
 
     // Already unsynced
-    if !nvim_buf_get_b_u_synced(buf) {
+    if buf_ref(buf).b_u_synced == 0 {
         return;
     }
 
@@ -1662,7 +1668,7 @@ pub unsafe extern "C" fn rs_ex_undojoin(_eap: ExargHandle) {
     }
 
     // Append next change to last entry
-    nvim_buf_set_b_u_synced(buf, false);
+    buf_mut(buf).b_u_synced = u8::from(false);
 }
 
 /// If 'cpoptions' contains 'u': Undo the previous undo or redo (vi compatible).
@@ -1678,7 +1684,7 @@ pub unsafe extern "C" fn rs_u_undo(mut count: c_int) {
     // If we get an undo command while executing a macro, we behave like the
     // original vi. If this happens twice in one macro the result will not
     // be compatible.
-    if !nvim_buf_get_b_u_synced(buf) {
+    if buf_ref(buf).b_u_synced == 0 {
         rs_u_sync(true);
         count = 1;
     }
@@ -1717,7 +1723,7 @@ pub unsafe extern "C" fn rs_u_redo(count: c_int) {
 pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bool) -> bool {
     let buf = nvim_get_curbuf();
 
-    if !nvim_buf_get_b_u_synced(buf) {
+    if buf_ref(buf).b_u_synced == 0 {
         rs_u_sync(true);
         count = 1;
     }
@@ -1725,7 +1731,7 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
     set_undo_undoes(true);
     rs_u_doit(count, true, do_buf_event);
 
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
     if curhead.is_null() {
         // nothing was undone
         return false;
@@ -1736,10 +1742,10 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
     // otherwise we will be in the leaf state
     let to_forget = curhead;
     let uh_next = (*to_forget).uh_next.ptr;
-    nvim_buf_set_b_u_newhead(buf, uh_next);
+    buf_mut(buf).b_u_newhead = (uh_next) as *mut c_void;
 
     let alt_next = (*to_forget).uh_alt_next.ptr;
-    nvim_buf_set_b_u_curhead(buf, alt_next);
+    buf_mut(buf).b_u_curhead = (alt_next) as *mut c_void;
 
     if !alt_next.is_null() {
         (*to_forget).uh_alt_next.ptr = std::ptr::null_mut();
@@ -1748,33 +1754,33 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
 
         let alt_next_next = (*alt_next).uh_next.ptr;
         if !alt_next_next.is_null() {
-            nvim_buf_set_b_u_seq_cur(buf, (*alt_next_next).uh_seq);
+            buf_mut(buf).b_u_seq_cur = (*alt_next_next).uh_seq;
         } else {
-            nvim_buf_set_b_u_seq_cur(buf, 0);
+            buf_mut(buf).b_u_seq_cur = 0;
         }
     } else {
-        let newhead = nvim_buf_get_b_u_newhead(buf);
+        let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
         if !newhead.is_null() {
-            nvim_buf_set_b_u_seq_cur(buf, (*newhead).uh_seq);
+            buf_mut(buf).b_u_seq_cur = (*newhead).uh_seq;
         }
     }
 
     let alt_prev = (*to_forget).uh_alt_prev.ptr;
     if !alt_prev.is_null() {
-        let new_curhead = nvim_buf_get_b_u_curhead(buf);
+        let new_curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         (*alt_prev).uh_alt_next.ptr = new_curhead;
     }
 
-    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
     if !newhead.is_null() {
-        let new_curhead = nvim_buf_get_b_u_curhead(buf);
+        let new_curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         (*newhead).uh_prev.ptr = new_curhead;
     }
 
-    let seq_last = nvim_buf_get_b_u_seq_last(buf);
+    let seq_last = buf_ref(buf).b_u_seq_last;
     let to_forget_seq = (*to_forget).uh_seq;
     if seq_last == to_forget_seq {
-        nvim_buf_set_b_u_seq_last(buf, seq_last - 1);
+        buf_mut(buf).b_u_seq_last = seq_last - 1;
     }
 
     rs_u_freebranch(buf, to_forget, std::ptr::null_mut());
@@ -1799,7 +1805,7 @@ unsafe fn undoredo_adjust_cursor(win: WinHandle, buf: BufHandle, curhead: UHeade
         nvim_undo_curwin_set_cursor_lnum(cur_lnum);
     }
 
-    let ml_count = nvim_buf_get_ml_line_count(buf);
+    let ml_count = buf_ref(buf).ml_line_count;
     if cur_lnum <= ml_count {
         if (*curhead).uh_cursor.lnum == cur_lnum {
             let col = (*curhead).uh_cursor.col;
@@ -1829,7 +1835,7 @@ unsafe fn undoredo_adjust_cursor(win: WinHandle, buf: BufHandle, curhead: UHeade
 /// Must be called with valid global state (curbuf, curhead set correctly).
 unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     let buf = nvim_get_curbuf();
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
     let win = nvim_undo_get_curwin();
 
     let mut newlnum: LinenrT = MAXLNUM;
@@ -1873,7 +1879,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     while !uep.is_null() {
         let top = (*uep).ue_top;
         let mut bot = (*uep).ue_bot;
-        let line_count = nvim_buf_get_ml_line_count(buf);
+        let line_count = buf_ref(buf).ml_line_count;
 
         if bot == 0 {
             bot = line_count + 1;
@@ -1933,7 +1939,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
                 i >= 0
             } {
                 *newarray.offset(i as isize) = nvim_undo_xstrdup(nvim_ml_get_buf_line(buf, lnum));
-                if nvim_buf_get_ml_line_count(buf) == 1 {
+                if buf_ref(buf).ml_line_count == 1 {
                     empty_buffer = true;
                 }
                 nvim_ml_delete_lnum(lnum);
@@ -1980,7 +1986,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
         if oldsize > 0 || newsize > 0 {
             nvim_undo_changed_lines(buf, top + 1, 0, bot, newsize - oldsize, do_buf_event);
-            let line_count = nvim_buf_get_ml_line_count(buf);
+            let line_count = buf_ref(buf).ml_line_count;
             if nvim_spell_check_window(win) && bot <= line_count {
                 nvim_redrawWinline(win, bot);
             }
@@ -2014,7 +2020,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // Ensure the '[ and '] marks are within bounds.
     {
-        let line_count = nvim_buf_get_ml_line_count(buf);
+        let line_count = buf_ref(buf).ml_line_count;
         let op_start = nvim_buf_get_op_start_lnum(buf).min(line_count);
         nvim_buf_set_op_start_lnum(buf, op_start);
         let op_end = nvim_buf_get_op_end_lnum(buf).min(line_count);
@@ -2078,18 +2084,15 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         } else {
             0
         };
-        nvim_buf_set_b_u_seq_cur(buf, if undo { next_seq } else { seq });
+        buf_mut(buf).b_u_seq_cur = if undo { next_seq } else { seq };
         if (*curhead).uh_save_nr != 0 {
-            nvim_buf_set_b_u_save_nr_cur(
-                buf,
-                if undo {
-                    (*curhead).uh_save_nr - 1
-                } else {
-                    (*curhead).uh_save_nr
-                },
-            );
+            buf_mut(buf).b_u_save_nr_cur = if undo {
+                (*curhead).uh_save_nr - 1
+            } else {
+                (*curhead).uh_save_nr
+            };
         }
-        nvim_buf_set_b_u_time_cur(buf, (*curhead).uh_time);
+        buf_mut(buf).b_u_time_cur = (*curhead).uh_time;
     }
 
     nvim_unblock_autocmds();
@@ -2137,7 +2140,7 @@ unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     // Inline nvim_undo_end_get_uhp_seq: find the relevant undo header
     let mut adjusted_did_undo = did_undo;
     let uhp_for_seq: *mut UHeader = {
-        let curhead = nvim_buf_get_b_u_curhead(buf);
+        let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         if !curhead.is_null() {
             if absolute && !(*curhead).uh_next.ptr.is_null() {
                 adjusted_did_undo = false;
@@ -2148,7 +2151,7 @@ unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
                 (*curhead).uh_next.ptr
             }
         } else {
-            nvim_buf_get_b_u_newhead(buf)
+            buf_ref(buf).b_u_newhead.cast::<UHeader>()
         }
     };
     let seq: c_int = if uhp_for_seq.is_null() {
@@ -2160,7 +2163,7 @@ unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     // Inline nvim_undo_end_fmt_time: format time from the undo header
     let mut timebuf = [0u8; 80];
     {
-        let curhead = nvim_buf_get_b_u_curhead(buf);
+        let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         let uhp_for_time: *mut UHeader = if !curhead.is_null() {
             if absolute && !(*curhead).uh_next.ptr.is_null() {
                 (*curhead).uh_next.ptr
@@ -2170,7 +2173,7 @@ unsafe fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
                 (*curhead).uh_next.ptr
             }
         } else {
-            nvim_buf_get_b_u_newhead(buf)
+            buf_ref(buf).b_u_newhead.cast::<UHeader>()
         };
         if uhp_for_time.is_null() {
             timebuf[0] = 0;
@@ -2236,24 +2239,24 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
         let undo_undoes = get_undo_undoes();
 
         if undo_undoes {
-            let curhead = nvim_buf_get_b_u_curhead(buf);
+            let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
             if curhead.is_null() {
                 // first undo
-                let newhead = nvim_buf_get_b_u_newhead(buf);
-                nvim_buf_set_b_u_curhead(buf, newhead);
+                let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
+                buf_mut(buf).b_u_curhead = (newhead) as *mut c_void;
             } else if nvim_get_undolevel(buf) > 0 {
                 // multi level undo - get next undo
                 let next = (*curhead).uh_next.ptr;
-                nvim_buf_set_b_u_curhead(buf, next);
+                buf_mut(buf).b_u_curhead = (next) as *mut c_void;
             }
 
             // nothing to undo
-            let curhead = nvim_buf_get_b_u_curhead(buf);
-            let numhead = nvim_buf_get_b_u_numhead(buf);
+            let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
+            let numhead = buf_ref(buf).b_u_numhead;
             if numhead == 0 || curhead.is_null() {
                 // stick curbuf->b_u_curhead at end
-                let oldhead = nvim_buf_get_b_u_oldhead(buf);
-                nvim_buf_set_b_u_curhead(buf, oldhead);
+                let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
+                buf_mut(buf).b_u_curhead = (oldhead) as *mut c_void;
                 nvim_beep_flush();
                 if count == startcount - 1 {
                     nvim_msg_oldest_change();
@@ -2264,7 +2267,7 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
 
             u_undoredo(true, do_buf_event);
         } else {
-            let curhead = nvim_buf_get_b_u_curhead(buf);
+            let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
             if curhead.is_null() || nvim_get_undolevel(buf) <= 0 {
                 // nothing to redo
                 nvim_beep_flush();
@@ -2279,12 +2282,12 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
 
             // Advance for next redo. Set "newhead" when at the end of the
             // redoable changes.
-            let curhead = nvim_buf_get_b_u_curhead(buf);
+            let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
             let prev = (*curhead).uh_prev.ptr;
             if prev.is_null() {
-                nvim_buf_set_b_u_newhead(buf, curhead);
+                buf_mut(buf).b_u_newhead = (curhead) as *mut c_void;
             }
-            nvim_buf_set_b_u_curhead(buf, prev);
+            buf_mut(buf).b_u_curhead = (prev) as *mut c_void;
         }
     }
 
@@ -2320,7 +2323,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
             nvim_change_warning_curbuf();
         }
 
-        let line_count = nvim_buf_get_ml_line_count(buf);
+        let line_count = buf_ref(buf).ml_line_count;
         if bot > line_count + 1 {
             nvim_emsg_line_count_changed();
             return FAIL;
@@ -2330,9 +2333,9 @@ pub unsafe extern "C" fn rs_u_savecommon(
     let size = bot - top - 1;
 
     // If curbuf->b_u_synced == true make a new header
-    if nvim_buf_get_b_u_synced(buf) {
+    if buf_ref(buf).b_u_synced != 0 {
         // Need to create new entry in b_changelist
-        nvim_buf_set_b_new_change(buf, true);
+        buf_mut(buf).b_new_change = 1;
 
         let uhp: UHeaderHandle;
         if nvim_get_undolevel(buf) >= 0 {
@@ -2347,16 +2350,16 @@ pub unsafe extern "C" fn rs_u_savecommon(
 
         // If we undid more than we redid, move the entry lists before and
         // including curbuf->b_u_curhead to an alternate branch
-        let mut old_curhead = nvim_buf_get_b_u_curhead(buf);
+        let mut old_curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         if !old_curhead.is_null() {
             let next = (*old_curhead).uh_next.ptr;
-            nvim_buf_set_b_u_newhead(buf, next);
-            nvim_buf_set_b_u_curhead(buf, std::ptr::null_mut());
+            buf_mut(buf).b_u_newhead = (next) as *mut c_void;
+            buf_mut(buf).b_u_curhead = std::ptr::null_mut();
         }
 
         // Free headers to keep the size right
-        while nvim_buf_get_b_u_numhead(buf) as i64 > nvim_get_undolevel(buf) {
-            let oldhead = nvim_buf_get_b_u_oldhead(buf);
+        while buf_ref(buf).b_u_numhead as i64 > nvim_get_undolevel(buf) {
+            let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
             if oldhead.is_null() {
                 break;
             }
@@ -2389,13 +2392,13 @@ pub unsafe extern "C" fn rs_u_savecommon(
             if !old_curhead.is_null() {
                 rs_u_freebranch(buf, old_curhead, std::ptr::null_mut());
             }
-            nvim_buf_set_b_u_synced(buf, false);
+            buf_mut(buf).b_u_synced = u8::from(false);
             return OK;
         }
 
         // Set up the new header
         (*uhp).uh_prev.ptr = std::ptr::null_mut();
-        let newhead = nvim_buf_get_b_u_newhead(buf);
+        let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
         (*uhp).uh_next.ptr = newhead;
         (*uhp).uh_alt_next.ptr = old_curhead;
 
@@ -2409,9 +2412,9 @@ pub unsafe extern "C" fn rs_u_savecommon(
 
             (*old_curhead).uh_alt_prev.ptr = uhp;
 
-            let oldhead = nvim_buf_get_b_u_oldhead(buf);
+            let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
             if oldhead == old_curhead {
-                nvim_buf_set_b_u_oldhead(buf, uhp);
+                buf_mut(buf).b_u_oldhead = (uhp) as *mut c_void;
             }
         } else {
             (*uhp).uh_alt_prev.ptr = std::ptr::null_mut();
@@ -2422,15 +2425,15 @@ pub unsafe extern "C" fn rs_u_savecommon(
         }
 
         // Set sequence numbers and time
-        let seq_last = nvim_buf_get_b_u_seq_last(buf);
-        nvim_buf_set_b_u_seq_last(buf, seq_last + 1);
+        let seq_last = buf_ref(buf).b_u_seq_last;
+        buf_mut(buf).b_u_seq_last = seq_last + 1;
         (*uhp).uh_seq = seq_last + 1;
-        nvim_buf_set_b_u_seq_cur(buf, seq_last + 1);
+        buf_mut(buf).b_u_seq_cur = seq_last + 1;
 
         let now = libc::time(ptr::null_mut());
         (*uhp).uh_time = now;
         (*uhp).uh_save_nr = 0;
-        nvim_buf_set_b_u_time_cur(buf, now + 1);
+        buf_mut(buf).b_u_time_cur = now + 1;
 
         (*uhp).uh_walk = 0;
         (*uhp).uh_entry = ptr::null_mut();
@@ -2460,15 +2463,15 @@ pub unsafe extern "C" fn rs_u_savecommon(
         // Save named marks and Visual marks
         rs_uhp_copy_marks_visual_impl(buf, uhp);
 
-        nvim_buf_set_b_u_newhead(buf, uhp);
+        buf_mut(buf).b_u_newhead = (uhp) as *mut c_void;
 
-        let oldhead = nvim_buf_get_b_u_oldhead(buf);
+        let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
         if oldhead.is_null() {
-            nvim_buf_set_b_u_oldhead(buf, uhp);
+            buf_mut(buf).b_u_oldhead = (uhp) as *mut c_void;
         }
 
-        let numhead = nvim_buf_get_b_u_numhead(buf);
-        nvim_buf_set_b_u_numhead(buf, numhead + 1);
+        let numhead = buf_ref(buf).b_u_numhead;
+        buf_mut(buf).b_u_numhead = numhead + 1;
     } else {
         if nvim_get_undolevel(buf) < 0 {
             // No undo at all
@@ -2485,13 +2488,13 @@ pub unsafe extern "C" fn rs_u_savecommon(
                     break;
                 }
 
-                let newhead = nvim_buf_get_b_u_newhead(buf);
+                let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
                 let getbot_entry = (*newhead).uh_getbot_entry;
                 let ue_top = (*uep).ue_top;
                 let ue_size = (*uep).ue_size;
                 let ue_bot = (*uep).ue_bot;
                 let ue_lcount = (*uep).ue_lcount;
-                let line_count = nvim_buf_get_ml_line_count(buf);
+                let line_count = buf_ref(buf).ml_line_count;
 
                 // Check if lines have been inserted/deleted
                 let reuse_blocked = if getbot_entry != uep {
@@ -2511,12 +2514,12 @@ pub unsafe extern "C" fn rs_u_savecommon(
                     if !prev_uep.is_null() {
                         // Move the found entry to become the last entry
                         rs_u_getbot(buf);
-                        nvim_buf_set_b_u_synced(buf, false);
+                        buf_mut(buf).b_u_synced = u8::from(false);
 
                         let uep_next = (*uep).ue_next;
                         (*prev_uep).ue_next = uep_next;
 
-                        let newhead = nvim_buf_get_b_u_newhead(buf);
+                        let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
                         let entry = (*newhead).uh_entry;
                         (*uep).ue_next = entry;
                         (*newhead).uh_entry = uep;
@@ -2529,7 +2532,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
                         (*uep).ue_bot = 0;
                     } else {
                         (*uep).ue_lcount = line_count;
-                        let newhead = nvim_buf_get_b_u_newhead(buf);
+                        let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
                         (*newhead).uh_getbot_entry = uep;
                     }
                     return OK;
@@ -2550,14 +2553,14 @@ pub unsafe extern "C" fn rs_u_savecommon(
     (*uep).ue_size = size;
     (*uep).ue_top = top;
 
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = buf_ref(buf).ml_line_count;
     if newbot != 0 {
         (*uep).ue_bot = newbot;
     } else if bot > line_count {
         (*uep).ue_bot = 0;
     } else {
         (*uep).ue_lcount = line_count;
-        let newhead = nvim_buf_get_b_u_newhead(buf);
+        let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
         (*newhead).uh_getbot_entry = uep;
     }
 
@@ -2579,7 +2582,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
         (*uep).ue_array = ptr::null_mut();
     }
 
-    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
     let entry = (*newhead).uh_entry;
     (*uep).ue_next = entry;
     (*newhead).uh_entry = uep;
@@ -2587,12 +2590,12 @@ pub unsafe extern "C" fn rs_u_savecommon(
     if reload {
         // Buffer was reloaded, notify text change subscribers
         let curbuf = nvim_get_curbuf();
-        let curbuf_newhead = nvim_buf_get_b_u_newhead(curbuf);
+        let curbuf_newhead = buf_ref(curbuf).b_u_newhead.cast::<UHeader>();
         let flags = (*curbuf_newhead).uh_flags;
         (*curbuf_newhead).uh_flags = flags | UH_RELOAD;
     }
 
-    nvim_buf_set_b_u_synced(buf, false);
+    buf_mut(buf).b_u_synced = u8::from(false);
     set_undo_undoes(false);
 
     OK
@@ -2636,7 +2639,7 @@ pub unsafe extern "C" fn rs_u_save(top: LinenrT, bot: LinenrT) -> c_int {
 /// Must be called with valid buffer handle and line numbers.
 #[export_name = "u_save_buf"]
 pub unsafe extern "C" fn rs_u_save_buf(buf: BufHandle, top: LinenrT, bot: LinenrT) -> c_int {
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = buf_ref(buf).ml_line_count;
 
     if top >= bot || bot > (line_count + 1) {
         return FAIL;
@@ -2680,7 +2683,7 @@ pub unsafe extern "C" fn rs_u_inssub(lnum: LinenrT) -> c_int {
 #[export_name = "u_savedel"]
 pub unsafe extern "C" fn rs_u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int {
     let buf = nvim_get_curbuf();
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = buf_ref(buf).ml_line_count;
     let newbot = if nlines == line_count { 2 } else { lnum };
 
     rs_u_savecommon(buf, lnum - 1, lnum + nlines, newbot, false)
@@ -2696,10 +2699,10 @@ pub unsafe extern "C" fn rs_u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int {
 #[export_name = "u_find_first_changed"]
 pub unsafe extern "C" fn rs_u_find_first_changed() {
     let curbuf = nvim_get_curbuf();
-    let uhp = nvim_buf_get_b_u_newhead(curbuf);
+    let uhp = buf_ref(curbuf).b_u_newhead.cast::<UHeader>();
 
     // If curhead is set or newhead is null, return early
-    if !nvim_buf_get_b_u_curhead(curbuf).is_null() || uhp.is_null() {
+    if !buf_ref(curbuf).b_u_curhead.cast::<UHeader>().is_null() || uhp.is_null() {
         return; // undid something in an autocmd?
     }
 
@@ -2709,7 +2712,7 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
         return;
     }
 
-    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    let line_count = buf_ref(curbuf).ml_line_count;
     let ue_size = (*uep).ue_size;
 
     // Find the first line that differs
@@ -2746,9 +2749,9 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
 #[export_name = "u_undoline"]
 pub unsafe extern "C" fn rs_u_undoline() {
     let curbuf = nvim_get_curbuf();
-    let line_ptr = nvim_buf_get_b_u_line_ptr(curbuf);
-    let line_lnum = nvim_buf_get_b_u_line_lnum(curbuf);
-    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    let line_ptr = buf_ref(curbuf).b_u_line_ptr;
+    let line_lnum = buf_ref(curbuf).b_u_line_lnum;
+    let line_count = buf_ref(curbuf).ml_line_count;
 
     // Check if line pointer is valid
     if line_ptr.is_null() || line_lnum > line_count {
@@ -2764,8 +2767,8 @@ pub unsafe extern "C" fn rs_u_undoline() {
     // Replace the line with the saved undo line, then swap the pointers.
     // (Previously nvim_u_undoline_replace_and_swap in C.)
     {
-        let lnum = nvim_buf_get_b_u_line_lnum(curbuf);
-        let cur_line_ptr = nvim_buf_get_b_u_line_ptr(curbuf);
+        let lnum = buf_ref(curbuf).b_u_line_lnum;
+        let cur_line_ptr = buf_ref(curbuf).b_u_line_ptr;
         let oldp = nvim_undo_xstrdup(nvim_ml_get_buf_line(curbuf, lnum));
         nvim_ml_replace_lnum(lnum, cur_line_ptr, true);
         nvim_extmark_splice_cols(
@@ -2778,13 +2781,13 @@ pub unsafe extern "C" fn rs_u_undoline() {
         );
         nvim_changed_bytes(lnum, 0);
         nvim_xfree(cur_line_ptr as *mut c_void);
-        nvim_buf_set_b_u_line_ptr(curbuf, oldp);
+        buf_mut(curbuf).b_u_line_ptr = oldp;
     }
 
     // Handle column position
-    let t = nvim_buf_get_b_u_line_colnr(curbuf);
+    let t = buf_ref(curbuf).b_u_line_colnr;
     if nvim_undo_curwin_get_cursor_lnum() == line_lnum {
-        nvim_buf_set_b_u_line_colnr(curbuf, nvim_undo_curwin_get_cursor_col());
+        buf_mut(curbuf).b_u_line_colnr = nvim_undo_curwin_get_cursor_col();
     }
     nvim_undo_curwin_set_cursor_col(t);
     nvim_undo_curwin_set_cursor_lnum(line_lnum);
@@ -2800,9 +2803,9 @@ pub unsafe extern "C" fn rs_u_undoline() {
 /// Must be called with a valid buffer handle.
 #[export_name = "u_force_get_undo_header"]
 pub unsafe extern "C" fn rs_u_force_get_undo_header(buf: BufHandle) -> UHeaderHandle {
-    let mut uhp = nvim_buf_get_b_u_curhead(buf);
+    let mut uhp = buf_ref(buf).b_u_curhead.cast::<UHeader>();
     if uhp.is_null() {
-        uhp = nvim_buf_get_b_u_newhead(buf);
+        uhp = buf_ref(buf).b_u_newhead.cast::<UHeader>();
     }
 
     // Create the first undo header for the buffer
@@ -2810,9 +2813,9 @@ pub unsafe extern "C" fn rs_u_force_get_undo_header(buf: BufHandle) -> UHeaderHa
         // Args are tricky: this means replace empty range by empty range
         rs_u_savecommon(buf, 0, 1, 1, true);
 
-        uhp = nvim_buf_get_b_u_curhead(buf);
+        uhp = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         if uhp.is_null() {
-            uhp = nvim_buf_get_b_u_newhead(buf);
+            uhp = buf_ref(buf).b_u_newhead.cast::<UHeader>();
             // If undolevel > 0 and still no header, abort
             // (This shouldn't happen in normal operation)
         }
@@ -2845,7 +2848,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
     let buf = nvim_get_curbuf();
 
     // First make sure the current undoable change is synced.
-    if !nvim_buf_get_b_u_synced(buf) {
+    if buf_ref(buf).b_u_synced == 0 {
         rs_u_sync(true);
     }
 
@@ -2863,7 +2866,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
         (step, -1)
     } else if dosec {
         (
-            (nvim_buf_get_b_u_time_cur(buf) as c_int) + step,
+            (buf_ref(buf).b_u_time_cur as c_int) + step,
             if step < 0 {
                 -1
             } else {
@@ -2871,18 +2874,18 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
             },
         )
     } else if dofile {
-        let save_nr_cur = nvim_buf_get_b_u_save_nr_cur(buf);
+        let save_nr_cur = buf_ref(buf).b_u_save_nr_cur;
         let mut t: c_int;
 
         if step < 0 {
             // Going back to a previous write. If there were changes after
             // the last write, count that as moving one file-write, so
             // that ":earlier 1f" undoes all changes since the last save.
-            let curhead = nvim_buf_get_b_u_curhead(buf);
+            let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
             let uhp = if !curhead.is_null() {
                 (*curhead).uh_next.ptr
             } else {
-                nvim_buf_get_b_u_newhead(buf)
+                buf_ref(buf).b_u_newhead.cast::<UHeader>()
             };
 
             if !uhp.is_null() && (*uhp).uh_save_nr != 0 {
@@ -2905,30 +2908,30 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
                 if step < 0 && dofile {
                     -1
                 } else if dofile {
-                    nvim_buf_get_b_u_save_nr_last(buf) + 2
+                    buf_ref(buf).b_u_save_nr_last + 2
                 } else {
-                    nvim_buf_get_b_u_seq_last(buf) + 2
+                    buf_ref(buf).b_u_seq_last + 2
                 },
             )
         } else {
             // Moving forward to a newer write.
             t = save_nr_cur + step;
-            let save_nr_last = nvim_buf_get_b_u_save_nr_last(buf);
+            let save_nr_last = buf_ref(buf).b_u_save_nr_last;
             if t > save_nr_last {
                 // Go to after last write: after the latest change. Use
                 // the sequence number for that.
-                t = nvim_buf_get_b_u_seq_last(buf) + 1;
+                t = buf_ref(buf).b_u_seq_last + 1;
                 dofile = false;
             }
             (t, save_nr_last + 2)
         }
     } else {
         (
-            nvim_buf_get_b_u_seq_cur(buf) + step,
+            buf_ref(buf).b_u_seq_cur + step,
             if step < 0 {
                 -1
             } else {
-                nvim_buf_get_b_u_seq_last(buf) + 2
+                buf_ref(buf).b_u_seq_last + 2
             },
         )
     };
@@ -2945,9 +2948,9 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
             closest = if dosec {
                 (nvim_undo_os_time() + 1) as c_int
             } else if dofile {
-                nvim_buf_get_b_u_save_nr_last(buf) + 2
+                buf_ref(buf).b_u_save_nr_last + 2
             } else {
-                nvim_buf_get_b_u_seq_last(buf) + 2
+                buf_ref(buf).b_u_seq_last + 2
             };
             if target >= closest {
                 target = closest - 1;
@@ -2956,7 +2959,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
     }
 
     let closest_start = closest;
-    let mut closest_seq = nvim_buf_get_b_u_seq_cur(buf);
+    let mut closest_seq = buf_ref(buf).b_u_seq_cur;
 
     // When "target" is 0; Back to origin.
     if target == 0 {
@@ -2979,10 +2982,10 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
         let mark = inc_lastmark();
         let nomark = inc_lastmark();
 
-        let curhead = nvim_buf_get_b_u_curhead(buf);
+        let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         let mut uhp = if curhead.is_null() {
             // at leaf of the tree
-            nvim_buf_get_b_u_newhead(buf)
+            buf_ref(buf).b_u_newhead.cast::<UHeader>()
         } else {
             curhead
         };
@@ -3003,7 +3006,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
                 // "b_u_seq_cur"). When the timestamp is equal find the
                 // highest/lowest sequence number.
                 let uh_seq = (*uhp).uh_seq;
-                let seq_cur = nvim_buf_get_b_u_seq_cur(buf);
+                let seq_cur = buf_ref(buf).b_u_seq_cur;
                 let in_right_direction = if step < 0 {
                     uh_seq <= seq_cur
                 } else {
@@ -3071,7 +3074,7 @@ pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolu
                         // go up in the tree if we haven't been there and we are at the
                         // start of alternate branches
                         // If still at the start we don't go through this change.
-                        let curhead = nvim_buf_get_b_u_curhead(buf);
+                        let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
                         if uhp == curhead {
                             (*uhp).uh_walk = nomark;
                         }
@@ -3147,9 +3150,9 @@ unsafe fn undo_time_to_target(
         // Do the change warning now, for the same reason as above.
         nvim_change_warning_curbuf();
 
-        let curhead = nvim_buf_get_b_u_curhead(buf);
+        let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
         let uhp = if curhead.is_null() {
-            nvim_buf_get_b_u_newhead(buf)
+            buf_ref(buf).b_u_newhead.cast::<UHeader>()
         } else {
             (*curhead).uh_next.ptr
         };
@@ -3161,7 +3164,7 @@ unsafe fn undo_time_to_target(
             break;
         }
 
-        nvim_buf_set_b_u_curhead(buf, uhp);
+        buf_mut(buf).b_u_curhead = (uhp) as *mut c_void;
         u_undoredo(true, true);
         if target > 0 {
             (*uhp).uh_walk = nomark; // don't go back down here
@@ -3175,7 +3178,7 @@ unsafe fn undo_time_to_target(
             // Do the change warning now, for the same reason as above.
             nvim_change_warning_curbuf();
 
-            let mut uhp = nvim_buf_get_b_u_curhead(buf);
+            let mut uhp = buf_ref(buf).b_u_curhead.cast::<UHeader>();
             if uhp.is_null() {
                 break;
             }
@@ -3217,9 +3220,9 @@ unsafe fn undo_time_to_target(
                 (*last).uh_alt_next.ptr = first;
                 (*first).uh_alt_prev.ptr = last;
 
-                let oldhead = nvim_buf_get_b_u_oldhead(buf);
+                let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
                 if oldhead == first {
-                    nvim_buf_set_b_u_oldhead(buf, last);
+                    buf_mut(buf).b_u_oldhead = (last) as *mut c_void;
                 }
 
                 uhp = last;
@@ -3229,7 +3232,7 @@ unsafe fn undo_time_to_target(
                 }
             }
 
-            nvim_buf_set_b_u_curhead(buf, uhp);
+            buf_mut(buf).b_u_curhead = (uhp) as *mut c_void;
 
             if (*uhp).uh_walk != mark {
                 break; // must have reached the target
@@ -3238,7 +3241,7 @@ unsafe fn undo_time_to_target(
             // Stop when going backwards in time and didn't find the exact
             // header we were looking for.
             if (*uhp).uh_seq == target && above {
-                nvim_buf_set_b_u_seq_cur(buf, target - 1);
+                buf_mut(buf).b_u_seq_cur = target - 1;
                 break;
             }
 
@@ -3248,9 +3251,9 @@ unsafe fn undo_time_to_target(
             // becomes NULL then we need to set "newhead" to this leaf.
             let prev = (*uhp).uh_prev.ptr;
             if prev.is_null() {
-                nvim_buf_set_b_u_newhead(buf, uhp);
+                buf_mut(buf).b_u_newhead = (uhp) as *mut c_void;
             }
-            nvim_buf_set_b_u_curhead(buf, prev);
+            buf_mut(buf).b_u_curhead = (prev) as *mut c_void;
             *did_undo = false;
 
             if (*uhp).uh_seq == target {
@@ -3364,7 +3367,7 @@ pub unsafe extern "C" fn rs_undo_time_within(tt: TimeT, seconds: i64) -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_tree_count(buf: BufHandle) -> c_int {
     let mut count: c_int = 0;
-    let mut uhp = nvim_buf_get_b_u_oldhead(buf);
+    let mut uhp = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
 
     while !uhp.is_null() {
         count += 1;
@@ -3415,7 +3418,7 @@ pub unsafe extern "C" fn rs_undo_branch_count(uhp: UHeaderHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_find_seq(buf: BufHandle, seq: c_int) -> UHeaderHandle {
-    let mut uhp = nvim_buf_get_b_u_newhead(buf);
+    let mut uhp = buf_ref(buf).b_u_newhead.cast::<UHeader>();
 
     while !uhp.is_null() {
         if (*uhp).uh_seq == seq {
@@ -3503,7 +3506,7 @@ pub unsafe extern "C" fn rs_undo_count_entries(uhp: UHeaderHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_tree_depth(buf: BufHandle) -> c_int {
-    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
     rs_undo_get_branch_depth(oldhead)
 }
 
@@ -3553,8 +3556,8 @@ pub unsafe extern "C" fn rs_undo_get_branch_depth(uhp: UHeaderHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_can_undo(buf: BufHandle) -> bool {
-    let curhead = nvim_buf_get_b_u_curhead(buf);
-    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
 
     // Can undo if curhead is NULL (first undo) and newhead exists
     // or if curhead exists and has a next header
@@ -3572,7 +3575,7 @@ pub unsafe extern "C" fn rs_undo_can_undo(buf: BufHandle) -> bool {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_can_redo(buf: BufHandle) -> bool {
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
     // Can redo if curhead exists (there's something to redo)
     !curhead.is_null()
 }
@@ -3584,7 +3587,7 @@ pub unsafe extern "C" fn rs_undo_can_redo(buf: BufHandle) -> bool {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_seq_cur(buf: BufHandle) -> c_int {
-    nvim_buf_get_b_u_seq_cur(buf)
+    buf_ref(buf).b_u_seq_cur
 }
 
 /// Get the last undo sequence number.
@@ -3594,7 +3597,7 @@ pub unsafe extern "C" fn rs_undo_get_seq_cur(buf: BufHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_seq_last(buf: BufHandle) -> c_int {
-    nvim_buf_get_b_u_seq_last(buf)
+    buf_ref(buf).b_u_seq_last
 }
 
 /// Get the number of undo headers in the buffer.
@@ -3604,7 +3607,7 @@ pub unsafe extern "C" fn rs_undo_get_seq_last(buf: BufHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_numhead(buf: BufHandle) -> c_int {
-    nvim_buf_get_b_u_numhead(buf)
+    buf_ref(buf).b_u_numhead
 }
 
 /// Get the current undo time.
@@ -3614,7 +3617,7 @@ pub unsafe extern "C" fn rs_undo_get_numhead(buf: BufHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_time_cur(buf: BufHandle) -> TimeT {
-    nvim_buf_get_b_u_time_cur(buf)
+    buf_ref(buf).b_u_time_cur
 }
 
 /// Get the save number of the current header.
@@ -3624,7 +3627,7 @@ pub unsafe extern "C" fn rs_undo_get_time_cur(buf: BufHandle) -> TimeT {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_save_nr_cur(buf: BufHandle) -> c_int {
-    nvim_buf_get_b_u_save_nr_cur(buf)
+    buf_ref(buf).b_u_save_nr_cur
 }
 
 /// Get the last save number.
@@ -3634,7 +3637,7 @@ pub unsafe extern "C" fn rs_undo_get_save_nr_cur(buf: BufHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_get_save_nr_last(buf: BufHandle) -> c_int {
-    nvim_buf_get_b_u_save_nr_last(buf)
+    buf_ref(buf).b_u_save_nr_last
 }
 
 /// Check if the undo list is synced.
@@ -3644,7 +3647,7 @@ pub unsafe extern "C" fn rs_undo_get_save_nr_last(buf: BufHandle) -> c_int {
 /// The `buf` handle must be a valid pointer to a buf_T.
 #[no_mangle]
 pub unsafe extern "C" fn rs_undo_is_synced(buf: BufHandle) -> bool {
-    nvim_buf_get_b_u_synced(buf)
+    buf_ref(buf).b_u_synced != 0
 }
 
 // =============================================================================
@@ -4333,13 +4336,13 @@ unsafe fn serialize_header(fp: FileHandle, buf: BufHandle, hash: *const u8) -> b
     }
 
     // Write buffer line count
-    let line_count = nvim_buf_get_b_ml_line_count(buf);
+    let line_count = buf_ref(buf).ml_line_count;
     if !undo_write_4(fp, line_count as i32) {
         return false;
     }
 
     // Write b_u_line_ptr
-    let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
+    let line_ptr = buf_ref(buf).b_u_line_ptr;
     let line_len = if line_ptr.is_null() {
         0
     } else {
@@ -4353,17 +4356,17 @@ unsafe fn serialize_header(fp: FileHandle, buf: BufHandle, hash: *const u8) -> b
     }
 
     // Write b_u_line_lnum and b_u_line_colnr
-    if !undo_write_4(fp, nvim_buf_get_b_u_line_lnum(buf) as i32) {
+    if !undo_write_4(fp, buf_ref(buf).b_u_line_lnum as i32) {
         return false;
     }
-    if !undo_write_4(fp, nvim_buf_get_b_u_line_colnr(buf)) {
+    if !undo_write_4(fp, buf_ref(buf).b_u_line_colnr) {
         return false;
     }
 
     // Write undo tree header pointers
-    let oldhead = nvim_buf_get_b_u_oldhead(buf);
-    let newhead = nvim_buf_get_b_u_newhead(buf);
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
 
     if !put_header_ptr(fp, oldhead) {
         return false;
@@ -4376,18 +4379,18 @@ unsafe fn serialize_header(fp: FileHandle, buf: BufHandle, hash: *const u8) -> b
     }
 
     // Write undo tree state
-    if !undo_write_4(fp, nvim_buf_get_b_u_numhead(buf)) {
+    if !undo_write_4(fp, buf_ref(buf).b_u_numhead) {
         return false;
     }
-    if !undo_write_4(fp, nvim_buf_get_b_u_seq_last(buf)) {
+    if !undo_write_4(fp, buf_ref(buf).b_u_seq_last) {
         return false;
     }
-    if !undo_write_4(fp, nvim_buf_get_b_u_seq_cur(buf)) {
+    if !undo_write_4(fp, buf_ref(buf).b_u_seq_cur) {
         return false;
     }
 
     // Write time
-    if !undo_write_time(fp, nvim_buf_get_b_u_time_cur(buf)) {
+    if !undo_write_time(fp, buf_ref(buf).b_u_time_cur) {
         return false;
     }
 
@@ -4400,7 +4403,7 @@ unsafe fn serialize_header(fp: FileHandle, buf: BufHandle, hash: *const u8) -> b
         // field id
         return false;
     }
-    if !undo_write_4(fp, nvim_buf_get_b_u_save_nr_last(buf)) {
+    if !undo_write_4(fp, buf_ref(buf).b_u_save_nr_last) {
         return false;
     }
 
@@ -4465,7 +4468,7 @@ pub unsafe extern "C" fn rs_u_compute_hash(buf: BufHandle, hash: *mut u8) {
     }
 
     let mut ctx = Sha256Context::new();
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = buf_ref(buf).ml_line_count;
 
     for lnum in 1..=line_count {
         let line = nvim_ml_get_buf_line(buf, lnum);
@@ -4664,8 +4667,8 @@ pub unsafe extern "C" fn rs_u_write_undo(
 
     // If there is no undo information at all, quit here after deleting any
     // existing undo file.
-    let numhead = nvim_buf_get_b_u_numhead(buf);
-    let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
+    let numhead = buf_ref(buf).b_u_numhead;
+    let line_ptr = buf_ref(buf).b_u_line_ptr;
     if numhead == 0 && line_ptr.is_null() {
         if nvim_get_p_verbose() > 0 {
             nvim_undo_verbose_enter();
@@ -4735,7 +4738,7 @@ pub unsafe extern "C" fn rs_u_write_undo(
 
     // Iteratively serialize UHPs and their UEPs from the top down.
     let mark = inc_lastmark();
-    let mut uhp = nvim_buf_get_b_u_oldhead(buf);
+    let mut uhp = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
     while !uhp.is_null() {
         // Serialize current UHP if we haven't seen it
         if (*uhp).uh_walk != mark {
@@ -5194,7 +5197,7 @@ pub unsafe extern "C" fn rs_u_read_undo(
     }
 
     let line_count = undo_read_4c(fp) as LinenrT;
-    let buf_line_count = nvim_buf_get_ml_line_count(buf);
+    let buf_line_count = buf_ref(buf).ml_line_count;
 
     // Compare hashes
     let hash_slice = std::slice::from_raw_parts(hash, UNDO_HASH_SIZE);
@@ -5398,19 +5401,19 @@ pub unsafe extern "C" fn rs_u_read_undo(
         *uhp_table.add(cur_idx as usize)
     };
 
-    nvim_buf_set_b_u_oldhead(buf, oldhead);
-    nvim_buf_set_b_u_newhead(buf, newhead);
-    nvim_buf_set_b_u_curhead(buf, curhead);
-    nvim_buf_set_b_u_line_ptr(buf, line_ptr);
-    nvim_buf_set_b_u_line_lnum(buf, line_lnum);
-    nvim_buf_set_b_u_line_colnr(buf, line_colnr);
-    nvim_buf_set_b_u_numhead(buf, num_head);
-    nvim_buf_set_b_u_seq_last(buf, seq_last);
-    nvim_buf_set_b_u_seq_cur(buf, seq_cur);
-    nvim_buf_set_b_u_time_cur(buf, seq_time);
-    nvim_buf_set_b_u_save_nr_last(buf, last_save_nr);
-    nvim_buf_set_b_u_save_nr_cur(buf, last_save_nr);
-    nvim_buf_set_b_u_synced(buf, true);
+    buf_mut(buf).b_u_oldhead = (oldhead) as *mut c_void;
+    buf_mut(buf).b_u_newhead = (newhead) as *mut c_void;
+    buf_mut(buf).b_u_curhead = (curhead) as *mut c_void;
+    buf_mut(buf).b_u_line_ptr = line_ptr;
+    buf_mut(buf).b_u_line_lnum = line_lnum;
+    buf_mut(buf).b_u_line_colnr = line_colnr;
+    buf_mut(buf).b_u_numhead = num_head;
+    buf_mut(buf).b_u_seq_last = seq_last;
+    buf_mut(buf).b_u_seq_cur = seq_cur;
+    buf_mut(buf).b_u_time_cur = seq_time;
+    buf_mut(buf).b_u_save_nr_last = last_save_nr;
+    buf_mut(buf).b_u_save_nr_cur = last_save_nr;
+    buf_mut(buf).b_u_synced = u8::from(true);
 
     nvim_xfree(uhp_table as *mut c_void);
 
@@ -5500,7 +5503,7 @@ pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
     // We'll collect strings directly in a Vec and then sort and display
     let mut entries: Vec<(*mut c_char, c_int)> = Vec::new();
 
-    let mut uhp = nvim_buf_get_b_u_oldhead(buf);
+    let mut uhp = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
     while !uhp.is_null() {
         let prev = (*uhp).uh_prev.ptr;
 
@@ -5675,8 +5678,8 @@ extern "C" {
 pub unsafe extern "C" fn rs_u_eval_tree(buf: BufHandle, first_uhp: UHeaderHandle) -> ListHandle {
     let list = nvim_tv_list_alloc();
 
-    let newhead = nvim_buf_get_b_u_newhead(buf);
-    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let newhead = buf_ref(buf).b_u_newhead.cast::<UHeader>();
+    let curhead = buf_ref(buf).b_u_curhead.cast::<UHeader>();
 
     let mut uhp = first_uhp;
     while !uhp.is_null() {
@@ -5757,40 +5760,35 @@ pub unsafe extern "C" fn rs_f_undotree(
         dict,
         c"synced".as_ptr(),
         6,
-        nvim_buf_get_b_u_synced(buf) as i64,
+        (buf_ref(buf).b_u_synced != 0) as i64,
     );
     nvim_tv_dict_add_nr(
         dict,
         c"seq_last".as_ptr(),
         8,
-        nvim_buf_get_b_u_seq_last(buf) as i64,
+        buf_ref(buf).b_u_seq_last as i64,
     );
     nvim_tv_dict_add_nr(
         dict,
         c"save_last".as_ptr(),
         9,
-        nvim_buf_get_b_u_save_nr_last(buf) as i64,
+        buf_ref(buf).b_u_save_nr_last as i64,
     );
     nvim_tv_dict_add_nr(
         dict,
         c"seq_cur".as_ptr(),
         7,
-        nvim_buf_get_b_u_seq_cur(buf) as i64,
+        buf_ref(buf).b_u_seq_cur as i64,
     );
-    nvim_tv_dict_add_nr(
-        dict,
-        c"time_cur".as_ptr(),
-        8,
-        nvim_buf_get_b_u_time_cur(buf),
-    );
+    nvim_tv_dict_add_nr(dict, c"time_cur".as_ptr(), 8, buf_ref(buf).b_u_time_cur);
     nvim_tv_dict_add_nr(
         dict,
         c"save_cur".as_ptr(),
         8,
-        nvim_buf_get_b_u_save_nr_cur(buf) as i64,
+        buf_ref(buf).b_u_save_nr_cur as i64,
     );
 
-    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    let oldhead = buf_ref(buf).b_u_oldhead.cast::<UHeader>();
     nvim_tv_dict_add_list(dict, c"entries".as_ptr(), 7, rs_u_eval_tree(buf, oldhead));
 }
 

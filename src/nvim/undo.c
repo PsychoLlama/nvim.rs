@@ -149,35 +149,6 @@ void f_undofile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_string = rs_f_undofile(fname);
 }
 
-// Buffer undo field accessors
-u_header_T *nvim_buf_get_b_u_oldhead(buf_T *buf) { return buf->b_u_oldhead; }
-
-u_header_T *nvim_buf_get_b_u_newhead(buf_T *buf) { return buf->b_u_newhead; }
-
-u_header_T *nvim_buf_get_b_u_curhead(buf_T *buf) { return buf->b_u_curhead; }
-
-int nvim_buf_get_b_u_numhead(buf_T *buf) { return buf->b_u_numhead; }
-
-bool nvim_buf_get_b_u_synced(buf_T *buf) { return buf->b_u_synced; }
-
-char *nvim_buf_get_b_u_line_ptr(buf_T *buf) { return buf->b_u_line_ptr; }
-
-linenr_T nvim_buf_get_b_u_line_lnum(buf_T *buf) { return buf->b_u_line_lnum; }
-
-void nvim_buf_set_b_u_oldhead(buf_T *buf, u_header_T *val) { buf->b_u_oldhead = val; }
-
-void nvim_buf_set_b_u_newhead(buf_T *buf, u_header_T *val) { buf->b_u_newhead = val; }
-
-void nvim_buf_set_b_u_curhead(buf_T *buf, u_header_T *val) { buf->b_u_curhead = val; }
-
-void nvim_buf_set_b_u_numhead(buf_T *buf, int val) { buf->b_u_numhead = val; }
-
-void nvim_buf_set_b_u_synced(buf_T *buf, bool val) { buf->b_u_synced = val; }
-
-void nvim_buf_set_b_u_line_ptr(buf_T *buf, char *val) { buf->b_u_line_ptr = val; }
-
-void nvim_buf_set_b_u_line_lnum(buf_T *buf, linenr_T val) { buf->b_u_line_lnum = val; }
-
 // Buffer state accessors
 bool nvim_buf_get_b_changed(buf_T *buf) { return buf->b_changed; }
 
@@ -200,13 +171,6 @@ int nvim_get_no_u_sync(void) { return no_u_sync; }
 
 OptInt nvim_get_undolevel(buf_T *buf) { return get_undolevel(buf); }
 
-void nvim_buf_set_b_did_warn(buf_T *buf, bool val) { buf->b_did_warn = val; }
-
-int nvim_buf_get_b_u_save_nr_last(buf_T *buf) { return buf->b_u_save_nr_last; }
-
-void nvim_buf_set_b_u_save_nr_last(buf_T *buf, int val) { buf->b_u_save_nr_last = val; }
-
-void nvim_buf_set_b_u_save_nr_cur(buf_T *buf, int val) { buf->b_u_save_nr_cur = val; }
 
 bool nvim_buf_is_modifiable(buf_T *buf) { return MODIFIABLE(buf); }
 
@@ -222,14 +186,6 @@ void nvim_emsg_textlock(void) { emsg(_(e_textlock)); }
 void nvim_emsg_undojoin_after_undo(void) { emsg(_("E790: undojoin is not allowed after undo")); }
 
 bool nvim_has_cpo_undo(void) { return vim_strchr(p_cpo, CPO_UNDO) != NULL; }
-
-int nvim_buf_get_b_u_seq_cur(buf_T *buf) { return buf->b_u_seq_cur; }
-
-void nvim_buf_set_b_u_seq_cur(buf_T *buf, int val) { buf->b_u_seq_cur = val; }
-
-int nvim_buf_get_b_u_seq_last(buf_T *buf) { return buf->b_u_seq_last; }
-
-void nvim_buf_set_b_u_seq_last(buf_T *buf, int val) { buf->b_u_seq_last = val; }
 
 bool nvim_buf_ml_is_empty(buf_T *buf) { return buf->b_ml.ml_flags & ML_EMPTY; }
 
@@ -252,8 +208,6 @@ colnr_T nvim_getviscol(void) { return getviscol(); }
 
 void nvim_buf_set_b_new_change(buf_T *buf, bool val) { buf->b_new_change = val; }
 
-void nvim_buf_set_b_u_time_cur(buf_T *buf, time_t val) { buf->b_u_time_cur = val; }
-
 // nvim_uhp_copy_marks_visual: migrated to Rust (rs_uhp_copy_marks_visual_impl).
 
 // Error message wrapper
@@ -261,10 +215,6 @@ void nvim_emsg_line_count_changed(void) { emsg(_("E881: Line count changed unexp
 
 // Check if buf equals curbuf
 bool nvim_buf_is_curbuf(buf_T *buf) { return buf == curbuf; }
-
-colnr_T nvim_buf_get_b_u_line_colnr(buf_T *buf) { return buf->b_u_line_colnr; }
-
-void nvim_buf_set_b_u_line_colnr(buf_T *buf, colnr_T val) { buf->b_u_line_colnr = val; }
 
 colnr_T nvim_undo_curwin_get_cursor_col(void) { return curwin->w_cursor.col; }
 
@@ -275,10 +225,6 @@ void nvim_undo_curwin_set_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = l
 void nvim_check_cursor_col_curwin(void) { check_cursor_col(curwin); }
 
 linenr_T nvim_undo_curwin_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
-
-time_t nvim_buf_get_b_u_time_cur(buf_T *buf) { return buf->b_u_time_cur; }
-
-int nvim_buf_get_b_u_save_nr_cur(buf_T *buf) { return buf->b_u_save_nr_cur; }
 
 // Strftime wrapper for Rust time formatting
 size_t nvim_undo_strftime(char *buf, size_t buflen, const char *fmt, time_t tt)
@@ -314,9 +260,6 @@ bool nvim_get_p_fs(void) { return p_fs; }
 
 // u_sync wrapper (still called from ex_cmds and window Rust crates)
 void nvim_u_sync(bool force) { u_sync(force); }
-
-// Buffer line count and line accessors for hash computation
-linenr_T nvim_buf_get_b_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 
 // Extmark Accessor Functions (for Rust FFI - extmark crate)
 
