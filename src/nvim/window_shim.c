@@ -725,7 +725,6 @@ void nvim_win_init_for_float(win_T *wp) { win_init(wp, curwin, 0); }
 
 // wp->w_p_wbr accessors
 int nvim_win_get_p_wbr_not_null(win_T *wp) { return (wp && wp->w_p_wbr) ? 1 : 0; }
-int nvim_win_p_wbr_is_empty_string_option(win_T *wp) { return (wp && wp->w_p_wbr == empty_string_option) ? 1 : 0; }
 void nvim_win_free_and_set_p_wbr_empty(win_T *wp)
 { if (!wp) { return; } if (wp->w_p_wbr && wp->w_p_wbr != empty_string_option) { free_string_option(wp->w_p_wbr); } wp->w_p_wbr = empty_string_option; }
 
@@ -760,9 +759,6 @@ int nvim_error_is_set(Error *err) { return (err && ERROR_SET(err)) ? 1 : 0; }
 // emsg from error msg and clear
 void nvim_emsg_and_clear_error(Error *err)
 { if (err) { if (ERROR_SET(err)) { emsg(err->msg); } api_clear_error(err); } }
-// api_clear_error
-void nvim_api_clear_error(Error *err) { if (err) { api_clear_error(err); } }
-
 // win_free wrapper
 void nvim_win_free(win_T *wp) { if (wp) { win_free(wp, NULL); } }
 

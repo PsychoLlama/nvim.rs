@@ -1305,7 +1305,6 @@ extern "C" {
     fn nvim_win_alloc_float(after: WinHandle) -> WinHandle;
     fn nvim_win_init_for_float(wp: WinHandle);
     fn nvim_win_get_p_wbr_not_null(wp: WinHandle) -> c_int;
-    fn nvim_win_p_wbr_is_empty_string_option(wp: WinHandle) -> c_int;
     fn nvim_win_free_and_set_p_wbr_empty(wp: WinHandle);
     fn nvim_win_p_stl_is_empty_string_option(wp: WinHandle) -> c_int;
     fn nvim_win_set_p_stl_empty_string_option(wp: WinHandle);
@@ -1317,7 +1316,6 @@ extern "C" {
     fn nvim_api_set_error_float_diff_tabpage(err: *mut c_void);
     fn nvim_error_is_set(err: *mut c_void) -> c_int;
     fn nvim_emsg_and_clear_error(err: *mut c_void);
-    fn nvim_api_clear_error(err: *mut c_void);
     fn nvim_win_free(wp: WinHandle);
     #[link_name = "block_autocmds"]
     fn nvim_block_autocmds();
