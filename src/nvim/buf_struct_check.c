@@ -58,6 +58,9 @@ _Static_assert(offsetof(buf_T, b_orig_size) == 360, "b_orig_size offset mismatch
 _Static_assert(offsetof(buf_T, b_orig_mode) == 368, "b_orig_mode offset mismatch");
 _Static_assert(offsetof(buf_T, b_last_used) == 376, "b_last_used offset mismatch");
 
+// Named marks region
+_Static_assert(offsetof(buf_T, b_namedm) == 384, "b_namedm offset mismatch");
+
 // Visual / marks region
 _Static_assert(offsetof(buf_T, b_visual) == 1424, "b_visual offset mismatch");
 _Static_assert(offsetof(buf_T, b_visual_mode_eval) == 1456, "b_visual_mode_eval offset mismatch");

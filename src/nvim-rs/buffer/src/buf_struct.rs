@@ -211,9 +211,10 @@ pub struct BufStruct {
     // offset 376: int64_t b_last_used (time_t on x86_64)
     pub b_last_used: i64,
 
-    // --- NAMED MARKS (offsets 384-1423, opaque) ---
-    // b_namedm: 1040 bytes
-    _pad6: [u8; 1040],
+    // --- NAMED MARKS (offsets 384-1423) ---
+    // b_namedm: fmark_T[26] = 40 * 26 = 1040 bytes
+    // Exposed as raw bytes; cast to *mut FmarkT at use sites.
+    pub b_namedm: [u8; 1040],
 
     // --- VISUAL / MARKS (offsets 1424-1583) ---
 

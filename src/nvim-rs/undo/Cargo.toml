@@ -5,7 +5,9 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2"
+nvim-buffer = { path = "../buffer" }
 nvim-encoding = { path = "../encoding" }
+nvim-window = { path = "../window" }
 
 [lib]
 crate-type = ["staticlib", "rlib"]
