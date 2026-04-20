@@ -116,7 +116,7 @@ extern "C" {
     fn nvim_blob_get_byte(b: BlobPtr, idx: c_int) -> u8;
     fn nvim_blob_set_byte(b: BlobPtr, idx: c_int, c: u8);
     fn nvim_blob_set_ret(rettv: TypvalPtr, b: BlobPtr);
-    fn nvim_blob_get_bv_lock(b: BlobPtr) -> c_int;
+    // (nvim_blob_get_bv_lock inlined: bv_lock at offset 28 in blob_T)
 
     // typval operations (eval/typval.c)
     fn tv_dict_remove(argvars: TypvalPtr, rettv: TypvalPtr, arg_errmsg: *const c_char);
@@ -183,7 +183,7 @@ extern "C" {
 
     // dictitem_T helpers (eval_shim.c, eval/vars.c)
     fn nvim_hi2dictitem(hi: *mut c_void) -> *mut c_void;
-    fn nvim_di_get_tv(di: *mut c_void) -> TypvalPtr;
+    // (nvim_di_get_tv inlined: di_tv at offset 0, same pointer)
 
     // typval number setter (eval/typval.c)
     fn nvim_tv_set_number(tv: TypvalPtr, n: VarNumber);
@@ -514,7 +514,8 @@ pub unsafe extern "C" fn rs_f_add(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: E
             let b = nvim_tv_get_blob(tv0);
             if !b.is_null()
                 && !value_check_lock(
-                    nvim_blob_get_bv_lock(b),
+                    // bv_lock at offset 28 in blob_T
+                    *(b as *const u8).add(28) as c_int,
                     c"add() argument".as_ptr(),
                     TV_TRANSLATE,
                 )
@@ -549,7 +550,8 @@ pub unsafe extern "C" fn rs_f_insert(argvars: TypvalPtr, rettv: TypvalPtr, _fptr
             let b = nvim_tv_get_blob(tv0);
             if b.is_null()
                 || value_check_lock(
-                    nvim_blob_get_bv_lock(b),
+                    // bv_lock at offset 28 in blob_T
+                    *(b as *const u8).add(28) as c_int,
                     c"insert() argument".as_ptr(),
                     TV_TRANSLATE,
                 )
@@ -709,7 +711,8 @@ unsafe fn count_dict_impl(d: *mut c_void, needle: TypvalPtr, ic: bool) -> VarNum
         while !hi.is_null() {
             let di = nvim_hi2dictitem(hi);
             if !di.is_null() {
-                let item_tv = nvim_di_get_tv(di);
+                // di_tv at offset 0, same pointer
+                let item_tv: TypvalPtr = di;
                 if tv_equal(item_tv, needle, ic) {
                     n += 1;
                 }

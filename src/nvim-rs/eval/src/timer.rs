@@ -130,7 +130,7 @@ extern "C" {
     fn nvim_tv_dict_item_alloc_key(key: *const c_char) -> DictItemHandle;
     #[link_name = "tv_dict_add"]
     fn nvim_tv_dict_add_item(dict: DictHandle, di: DictItemHandle) -> c_int;
-    fn nvim_di_get_tv(di: DictItemHandle) -> TvHandle;
+    // (nvim_di_get_tv inlined: di_tv at offset 0, same pointer)
     #[link_name = "xfree"]
     fn nvim_tv_dict_item_free(di: DictItemHandle);
 
@@ -245,9 +245,9 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
         return;
     }
 
-    let di_tv = nvim_di_get_tv(di);
+    // di_tv at offset 0 in dictitem_T, same pointer
     let cb_ptr = nvim_timer_get_callback_ptr(timer);
-    nvim_callback_put(cb_ptr, di_tv);
+    nvim_callback_put(cb_ptr, di);
 }
 
 /// Add information about all timers to the return typval (which becomes a list).

@@ -73,8 +73,9 @@ extern "C" {
     ) -> c_int;
     fn eval1(arg: *mut *mut c_char, rettv: TypevalHandle, evalarg: EvalargHandle) -> c_int;
 
-    // Evalarg lifecycle
-    fn nvim_get_evalarg_evaluate_ptr() -> EvalargHandle;
+    // EVALARG_EVALUATE global static
+    #[link_name = "EVALARG_EVALUATE"]
+    static mut EVALARG_EVALUATE_GLOBAL: EvalargT;
 
     // Phase 12: emsg_skip accessed directly as a global
     static mut emsg_skip: c_int;
@@ -394,7 +395,7 @@ pub unsafe extern "C" fn rs_eval_to_number(expr: *mut c_char, use_simple_functio
         r = nvim_eval_may_call_simple_func(expr, tv);
     }
     if r == NOTDONE {
-        let evalarg = nvim_get_evalarg_evaluate_ptr();
+        let evalarg = EvalargHandle(std::ptr::addr_of_mut!(EVALARG_EVALUATE_GLOBAL));
         r = eval1(&mut p as *mut *mut c_char, tv, evalarg);
     }
 
@@ -1377,7 +1378,7 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
     let tv = xmalloc(16); // sizeof(typval_T) = 16 bytes
     let tv_handle = TypevalHandle::from_ptr(tv);
 
-    let evalarg = nvim_get_evalarg_evaluate_ptr();
+    let evalarg = EvalargHandle(std::ptr::addr_of_mut!(EVALARG_EVALUATE_GLOBAL));
     let retval: i64 =
         if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
             0
@@ -1470,7 +1471,7 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
     let tv = xmalloc(16); // sizeof(typval_T) = 16 bytes
     let tv_handle = TypevalHandle::from_ptr(tv);
 
-    let evalarg = nvim_get_evalarg_evaluate_ptr();
+    let evalarg = EvalargHandle(std::ptr::addr_of_mut!(EVALARG_EVALUATE_GLOBAL));
     if eval0_simple_funccal_impl(arg, tv_handle, ExargHandle::null(), evalarg) == FAIL {
         nvim_foldtext_make_obj(ptr::null_mut(), 0, out);
     } else {

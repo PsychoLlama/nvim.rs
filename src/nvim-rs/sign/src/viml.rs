@@ -420,7 +420,7 @@ extern "C" {
     fn tv_check_for_nonnull_dict_arg(argvars: *const c_void, idx: c_int) -> c_int;
     fn tv_check_for_string_arg(argvars: *const c_void, idx: c_int) -> c_int;
     fn get_buf_arg(tv: *mut c_void) -> SignBufHandle;
-    fn nvim_di_get_tv(di: *mut c_void) -> *mut c_void; // dictitem_T* → typval_T*
+    // (nvim_di_get_tv inlined: di_tv at offset 0, same pointer)
 
     // Typval field accessors (in sign.c)
     fn nvim_tv_get_type(tv: *const c_void) -> c_int;
@@ -752,7 +752,7 @@ pub unsafe extern "C" fn rs_sign_place_from_dict(
         if di.is_null() {
             std::ptr::null_mut()
         } else {
-            nvim_di_get_tv(di)
+            di
         }
     } else {
         std::ptr::null_mut()
@@ -777,7 +777,7 @@ pub unsafe extern "C" fn rs_sign_place_from_dict(
         if di.is_null() {
             std::ptr::null_mut()
         } else {
-            nvim_di_get_tv(di)
+            di
         }
     } else {
         std::ptr::null_mut()
@@ -798,7 +798,7 @@ pub unsafe extern "C" fn rs_sign_place_from_dict(
         if di.is_null() {
             std::ptr::null_mut()
         } else {
-            nvim_di_get_tv(di)
+            di
         }
     } else {
         std::ptr::null_mut()
@@ -819,7 +819,7 @@ pub unsafe extern "C" fn rs_sign_place_from_dict(
         if di.is_null() {
             std::ptr::null_mut()
         } else {
-            nvim_di_get_tv(di)
+            di
         }
     } else {
         std::ptr::null_mut()
@@ -837,7 +837,7 @@ pub unsafe extern "C" fn rs_sign_place_from_dict(
     if !dict.is_null() {
         let di = tv_dict_find(dict, b"lnum\0".as_ptr().cast(), -1);
         if !di.is_null() {
-            let dtv = nvim_di_get_tv(di);
+            let dtv = di;
             lnum = tv_get_lnum(dtv);
             if lnum <= 0 {
                 emsg(E_INVARG.as_ptr().cast());
@@ -850,7 +850,7 @@ pub unsafe extern "C" fn rs_sign_place_from_dict(
     let prio: c_int = if !dict.is_null() {
         let di = tv_dict_find(dict, b"priority\0".as_ptr().cast(), -1);
         if !di.is_null() {
-            let dtv = nvim_di_get_tv(di);
+            let dtv = di;
             let p = tv_get_number_chk(dtv, std::ptr::addr_of_mut!(notanum)) as c_int;
             if notanum {
                 return -1;
@@ -908,7 +908,7 @@ pub unsafe extern "C" fn rs_sign_unplace_from_dict(
         // buffer
         let di = tv_dict_find(dict, b"buffer\0".as_ptr().cast(), -1);
         if !di.is_null() {
-            buf = get_buf_arg(nvim_di_get_tv(di));
+            buf = get_buf_arg(di);
             if buf.is_null() {
                 return -1;
             }
@@ -1061,22 +1061,21 @@ pub unsafe extern "C" fn rs_f_sign_getplaced(
             let dict = nvim_tv_get_dict(av1);
             let di_lnum = tv_dict_find(dict, b"lnum\0".as_ptr().cast(), -1);
             if !di_lnum.is_null() {
-                lnum = tv_get_lnum(nvim_di_get_tv(di_lnum));
+                lnum = tv_get_lnum(di_lnum);
                 if lnum <= 0 {
                     return;
                 }
             }
             let di_id = tv_dict_find(dict, b"id\0".as_ptr().cast(), -1);
             if !di_id.is_null() {
-                sign_id = tv_get_number_chk(nvim_di_get_tv(di_id), std::ptr::addr_of_mut!(notanum))
-                    as c_int;
+                sign_id = tv_get_number_chk(di_id, std::ptr::addr_of_mut!(notanum)) as c_int;
                 if notanum {
                     return;
                 }
             }
             let di_grp = tv_dict_find(dict, b"group\0".as_ptr().cast(), -1);
             if !di_grp.is_null() {
-                let g = tv_get_string_chk(nvim_di_get_tv(di_grp));
+                let g = tv_get_string_chk(di_grp);
                 if g.is_null() {
                     return;
                 }

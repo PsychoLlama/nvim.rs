@@ -117,8 +117,7 @@ extern "C" {
     // tv_dict_find: look up a key in a dict
     fn tv_dict_find(d: *const c_void, key: *const c_char, len: isize) -> *mut c_void; // returns dictitem_T*
 
-    // nvim_di_get_tv: get typval pointer from dictitem
-    fn nvim_di_get_tv(di: *mut c_void) -> TypevalHandle;
+    // (nvim_di_get_tv inlined: di_tv at offset 0, same pointer)
 
     // rs_is_luafunc: check if a partial is a lua func (from eval crate)
     fn rs_is_luafunc(pt: *const c_void) -> bool;
@@ -490,7 +489,8 @@ pub unsafe fn eval_index_inner_impl(
                 return FAIL;
             }
 
-            let item_tv = nvim_di_get_tv(item);
+            // di_tv at offset 0 in dictitem_T, same pointer
+            let item_tv = TypevalHandle::from_ptr(item);
             // Inline tv_is_luafunc: v_type == VAR_PARTIAL && rs_is_luafunc(partial)
             if nvim_tv_get_type(item_tv) == VAR_PARTIAL
                 && rs_is_luafunc((*item_tv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial)

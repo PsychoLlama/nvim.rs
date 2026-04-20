@@ -146,14 +146,6 @@ int nvim_blob_len(const blob_T *b) { return tv_blob_len(b); }
 int nvim_blob_get(const blob_T *b, int idx) { return (int)tv_blob_get(b, idx); }
 
 void nvim_blob_set_ret(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
-typval_T *nvim_di_get_tv(dictitem_T *di) { return &di->di_tv; }
-evalarg_T *nvim_get_evalarg_evaluate_ptr(void) { return &EVALARG_EVALUATE; }
-VarLockStatus nvim_blob_get_bv_lock(const blob_T *blob) { return blob->bv_lock; }
-
-bool nvim_lval_check_tv_lock(const lval_T *lp, const char *name)
-{ VarLockStatus lock = lp->ll_newkey == NULL ? lp->ll_tv->v_lock : lp->ll_tv->vval.v_dict->dv_lock; return value_check_lock(lock, name, TV_CSTRING); }
-
-const char *nvim_di_get_key(const dictitem_T *di) { return di->di_key; }
 bool nvim_di_check_ro(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_CSTRING); }
 bool nvim_di_check_lock(const dictitem_T *di, const char *name) { return tv_check_lock(&di->di_tv, name, TV_CSTRING); }
 bool nvim_tv_dict_is_watched(const dict_T *d) { return tv_dict_is_watched(d); }
@@ -168,11 +160,6 @@ void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l) { tv_list_set_ret(ret
 void nvim_eval_di_set_tv_from_typval(dictitem_T *di, typval_T *tv)
   { di->di_tv = *tv; di->di_tv.v_lock = VAR_UNLOCKED; }
 void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d) { tv_dict_set_ret(rettv, d); }
-bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp) { return lp->ll_dict == get_vimvar_dict() || &lp->ll_dict->dv_hashtab == get_funccal_args_ht(); }
-bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_len) { return var_check_ro(lp->ll_di->di_flags, name, name_len) || var_check_lock(lp->ll_di->di_flags, name, name_len); }
-listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet) { return tv_list_check_range_index_one(lp->ll_list, &lp->ll_n1, quiet); }
-int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet) { return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet); }
-
 bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *rettv)
 {
   char prevval;
