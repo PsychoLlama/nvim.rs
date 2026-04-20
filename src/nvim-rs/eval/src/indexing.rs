@@ -34,6 +34,20 @@ unsafe fn buf_fnum(buf: BufHandle) -> c_int {
     *buf.cast::<c_int>()
 }
 
+/// Inline: check whether a buffer's memfile is open (ml_mfp != NULL).
+///
+/// Replaces `nvim_eval_buf_ml_valid(buf)`.
+/// In buf_T layout: handle(i32)+pad(4)+ml_line_count(i32)+pad(4)+ml_mfp(*) = offset 16.
+#[inline]
+unsafe fn buf_ml_valid(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+    // ml_mfp is a *mut c_void at offset 16 in buf_T
+    let ml_mfp = *buf.byte_add(16).cast::<*mut c_void>();
+    !ml_mfp.is_null()
+}
+
 /// Maximum number of subexpressions in a regexp (from regexp_defs.h)
 const NSUBEXP: usize = 10;
 
@@ -48,8 +62,7 @@ type BufHandle = *mut c_void;
 extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
 
-    // Buffer accessors (defined in eval.c)
-    fn nvim_eval_buf_ml_valid(buf: BufHandle) -> c_int;
+    // Buffer accessors (defined in eval.c) -- nvim_eval_buf_ml_valid inlined as buf_ml_valid()
     #[link_name = "nvim_buf_get_ml_line_count"]
     fn nvim_eval_buf_line_count(buf: BufHandle) -> i32;
     #[link_name = "ml_get_buf"]
@@ -102,7 +115,7 @@ pub unsafe extern "C" fn rs_buf_byteidx_to_charidx(
     mut lnum: i32,
     byteidx: c_int,
 ) -> c_int {
-    if buf.is_null() || nvim_eval_buf_ml_valid(buf) == 0 {
+    if !buf_ml_valid(buf) {
         return -1;
     }
 
@@ -149,7 +162,7 @@ pub unsafe extern "C" fn rs_buf_charidx_to_byteidx(
     mut lnum: i32,
     mut charidx: c_int,
 ) -> c_int {
-    if buf.is_null() || nvim_eval_buf_ml_valid(buf) == 0 {
+    if !buf_ml_valid(buf) {
         return -1;
     }
 
@@ -587,7 +600,7 @@ pub unsafe extern "C" fn rs_list2fpos(
             *fnump
         };
         let buf = nvim_buflist_findnr(fnum);
-        if buf.is_null() || nvim_eval_buf_ml_valid(buf) == 0 {
+        if !buf_ml_valid(buf) {
             return FAIL;
         }
         let use_lnum = if lnum == 0 {

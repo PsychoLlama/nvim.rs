@@ -58,7 +58,6 @@ bool nvim_eval_list_foreach_tv(list_T *l, int copyID, ht_stack_T **ht_stack, lis
 void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
 { QUEUE *w = NULL; DictWatcher *watcher = NULL; QUEUE_FOREACH(w, &dd->watchers, { watcher = tv_dict_watcher_node_data(w); rs_set_ref_in_callback(&watcher->callback, copyID, ht_stack, list_stack); }) }
 
-int nvim_eval_buf_ml_valid(const buf_T *buf) { return buf != NULL && buf->b_ml.ml_mfp != NULL; }
 int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count; }
 
 
