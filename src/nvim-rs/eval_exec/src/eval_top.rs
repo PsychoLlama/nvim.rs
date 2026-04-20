@@ -1144,10 +1144,14 @@ extern "C" {
     fn nvim_appended_lines_mark(lnum: i32, count: c_int);
     fn nvim_set_cursor_lnum(lnum: i32); // linenr_T
     fn nvim_set_cursor_col(col: c_int);
-    fn nvim_curbuf_u_clearallandblockfree();
+    // nvim_curbuf_u_clearallandblockfree inlined: u_clearallandblockfree(curbuf)
+    #[link_name = "u_clearallandblockfree"]
+    fn nvim_u_clearallandblockfree(buf: *mut c_void);
 
     // Direct C global
     pub static mut got_int: bool;
+    #[link_name = "curbuf"]
+    static mut CURBUF: *mut c_void;
 }
 
 // kCallbackNone = 0
@@ -1264,8 +1268,8 @@ pub unsafe extern "C" fn rs_prompt_invoke_callback() {
         tv_clear(rettv);
     }
 
-    // clear undo history on submit
-    nvim_curbuf_u_clearallandblockfree();
+    // clear undo history on submit (nvim_curbuf_u_clearallandblockfree inlined)
+    nvim_u_clearallandblockfree(CURBUF);
     // Re-read ml_line_count after mutation
     nvim_read_prompt_state(&mut ps);
     nvim_write_prompt_start_lnum(ps.ml_line_count);

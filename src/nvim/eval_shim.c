@@ -146,19 +146,10 @@ int nvim_blob_len(const blob_T *b) { return tv_blob_len(b); }
 int nvim_blob_get(const blob_T *b, int idx) { return (int)tv_blob_get(b, idx); }
 
 void nvim_blob_set_ret(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
-bool nvim_di_check_ro(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_CSTRING); }
-bool nvim_di_check_lock(const dictitem_T *di, const char *name) { return tv_check_lock(&di->di_tv, name, TV_CSTRING); }
 bool nvim_tv_dict_is_watched(const dict_T *d) { return tv_dict_is_watched(d); }
 
 
-void nvim_eval_tv_list_append_owned_tv_ptr(list_T *l, typval_T *tv)
-{
-  tv->v_lock = VAR_UNLOCKED; tv_list_append_owned_tv(l, *tv);
-}
-
 void nvim_eval_tv_list_set_ret(typval_T *rettv, list_T *l) { tv_list_set_ret(rettv, l); }
-void nvim_eval_di_set_tv_from_typval(dictitem_T *di, typval_T *tv)
-  { di->di_tv = *tv; di->di_tv.v_lock = VAR_UNLOCKED; }
 void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d) { tv_dict_set_ret(rettv, d); }
 bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *rettv)
 {
@@ -194,7 +185,6 @@ bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *cola
 }
 
 void nvim_update_topline_curwin(void) { update_topline(curwin); }
-void nvim_check_cursor_moved_curwin(void) { check_cursor_moved(curwin); }
 
 bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 {
@@ -205,8 +195,6 @@ bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 }
 
 int nvim_tv_list_len(const list_T *l) { return tv_list_len(l); }
-int nvim_mb_charlen_ml(int32_t lnum) { return mb_charlen(ml_get(lnum)); }
-int nvim_get_cursor_line_charlen(void) { return mb_charlen(get_cursor_line_ptr()); }
 
 
 const char *nvim_find_option_var_end(const char **arg, int *opt_idxp, int *opt_flagsp)
@@ -223,13 +211,7 @@ void nvim_get_option_value_as_tv(int opt_idx, int opt_flags, typval_T *rettv)
 void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
 { OptVal value = get_tty_option(name); assert(value.type != kOptValTypeNil); *rettv = optval_as_tv(value, true); }
 
-int nvim_vimconv_get_type(const vimconv_T *conv) { return conv == NULL ? CONV_NONE : (int)conv->vc_type; }
-int nvim_tv_list_copyid(const list_T *list) { return tv_list_copyid(list); }
-list_T *nvim_tv_list_latest_copy(const list_T *list) { return tv_list_latest_copy(list); }
 void nvim_tv_list_ref(list_T *list) { tv_list_ref(list); }
-dict_T *nvim_dict_get_copydict(const dict_T *dict) { return dict->dv_copydict; }
-listitem_T *nvim_list_first_item(const list_T *l) { return tv_list_first(l); }
-const char *nvim_list_item_get_string(listitem_T *item) { return tv_get_string(TV_LIST_ITEM_TV(item)); }
 
 
 const char *nvim_sourcing_name_get(void) { return SOURCING_NAME; }
@@ -243,7 +225,6 @@ void nvim_read_prompt_state(NvimPromptState *out)
 
 void nvim_write_prompt_start_lnum(int32_t lnum) { curbuf->b_prompt_start.mark.lnum = (linenr_T)lnum; }
 linenr_T nvim_buf_get_prompt_start_lnum(buf_T *buf) { return buf->b_prompt_start.mark.lnum; }
-void nvim_curbuf_u_clearallandblockfree(void) { u_clearallandblockfree(curbuf); }
 
 void nvim_read_fold_eval_state(win_T *wp, NvimFoldEvalState *out)
 { out->insecure_foldexpr = was_set_insecurely(wp, kOptFoldexpr, OPT_LOCAL); out->insecure_foldtext = was_set_insecurely(wp, kOptFoldtext, OPT_LOCAL); out->foldexpr = skipwhite(wp->w_p_fde); out->foldtext = wp->w_p_fdt; }
@@ -375,9 +356,7 @@ void nvim_chan_foreach_close_all(void)
 }
 
 // Phase 6f: tv_dict_remove accessors (Rust FFI helpers)
-bool nvim_di_check_fixed_translate(const dictitem_T *di, const char *name) { return var_check_fixed(di->di_flags, name, TV_TRANSLATE); }
-bool nvim_di_check_ro_translate(const dictitem_T *di, const char *name) { return var_check_ro(di->di_flags, name, TV_TRANSLATE); }
-void nvim_dictitem_move_tv_to_rettv(typval_T *rettv, dictitem_T *di) { *rettv = di->di_tv; di->di_tv = TV_INITIAL_VALUE; }
+// nvim_di_check_fixed_translate, nvim_di_check_ro_translate, nvim_dictitem_move_tv_to_rettv inlined in Rust
 void nvim_semsg_dictkey(const char *key) { semsg(_(e_dictkey), key); }
 void nvim_semsg_toomanyarg(const char *fname) { semsg(_(e_toomanyarg), fname); }
 

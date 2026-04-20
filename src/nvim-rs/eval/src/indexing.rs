@@ -289,14 +289,22 @@ extern "C" {
     // Window validation (Phase 3)
     fn nvim_update_topline_curwin();
     fn nvim_validate_botline_curwin();
-    fn nvim_check_cursor_moved_curwin();
+    // nvim_check_cursor_moved_curwin inlined: check_cursor_moved(curwin)
+    #[link_name = "check_cursor_moved"]
+    fn nvim_check_cursor_moved_impl(wp: *mut c_void);
+
+    #[link_name = "curwin"]
+    static CURWIN_EVAL: *mut c_void;
 
     // Line length helpers (Phase 3)
     #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: i32) -> c_int;
-    fn nvim_mb_charlen_ml(lnum: i32) -> c_int;
+    // nvim_mb_charlen_ml inlined: mb_charlen(ml_get(lnum))
+    fn ml_get(lnum: i32) -> *const c_char;
+    fn mb_charlen(s: *const c_char) -> c_int;
     fn nvim_get_cursor_line_len() -> c_int;
-    fn nvim_get_cursor_line_charlen() -> c_int;
+    // nvim_get_cursor_line_charlen inlined: mb_charlen(get_cursor_line_ptr())
+    fn get_cursor_line_ptr() -> *const c_char;
 }
 
 /// Check if a character is an ASCII uppercase letter (A-Z).
@@ -353,7 +361,7 @@ pub unsafe extern "C" fn rs_var2fpos(
         }
 
         let len = if charcol {
-            nvim_mb_charlen_ml(lnum)
+            mb_charlen(ml_get(lnum))
         } else {
             nvim_ml_get_len(lnum)
         };
@@ -457,7 +465,7 @@ pub unsafe extern "C" fn rs_var2fpos(
     if name[0] == b'w' && dollar_lnum {
         // the "w_valid" flags are not reset when moving the cursor, but they
         // do matter for update_topline() and validate_botline().
-        nvim_check_cursor_moved_curwin();
+        nvim_check_cursor_moved_impl(CURWIN_EVAL); // nvim_check_cursor_moved_curwin inlined
 
         pos.col = 0;
         if name[1] == b'0' {
@@ -488,7 +496,7 @@ pub unsafe extern "C" fn rs_var2fpos(
         } else {
             pos.lnum = cvs.cursor_lnum;
             if charcol {
-                pos.col = nvim_get_cursor_line_charlen();
+                pos.col = mb_charlen(get_cursor_line_ptr());
             } else {
                 pos.col = nvim_get_cursor_line_len();
             }

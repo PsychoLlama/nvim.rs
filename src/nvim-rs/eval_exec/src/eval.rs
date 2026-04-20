@@ -1861,7 +1861,8 @@ extern "C" {
     fn nvim_eval_tv_list_alloc(len: isize) -> *mut c_void;
     #[link_name = "tv_list_free"]
     fn nvim_eval_tv_list_free(l: *mut c_void);
-    fn nvim_eval_tv_list_append_owned_tv_ptr(l: *mut c_void, tv: TypevalHandle);
+    // nvim_eval_tv_list_append_owned_tv_ptr inlined: set v_lock=VAR_UNLOCKED then call tv_list_append_owned_tv by value
+    fn tv_list_append_owned_tv(l: *mut c_void, tv: TypvalTRepr) -> TypevalHandle;
     fn nvim_eval_tv_list_set_ret(rettv: TypevalHandle, l: *mut c_void);
 }
 
@@ -1907,7 +1908,11 @@ pub unsafe fn eval_list_impl(
             return FAIL;
         }
         if evaluate {
-            nvim_eval_tv_list_append_owned_tv_ptr(l, tv);
+            // nvim_eval_tv_list_append_owned_tv_ptr inlined:
+            // tv->v_lock = VAR_UNLOCKED; tv_list_append_owned_tv(l, *tv);
+            let mut tv_val = std::ptr::read(tv.as_ptr().cast::<TypvalTRepr>());
+            tv_val.v_lock = VAR_UNLOCKED;
+            tv_list_append_owned_tv(l, tv_val);
         } else {
             tv_clear(tv);
         }
@@ -2263,8 +2268,8 @@ extern "C" {
     fn tv_dict_add(d: *mut c_void, item: *mut c_void) -> c_int;
     fn tv_dict_item_free(item: *mut c_void);
     fn nvim_eval_tv_dict_set_ret(rettv: TypevalHandle, d: *mut c_void);
-    /// Accessor: set di->di_tv = *tv; di->di_tv.v_lock = VAR_UNLOCKED
-    fn nvim_eval_di_set_tv_from_typval(di: *mut c_void, tv: TypevalHandle);
+    // nvim_eval_di_set_tv_from_typval inlined: di->di_tv = *tv; di->di_tv.v_lock = VAR_UNLOCKED
+    // (di_tv is at offset 0 in dictitem_T, so di pointer == &di->di_tv)
     /// Get the raw vval.v_string pointer from a typval (for dict dup key check via
     /// tv_get_string_buf_chk).
     fn nvim_tv_get_string(tv: TypevalHandle) -> *mut c_char;
@@ -2820,8 +2825,11 @@ pub unsafe fn eval_dict_impl(
                 return FAIL;
             }
             let new_item = tv_dict_item_alloc(key);
-            // Transfer ownership: di->di_tv = *tvval; dict item now owns the content.
-            nvim_eval_di_set_tv_from_typval(new_item, tvval);
+            // Transfer ownership: di->di_tv = *tvval; di->di_tv.v_lock = VAR_UNLOCKED
+            // di_tv is at offset 0 in dictitem_T, so new_item pointer == &di->di_tv
+            let mut tv_copy = std::ptr::read(tvval.as_ptr().cast::<TypvalTRepr>());
+            tv_copy.v_lock = VAR_UNLOCKED;
+            std::ptr::write(new_item.cast::<TypvalTRepr>(), tv_copy);
             if tv_dict_add(d, new_item) == FAIL {
                 // Add failed; item (and its copy of tvval's content) is freed here.
                 tv_dict_item_free(new_item);

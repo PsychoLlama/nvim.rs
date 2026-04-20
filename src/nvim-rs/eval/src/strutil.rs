@@ -40,8 +40,10 @@ extern "C" {
     fn nvim_eval_buf_line_count(buf: *mut c_void) -> c_int;
     #[link_name = "ml_get_buf"]
     fn nvim_eval_ml_get_buf(buf: *mut c_void, lnum: i32) -> *const c_char;
-    fn nvim_list_first_item(list: *mut c_void) -> *mut c_void; // listitem_T*
-    fn nvim_list_item_get_string(item: *mut c_void) -> *const c_char;
+    // nvim_list_first_item inlined: lv_first at offset 0 in list_T
+    // nvim_list_item_get_string inlined: tv_get_string(item + 16) (li_tv at offset 16)
+    #[link_name = "tv_get_string"]
+    fn nvim_list_item_get_string_real(tv: *const c_void) -> *const c_char;
     fn xmalloc(size: usize) -> *mut c_void;
     fn strlen(s: *const c_char) -> usize;
 }
@@ -148,9 +150,11 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
     let list = (*tv.cast::<TypvalTRepr>()).vval.v_list;
 
     // First pass: calculate total length.
-    let mut item = nvim_list_first_item(list);
+    // nvim_list_first_item inlined: lv_first at offset 0 in list_T
+    let mut item = *(list as *const *mut c_void);
     while !item.is_null() {
-        let s = nvim_list_item_get_string(item);
+        // nvim_list_item_get_string inlined: tv_get_string(item + 16) (li_tv at offset 16)
+        let s = nvim_list_item_get_string_real(item.add(16).cast::<c_void>());
         *len += strlen(s) as isize + if crlf { 2 } else { 1 };
         item = list_item_next(list, item);
     }
@@ -171,10 +175,12 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
     let ret = xmalloc((*len) as usize + extra) as *mut c_char;
     let mut end = ret;
 
-    let mut item = nvim_list_first_item(list);
+    // nvim_list_first_item inlined: lv_first at offset 0 in list_T
+    let mut item = *(list as *const *mut c_void);
     while !item.is_null() {
         let next = list_item_next(list, item);
-        let s = nvim_list_item_get_string(item);
+        // nvim_list_item_get_string inlined: tv_get_string(item + 16) (li_tv at offset 16)
+        let s = nvim_list_item_get_string_real(item.add(16).cast::<c_void>());
         let mut p = s;
         while *p != 0 {
             *end = if *p == b'\n' as c_char { 0 } else { *p };

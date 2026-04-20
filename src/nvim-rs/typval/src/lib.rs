@@ -1256,9 +1256,11 @@ extern "C" {
     fn nvim_tv_dict2list_items(argvars: TypevalHandle, rettv: TypevalHandle);
 
     // Phase 6f: tv_dict_remove
-    fn nvim_di_check_fixed_translate(di: DictItemHandle, name: *const c_char) -> bool;
-    fn nvim_di_check_ro_translate(di: DictItemHandle, name: *const c_char) -> bool;
-    fn nvim_dictitem_move_tv_to_rettv(rettv: TypevalHandle, di: DictItemHandle);
+    // nvim_di_check_fixed_translate inlined: var_check_fixed(di_flags at offset 16, name, TV_TRANSLATE)
+    fn var_check_fixed(flags: c_int, name: *const c_char, name_len: usize) -> bool;
+    // nvim_di_check_ro_translate inlined: var_check_ro(di_flags at offset 16, name, TV_TRANSLATE)
+    fn var_check_ro(flags: c_int, name: *const c_char, name_len: usize) -> bool;
+    // nvim_dictitem_move_tv_to_rettv inlined: memcpy(rettv, di_tv@offset0, 16); zero di_tv
     fn nvim_semsg_dictkey(key: *const c_char);
     fn nvim_semsg_toomanyarg(fname: *const c_char);
     fn nvim_tv_dict_watcher_notify(
@@ -2607,12 +2609,19 @@ pub unsafe extern "C" fn rs_tv_dict_remove(
         unsafe { nvim_semsg_dictkey(key) };
         return;
     }
-    if unsafe { nvim_di_check_fixed_translate(di, arg_errmsg) }
-        || unsafe { nvim_di_check_ro_translate(di, arg_errmsg) }
+    // nvim_di_check_fixed_translate inlined: di_flags at offset 16, TV_TRANSLATE = SIZE_MAX
+    // nvim_di_check_ro_translate inlined: di_flags at offset 16, TV_TRANSLATE = SIZE_MAX
+    let di_flags = c_int::from(unsafe { *di.0.cast::<u8>().add(16) });
+    if unsafe { var_check_fixed(di_flags, arg_errmsg, usize::MAX) }
+        || unsafe { var_check_ro(di_flags, arg_errmsg, usize::MAX) }
     {
         return;
     }
-    unsafe { nvim_dictitem_move_tv_to_rettv(rettv, di) };
+    // nvim_dictitem_move_tv_to_rettv inlined: di_tv at offset 0, copy 16 bytes then zero
+    unsafe {
+        std::ptr::copy_nonoverlapping(di.0.cast::<u8>(), rettv.0.cast_mut().cast::<u8>(), 16);
+        std::ptr::write_bytes(di.0.cast_mut().cast::<u8>(), 0, 16);
+    }
     unsafe { rs_tv_dict_item_remove(d, di) };
     if tv_dict_is_watched_impl(d) {
         unsafe { nvim_tv_dict_watcher_notify(d, key, std::ptr::null_mut(), rettv.0.cast_mut()) };

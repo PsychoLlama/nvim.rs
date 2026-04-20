@@ -1014,8 +1014,9 @@ extern "C" {
     fn xcalloc(count: usize, size: usize) -> *mut c_void;
 
     // dictitem_T accessors (nvim_di_get_key inlined: di_key at offset 17 in dictitem_T)
-    fn nvim_di_check_ro(di: DictitemHandle, name: *const c_char) -> bool;
-    fn nvim_di_check_lock(di: DictitemHandle, name: *const c_char) -> bool;
+    // nvim_di_check_ro inlined: var_check_ro(di_flags at offset 16, name, TV_CSTRING)
+    // nvim_di_check_lock inlined: tv_check_lock(di as typval*, name, TV_CSTRING)
+    fn tv_check_lock(tv: TypevalHandle, name: *const c_char, name_len: usize) -> bool;
 
     // VAR_UNLOCKED = 0 (used as constant below)
 
@@ -1150,9 +1151,13 @@ unsafe fn set_var_lval_impl(
                 false,
             ) == OK
             {
+                // nvim_di_check_ro inlined: di_flags at offset 16 in dictitem_T
+                // nvim_di_check_lock inlined: di->di_tv at offset 0 (identity)
+                // TV_CSTRING = SIZE_MAX - 1
+                let di_flags = *(di_ptr.0 as *const u8).add(16) as c_int;
                 let can_modify = di_ptr.is_null()
-                    || (!nvim_di_check_ro(di_ptr, (*lp).ll_name)
-                        && !nvim_di_check_lock(di_ptr, (*lp).ll_name));
+                    || (!var_check_ro(di_flags, (*lp).ll_name, usize::MAX - 1)
+                        && !tv_check_lock(TypevalHandle(di_ptr.0), (*lp).ll_name, usize::MAX - 1));
                 if can_modify && eexe_mod_op(tv_tmp, rettv, op) == OK {
                     set_var((*lp).ll_name, (*lp).ll_name_len, tv_tmp, false);
                 }
@@ -1304,8 +1309,7 @@ pub unsafe extern "C" fn rs_set_var_lval(
 use std::cell::Cell;
 
 extern "C" {
-    // vimconv_T accessor: returns conv->vc_type (0 = CONV_NONE)
-    fn nvim_vimconv_get_type(conv: *const c_void) -> c_int;
+    // nvim_vimconv_get_type inlined: vc_type is at offset 0 in vimconv_T
     // string_convert (real C function, passing NULL for lenp)
     #[link_name = "string_convert"]
     fn nvim_string_convert(conv: *const c_void, str: *mut c_char, lenp: *mut usize) -> *mut c_char;
@@ -1314,8 +1318,8 @@ extern "C" {
     // tv type setter
 
     // List operations
-    fn nvim_tv_list_copyid(list: *const c_void) -> c_int;
-    fn nvim_tv_list_latest_copy(list: *const c_void) -> *mut c_void;
+    // nvim_tv_list_copyid inlined: lv_copyID at offset 68 in list_T
+    // nvim_tv_list_latest_copy inlined: lv_copylist at offset 32 in list_T
     fn nvim_tv_list_ref(list: *mut c_void);
     #[link_name = "tv_list_copy"]
     fn nvim_tv_list_copy(
@@ -1327,7 +1331,7 @@ extern "C" {
 
     // Dict operations
     fn nvim_dict_get_copyid(dict: *const c_void) -> c_int;
-    fn nvim_dict_get_copydict(dict: *const c_void) -> *mut c_void;
+    // nvim_dict_get_copydict inlined: dv_copydict at offset 312 in dict_T
     // (nvim_dict_refcount_inc inlined via DictTHead.dv_refcount)
     #[link_name = "tv_dict_copy"]
     fn nvim_tv_dict_copy(
@@ -1414,7 +1418,12 @@ unsafe fn var_item_copy_impl(
         }
         VAR_STRING => {
             let from_str = from.get_vstring() as *const c_char;
-            let conv_type = nvim_vimconv_get_type(conv);
+            // nvim_vimconv_get_type inlined: vc_type at offset 0 in vimconv_T
+            let conv_type = if conv.is_null() {
+                0
+            } else {
+                *(conv as *const c_int)
+            };
             if conv.is_null() || conv_type == CONV_NONE || from_str.is_null() {
                 tv_copy(from, to);
             } else {
@@ -1436,9 +1445,11 @@ unsafe fn var_item_copy_impl(
             let from_list = (*from.0.cast::<TypvalTRepr>()).vval.v_list;
             if from_list.is_null() {
                 (*to.0.cast::<TypvalTRepr>()).vval.v_list = std::ptr::null_mut();
-            } else if copy_id != 0 && nvim_tv_list_copyid(from_list) == copy_id {
+            } else if copy_id != 0 && *(from_list as *const u8).add(68).cast::<c_int>() == copy_id {
                 // Use the copy made earlier.
-                let existing_copy = nvim_tv_list_latest_copy(from_list);
+                // nvim_tv_list_copyid inlined: lv_copyID at offset 68
+                // nvim_tv_list_latest_copy inlined: lv_copylist at offset 32
+                let existing_copy = *(from_list as *const u8).add(32).cast::<*mut c_void>();
                 nvim_tv_list_ref(existing_copy);
                 (*to.0.cast::<TypvalTRepr>()).vval.v_list = existing_copy;
             } else {
@@ -1462,7 +1473,8 @@ unsafe fn var_item_copy_impl(
                 (*to.0.cast::<TypvalTRepr>()).vval.v_dict = std::ptr::null_mut();
             } else if copy_id != 0 && nvim_dict_get_copyid(from_dict) == copy_id {
                 // Use the copy made earlier.
-                let existing_copy = nvim_dict_get_copydict(from_dict);
+                // nvim_dict_get_copydict inlined: dv_copydict at offset 312 in dict_T
+                let existing_copy = *(from_dict as *const u8).add(312).cast::<*mut c_void>();
                 if !existing_copy.is_null() {
                     (*existing_copy.cast::<DictTHead>()).dv_refcount += 1;
                 }
