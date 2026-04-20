@@ -1188,6 +1188,7 @@ extern "C" {
     fn nvim_ufunc_get_name(fp: *const std::ffi::c_void) -> *const c_char;
     fn nvim_ufunc_get_namelen(fp: *const std::ffi::c_void) -> usize;
     fn nvim_tv_copy(from: TypevalHandle, to: TypevalHandle);
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xstrndup(s: *const c_char, len: usize) -> *mut c_char;
 

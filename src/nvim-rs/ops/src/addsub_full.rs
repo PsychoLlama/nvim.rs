@@ -92,6 +92,7 @@ extern "C" {
     fn nvim_pos_get_coladd(pos: *const c_void) -> c_int;
     fn nvim_pos_set_coladd(pos: *mut c_void, v: c_int);
     fn nvim_ml_get(lnum: c_int) -> *const std::ffi::c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_ml_get_len(lnum: c_int) -> c_int;
     fn nvim_virtual_active() -> bool;
     fn nvim_get_cursor_col() -> c_int;

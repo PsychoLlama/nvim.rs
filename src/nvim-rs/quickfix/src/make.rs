@@ -102,6 +102,7 @@ extern "C" {
     fn vim_tempname() -> *mut c_char;
 
     // Memory
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
     // qf_cmdtitle / eap accessors

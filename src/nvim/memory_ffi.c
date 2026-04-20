@@ -10,5 +10,3 @@
 
 #include "memory_ffi.c.generated.h"
 
-/// Duplicate a NUL-terminated string.
-char *nvim_xstrdup(const char *str) { return xstrdup(str); }

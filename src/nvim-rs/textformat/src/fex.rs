@@ -21,6 +21,7 @@ extern "C" {
     fn nvim_textfmt_sandbox_inc();
     fn nvim_textfmt_sandbox_dec();
     fn nvim_textfmt_eval_to_number(expr: *mut c_char) -> c_int;
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);

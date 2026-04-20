@@ -874,6 +874,7 @@ extern "C" {
     fn rs_find_option_end(arg: *const c_char) -> FindOptionEndResult;
 
     // Phase 1: call_func_retstr helper
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 }
 

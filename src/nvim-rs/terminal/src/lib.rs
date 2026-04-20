@@ -4397,6 +4397,7 @@ extern "C" {
     #[link_name = "free_string_option"]
     fn nvim_free_string_option(str: *mut i8);
     fn nvim_win_set_p_culopt(wp: *mut c_void, s: *mut i8);
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const i8) -> *mut i8;
     // string option — no WinStruct accessor, keep extern
     fn nvim_win_get_p_culopt(wp: *mut c_void) -> *const i8;

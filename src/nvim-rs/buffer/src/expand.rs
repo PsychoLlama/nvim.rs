@@ -71,6 +71,7 @@ extern "C" {
     /// `home_replace_save()` for a buffer -- caller must free with `nvim_xfree`.
     #[link_name = "home_replace_save"]
     fn nvim_home_replace_save_buf(buf: BufHandle, src: *const c_char) -> *mut c_char;
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut std::ffi::c_void);
     #[link_name = "xmalloc"]

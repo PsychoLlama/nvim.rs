@@ -361,6 +361,7 @@ extern "C" {
     // curbuf global
     static mut curbuf: *mut c_void;
     // xstrdup / xfree (for target_dir)
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 }
 

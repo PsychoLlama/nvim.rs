@@ -324,6 +324,7 @@ extern "C" {
 
     // String / char helpers
     fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(str: *const c_char) -> *mut c_char;
     #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);

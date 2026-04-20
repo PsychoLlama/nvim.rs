@@ -387,6 +387,7 @@ extern "C" {
     fn nvim_xcalloc(count: usize, size: usize) -> *mut c_void;
     #[link_name = "xrealloc"]
     fn nvim_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
     // Option access

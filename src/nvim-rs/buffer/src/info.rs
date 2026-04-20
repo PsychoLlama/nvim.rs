@@ -56,7 +56,7 @@ extern "C" {
 
     fn rs_buf_spname(buf: BufHandle) -> *mut c_char;
     fn rs_bt_dontwrite(buf: BufHandle) -> bool;
-    fn nvim_curbufIsChanged() -> c_int;
+    fn curbufIsChanged() -> bool;
 
     fn shortmess(x: c_int) -> bool;
 
@@ -106,6 +106,7 @@ extern "C" {
     fn nvim_trans_characters(buf: *mut c_char, bufsize: usize);
     fn nvim_ui_call_set_title(s: *const c_char);
     fn nvim_ui_call_set_icon(s: *const c_char);
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     /// Get the `end_off` from `utf_cp_bounds(str, ptr)`.
     fn nvim_utf_cp_bounds_end_off(str_: *const c_char, ptr: *const c_char) -> c_int;
@@ -483,7 +484,7 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
     let curbuf_b = buf_ref(curbuf);
     let flags = curbuf_b.b_flags;
     let dontwrite = rs_bt_dontwrite(curbuf);
-    let is_changed = nvim_curbufIsChanged() != 0;
+    let is_changed = curbufIsChanged();
     let is_ro = curbuf_b.b_p_ro != 0;
 
     // Closing quote

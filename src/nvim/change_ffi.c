@@ -61,7 +61,6 @@ int nvim_buf_meta_total(buf_T *buf, int meta_type) { return (int)buf_meta_total(
 bool nvim_get_autocmd_busy(void) { return autocmd_busy; }
 void apply_autocmds_filechangedro(buf_T *buf) { apply_autocmds(EVENT_FILECHANGEDRO, NULL, NULL, false, buf); }
 int nvim_get_highlight_match(void) { return highlight_match; }
-int nvim_curbufIsChanged(void) { return curbufIsChanged(); }
 int nvim_msg_silent(void) { return msg_silent; }
 bool nvim_silent_mode(void) { return silent_mode; }
 bool nvim_in_assert_fails(void) { return in_assert_fails; }
@@ -71,8 +70,6 @@ char *nvim_ml_get(linenr_T lnum) { return ml_get(lnum); }
 const char *nvim_gettext(const char *s) { return _(s); }
 
 char *nvim_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
-int nvim_utf_char2bytes(int c, char *buf) { return utf_char2bytes(c, buf); }
-colnr_T nvim_ml_get_len(linenr_T lnum) { return ml_get_len(lnum); }
 
 // Curwin cursor accessors (used by open_line.rs)
 pos_T nvim_change_get_curwin_cursor(void) { return curwin->w_cursor; }

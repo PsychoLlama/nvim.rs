@@ -471,6 +471,7 @@ extern "C" {
     // Accessors for rs_ins_compl_addleader
     fn stop_arrow() -> c_int;
     fn utf_char2len(c: c_int) -> c_int;
+    #[link_name = "utf_char2bytes"]
     fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn ins_char(c: c_int);
     fn ins_char_bytes(buf: *const c_char, len: usize);

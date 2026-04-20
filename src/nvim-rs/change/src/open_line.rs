@@ -138,6 +138,7 @@ extern "C" {
     fn nvim_xmalloc(size: usize) -> *mut c_char;
     #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut c_void);
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;

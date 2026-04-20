@@ -287,6 +287,7 @@ extern "C" {
     fn nvim_get_evalarg_evaluate_ptr() -> EvalargHandle;
 
     // xstrdup / xmemdupz
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
 

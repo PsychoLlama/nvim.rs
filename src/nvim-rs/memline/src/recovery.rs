@@ -221,7 +221,8 @@ extern "C" {
     fn nvim_set_fenc_local(fenc: *const c_char);
     fn nvim_ml_append_recovery(lnum: i64, line: *const c_char, is_new: bool) -> c_int;
     fn nvim_ml_get(lnum: i64) -> *mut c_char;
-    fn nvim_ml_get_len(lnum: i64) -> i64;
+    #[link_name = "ml_get_len"]
+    fn nvim_ml_get_len(lnum: i64) -> i32;
     #[link_name = "xstrnsave"]
     fn nvim_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
     #[link_name = "buf_inc_changedtick"]

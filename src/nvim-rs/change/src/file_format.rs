@@ -27,6 +27,7 @@ extern "C" {
     // Memory functions
     #[link_name = "xfree"]
     fn nvim_xfree(ptr: *mut std::ffi::c_void);
+    #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
     // Line access

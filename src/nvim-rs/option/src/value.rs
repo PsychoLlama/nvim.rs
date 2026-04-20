@@ -758,7 +758,7 @@ use crate::OptValType as StorageOptValType;
 // C external functions used by Phase 9 helpers
 extern "C" {
     fn nvim_varp_is_curbuf_b_changed(varp: *const std::ffi::c_void) -> c_int;
-    fn nvim_curbufIsChanged() -> c_int;
+    fn curbufIsChanged() -> bool;
     fn nvim_get_option_type(opt_idx: c_int) -> c_int;
     fn rs_optval_free(o: OptVal);
     fn rs_optval_equal(o1: OptVal, o2: OptVal) -> c_int;
@@ -821,12 +821,12 @@ pub unsafe extern "C" fn rs_optval_from_varp(
     // Special case: 'modified' is b_changed, but we also want to consider it set
     // when 'ff' or 'fenc' changed.
     if nvim_varp_is_curbuf_b_changed(varp) != 0 {
-        let changed = nvim_curbufIsChanged();
+        let changed = curbufIsChanged();
         // Returns BOOLEAN_OPTVAL(curbufIsChanged()) where curbufIsChanged() is bool -> kTrue/kFalse
         return OptVal {
             type_: StorageOptValType::Boolean,
             data: OptValData {
-                boolean: if changed != 0 { K_TRUE } else { K_FALSE },
+                boolean: if changed { K_TRUE } else { K_FALSE },
             },
         };
     }

@@ -74,8 +74,7 @@ extern "C" {
     fn nvim_edit_grid_line_flush();
     /// `schar_from_ascii`(' ') as `uint32_t` (`edit_shim.c`).
     fn nvim_schar_space() -> c_uint;
-    /// `utf_char2bytes(c`, buf) (`change_ffi.c`).
-    fn nvim_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
     /// redrawWinline(curwin, curwin->w_cursor.lnum) (`edit_shim.c`).
     fn nvim_redrawwinline_cursor();
 }
@@ -138,7 +137,7 @@ unsafe fn edit_putchar_impl(c: c_int, highlight: bool) {
     // MB_MAXCHAR + 1
     let mut buf = [0u8; 22];
     let col = PC_COL.load(Ordering::Relaxed);
-    let len = nvim_utf_char2bytes(c, buf.as_mut_ptr().cast());
+    let len = utf_char2bytes(c, buf.as_mut_ptr());
     nvim_edit_grid_line_puts(col, buf.as_ptr().cast(), len, attr);
     nvim_edit_grid_line_flush();
 }
