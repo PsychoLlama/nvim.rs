@@ -7,7 +7,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::callbacks::{callback_ok, CallbackResult};
-use crate::{BufHandle, OptInt, WinHandle};
+use crate::{win_mut, win_ref, BufHandle, OptInt, WinHandle};
 use nvim_buffer::buf_struct::BufStruct;
 
 // =============================================================================
@@ -108,8 +108,6 @@ extern "C" {
     fn nvim_apply_autocmds_buf_event(event: c_int, buf: BufHandle);
 
     // Previewwindow callback
-    fn nvim_win_get_p_pvw(win: WinHandle) -> c_int;
-    fn nvim_win_set_p_pvw(win: WinHandle, val: c_int);
     fn nvim_for_all_windows_in_curtab(
         callback: unsafe extern "C" fn(WinHandle, *mut c_void),
         ud: *mut c_void,
@@ -117,7 +115,6 @@ extern "C" {
     fn gettext(s: *const c_char) -> *const c_char;
 
     // Spell callback
-    fn nvim_win_get_p_spell(win: WinHandle) -> c_int;
     fn parse_spelllang(win: WinHandle) -> CallbackResult;
 
     // Phase 95: spell option accessors
@@ -136,9 +133,8 @@ extern "C" {
     #[link_name = "ll_resize_stack"]
     fn nvim_ll_resize_stack(win: WinHandle, n: c_int);
 
-    // fill_culopt_flags accessors
+    // fill_culopt_flags accessors (keep nvim_win_get_p_culopt as FFI for safety)
     fn nvim_win_get_p_culopt(win: WinHandle) -> *const std::ffi::c_char;
-    fn nvim_win_set_p_culopt_flags(win: WinHandle, flags: u8);
 
     fn nvim_bin_didset_sctx_all(opt_flags: c_int);
 
@@ -650,7 +646,7 @@ static mut PVW_CONFLICT: bool = false;
 /// Per-window callback for 'previewwindow' check.
 unsafe extern "C" fn pvw_check_callback(wp: WinHandle, _ud: *mut c_void) {
     let target = PVW_TARGET_WIN;
-    if nvim_win_get_p_pvw(wp) != 0 && wp != target {
+    if win_ref(wp).w_p_pvw() != 0 && wp != target {
         // Another window already has pvw set — conflict
         PVW_CONFLICT = true;
     }
@@ -663,7 +659,7 @@ unsafe extern "C" fn pvw_check_callback(wp: WinHandle, _ud: *mut c_void) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_previewwindow(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
-    if nvim_win_get_p_pvw(win) == 0 {
+    if win_ref(win).w_p_pvw() == 0 {
         return callback_ok();
     }
 
@@ -673,7 +669,7 @@ pub unsafe extern "C" fn rs_did_set_previewwindow(args: *mut c_void) -> Callback
     nvim_for_all_windows_in_curtab(pvw_check_callback, std::ptr::null_mut());
 
     if PVW_CONFLICT {
-        nvim_win_set_p_pvw(win, 0);
+        win_mut(win).set_w_p_pvw(0);
         return gettext(c"E590: A preview window already exists".as_ptr());
     }
 
@@ -737,7 +733,7 @@ pub unsafe extern "C" fn rs_did_set_keymodel(args: *mut c_void) -> CallbackResul
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_spell_full(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
-    if nvim_win_get_p_spell(win) != 0 {
+    if win_ref(win).w_p_spell() != 0 {
         return parse_spelllang(win);
     }
     callback_ok()
@@ -909,7 +905,7 @@ pub unsafe extern "C" fn rs_fill_culopt_flags(
         return FAIL;
     }
 
-    nvim_win_set_p_culopt_flags(wp, culopt_flags_new);
+    win_mut(wp).w_p_culopt_flags = culopt_flags_new;
     OK
 }
 

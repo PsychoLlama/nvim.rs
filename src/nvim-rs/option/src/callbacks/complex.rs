@@ -825,7 +825,6 @@ extern "C" {
     fn nvim_win_get_p_scb(win: crate::WinHandle) -> c_int;
     fn do_check_scrollbind(check: c_int);
     fn rs_get_vtopline(win: crate::WinHandle) -> c_int;
-    fn nvim_callback_win_set_scbind_pos(win: crate::WinHandle, value: c_int);
 
     // optset_T field accessors
     fn nvim_optset_get_win(args: *const c_void) -> crate::WinHandle;
@@ -843,7 +842,7 @@ pub unsafe extern "C" fn rs_did_set_scrollbind(args: *mut c_void) -> CallbackRes
         return callback_ok();
     }
     do_check_scrollbind(0); // false: prepare snapshot, don't sync
-    nvim_callback_win_set_scbind_pos(win, rs_get_vtopline(win));
+    crate::win_mut(win).w_scbind_pos = rs_get_vtopline(win);
     callback_ok()
 }
 

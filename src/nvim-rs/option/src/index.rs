@@ -6,7 +6,7 @@
 use std::ffi::{c_char, c_int, c_uint};
 
 use crate::opt_index::{K_OPT_FOLDMETHOD, K_OPT_WRAP};
-use crate::{SetPrefix, FAIL, OK};
+use crate::{win_ref, SetPrefix, FAIL, OK};
 
 // =============================================================================
 // Type Definitions
@@ -88,8 +88,6 @@ extern "C" {
     // sandbox global variable
     fn nvim_get_sandbox() -> c_int;
 
-    // Window accessor for diff mode check
-    fn nvim_win_get_diff(win: WinHandle) -> c_int;
 }
 
 // =============================================================================
@@ -551,7 +549,7 @@ pub unsafe extern "C" fn rs_validate_opt_idx(
         // 'foldmethod' becomes "marker" instead of "diff" and that
         // "wrap" gets set.
         if !win.is_null() {
-            let win_diff = nvim_win_get_diff(win) != 0;
+            let win_diff = win_ref(win).w_p_diff() != 0;
             if win_diff && (opt_idx == K_OPT_FOLDMETHOD || opt_idx == K_OPT_WRAP) {
                 return ValidateOptIdxResult {
                     result: FAIL,

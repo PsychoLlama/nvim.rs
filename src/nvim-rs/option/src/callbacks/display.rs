@@ -7,7 +7,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::callbacks::{callback_ok, request_redraw_all, CallbackResult, UpdateType};
-use crate::{OptInt, WinHandle};
+use crate::{win_mut, win_ref, OptInt, WinHandle};
 
 // Direct C globals.
 extern "C" {
@@ -52,9 +52,6 @@ extern "C" {
 
     // Window accessors
     fn nvim_option_win_get_stc(win: WinHandle) -> *const c_char;
-    fn nvim_option_win_set_nrwidth(win: WinHandle, value: c_int);
-    fn nvim_option_win_get_sms(win: WinHandle) -> c_int;
-    fn nvim_option_win_set_skipcol(win: WinHandle, value: c_int);
 
     // optset_T field accessors
     fn nvim_optset_get_win(args: *const c_void) -> WinHandle;
@@ -228,7 +225,7 @@ pub unsafe extern "C" fn rs_did_set_number_relativenumber(args: *mut c_void) -> 
     let win = nvim_optset_get_win(args);
     let stc = nvim_option_win_get_stc(win);
     if !stc.is_null() && *stc != 0 {
-        nvim_option_win_set_nrwidth(win, 0);
+        win_mut(win).w_nrwidth_line_count = 0;
     }
     check_signcolumn(std::ptr::null(), win);
     callback_ok()
@@ -240,7 +237,7 @@ pub unsafe extern "C" fn rs_did_set_number_relativenumber(args: *mut c_void) -> 
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_numberwidth(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
-    nvim_option_win_set_nrwidth(win, 0);
+    win_mut(win).w_nrwidth_line_count = 0;
     callback_ok()
 }
 
@@ -250,8 +247,8 @@ pub unsafe extern "C" fn rs_did_set_numberwidth(args: *mut c_void) -> CallbackRe
 #[no_mangle]
 pub unsafe extern "C" fn rs_did_set_smoothscroll_full(args: *mut c_void) -> CallbackResult {
     let win = nvim_optset_get_win(args);
-    if nvim_option_win_get_sms(win) == 0 {
-        nvim_option_win_set_skipcol(win, 0);
+    if win_ref(win).w_p_sms() == 0 {
+        win_mut(win).w_skipcol = 0;
     }
     callback_ok()
 }
@@ -331,7 +328,7 @@ pub unsafe extern "C" fn rs_did_set_wrap(args: *mut c_void) -> CallbackResult {
     if nvim_win_get_p_wrap(win) != 0 {
         nvim_win_set_leftcol(win, 0);
     } else {
-        nvim_option_win_set_skipcol(win, 0);
+        win_mut(win).w_skipcol = 0;
     }
     callback_ok()
 }

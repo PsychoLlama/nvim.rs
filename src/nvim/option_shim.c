@@ -53,8 +53,6 @@ const char *nvim_optset_get_oldval_str(const void *args) { return ((const optset
 int nvim_verbose_check_and_open(void)
   { verbose_stop(); if (*p_vfile != NUL && verbose_open() == FAIL) return 0; return 1; }
 const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
-int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
-int nvim_option_win_get_view_height(win_T *win) { return win ? win->w_view_height : 0; }
 const char *nvim_win_get_p_wbr(win_T *win) { return win ? (const char *)win->w_p_wbr : NULL; }
 int nvim_win_get_briopt_list(win_T *win) { return win ? win->w_briopt_list : 0; }
 const char *nvim_win_get_p_briopt(win_T *win) { return win ? win->w_p_briopt : NULL; }
@@ -64,9 +62,6 @@ void nvim_win_set_briopt_sbr(win_T *win, int val) { if (win) { win->w_briopt_sbr
 void nvim_win_set_briopt_list(win_T *win, int val) { if (win) { win->w_briopt_list = val; } }
 void nvim_win_set_briopt_vcol(win_T *win, int val) { if (win) { win->w_briopt_vcol = val; } }
 const char *nvim_option_win_get_stc(win_T *win) { return win ? (const char *)win->w_p_stc : NULL; }
-void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidth_line_count = value; }
-int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
-void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
 int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 void nvim_callback_for_all_tab_windows(void (*callback)(win_T *))
@@ -76,14 +71,11 @@ void nvim_for_all_buffers(void (*callback)(buf_T *))
 int nvim_buf_is_changed(buf_T *buf) { return buf ? bufIsChanged(buf) : 0; }
 void nvim_apply_autocmds_buf_event(int event, buf_T *buf) { apply_autocmds((event_T)event, NULL, NULL, true, buf); }
 int nvim_win_get_p_pvw(win_T *win) { return win ? win->w_p_pvw : 0; }
-void nvim_win_set_p_pvw(win_T *win, int val) { if (win) win->w_p_pvw = val != 0; }
 void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud)
   { FOR_ALL_WINDOWS_IN_TAB(wp, curtab) { callback(wp, ud); } }
 int nvim_win_get_p_spell(win_T *win) { return win ? win->w_p_spell : 0; }
 void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
 void nvim_callback_win_clamp_winbl(win_T *win) { if (win) { if (win->w_p_winbl > 100) win->w_p_winbl = 100; if (win->w_p_winbl < 0) win->w_p_winbl = 0; } }
-void nvim_callback_win_set_hl_needs_update(win_T *win, int value) { if (win) win->w_hl_needs_update = (value != 0); }
-void nvim_callback_win_set_scbind_pos(win_T *win, int value) { if (win) win->w_scbind_pos = value; }
 const char *nvim_optset_get_varp_str(const void *args)
   { char **varp = (char **)((const optset_T *)args)->os_varp; return varp ? *varp : NULL; }
 char *nvim_optset_get_errbuf(const void *args) { return ((const optset_T *)args)->os_errbuf; }
@@ -100,7 +92,6 @@ int nvim_winhl_ns_prepare(win_T *wp)
   { if (wp->w_ns_hl_winhl == 0) { wp->w_ns_hl_winhl = (int)nvim_create_namespace(NULL_STRING); } else { get_decor_provider(wp->w_ns_hl_winhl, true)->hl_valid++; } return wp->w_ns_hl_winhl; }
 void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id) { HlAttrs attrs = HLATTRS_INIT; attrs.rgb_ae_attr |= HL_GLOBAL; ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL); }
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
-void nvim_win_set_p_culopt_flags(win_T *wp, uint8_t flags) { if (wp) wp->w_p_culopt_flags = flags; }
 #include "option_shim.c.generated.h"
 #include "options.generated.h"
 #include "options_map.generated.h"

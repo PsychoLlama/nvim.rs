@@ -90,7 +90,6 @@ extern "C" {
 
     // Winblend accessors
     fn nvim_callback_win_clamp_winbl(win: crate::WinHandle);
-    fn nvim_callback_win_set_hl_needs_update(win: crate::WinHandle, value: c_int);
     fn check_blending(win: crate::WinHandle);
 
     // optset_T field accessors
@@ -309,7 +308,7 @@ pub unsafe extern "C" fn rs_did_set_winblend(args: *mut c_void) -> CallbackResul
     let new_value = nvim_optset_get_newval_number(args);
     if new_value != old_value {
         nvim_callback_win_clamp_winbl(win);
-        nvim_callback_win_set_hl_needs_update(win, 1);
+        crate::win_mut(win).w_hl_needs_update = 1;
         check_blending(win);
     }
     callback_ok()

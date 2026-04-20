@@ -7,7 +7,7 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
-use crate::OptInt;
+use crate::{win_ref, OptInt};
 
 // =============================================================================
 // Type Definitions
@@ -63,9 +63,6 @@ extern "C" {
     // Global state variables
     static mut full_screen: bool;
     static mut Rows: c_int;
-
-    // Window accessor for view height
-    fn nvim_option_win_get_view_height(win: *mut std::ffi::c_void) -> c_int;
 
     // Current window (note: *const to match setcmd.rs declaration; cast to *mut for Rust APIs)
     fn nvim_get_curwin() -> *const std::ffi::c_void;
@@ -289,7 +286,7 @@ pub unsafe extern "C" fn rs_check_scroll_bounds(
     let view_height = if win.is_null() {
         0
     } else {
-        OptInt::from(nvim_option_win_get_view_height(win))
+        OptInt::from(win_ref(win).w_view_height)
     };
 
     if full_screen && (value <= 0 || (value > view_height && view_height > 0)) {
@@ -597,7 +594,7 @@ pub unsafe extern "C" fn rs_validate_num_option(
             let view_height = if win.is_null() {
                 0
             } else {
-                OptInt::from(nvim_option_win_get_view_height(win))
+                OptInt::from(win_ref(win).w_view_height)
             };
             if (*newval <= 0 || (*newval > view_height && view_height > 0)) && full_screen {
                 let errmsg = if *newval != 0 {
