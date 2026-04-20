@@ -8,7 +8,8 @@
 
 use std::ffi::c_int;
 
-use crate::{win_struct::win_ref, WinHandle};
+use crate::win_struct::{win_mut, win_ref};
+use crate::WinHandle;
 
 // WSP_NEWLOC flag: don't copy the location list.
 const WSP_NEWLOC: c_int = 0x100;
@@ -25,92 +26,8 @@ extern "C" {
     /// Copy cursor position: dst->w_cursor = src->w_cursor.
     fn nvim_win_copy_cursor(dst: WinHandle, src: WinHandle);
 
-    /// Set w_valid to 0.
-    fn nvim_win_set_valid(wp: WinHandle, val: c_int);
-
-    /// Get w_curswant.
-    fn nvim_win_get_curswant(wp: WinHandle) -> c_int;
-
-    /// Set w_curswant.
-    fn nvim_win_set_curswant(wp: WinHandle, val: c_int);
-
-    /// Get w_set_curswant.
-    fn nvim_win_get_set_curswant(wp: WinHandle) -> c_int;
-
-    /// Set w_set_curswant.
-    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
-
-    /// Get w_topline.
-    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
-
-    /// Set w_topline.
-    fn nvim_win_set_topline(wp: WinHandle, val: c_int);
-
-    /// Get w_topfill.
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-
-    /// Set w_topfill.
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
-
-    /// Get w_leftcol.
-    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
-
-    /// Set w_leftcol.
-    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
-
-    /// Get w_alt_fnum.
-    fn nvim_win_get_alt_fnum(wp: WinHandle) -> c_int;
-
-    /// Set w_alt_fnum.
-    fn nvim_win_set_alt_fnum(wp: WinHandle, val: c_int);
-
-    /// Get w_wrow.
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
-
-    /// Set w_wrow.
-    fn nvim_win_set_wrow(wp: WinHandle, val: c_int);
-
-    /// Set w_fraction.
-    fn nvim_win_set_fraction(wp: WinHandle, val: c_int);
-
-    /// Set w_prev_fraction_row.
-    fn nvim_win_set_prev_fraction_row(wp: WinHandle, val: c_int);
-
     /// Get *p_spk character: 'c' = cursor, 's' = screen, 't' = topline.
     fn nvim_win_get_p_spk_char() -> c_int;
-
-    /// Get w_skipcol.
-    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
-
-    /// Set w_skipcol.
-    fn nvim_win_set_skipcol(wp: WinHandle, val: c_int);
-
-    /// Get w_botline.
-    fn nvim_win_get_botline(wp: WinHandle) -> c_int;
-
-    /// Set w_botline.
-    fn nvim_win_set_botline(wp: WinHandle, val: c_int);
-
-    /// Get w_height.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-
-    /// Set w_prev_height.
-    fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
-
-    /// Get w_winrow.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Set w_prev_winrow.
-    fn nvim_win_set_prev_winrow(wp: WinHandle, val: c_int);
-
-    /// Set w_changelistidx.
-    fn nvim_win_set_changelistidx(wp: WinHandle, val: c_int);
-
-    /// Get w_winbar_height.
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-
-    /// Set w_winbar_height.
-    fn nvim_win_set_winbar_height(wp: WinHandle, val: c_int);
 }
 
 // =============================================================================
@@ -136,41 +53,41 @@ fn win_init_impl(newp: WinHandle, oldp: WinHandle, flags: c_int) {
         nvim_win_copy_cursor(newp, oldp);
 
         // Reset w_valid
-        nvim_win_set_valid(newp, 0);
+        win_mut(newp).w_valid = 0;
 
         // Copy scalar view fields
-        nvim_win_set_curswant(newp, nvim_win_get_curswant(oldp));
-        nvim_win_set_set_curswant(newp, nvim_win_get_set_curswant(oldp));
-        nvim_win_set_topline(newp, nvim_win_get_topline(oldp));
-        nvim_win_set_topfill(newp, nvim_win_get_topfill(oldp));
-        nvim_win_set_leftcol(newp, nvim_win_get_leftcol(oldp));
+        win_mut(newp).w_curswant = win_ref(oldp).w_curswant;
+        win_mut(newp).w_set_curswant = win_ref(oldp).w_set_curswant;
+        win_mut(newp).w_topline = win_ref(oldp).w_topline;
+        win_mut(newp).w_topfill = win_ref(oldp).w_topfill;
+        win_mut(newp).w_leftcol = win_ref(oldp).w_leftcol;
 
         // Copy alternate file number
-        nvim_win_set_alt_fnum(newp, nvim_win_get_alt_fnum(oldp));
+        win_mut(newp).w_alt_fnum = win_ref(oldp).w_alt_fnum;
 
         // Copy w_wrow, w_fraction, w_prev_fraction_row
-        nvim_win_set_wrow(newp, nvim_win_get_wrow(oldp));
-        nvim_win_set_fraction(newp, win_ref(oldp).w_fraction);
-        nvim_win_set_prev_fraction_row(newp, win_ref(oldp).w_prev_fraction_row);
+        win_mut(newp).w_wrow = win_ref(oldp).w_wrow;
+        win_mut(newp).w_fraction = win_ref(oldp).w_fraction;
+        win_mut(newp).w_prev_fraction_row = win_ref(oldp).w_prev_fraction_row;
 
         // Handle splitkeep fields
         let p_spk = nvim_win_get_p_spk_char();
         if p_spk != c_int::from(b'c') {
             if p_spk == c_int::from(b't') {
-                nvim_win_set_skipcol(newp, nvim_win_get_skipcol(oldp));
+                win_mut(newp).w_skipcol = win_ref(oldp).w_skipcol;
             }
-            nvim_win_set_botline(newp, nvim_win_get_botline(oldp));
+            win_mut(newp).w_botline = win_ref(oldp).w_botline;
             // w_prev_height = oldp->w_height
-            nvim_win_set_prev_height(newp, nvim_win_get_w_height(oldp));
+            win_mut(newp).w_prev_height = win_ref(oldp).w_height;
             // w_prev_winrow = oldp->w_winrow
-            nvim_win_set_prev_winrow(newp, nvim_win_get_winrow(oldp));
+            win_mut(newp).w_prev_winrow = win_ref(oldp).w_winrow;
         }
 
         // Copy changelist position
-        nvim_win_set_changelistidx(newp, win_ref(oldp).w_changelistidx);
+        win_mut(newp).w_changelistidx = win_ref(oldp).w_changelistidx;
 
         // Copy winbar height
-        nvim_win_set_winbar_height(newp, nvim_win_get_winbar_height(oldp));
+        win_mut(newp).w_winbar_height = win_ref(oldp).w_winbar_height;
     }
 }
 

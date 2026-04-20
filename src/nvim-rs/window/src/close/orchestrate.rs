@@ -10,6 +10,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::win_ref;
 use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // =============================================================================
@@ -22,9 +23,6 @@ extern "C" {
 
 extern "C" {
     // --- Accessors ---
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_win_get_locked(wp: WinHandle) -> c_int;
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
     fn nvim_tabpage_get_lastwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
@@ -119,7 +117,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
         // Floating-only: recursively close floating windows.
         loop {
             let lastwin = nvim_tabpage_get_lastwin(tp);
-            if nvim_win_get_floating(lastwin) == 0 {
+            if c_int::from(win_ref(lastwin).w_floating) == 0 {
                 break;
             }
             if rs_win_close_othertab(lastwin, free_buf, tp, 1) == 0 {
@@ -141,7 +139,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
     // --- Autocmd section ---
 
     // Fire WinClosed before freeing window-related resources.
-    if !nvim_win_get_buffer(win).is_null() {
+    if !BufHandle(win_ref(win).w_buffer).is_null() {
         rs_do_autocmd_winclosed(win);
         if rs_win_valid_any_tab(win) == 0 {
             return 0;
@@ -149,10 +147,10 @@ pub unsafe extern "C" fn rs_win_close_othertab(
     }
 
     // Save bufref before close_buffer (for error recovery).
-    bufref_buf = nvim_win_get_buffer(win);
+    bufref_buf = BufHandle(win_ref(win).w_buffer);
 
-    if !nvim_win_get_buffer(win).is_null() {
-        let buf = nvim_win_get_buffer(win);
+    if !BufHandle(win_ref(win).w_buffer).is_null() {
+        let buf = BufHandle(win_ref(win).w_buffer);
         did_decrement = c_int::from(close_buffer(
             win,
             buf,
@@ -183,7 +181,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
         return 0;
     }
     let lastwin = nvim_tabpage_get_lastwin(tp);
-    if nvim_win_get_floating(lastwin) != 0 && rs_one_window_in_tab(win, tp) != 0 {
+    if win_ref(lastwin).w_floating && rs_one_window_in_tab(win, tp) != 0 {
         nvim_emsg_id(EMSG_E_FLOATONLY);
         let bufref_valid = if bufref_buf.is_null() {
             0
@@ -198,7 +196,7 @@ pub unsafe extern "C" fn rs_win_close_othertab(
     let res = rs_close_othertab_remove_tabpage(win, tp);
 
     // Free the window memory.
-    let buf = nvim_win_get_buffer(win);
+    let buf = BufHandle(win_ref(win).w_buffer);
     let mut dir: c_int = 0;
     crate::close::helpers::rs_win_free_mem(win, std::ptr::addr_of_mut!(dir), tp);
 
@@ -252,10 +250,10 @@ pub extern "C" fn rs_close_othertab_validate(
 ) -> c_int {
     unsafe {
         // Check win_locked or buffer locked.
-        if nvim_win_get_locked(win) != 0 {
+        if win_ref(win).w_locked {
             return 1;
         }
-        let buf = nvim_win_get_buffer(win);
+        let buf = BufHandle(win_ref(win).w_buffer);
         if !buf.is_null() && nvim_buf_get_locked(buf) != 0 {
             return 1;
         }
@@ -268,7 +266,7 @@ pub extern "C" fn rs_close_othertab_validate(
 
         // Check if closing would leave only floating windows.
         let lastwin = nvim_tabpage_get_lastwin(tp);
-        if nvim_win_get_floating(lastwin) != 0 && rs_one_window_in_tab(win, tp) != 0 {
+        if win_ref(lastwin).w_floating && rs_one_window_in_tab(win, tp) != 0 {
             if force != 0 || nvim_can_close_floating_windows(tp) != 0 {
                 // Signal caller to do recursive float close loop.
                 return 2;
@@ -368,7 +366,7 @@ pub extern "C" fn rs_close_othertab_leave_open(
             return;
         }
 
-        let buf = nvim_win_get_buffer(win);
+        let buf = BufHandle(win_ref(win).w_buffer);
         if buf.is_null() {
             // Buffer was removed from the window; give it any buffer.
             let firstbuf = nvim_get_firstbuf_wrapper();

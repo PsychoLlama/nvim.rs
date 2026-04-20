@@ -12,7 +12,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{win_struct::win_ref, TabpageHandle, WinHandle};
+use crate::win_struct::{win_mut, win_ref};
+use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // =============================================================================
 // Types
@@ -107,27 +108,8 @@ extern "C" {
     fn nvim_get_lastwin() -> WinHandle;
     fn nvim_get_curtab() -> TabpageHandle;
     fn nvim_get_first_tabpage() -> TabpageHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-    fn nvim_win_get_buffer(wp: WinHandle) -> crate::BufHandle;
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_focusable(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
-    fn nvim_win_get_botline(wp: WinHandle) -> c_int;
-    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
-    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> c_int;
-    fn nvim_win_get_curswant(wp: WinHandle) -> c_int;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
     fn nvim_tabpage_get_curwin(tp: TabpageHandle) -> WinHandle;
@@ -157,14 +139,6 @@ extern "C" {
     #[link_name = "check_topfill"]
     fn nvim_check_topfill(wp: WinHandle, down: c_int);
     fn changed_window_setting(wp: WinHandle);
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: c_int);
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: c_int);
-    fn nvim_win_set_curswant(wp: WinHandle, val: c_int);
-    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
-    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_skipcol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
     fn nvim_curbuf_get_ml_line_count() -> c_int;
 
     // globals
@@ -329,7 +303,7 @@ unsafe fn get_winnr_impl(tp: TabpageHandle, argvar: TypvalPtr) -> c_int {
             if wp == twin {
                 break;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         if wp.is_null() {
             nr = 0; // didn't find it in this tabpage
@@ -395,7 +369,7 @@ pub unsafe extern "C" fn rs_f_wincol(_argvars: TypvalPtr, rettv: TypvalPtr, _fpt
     unsafe {
         nvim_validate_cursor();
         let curwin = nvim_get_curwin();
-        nvim_eval_tv_set_number(rettv, i64::from(nvim_win_get_wcol(curwin) + 1));
+        nvim_eval_tv_set_number(rettv, i64::from(win_ref(curwin).w_wcol + 1));
     }
 }
 
@@ -408,7 +382,7 @@ pub unsafe extern "C" fn rs_f_winline(_argvars: TypvalPtr, rettv: TypvalPtr, _fp
     unsafe {
         nvim_validate_cursor();
         let curwin = nvim_get_curwin();
-        nvim_eval_tv_set_number(rettv, i64::from(nvim_win_get_wrow(curwin) + 1));
+        nvim_eval_tv_set_number(rettv, i64::from(win_ref(curwin).w_wrow + 1));
     }
 }
 
@@ -425,7 +399,7 @@ pub unsafe extern "C" fn rs_f_winheight(argvars: TypvalPtr, rettv: TypvalPtr, _f
             if wp.is_null() {
                 -1
             } else {
-                i64::from(nvim_win_get_view_height(wp))
+                i64::from(win_ref(wp).w_view_height)
             },
         );
     }
@@ -444,7 +418,7 @@ pub unsafe extern "C" fn rs_f_winwidth(argvars: TypvalPtr, rettv: TypvalPtr, _fp
             if wp.is_null() {
                 -1
             } else {
-                i64::from(nvim_win_get_view_width(wp))
+                i64::from(win_ref(wp).w_view_width)
             },
         );
     }
@@ -463,7 +437,7 @@ pub unsafe extern "C" fn rs_f_winbufnr(argvars: TypvalPtr, rettv: TypvalPtr, _fp
             if wp.is_null() {
                 -1
             } else {
-                let buf = nvim_win_get_buffer(wp);
+                let buf = BufHandle(win_ref(wp).w_buffer);
                 i64::from(nvim_buf_get_fnum(buf))
             },
         );
@@ -507,7 +481,7 @@ pub unsafe extern "C" fn rs_f_win_screenpos(
             if wp.is_null() {
                 0
             } else {
-                i64::from(nvim_win_get_winrow(wp) + 1)
+                i64::from(win_ref(wp).w_winrow + 1)
             },
         );
         tv_list_append_number(
@@ -515,7 +489,7 @@ pub unsafe extern "C" fn rs_f_win_screenpos(
             if wp.is_null() {
                 0
             } else {
-                i64::from(nvim_win_get_wincol(wp) + 1)
+                i64::from(win_ref(wp).w_wincol + 1)
             },
         );
     }
@@ -600,7 +574,7 @@ unsafe fn win_getid_impl(argvars: TypvalPtr) -> c_int {
     unsafe {
         let tv0 = argvar_at(argvars, 0);
         if (*tv0.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
-            return nvim_win_get_handle(nvim_get_curwin());
+            return win_ref(nvim_get_curwin()).handle;
         }
         let winnr = tv_get_number(tv0) as c_int;
         if winnr <= 0 {
@@ -635,9 +609,9 @@ unsafe fn win_getid_impl(argvars: TypvalPtr) -> c_int {
         while !wp.is_null() {
             remaining_winnr -= win_has_winnr(wp, tp) as c_int;
             if remaining_winnr == 0 {
-                return nvim_win_get_handle(wp);
+                return win_ref(wp).handle;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         0
     }
@@ -688,12 +662,12 @@ pub unsafe extern "C" fn rs_f_win_id2win(
         let mut wp = tabpage_firstwin(curtab);
         let mut result = 0;
         while !wp.is_null() {
-            if nvim_win_get_handle(wp) == id {
+            if win_ref(wp).handle == id {
                 result = if win_has_winnr(wp, curtab) { nr } else { 0 };
                 break;
             }
             nr += win_has_winnr(wp, curtab) as c_int;
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         nvim_eval_tv_set_number(rettv, i64::from(result));
     }
@@ -719,11 +693,11 @@ pub unsafe extern "C" fn rs_f_win_findbuf(
         while !tp.is_null() {
             let mut wp = tabpage_firstwin(tp);
             while !wp.is_null() {
-                let buf = nvim_win_get_buffer(wp);
+                let buf = BufHandle(win_ref(wp).w_buffer);
                 if nvim_buf_get_fnum(buf) == bufnr {
-                    tv_list_append_number(list, i64::from(nvim_win_get_handle(wp)));
+                    tv_list_append_number(list, i64::from(win_ref(wp).handle));
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
             tp = nvim_tabpage_get_next(tp);
         }
@@ -771,17 +745,17 @@ unsafe fn get_win_info_impl(wp: WinHandle, tpnr: i16, winnr: i16) -> DictPtr {
 
         add_nr!("tabnr", tpnr);
         add_nr!("winnr", winnr);
-        add_nr!("winid", nvim_win_get_handle(wp));
-        add_nr!("height", nvim_win_get_view_height(wp));
-        add_nr!("winrow", nvim_win_get_winrow(wp) + 1);
-        add_nr!("topline", nvim_win_get_topline(wp));
-        add_nr!("botline", nvim_win_get_botline(wp) - 1);
-        add_nr!("leftcol", nvim_win_get_leftcol(wp));
-        add_nr!("winbar", nvim_win_get_winbar_height(wp));
-        add_nr!("width", nvim_win_get_view_width(wp));
-        let buf = nvim_win_get_buffer(wp);
+        add_nr!("winid", win_ref(wp).handle);
+        add_nr!("height", win_ref(wp).w_view_height);
+        add_nr!("winrow", win_ref(wp).w_winrow + 1);
+        add_nr!("topline", win_ref(wp).w_topline);
+        add_nr!("botline", win_ref(wp).w_botline - 1);
+        add_nr!("leftcol", win_ref(wp).w_leftcol);
+        add_nr!("winbar", win_ref(wp).w_winbar_height);
+        add_nr!("width", win_ref(wp).w_view_width);
+        let buf = BufHandle(win_ref(wp).w_buffer);
         add_nr!("bufnr", nvim_buf_get_fnum(buf));
-        add_nr!("wincol", nvim_win_get_wincol(wp) + 1);
+        add_nr!("wincol", win_ref(wp).w_wincol + 1);
         add_nr!("textoff", win_col_off(wp));
         add_nr!("terminal", rs_bt_terminal(buf));
         add_nr!("quickfix", rs_bt_quickfix(buf));
@@ -820,8 +794,8 @@ unsafe fn get_tabpage_info_impl(tp: TabpageHandle, tp_idx: c_int) -> DictPtr {
         let l = tv_list_alloc(K_LIST_LEN_MAY_KNOW);
         let mut wp = tabpage_firstwin(tp);
         while !wp.is_null() {
-            tv_list_append_number(l, i64::from(nvim_win_get_handle(wp)));
-            wp = nvim_win_get_next(wp);
+            tv_list_append_number(l, i64::from(win_ref(wp).handle));
+            wp = win_ref(wp).w_next;
         }
         tv_dict_add_list(dict, c"windows".as_ptr(), c"windows".to_bytes().len(), l);
 
@@ -917,7 +891,7 @@ pub unsafe extern "C" fn rs_f_getwininfo(
             while !wp.is_null() {
                 winnr += win_has_winnr(wp, tp) as i16;
                 if !wparg.is_null() && wp != wparg {
-                    wp = nvim_win_get_next(wp);
+                    wp = win_ref(wp).w_next;
                     continue;
                 }
                 let has_nr = win_has_winnr(wp, tp);
@@ -926,7 +900,7 @@ pub unsafe extern "C" fn rs_f_getwininfo(
                 if !wparg.is_null() {
                     return;
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
             tp = nvim_tabpage_get_next(tp);
         }
@@ -943,10 +917,10 @@ unsafe fn win_id2wp_impl(id: c_int) -> WinHandle {
         while !tp.is_null() {
             let mut wp = tabpage_firstwin(tp);
             while !wp.is_null() {
-                if nvim_win_get_handle(wp) == id {
+                if win_ref(wp).handle == id {
                     return wp;
                 }
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
             tp = nvim_tabpage_get_next(tp);
         }
@@ -980,15 +954,15 @@ pub unsafe extern "C" fn rs_f_winsaveview(
             };
         }
 
-        add_nr!("lnum", nvim_win_get_cursor_lnum(curwin));
-        add_nr!("col", nvim_win_get_cursor_col(curwin));
-        add_nr!("coladd", nvim_win_get_cursor_coladd(curwin));
+        add_nr!("lnum", win_ref(curwin).w_cursor.lnum);
+        add_nr!("col", win_ref(curwin).w_cursor.col);
+        add_nr!("coladd", win_ref(curwin).w_cursor.coladd);
         update_curswant();
-        add_nr!("curswant", nvim_win_get_curswant(curwin));
-        add_nr!("topline", nvim_win_get_topline(curwin));
-        add_nr!("topfill", nvim_win_get_topfill(curwin));
-        add_nr!("leftcol", nvim_win_get_leftcol(curwin));
-        add_nr!("skipcol", nvim_win_get_skipcol(curwin));
+        add_nr!("curswant", win_ref(curwin).w_curswant);
+        add_nr!("topline", win_ref(curwin).w_topline);
+        add_nr!("topfill", win_ref(curwin).w_topfill);
+        add_nr!("leftcol", win_ref(curwin).w_leftcol);
+        add_nr!("skipcol", win_ref(curwin).w_skipcol);
     }
 }
 
@@ -1027,9 +1001,28 @@ pub unsafe extern "C" fn rs_f_winrestview(
             }};
         }
 
-        restore_field!("lnum", nvim_win_set_cursor_lnum);
-        restore_field!("col", nvim_win_set_cursor_col);
-        restore_field!("coladd", nvim_win_set_cursor_coladd);
+        {
+            let di = tv_dict_find(dict, c"lnum".as_ptr(), c"lnum".to_bytes().len() as c_int);
+            if !di.is_null() {
+                win_mut(curwin).w_cursor.lnum = tv_get_number(nvim_dictitem_get_tv(di)) as i32;
+            }
+        }
+        {
+            let di = tv_dict_find(dict, c"col".as_ptr(), c"col".to_bytes().len() as c_int);
+            if !di.is_null() {
+                win_mut(curwin).w_cursor.col = tv_get_number(nvim_dictitem_get_tv(di)) as i32;
+            }
+        }
+        {
+            let di = tv_dict_find(
+                dict,
+                c"coladd".as_ptr(),
+                c"coladd".to_bytes().len() as c_int,
+            );
+            if !di.is_null() {
+                win_mut(curwin).w_cursor.coladd = tv_get_number(nvim_dictitem_get_tv(di)) as i32;
+            }
+        }
 
         // curswant: also clear w_set_curswant flag
         {
@@ -1040,23 +1033,50 @@ pub unsafe extern "C" fn rs_f_winrestview(
             );
             if !di.is_null() {
                 let di_tv = nvim_dictitem_get_tv(di);
-                nvim_win_set_curswant(curwin, tv_get_number(di_tv) as c_int);
-                nvim_win_set_set_curswant(curwin, 0); // false
+                win_mut(curwin).w_curswant = tv_get_number(di_tv) as c_int;
+                win_mut(curwin).w_set_curswant = 0; // false
             }
         }
 
         restore_field!("topline", nvim_set_topline);
-        restore_field!("topfill", nvim_win_set_topfill);
-        restore_field!("leftcol", nvim_win_set_leftcol);
-        restore_field!("skipcol", nvim_win_set_skipcol);
+        {
+            let di = tv_dict_find(
+                dict,
+                c"topfill".as_ptr(),
+                c"topfill".to_bytes().len() as c_int,
+            );
+            if !di.is_null() {
+                win_mut(curwin).w_topfill = tv_get_number(nvim_dictitem_get_tv(di)) as i32;
+            }
+        }
+        {
+            let di = tv_dict_find(
+                dict,
+                c"leftcol".as_ptr(),
+                c"leftcol".to_bytes().len() as c_int,
+            );
+            if !di.is_null() {
+                win_mut(curwin).w_leftcol = tv_get_number(nvim_dictitem_get_tv(di)) as i32;
+            }
+        }
+        {
+            let di = tv_dict_find(
+                dict,
+                c"skipcol".as_ptr(),
+                c"skipcol".to_bytes().len() as c_int,
+            );
+            if !di.is_null() {
+                win_mut(curwin).w_skipcol = tv_get_number(nvim_dictitem_get_tv(di)) as i32;
+            }
+        }
 
         nvim_check_cursor_win_wrapper(curwin);
-        rs_win_new_height(curwin, nvim_win_get_view_height(curwin));
-        rs_win_new_width(curwin, nvim_win_get_view_width(curwin));
+        rs_win_new_height(curwin, win_ref(curwin).w_view_height);
+        rs_win_new_width(curwin, win_ref(curwin).w_view_width);
         changed_window_setting(curwin);
 
         // Clamp w_topline to [1, line_count]
-        let topline = nvim_win_get_topline(curwin);
+        let topline = win_ref(curwin).w_topline;
         if topline <= 0 {
             nvim_set_topline(curwin, 1);
         } else {

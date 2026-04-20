@@ -9,6 +9,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::win_ref;
 use crate::{BufHandle, Frame, TabpageHandle, WinHandle, FR_LEAF};
 
 // C accessor functions for window fields.
@@ -44,10 +45,8 @@ extern "C" {
     pub(crate) fn nvim_win_get_floating(win: WinHandle) -> c_int;
 
     /// Get the `w_p_pvw` (preview window) field from a window.
-    fn nvim_win_get_pvw(win: WinHandle) -> c_int;
 
     /// Get the `w_buffer` field from a window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 
     /// Get the current buffer (`curbuf` global).
     fn nvim_get_curbuf() -> BufHandle;
@@ -60,7 +59,6 @@ extern "C" {
     fn rs_is_aucmd_win(win: WinHandle) -> c_int;
 
     /// Get the `handle` field from a window.
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
 
     /// Get the `w_frame` field from a window (returns Frame pointer).
     pub(crate) fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
@@ -103,7 +101,7 @@ pub(crate) fn tabpage_win_valid_impl(tp: TabpageHandle, win: WinHandle) -> bool 
             return true;
         }
         // SAFETY: nvim_win_get_next is a safe field accessor
-        wp = unsafe { nvim_win_get_next(wp) };
+        wp = unsafe { win_ref(wp).w_next };
     }
     false
 }
@@ -138,10 +136,10 @@ fn win_float_valid_impl(win: WinHandle) -> bool {
     while !wp.is_null() {
         if wp == win {
             // SAFETY: nvim_win_get_floating is a safe field accessor
-            return unsafe { nvim_win_get_floating(wp) != 0 };
+            return unsafe { win_ref(wp).w_floating };
         }
         // SAFETY: nvim_win_get_next is a safe field accessor
-        wp = unsafe { nvim_win_get_next(wp) };
+        wp = unsafe { win_ref(wp).w_next };
     }
     false
 }
@@ -170,11 +168,11 @@ fn only_one_window_impl() -> bool {
         let mut wp = get_tabpage_firstwin(curtab);
 
         while !wp.is_null() {
-            let buf = nvim_win_get_buffer(wp);
+            let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
                 let is_help = rs_bt_help(buf);
-                let is_floating = nvim_win_get_floating(wp) != 0;
-                let is_pvw = nvim_win_get_pvw(wp) != 0;
+                let is_floating = win_ref(wp).w_floating;
+                let is_pvw = win_ref(wp).w_p_pvw() != 0;
                 let is_curwin = wp == curwin;
                 let is_aucmd = rs_is_aucmd_win(wp) != 0;
 
@@ -187,7 +185,7 @@ fn only_one_window_impl() -> bool {
                     count += 1;
                 }
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
 
         count <= 1
@@ -260,8 +258,8 @@ fn one_window_in_tab_impl(win: WinHandle, tp: TabpageHandle) -> bool {
 
     // Check if win->w_next is NULL or floating
     // SAFETY: nvim_win_get_next and nvim_win_get_floating are safe accessors
-    let next = unsafe { nvim_win_get_next(win) };
-    next.is_null() || unsafe { nvim_win_get_floating(next) != 0 }
+    let next = unsafe { win_ref(win).w_next };
+    next.is_null() || unsafe { win_ref(next).w_floating }
 }
 
 // Note: FFI wrapper rs_one_window_in_tab is in lib.rs
@@ -307,7 +305,7 @@ fn win_count_impl() -> c_int {
     let mut wp = unsafe { nvim_get_firstwin() };
     while !wp.is_null() {
         count += 1;
-        wp = unsafe { nvim_win_get_next(wp) };
+        wp = unsafe { win_ref(wp).w_next };
     }
     count
 }
@@ -326,10 +324,10 @@ fn win_find_by_handle_impl(handle: c_int) -> WinHandle {
     let mut wp = get_tabpage_firstwin(curtab);
     while !wp.is_null() {
         // SAFETY: nvim_win_get_handle is a safe accessor
-        if unsafe { nvim_win_get_handle(wp) } == handle {
+        if unsafe { win_ref(wp).handle } == handle {
             return wp;
         }
-        wp = unsafe { nvim_win_get_next(wp) };
+        wp = unsafe { win_ref(wp).w_next };
     }
     // Return null if not found
     WinHandle::null()
@@ -358,8 +356,8 @@ fn get_last_winid_impl() -> c_int {
 pub(crate) fn lastwin_nofloating_impl() -> WinHandle {
     // SAFETY: nvim_get_lastwin, nvim_win_get_prev, nvim_win_get_floating are safe accessors
     let mut res = unsafe { nvim_get_lastwin() };
-    while !res.is_null() && unsafe { nvim_win_get_floating(res) } != 0 {
-        res = unsafe { nvim_win_get_prev(res) };
+    while !res.is_null() && unsafe { c_int::from(win_ref(res).w_floating) } != 0 {
+        res = unsafe { win_ref(res).w_prev };
     }
     res
 }
@@ -433,7 +431,7 @@ fn is_bottom_win_impl(wp: WinHandle) -> bool {
 
     // Get the window's frame
     // SAFETY: wp is not null, and nvim_win_get_frame is a safe accessor
-    let mut frp = unsafe { nvim_win_get_frame(wp) };
+    let mut frp = unsafe { win_ref(wp).w_frame };
 
     // Traverse up the frame tree
     // SAFETY: We access frame fields directly

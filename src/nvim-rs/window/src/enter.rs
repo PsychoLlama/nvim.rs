@@ -12,6 +12,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::{win_mut, win_ref};
 use crate::{BufHandle, WinHandle};
 
 // =============================================================================
@@ -54,16 +55,8 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
 
     // Window field accessors
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_hl_attr_normal(wp: WinHandle) -> c_int;
     fn nvim_win_get_hl_attr_normalnc(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
 
     // p_spk (splitkeep option) -- returns first char as int
     fn nvim_win_get_p_spk_char() -> c_int;
@@ -172,7 +165,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         if !curwin_invalid && (flags & WEE_TRIGGER_LEAVE_AUTOCMDS) != 0 {
             // Be careful: if autocommands delete the window, return now.
             let curbuf = nvim_get_curbuf();
-            let wp_buffer = nvim_win_get_buffer(wp);
+            let wp_buffer = BufHandle(win_ref(wp).w_buffer);
             if wp_buffer != curbuf {
                 nvim_apply_autocmds_event(EVENT_BUFLEAVE);
                 other_buffer = true;
@@ -193,7 +186,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         // sync undo before leaving the current buffer
         if (flags & WEE_UNDO_SYNC) != 0 {
             let curbuf = nvim_get_curbuf();
-            let wp_buffer = nvim_win_get_buffer(wp);
+            let wp_buffer = BufHandle(win_ref(wp).w_buffer);
             if curbuf != wp_buffer {
                 nvim_u_sync(false);
             }
@@ -208,7 +201,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
 
         // may have to copy the buffer options when 'cpo' contains 'S'
         let curbuf = nvim_get_curbuf();
-        let wp_buffer = nvim_win_get_buffer(wp);
+        let wp_buffer = BufHandle(win_ref(wp).w_buffer);
         if wp_buffer != curbuf {
             nvim_buf_copy_options_enter(wp_buffer, 5); // BCO_ENTER | BCO_NOHELP
         }
@@ -216,17 +209,17 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
         if !curwin_invalid {
             // remember for CTRL-W p
             nvim_set_prevwin(curwin);
-            nvim_win_set_redr_status(curwin, 1);
+            win_mut(curwin).w_redr_status = true;
         }
         nvim_set_curwin(wp);
-        nvim_set_curbuf(nvim_win_get_buffer(wp));
+        nvim_set_curbuf(BufHandle(win_ref(wp).w_buffer));
 
         // Re-read curwin (it's now wp)
         let new_curwin = nvim_get_curwin();
 
         nvim_check_cursor_win_wrapper(new_curwin);
         if !nvim_virtual_active() {
-            nvim_win_set_cursor_coladd(new_curwin, 0);
+            win_mut(new_curwin).w_cursor.coladd = 0;
         }
 
         let p_spk = nvim_win_get_p_spk_char();
@@ -258,7 +251,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
 
         // Re-read curwin in case autocmds changed it
         let new_curwin = nvim_get_curwin();
-        nvim_win_set_redr_status(new_curwin, 1);
+        win_mut(new_curwin).w_redr_status = true;
         redraw_tabline = true;
 
         if restart_edit != 0 {
@@ -284,9 +277,9 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
 
         // set window height to desired minimal value
         let p_wh = nvim_get_p_wh() as c_int;
-        let height = nvim_win_get_w_height(new_curwin);
-        let wfh = nvim_win_get_wfh(new_curwin);
-        let floating = nvim_win_get_floating(new_curwin);
+        let height = win_ref(new_curwin).w_height;
+        let wfh = win_ref(new_curwin).w_p_wfh();
+        let floating = c_int::from(win_ref(new_curwin).w_floating);
         if height < p_wh && wfh == 0 && floating == 0 {
             rs_win_setheight(p_wh);
         } else if height == 0 {
@@ -295,8 +288,8 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
 
         // set window width to desired minimal value
         let p_wiw = nvim_get_p_wiw() as c_int;
-        let width = nvim_win_get_w_width(new_curwin);
-        let wfw = nvim_win_get_wfw(new_curwin);
+        let width = win_ref(new_curwin).w_width;
+        let wfw = win_ref(new_curwin).w_p_wfw();
         if width < p_wiw && wfw == 0 && floating == 0 {
             rs_win_setwidth(p_wiw);
         }

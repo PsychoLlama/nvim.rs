@@ -7,7 +7,8 @@
 
 use std::ffi::c_int;
 
-use crate::{win_struct::win_ref, Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF};
+use crate::win_struct::{win_mut, win_ref};
+use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF};
 
 // =============================================================================
 // Constants
@@ -22,13 +23,6 @@ const STATUS_HEIGHT: c_int = 1;
 
 extern "C" {
     fn nvim_get_topframe() -> *mut Frame;
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
     fn nvim_comp_col();
     fn nvim_win_stl_clear_click_defs(wp: WinHandle);
     fn nvim_win_float_anchor_laststatus();
@@ -50,9 +44,6 @@ extern "C" {
     fn rs_global_stl_height() -> c_int;
 
     // --- set_winbar_win dependencies ---
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_winbar_height(wp: WinHandle, val: c_int);
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
     #[link_name = "win_set_inner_size"]
     fn rs_win_set_inner_size(wp: WinHandle, valid_cursor: bool);
     fn nvim_win_clear_winbar_click_defs(wp: WinHandle);
@@ -64,7 +55,6 @@ extern "C" {
     // --- set_winbar dependencies ---
     fn nvim_get_curtab() -> TabpageHandle;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 }
 
 // =============================================================================
@@ -117,14 +107,14 @@ fn win_remove_status_line_impl(wp: WinHandle, add_hsep: bool) {
     }
 
     unsafe {
-        nvim_win_set_status_height(wp, 0);
+        win_mut(wp).w_status_height = 0;
         if add_hsep {
-            nvim_win_set_hsep_height(wp, 1);
+            win_mut(wp).w_hsep_height = 1;
         } else {
-            let height = if nvim_win_get_floating(wp) != 0 {
-                nvim_win_get_view_height(wp)
+            let height = if win_ref(wp).w_floating {
+                win_ref(wp).w_view_height
             } else {
-                nvim_win_get_w_height(wp)
+                win_ref(wp).w_height
             };
             rs_win_new_height(wp, height + STATUS_HEIGHT);
         }
@@ -156,7 +146,7 @@ fn resize_frame_for_status_impl(fr: *mut Frame) -> bool {
             rs_win_comp_pos();
             true
         } else {
-            rs_win_new_height(wp, nvim_win_get_w_height(wp) - 1);
+            rs_win_new_height(wp, win_ref(wp).w_height - 1);
             true
         }
     }
@@ -181,7 +171,7 @@ fn resize_frame_for_winbar_impl(fr: *mut Frame) -> bool {
             return false;
         }
         rs_frame_new_height(fp, (*fp).fr_height - 1, 0, 0, 0);
-        rs_win_new_height(wp, nvim_win_get_w_height(wp) + 1);
+        rs_win_new_height(wp, win_ref(wp).w_height + 1);
         rs_frame_fix_height(wp);
         rs_win_comp_pos();
         true
@@ -202,31 +192,31 @@ fn last_status_rec_impl(fr: *mut Frame, statusline: bool, is_stl_global: bool) {
             let is_last = rs_is_bottom_win(wp) != 0;
 
             if is_last {
-                if nvim_win_get_status_height(wp) != 0 && (!statusline || is_stl_global) {
+                if win_ref(wp).w_status_height != 0 && (!statusline || is_stl_global) {
                     win_remove_status_line_impl(wp, false);
-                } else if nvim_win_get_status_height(wp) == 0 && !is_stl_global && statusline {
+                } else if win_ref(wp).w_status_height == 0 && !is_stl_global && statusline {
                     // Add statusline to window if needed.
-                    nvim_win_set_status_height(wp, STATUS_HEIGHT);
+                    win_mut(wp).w_status_height = STATUS_HEIGHT;
                     if !resize_frame_for_status_impl(fr) {
                         return;
                     }
                     nvim_comp_col();
                 }
                 // Set prev_height when difference is due to 'laststatus'.
-                let h = nvim_win_get_w_height(wp);
+                let h = win_ref(wp).w_height;
                 let prev_h = win_ref(wp).w_prev_height;
                 if (h - prev_h).abs() == 1 {
-                    nvim_win_set_prev_height(wp, h);
+                    win_mut(wp).w_prev_height = h;
                 }
-            } else if nvim_win_get_status_height(wp) != 0 && is_stl_global {
+            } else if win_ref(wp).w_status_height != 0 && is_stl_global {
                 // If statusline is global and the window has a statusline,
                 // replace it with a horizontal separator.
                 win_remove_status_line_impl(wp, true);
-            } else if nvim_win_get_status_height(wp) == 0 && !is_stl_global {
+            } else if win_ref(wp).w_status_height == 0 && !is_stl_global {
                 // If statusline isn't global and the window doesn't have a
                 // statusline, re-add it.
-                nvim_win_set_status_height(wp, STATUS_HEIGHT);
-                nvim_win_set_hsep_height(wp, 0);
+                win_mut(wp).w_status_height = STATUS_HEIGHT;
+                win_mut(wp).w_hsep_height = 0;
                 nvim_comp_col();
             }
         } else {
@@ -302,22 +292,22 @@ unsafe fn set_winbar_win_impl(wp: WinHandle, make_room: bool, valid_cursor: bool
     // Non-floating: show winbar if global p_wbr OR local w_p_wbr is non-empty.
     // nvim_win_get_p_wbr_empty: returns 1 if local wbr is empty.
     // nvim_win_get_p_wbr_both_empty: returns 1 if both global and local wbr are empty.
-    let winbar_height = if nvim_win_get_floating(wp) != 0 {
+    let winbar_height = if win_ref(wp).w_floating {
         i32::from(nvim_win_get_p_wbr_empty(wp) == 0)
     } else {
         i32::from(nvim_win_get_p_wbr_both_empty(wp) == 0)
     };
 
-    if nvim_win_get_winbar_height(wp) != winbar_height {
-        if winbar_height == 1 && nvim_win_get_view_height(wp) <= 1 {
-            if nvim_win_get_floating(wp) != 0 {
+    if win_ref(wp).w_winbar_height != winbar_height {
+        if winbar_height == 1 && win_ref(wp).w_view_height <= 1 {
+            if win_ref(wp).w_floating {
                 nvim_emsg_id(EMSG_NOROOM);
                 return SET_WINBAR_WIN_NOTDONE;
-            } else if !make_room || rs_resize_frame_for_winbar(nvim_win_get_frame(wp)) == 0 {
+            } else if !make_room || rs_resize_frame_for_winbar(win_ref(wp).w_frame) == 0 {
                 return SET_WINBAR_WIN_FAIL;
             }
         }
-        nvim_win_set_winbar_height(wp, winbar_height);
+        win_mut(wp).w_winbar_height = winbar_height;
         rs_win_set_inner_size(wp, valid_cursor);
 
         if winbar_height == 0 {
@@ -360,7 +350,7 @@ unsafe fn set_winbar_impl(make_room: bool) {
         if set_winbar_win_impl(wp, make_room, true) == SET_WINBAR_WIN_FAIL {
             break;
         }
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 }
 

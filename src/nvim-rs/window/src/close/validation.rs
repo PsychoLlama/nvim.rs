@@ -3,8 +3,12 @@
 //! This module provides validation functions for window close operations,
 //! checking whether closes are allowed and various window state queries.
 
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)]
+
 use std::ffi::c_int;
 
+use crate::win_struct::win_ref;
 use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // =============================================================================
@@ -34,22 +38,17 @@ extern "C" {
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
 
     /// Get w_next from window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 
     /// Get w_prev from window.
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
 
     /// Get tp_lastwin from tabpage.
     fn nvim_tabpage_get_lastwin(tp: TabpageHandle) -> WinHandle;
 
     /// Get w_floating from window.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Get w_buffer from window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 
     /// Get w_locked from window.
-    fn nvim_win_get_locked(wp: WinHandle) -> c_int;
 
     /// Get b_locked from buffer.
     fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
@@ -80,7 +79,7 @@ fn win_locked_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    unsafe { nvim_win_get_locked(wp) != 0 }
+    unsafe { win_ref(wp).w_locked }
 }
 
 /// Check if a window's buffer is locked.
@@ -89,7 +88,7 @@ fn buf_locked_impl(wp: WinHandle) -> bool {
         return false;
     }
     unsafe {
-        let buf = nvim_win_get_buffer(wp);
+        let buf = BufHandle(win_ref(wp).w_buffer);
         if buf.is_null() {
             return false;
         }
@@ -126,8 +125,8 @@ fn can_close_floating_windows_impl() -> bool {
 
         // Iterate backwards through floating windows
         let mut wp = lastwin;
-        while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
-            let buf = nvim_win_get_buffer(wp);
+        while !wp.is_null() && win_ref(wp).w_floating {
+            let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
                 let is_changed = bufIsChanged(buf) != 0;
                 let nwindows = nvim_buf_get_nwindows(buf);
@@ -140,7 +139,7 @@ fn can_close_floating_windows_impl() -> bool {
                     return false;
                 }
             }
-            wp = nvim_win_get_prev(wp);
+            wp = win_ref(wp).w_prev;
         }
         true
     }
@@ -166,8 +165,8 @@ fn is_only_nonfloating_impl(wp: WinHandle, tp: TabpageHandle) -> bool {
         }
 
         // Next window must be null or floating
-        let next = nvim_win_get_next(wp);
-        next.is_null() || nvim_win_get_floating(next) != 0
+        let next = win_ref(wp).w_next;
+        next.is_null() || win_ref(next).w_floating
     }
 }
 
@@ -195,7 +194,7 @@ fn would_leave_only_floating_impl(wp: WinHandle) -> bool {
         let lastwin = nvim_get_lastwin();
 
         // If lastwin is floating and this is the only non-floating window
-        nvim_win_get_floating(lastwin) != 0
+        win_ref(lastwin).w_floating
             && is_only_nonfloating_impl(wp, TabpageHandle::from_ptr(std::ptr::null_mut()))
     }
 }
@@ -212,10 +211,10 @@ fn count_nonfloating_impl(tp: TabpageHandle) -> c_int {
         let mut count = 0;
         let mut wp = first;
         while !wp.is_null() {
-            if nvim_win_get_floating(wp) == 0 {
+            if c_int::from(win_ref(wp).w_floating) == 0 {
                 count += 1;
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         count
     }
@@ -234,7 +233,7 @@ fn count_total_windows_impl(tp: TabpageHandle) -> c_int {
         let mut wp = first;
         while !wp.is_null() {
             count += 1;
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         count
     }
@@ -266,11 +265,11 @@ fn can_close_window_impl(wp: WinHandle, force: bool) -> c_int {
         }
 
         // Check locked status
-        if nvim_win_get_locked(wp) != 0 {
+        if win_ref(wp).w_locked {
             return 2;
         }
 
-        let buf = nvim_win_get_buffer(wp);
+        let buf = BufHandle(win_ref(wp).w_buffer);
         if !buf.is_null() && nvim_buf_get_locked(buf) > 0 {
             return 3;
         }
@@ -342,8 +341,8 @@ fn can_close_floating_windows_tp_impl(tp: TabpageHandle) -> bool {
         }
 
         let mut wp = lastwin;
-        while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
-            let buf = nvim_win_get_buffer(wp);
+        while !wp.is_null() && win_ref(wp).w_floating {
+            let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
                 let is_changed = bufIsChanged(buf) != 0;
                 let nwindows = nvim_buf_get_nwindows(buf);
@@ -352,7 +351,7 @@ fn can_close_floating_windows_tp_impl(tp: TabpageHandle) -> bool {
                     return false;
                 }
             }
-            wp = nvim_win_get_prev(wp);
+            wp = win_ref(wp).w_prev;
         }
         true
     }
@@ -428,7 +427,7 @@ pub extern "C" fn rs_close_is_closable(wp: WinHandle) -> c_int {
     }
     unsafe {
         // Quick checks that don't require full validation
-        if nvim_win_get_locked(wp) != 0 {
+        if win_ref(wp).w_locked {
             return 0;
         }
         if rs_is_aucmd_win(wp) != 0 {

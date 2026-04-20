@@ -18,6 +18,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::win_ref;
 use crate::{Frame, TabpageHandle, WinHandle, FR_COL};
 
 // =============================================================================
@@ -46,25 +47,12 @@ extern "C" {
     /// Get tp_firstwin from tabpage.
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
 
-    /// Get w_next from window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-
-    /// Get w_prev from window.
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
-
-    /// Get w_floating from window.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-
-    /// Get w_frame from window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 }
 
 // =============================================================================
 // Close Direction Helpers
 // =============================================================================
 
-/// Get direction character for close operation.
-///
 /// Returns 'v' for vertical direction (FR_COL parent) or 'h' for horizontal.
 fn get_close_direction_impl(wp: WinHandle) -> c_int {
     if wp.is_null() {
@@ -72,7 +60,7 @@ fn get_close_direction_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return c_int::from(b'h');
         }
@@ -90,8 +78,6 @@ fn get_close_direction_impl(wp: WinHandle) -> c_int {
     }
 }
 
-/// Get the basic sibling frame (next or prev).
-///
 /// Returns next sibling if available, otherwise prev.
 fn get_basic_sibling_frame_impl(wp: WinHandle) -> *mut Frame {
     if wp.is_null() {
@@ -99,7 +85,7 @@ fn get_basic_sibling_frame_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return std::ptr::null_mut();
         }
@@ -142,15 +128,15 @@ fn last_nonfloat_impl(tp: TabpageHandle) -> WinHandle {
             let mut last = first;
             while !wp.is_null() {
                 last = wp;
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
             }
             last
         };
 
         // Walk backwards to find last non-floating
         let mut wp = lastwin;
-        while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
-            wp = nvim_win_get_prev(wp);
+        while !wp.is_null() && win_ref(wp).w_floating {
+            wp = win_ref(wp).w_prev;
         }
         wp
     }
@@ -189,8 +175,6 @@ fn is_last_nonfloat_impl(wp: WinHandle, tp: TabpageHandle) -> bool {
 // Close Operation State Helpers
 // =============================================================================
 
-/// Check if closing the window would trigger a tabpage close.
-///
 /// True if this is the only non-floating window in its tabpage.
 fn close_triggers_tabpage_close_impl(wp: WinHandle, tp: TabpageHandle) -> bool {
     if wp.is_null() {
@@ -210,8 +194,8 @@ fn close_triggers_tabpage_close_impl(wp: WinHandle, tp: TabpageHandle) -> bool {
         }
 
         // Next must be null or floating
-        let next = nvim_win_get_next(wp);
-        next.is_null() || nvim_win_get_floating(next) != 0
+        let next = win_ref(wp).w_next;
+        next.is_null() || win_ref(next).w_floating
     }
 }
 
@@ -220,7 +204,7 @@ fn is_floating_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    unsafe { nvim_win_get_floating(wp) != 0 }
+    unsafe { win_ref(wp).w_floating }
 }
 
 /// Check if window frame has siblings.
@@ -230,7 +214,7 @@ fn frame_has_siblings_impl(wp: WinHandle) -> bool {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return false;
         }
@@ -246,7 +230,7 @@ fn frame_has_prev_impl(wp: WinHandle) -> bool {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return false;
         }
@@ -262,7 +246,7 @@ fn frame_has_next_impl(wp: WinHandle) -> bool {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return false;
         }
@@ -278,7 +262,7 @@ fn freed_height_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 0;
         }
@@ -294,7 +278,7 @@ fn freed_width_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 0;
         }
@@ -310,7 +294,7 @@ fn get_prev_sibling_frame_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return std::ptr::null_mut();
         }
@@ -326,7 +310,7 @@ fn get_next_sibling_frame_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return std::ptr::null_mut();
         }
@@ -441,7 +425,7 @@ pub extern "C" fn rs_close_has_frame(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    unsafe { c_int::from(!nvim_win_get_frame(wp).is_null()) }
+    unsafe { c_int::from(!win_ref(wp).w_frame.is_null()) }
 }
 
 /// FFI: Get window's frame parent layout.
@@ -452,7 +436,7 @@ pub extern "C" fn rs_close_parent_layout(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 0;
         }

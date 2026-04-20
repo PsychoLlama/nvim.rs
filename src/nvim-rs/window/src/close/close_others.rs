@@ -7,6 +7,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::win_ref;
 use crate::{BufHandle, WinHandle};
 
 // =============================================================================
@@ -27,10 +28,8 @@ extern "C" {
     fn nvim_get_lastwin() -> WinHandle;
 
     /// Get w_next from a window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 
     /// Get w_floating from window.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Validate a window pointer.
     fn rs_win_valid(wp: WinHandle) -> c_int;
@@ -102,7 +101,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
     let old_curwin = nvim_get_curwin();
 
     // If current window is floating, we can only close other floating windows.
-    if nvim_win_get_floating(old_curwin) != 0 {
+    if win_ref(old_curwin).w_floating {
         if message != 0 && !nvim_get_autocmd_busy() {
             nvim_emsg_id(EMSG_E_FLOATONLY);
         }
@@ -113,7 +112,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
     let firstwin = nvim_get_firstwin();
     let lastwin = nvim_get_lastwin();
     if rs_one_window_in_tab(firstwin, crate::TabpageHandle::null()) != 0
-        && nvim_win_get_floating(lastwin) == 0
+        && c_int::from(win_ref(lastwin).w_floating) == 0
     {
         if message != 0 && !nvim_get_autocmd_busy() {
             nvim_msg_onlyone();
@@ -124,7 +123,7 @@ unsafe fn close_others_impl(message: c_int, forceit: c_int) {
     // Be very careful here: autocommands may change the window layout.
     let mut wp = nvim_get_firstwin();
     while rs_win_valid(wp) != 0 {
-        let nextwp = nvim_win_get_next(wp);
+        let nextwp = win_ref(wp).w_next;
 
         // Autocommands messed curwin up: restore it.
         let curwin = nvim_get_curwin();

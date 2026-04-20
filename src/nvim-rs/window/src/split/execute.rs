@@ -13,6 +13,7 @@
 use std::ffi::c_int;
 
 use crate::frame::constants::{STATUS_HEIGHT, WSP_ABOVE, WSP_BOT, WSP_ROOM, WSP_TOP, WSP_VERT};
+use crate::win_struct::win_ref;
 use crate::{Frame, WinHandle, FR_COL, FR_ROW};
 
 // =============================================================================
@@ -39,31 +40,22 @@ extern "C" {
     fn nvim_get_p_wh() -> i64;
 
     /// Get w_width from a window.
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 
     /// Get w_height from a window.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
 
     /// Get w_vsep_width from a window.
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
 
     /// Get w_hsep_height from a window.
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
 
     /// Get w_status_height from a window.
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
 
     /// Get w_frame from a window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get w_p_wfw (winfixwidth option) from a window.
-    fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
 
     /// Get w_p_wfh (winfixheight option) from a window.
-    fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
 
     /// Check if window is floating.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Get global_winbar_height.
     #[link_name = "rs_global_winbar_height"]
@@ -93,8 +85,8 @@ fn calculate_max_windows_impl(vertical: bool) -> c_int {
 
         let maxcount = if vertical {
             // Each window needs at least 'winminwidth' lines and a separator column.
-            let w_width = nvim_win_get_w_width(curwin);
-            let w_vsep = nvim_win_get_vsep_width(curwin);
+            let w_width = win_ref(curwin).w_width;
+            let w_vsep = win_ref(curwin).w_vsep_width;
             let p_wiw = nvim_get_p_wiw() as c_int;
             let p_wmw = nvim_get_p_wmw() as c_int;
             (w_width + w_vsep - (p_wiw - p_wmw)) / (p_wmw + 1)
@@ -102,9 +94,9 @@ fn calculate_max_windows_impl(vertical: bool) -> c_int {
             // Each window needs at least 'winminheight' lines.
             // If statusline isn't global, each window also needs a statusline.
             // If 'winbar' is set, each window also needs a winbar.
-            let w_height = nvim_win_get_w_height(curwin);
-            let w_hsep = nvim_win_get_hsep_height(curwin);
-            let w_status = nvim_win_get_status_height(curwin);
+            let w_height = win_ref(curwin).w_height;
+            let w_hsep = win_ref(curwin).w_hsep_height;
+            let w_status = win_ref(curwin).w_status_height;
             let p_wh = nvim_get_p_wh() as c_int;
             let p_wmh = nvim_get_p_wmh() as c_int;
             let winbar = global_winbar_height();
@@ -154,10 +146,10 @@ fn calculate_split_size_for_iteration_impl(vertical: bool, todo: c_int) -> c_int
         }
 
         if vertical {
-            let w_width = nvim_win_get_w_width(curwin);
+            let w_width = win_ref(curwin).w_width;
             w_width - (w_width - todo) / (todo + 1) - 1
         } else {
-            let w_height = nvim_win_get_w_height(curwin);
+            let w_height = win_ref(curwin).w_height;
             w_height - (w_height - todo * STATUS_HEIGHT) / (todo + 1) - STATUS_HEIGHT
         }
     }
@@ -175,9 +167,9 @@ fn get_default_new_size_impl(flags: c_int, oldwin: WinHandle) -> c_int {
 
     unsafe {
         if vertical {
-            nvim_win_get_w_width(oldwin) / 2
+            win_ref(oldwin).w_width / 2
         } else {
-            nvim_win_get_w_height(oldwin) / 2
+            win_ref(oldwin).w_height / 2
         }
     }
 }
@@ -223,11 +215,11 @@ fn needs_equalization_impl(flags: c_int, new_size: c_int, oldwin: WinHandle) -> 
 
     unsafe {
         if vertical {
-            let old_width = nvim_win_get_w_width(oldwin);
+            let old_width = win_ref(oldwin).w_width;
             let p_wmw = nvim_get_p_wmw() as c_int;
             old_width - new_size - 1 < p_wmw
         } else {
-            let old_height = nvim_win_get_w_height(oldwin);
+            let old_height = win_ref(oldwin).w_height;
             let p_wmh = nvim_get_p_wmh() as c_int;
             old_height - new_size - STATUS_HEIGHT < p_wmh
         }
@@ -243,7 +235,7 @@ fn get_oldwin_for_split_impl(flags: c_int) -> WinHandle {
 
         if (flags & WSP_TOP) != 0 {
             nvim_get_firstwin()
-        } else if (flags & WSP_BOT) != 0 || nvim_win_get_floating(curwin) != 0 {
+        } else if (flags & WSP_BOT) != 0 || win_ref(curwin).w_floating {
             lastwin_nofloating()
         } else {
             curwin
@@ -270,9 +262,9 @@ fn window_is_fixed_impl(wp: WinHandle, vertical: bool) -> bool {
 
     unsafe {
         if vertical {
-            nvim_win_get_wfw(wp) != 0
+            win_ref(wp).w_p_wfw() != 0
         } else {
-            nvim_win_get_wfh(wp) != 0
+            win_ref(wp).w_p_wfh() != 0
         }
     }
 }
@@ -314,7 +306,7 @@ fn get_window_available_impl(wp: WinHandle, vertical: bool) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 0;
         }

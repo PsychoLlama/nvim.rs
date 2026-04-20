@@ -22,8 +22,11 @@
 // However, window list operations (win_append, win_remove) can be migrated
 // since they are pure linked-list manipulations that use accessor functions.
 
+#![allow(clippy::missing_safety_doc)]
+
 use std::ffi::c_int;
 
+use crate::win_struct::{win_mut, win_ref};
 use crate::{TabpageHandle, WinHandle};
 
 // C accessor functions for window list manipulation.
@@ -31,8 +34,6 @@ extern "C" {
     static Rows: c_int;
     static Columns: c_int;
     // Getters
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
     fn nvim_get_firstwin() -> WinHandle;
     fn nvim_get_lastwin() -> WinHandle;
     fn nvim_get_curtab() -> TabpageHandle;
@@ -41,26 +42,12 @@ extern "C" {
     fn nvim_tabpage_get_lastwin(tp: TabpageHandle) -> WinHandle;
 
     // Setters
-    fn nvim_win_set_next(wp: WinHandle, next: WinHandle);
-    fn nvim_win_set_prev(wp: WinHandle, prev: WinHandle);
     fn nvim_set_firstwin(wp: WinHandle);
     fn nvim_set_lastwin(wp: WinHandle);
     fn nvim_tabpage_set_firstwin(tp: TabpageHandle, wp: WinHandle);
     fn nvim_tabpage_set_lastwin(tp: TabpageHandle, wp: WinHandle);
 }
 
-/// Append window "wp" in the window list after window "after".
-///
-/// This is the Rust implementation of `win_append()` in window.c.
-///
-/// # Arguments
-/// * `after` - Window to insert after (NULL = insert at beginning)
-/// * `wp` - Window to insert (must not be NULL)
-/// * `tp` - Tab page "win" is in (NULL for current tabpage)
-///
-/// # Safety
-/// - `wp` must be a valid, non-null window pointer
-/// - `tp` must be NULL or a valid tabpage that is NOT the current tabpage
 /// - `after` must be NULL or a valid window in the specified tabpage
 fn win_append_impl(after: WinHandle, wp: WinHandle, tp: TabpageHandle) {
     // SAFETY: All accessor functions handle pointers safely.
@@ -78,12 +65,12 @@ fn win_append_impl(after: WinHandle, wp: WinHandle, tp: TabpageHandle) {
         let before = if after.is_null() {
             first
         } else {
-            nvim_win_get_next(after)
+            win_ref(after).w_next
         };
 
         // Link wp into the list
-        nvim_win_set_next(wp, before);
-        nvim_win_set_prev(wp, after);
+        win_mut(wp).w_next = before;
+        win_mut(wp).w_prev = after;
 
         // Update previous link
         if after.is_null() {
@@ -94,7 +81,7 @@ fn win_append_impl(after: WinHandle, wp: WinHandle, tp: TabpageHandle) {
                 nvim_tabpage_set_firstwin(tp, wp);
             }
         } else {
-            nvim_win_set_next(after, wp);
+            win_mut(after).w_next = wp;
         }
 
         // Update next link
@@ -106,13 +93,11 @@ fn win_append_impl(after: WinHandle, wp: WinHandle, tp: TabpageHandle) {
                 nvim_tabpage_set_lastwin(tp, wp);
             }
         } else {
-            nvim_win_set_prev(before, wp);
+            win_mut(before).w_prev = wp;
         }
     }
 }
 
-/// FFI wrapper for `win_append`.
-///
 /// Appends a window in the window list after another window.
 #[no_mangle]
 pub extern "C" fn rs_win_append(after: WinHandle, wp: WinHandle, tp: TabpageHandle) {
@@ -122,27 +107,17 @@ pub extern "C" fn rs_win_append(after: WinHandle, wp: WinHandle, tp: TabpageHand
     win_append_impl(after, wp, tp);
 }
 
-/// Remove a window from the window list.
-///
-/// This is the Rust implementation of `win_remove()` in window.c.
-///
-/// # Arguments
-/// * `wp` - Window to remove (must not be NULL)
-/// * `tp` - Tab page "win" is in (NULL for current tabpage)
-///
-/// # Safety
-/// - `wp` must be a valid, non-null window pointer
 /// - `tp` must be NULL or a valid tabpage that is NOT the current tabpage
 fn win_remove_impl(wp: WinHandle, tp: TabpageHandle) {
     // SAFETY: All accessor functions handle pointers safely.
     // The assertion from C (tp == NULL || tp != curtab) should be ensured by caller.
     unsafe {
-        let prev = nvim_win_get_prev(wp);
-        let next = nvim_win_get_next(wp);
+        let prev = win_ref(wp).w_prev;
+        let next = win_ref(wp).w_next;
 
         // Update previous window's next pointer
         if !prev.is_null() {
-            nvim_win_set_next(prev, next);
+            win_mut(prev).w_next = next;
         } else if tp.is_null() {
             // wp was the first window
             nvim_set_firstwin(next);
@@ -152,7 +127,7 @@ fn win_remove_impl(wp: WinHandle, tp: TabpageHandle) {
 
         // Update next window's prev pointer
         if !next.is_null() {
-            nvim_win_set_prev(next, prev);
+            win_mut(next).w_prev = prev;
         } else if tp.is_null() {
             // wp was the last window
             nvim_set_lastwin(prev);
@@ -162,8 +137,6 @@ fn win_remove_impl(wp: WinHandle, tp: TabpageHandle) {
     }
 }
 
-/// FFI wrapper for `win_remove`.
-///
 /// Removes a window from the window list.
 #[no_mangle]
 pub extern "C" fn rs_win_remove(wp: WinHandle, tp: TabpageHandle) {
@@ -197,88 +170,47 @@ extern "C" {
     /// Schedule a later redraw for the window.
     fn nvim_redraw_later_wrapper(wp: WinHandle, update_type: c_int);
 
-    /// Set w_lines_valid field.
-    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
-
-    /// Set cursor lnum (linenr_T = i32).
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LinenrT);
-
-    /// Set cursor col (colnr_T = c_int).
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: c_int);
-
-    /// Set cursor coladd (colnr_T = c_int).
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
-
-    /// Set w_curswant (colnr_T = c_int).
-    fn nvim_win_set_curswant(wp: WinHandle, val: c_int);
-
-    /// Set w_topline (linenr_T = i32).
-    fn nvim_win_set_topline(wp: WinHandle, val: LinenrT);
-
-    /// Set w_topfill.
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
-
-    /// Set w_botline (takes int in C, casts to linenr_T).
-    fn nvim_win_set_botline(wp: WinHandle, val: c_int);
-
-    /// Set w_valid.
-    fn nvim_win_set_valid(wp: WinHandle, val: c_int);
-
-    /// Set w_pcmark (lnum: linenr_T = i32, col: colnr_T = c_int).
-    fn nvim_win_set_pcmark(wp: WinHandle, lnum: LinenrT, col: c_int);
-
-    /// Set w_prev_pcmark (lnum: linenr_T = i32, col: colnr_T = c_int).
-    fn nvim_win_set_prev_pcmark(wp: WinHandle, lnum: LinenrT, col: c_int);
-
     /// Sync w_s to point to the window buffer's b_s.
     fn nvim_win_sync_s(wp: WinHandle);
 }
 
-/// Initialize an empty window's cursor and scroll state.
-///
-/// Port of C `win_init_empty()`.
-///
-/// # Safety
 /// Calls C accessor functions.
 unsafe fn win_init_empty_impl(wp: WinHandle) {
     nvim_redraw_later_wrapper(wp, UPD_NOT_VALID);
-    nvim_win_set_lines_valid(wp, 0);
-    nvim_win_set_cursor_lnum(wp, 1);
-    nvim_win_set_cursor_col(wp, 0);
-    nvim_win_set_cursor_coladd(wp, 0);
-    nvim_win_set_curswant(wp, 0);
-    nvim_win_set_pcmark(wp, 1, 0); // pcmark not cleared but set to line 1
-    nvim_win_set_prev_pcmark(wp, 0, 0);
-    nvim_win_set_topline(wp, 1);
-    nvim_win_set_topfill(wp, 0);
-    nvim_win_set_botline(wp, 2);
-    nvim_win_set_valid(wp, 0);
+    win_mut(wp).w_lines_valid = 0;
+    win_mut(wp).w_cursor.lnum = 1;
+    win_mut(wp).w_cursor.col = 0;
+    win_mut(wp).w_cursor.coladd = 0;
+    win_mut(wp).w_curswant = 0;
+    {
+        let ws = win_mut(wp);
+        ws.w_pcmark.lnum = 1;
+        ws.w_pcmark.col = 0;
+    }; // pcmark not cleared but set to line 1
+    {
+        let ws = win_mut(wp);
+        ws.w_prev_pcmark.lnum = 0;
+        ws.w_prev_pcmark.col = 0;
+    };
+    win_mut(wp).w_topline = 1;
+    win_mut(wp).w_topfill = 0;
+    win_mut(wp).w_botline = 2;
+    win_mut(wp).w_valid = 0;
     nvim_win_sync_s(wp);
 }
 
-/// FFI export for `win_init_empty`.
-///
-/// # Safety
 /// Calls C accessor functions with a valid window handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_init_empty(wp: WinHandle) {
     win_init_empty_impl(wp);
 }
 
-/// C export: `win_init_empty` — eliminates the C thin wrapper.
-///
-/// # Safety
 /// Calls C accessor functions with a valid window handle.
 #[unsafe(export_name = "win_init_empty")]
 pub unsafe extern "C" fn win_init_empty(wp: WinHandle) {
     win_init_empty_impl(wp);
 }
 
-/// C export: `curwin_init` — eliminates the C thin wrapper.
-///
-/// Initializes the current window with an empty buffer.
-///
-/// # Safety
 /// Must be called from a valid initialized context.
 #[unsafe(export_name = "curwin_init")]
 pub unsafe extern "C" fn curwin_init() {
@@ -294,28 +226,16 @@ extern "C" {
     /// Allocate a raw frame_T via xcalloc.
     fn nvim_alloc_frame_raw() -> *mut crate::Frame;
 
-    /// Set wp->w_frame.
-    fn nvim_win_set_frame(wp: WinHandle, frp: *mut crate::Frame);
 }
 
-/// Allocate a new frame_T and link it to window `wp`.
-///
-/// Port of C `new_frame()`.
-///
-/// # Safety
 /// Calls C accessor functions. `wp` must be a valid, non-null window.
 unsafe fn new_frame_impl(wp: WinHandle) {
     let frp = nvim_alloc_frame_raw();
     (*frp).fr_layout = crate::FR_LEAF;
     (*frp).fr_win = wp;
-    nvim_win_set_frame(wp, frp);
+    win_mut(wp).w_frame = frp;
 }
 
-/// FFI export for `new_frame`.
-///
-/// Allocates a frame_T and links it to window `wp`.
-///
-/// # Safety
 /// `wp` must be a valid, non-null window handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_new_frame(wp: WinHandle) {
@@ -350,25 +270,8 @@ extern "C" {
     /// Find the tabpage containing `wp`.
     fn rs_win_find_tabpage(wp: WinHandle) -> TabpageHandle;
 
-    /// Set w_wincol.
-    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
-
-    /// Set w_width (inner).
-    fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
-
-    /// Get Columns global.
-
-    /// Set w_scbind_pos.
-    fn nvim_win_set_scbind_pos(wp: WinHandle, val: c_int);
-
-    /// Set w_floating.
-    fn nvim_win_set_floating(wp: WinHandle, val: c_int);
-
     /// Set w_config = WIN_CONFIG_INIT.
     fn nvim_win_set_config_init(wp: WinHandle);
-
-    /// Set w_viewport_invalid.
-    fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
 
     /// Bulk-set w_viewport_last_* fields from a WinViewportSnapshot.
     fn nvim_win_set_viewport_snapshot(wp: WinHandle, s: *const WinViewportSnapshot);
@@ -379,12 +282,6 @@ extern "C" {
     /// Set global-local scroll offset options to -1.
     fn nvim_win_init_global_local_opts(wp: WinHandle);
 
-    /// Set w_fraction.
-    fn nvim_win_set_fraction(wp: WinHandle, val: c_int);
-
-    /// Set w_prev_fraction_row.
-    fn nvim_win_set_prev_fraction_row(wp: WinHandle, val: c_int);
-
     /// Init fold state for window.
     fn rs_foldInitWin(wp: WinHandle);
 
@@ -392,11 +289,6 @@ extern "C" {
     fn nvim_free_wininfo_raw(wip: *mut std::ffi::c_void, bp: crate::BufHandle);
 }
 
-/// Allocate and initialize a new win_T.
-///
-/// Port of C `win_alloc()`.
-///
-/// # Safety
 /// Calls C accessor functions. `after` must be null or a valid window.
 unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
     let wp = nvim_alloc_win_raw();
@@ -424,18 +316,18 @@ unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
         rs_win_append(after, wp, tp);
     }
 
-    nvim_win_set_wincol(wp, 0);
-    nvim_win_set_field_width(wp, Columns);
+    win_mut(wp).w_wincol = 0;
+    win_mut(wp).w_width = Columns;
 
     // Position display and cursor at top of file.
-    nvim_win_set_topline(wp, 1);
-    nvim_win_set_topfill(wp, 0);
-    nvim_win_set_botline(wp, 2);
-    nvim_win_set_cursor_lnum(wp, 1);
-    nvim_win_set_scbind_pos(wp, 1);
-    nvim_win_set_floating(wp, 0);
+    win_mut(wp).w_topline = 1;
+    win_mut(wp).w_topfill = 0;
+    win_mut(wp).w_botline = 2;
+    win_mut(wp).w_cursor.lnum = 1;
+    win_mut(wp).w_scbind_pos = 1;
+    win_mut(wp).w_floating = false;
     nvim_win_set_config_init(wp);
-    nvim_win_set_viewport_invalid(wp, 1);
+    win_mut(wp).w_viewport_invalid = true;
     let vsnap = WinViewportSnapshot {
         topline: 1,
         ..WinViewportSnapshot::default()
@@ -445,8 +337,8 @@ unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
     nvim_win_init_ns_set(wp);
     nvim_win_init_global_local_opts(wp);
 
-    nvim_win_set_fraction(wp, 0);
-    nvim_win_set_prev_fraction_row(wp, -1);
+    win_mut(wp).w_fraction = 0;
+    win_mut(wp).w_prev_fraction_row = -1;
 
     rs_foldInitWin(wp);
     nvim_unblock_autocmds();
@@ -455,11 +347,6 @@ unsafe fn win_alloc_impl(after: WinHandle, hidden: bool) -> WinHandle {
     wp
 }
 
-/// FFI export for `win_alloc`.
-///
-/// Allocates and initializes a new win_T.
-///
-/// # Safety
 /// `after` must be null or a valid window handle.
 #[allow(clippy::must_use_candidate)]
 #[export_name = "win_alloc"]
@@ -467,30 +354,17 @@ pub unsafe extern "C" fn rs_win_alloc(after: WinHandle, hidden: bool) -> WinHand
     win_alloc_impl(after, hidden)
 }
 
-/// Free a WinInfo struct.
-///
-/// Port of C `free_wininfo()`.
-///
-/// # Safety
 /// `wip` must be a valid, non-null WinInfo pointer. `bp` must be valid or null.
 unsafe fn free_wininfo_impl(wip: *mut std::ffi::c_void, bp: crate::BufHandle) {
     nvim_free_wininfo_raw(wip, bp);
 }
 
-/// FFI export for `free_wininfo`.
-///
-/// Frees the WinInfo struct `wip`.
-///
-/// # Safety
 /// `wip` must be a valid, non-null WinInfo pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_free_wininfo(wip: *mut std::ffi::c_void, bp: crate::BufHandle) {
     free_wininfo_impl(wip, bp);
 }
 
-/// C export: `free_wininfo` — eliminates the C thin wrapper.
-///
-/// # Safety
 /// `wip` must be a valid, non-null WinInfo pointer.
 #[unsafe(export_name = "free_wininfo")]
 pub unsafe extern "C" fn free_wininfo(wip: *mut std::ffi::c_void, bp: crate::BufHandle) {
@@ -540,16 +414,6 @@ extern "C" {
 const OK: c_int = 1;
 const FAIL: c_int = 0;
 
-/// Allocate the first window in a tabpage.
-///
-/// When `oldwin` is null, create an empty buffer.
-/// When `oldwin` is non-null, copy info from it.
-///
-/// Port of C `win_alloc_firstwin()`.
-///
-/// Returns OK (1) or FAIL (0).
-///
-/// # Safety
 /// Calls C accessor functions. Must only be called at startup or tabnew time.
 unsafe fn win_alloc_firstwin_impl(oldwin: WinHandle) -> c_int {
     let wp = win_alloc_impl(WinHandle::null(), false);
@@ -576,20 +440,12 @@ unsafe fn win_alloc_firstwin_impl(oldwin: WinHandle) -> c_int {
     OK
 }
 
-/// FFI export for `win_alloc_firstwin`.
-///
-/// # Safety
 /// `oldwin` must be null or a valid window handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_alloc_firstwin(oldwin: WinHandle) -> c_int {
     win_alloc_firstwin_impl(oldwin)
 }
 
-/// Allocate the first window and put an empty buffer in it.
-///
-/// Port of C `win_alloc_first()`. Only called from `main()`.
-///
-/// # Safety
 /// Must only be called once at startup.
 unsafe fn win_alloc_first_impl() {
     if win_alloc_firstwin_impl(WinHandle::null()) == FAIL {
@@ -603,39 +459,24 @@ unsafe fn win_alloc_first_impl() {
     rs_unuse_tabpage(tp);
 }
 
-/// FFI export for `win_alloc_first`.
-///
-/// # Safety
 /// Must only be called once at startup.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_alloc_first() {
     win_alloc_first_impl();
 }
 
-/// C export: `win_alloc_first` — eliminates the C thin wrapper.
-///
-/// # Safety
 /// Must only be called once at startup.
 #[unsafe(export_name = "win_alloc_first")]
 pub unsafe extern "C" fn win_alloc_first() {
     win_alloc_first_impl();
 }
 
-/// Initialize `aucmd_win[idx]` as a hidden floating window.
-///
-/// Port of C `win_alloc_aucmd_win()`. Must only be called after
-/// the first window is fully initialized.
-///
-/// # Safety
 /// Must only be called after startup.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_alloc_aucmd_win(idx: c_int) {
     nvim_win_alloc_aucmd_win_impl(idx);
 }
 
-/// C export: `win_alloc_aucmd_win` — eliminates the C thin wrapper.
-///
-/// # Safety
 /// Must only be called after startup.
 #[unsafe(export_name = "win_alloc_aucmd_win")]
 pub unsafe extern "C" fn win_alloc_aucmd_win(idx: c_int) {

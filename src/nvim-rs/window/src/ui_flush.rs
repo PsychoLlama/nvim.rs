@@ -8,7 +8,8 @@
 
 use std::ffi::c_int;
 
-use crate::{win_struct::win_ref, TabpageHandle, WinHandle};
+use crate::win_struct::{win_mut, win_ref};
+use crate::{TabpageHandle, WinHandle};
 
 // =============================================================================
 // External C Functions
@@ -22,13 +23,10 @@ extern "C" {
 
     // Window iteration
     fn nvim_get_firstwin() -> WinHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
 
     // Window state accessors
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_external_int(wp: WinHandle) -> c_int;
-    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
 
     // Grid/UI accessors
     fn nvim_win_get_grid_pending_comp(wp: WinHandle) -> c_int;
@@ -73,9 +71,9 @@ unsafe fn tabpage_check_windows_impl(old_curtab: TabpageHandle) {
     // float grids from compositor, mark all windows as pos_changed.
     let mut wp = nvim_tabpage_get_firstwin(old_curtab);
     while !wp.is_null() {
-        let next_wp = nvim_win_get_next(wp);
+        let next_wp = win_ref(wp).w_next;
 
-        if nvim_win_get_floating(wp) != 0 {
+        if win_ref(wp).w_floating {
             if nvim_win_get_config_external_int(wp) != 0 {
                 rs_win_remove(wp, old_curtab);
                 rs_win_append(rs_lastwin_nofloating(), wp, TabpageHandle::null());
@@ -83,7 +81,7 @@ unsafe fn tabpage_check_windows_impl(old_curtab: TabpageHandle) {
                 nvim_ui_comp_remove_grid_win(wp);
             }
         }
-        nvim_win_set_pos_changed(wp, 1);
+        win_mut(wp).w_pos_changed = true;
 
         wp = next_wp;
     }
@@ -92,11 +90,11 @@ unsafe fn tabpage_check_windows_impl(old_curtab: TabpageHandle) {
     // and mark all windows as pos_changed.
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
-        if nvim_win_get_floating(wp) != 0 && nvim_win_get_config_external_int(wp) == 0 {
+        if win_ref(wp).w_floating && nvim_win_get_config_external_int(wp) == 0 {
             nvim_win_config_float(wp);
         }
-        nvim_win_set_pos_changed(wp, 1);
-        wp = nvim_win_get_next(wp);
+        win_mut(wp).w_pos_changed = true;
+        wp = win_ref(wp).w_next;
     }
 }
 
@@ -135,7 +133,7 @@ unsafe fn win_ui_flush_impl(validate: c_int) {
                     ui_ext_win_position(wp, validate != 0);
                 } else {
                     nvim_ui_call_win_hide_win(wp);
-                    nvim_win_set_pos_changed(wp, 0);
+                    win_mut(wp).w_pos_changed = false;
                 }
                 nvim_win_set_grid_pending_comp(wp, 0);
             }
@@ -143,7 +141,7 @@ unsafe fn win_ui_flush_impl(validate: c_int) {
                 rs_ui_ext_win_viewport(wp);
             }
 
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
         tp = nvim_tabpage_get_next(tp);
     }

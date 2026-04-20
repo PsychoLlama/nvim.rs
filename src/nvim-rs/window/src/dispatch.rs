@@ -11,6 +11,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::win_struct::{win_mut, win_ref};
 use crate::{BufHandle, TabpageHandle, WinHandle};
 
 // =============================================================================
@@ -228,8 +229,6 @@ extern "C" {
     // nvim_win_exchange_wrapper removed: replaced by rs_win_exchange
     // nvim_win_rotate_wrapper removed: replaced by rs_win_rotate
     fn rs_win_splitmove(wp: WinHandle, size: c_int, flags: c_int) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
     fn nvim_get_min_set_ch() -> i64;
 
     // --- Accessors ---
@@ -248,18 +247,13 @@ extern "C" {
     fn nvim_win_valid(wp: WinHandle) -> c_int; // for prevwin check
 
     // --- Phase 4: wW/P/T/hat/new/count accessors ---
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_focusable(wp: WinHandle) -> c_int;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
     fn nvim_emsg_id(id: c_int);
     fn rs_win_new_tabpage(after: c_int, filename: *const u8) -> c_int;
     fn nvim_al_goto_tabpage_tp(tp: TabpageHandle, trigger_enter: c_int, trigger_leave: c_int);
     fn nvim_al_win_close(wp: WinHandle, free_buf: c_int, force: c_int);
     fn nvim_apply_autocmds_tabnewentered();
-    fn nvim_win_get_alt_fnum(wp: WinHandle) -> c_int;
     fn curbuf_locked() -> bool;
     fn nvim_semsg_e92_buf_not_found(nr: i64);
     #[link_name = "rs_buflist_findnr"]
@@ -443,7 +437,7 @@ unsafe fn do_window_find_in_path(nchar: c_int, prenum: c_int, prenum1: c_int) {
     let whole = c_int::from(prenum == 0);
     nvim_find_pattern_in_path_split(ptr, len, type_, prenum1, whole);
     xfree(ptr.cast());
-    crate::win_struct::win_mut(nvim_get_curwin()).w_set_curswant = 1;
+    win_mut(nvim_get_curwin()).w_set_curswant = 1;
 }
 
 /// Rust implementation of `nvim_do_window_g_external`.
@@ -742,7 +736,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // =================================================================
             CH_PLUS => {
                 let curwin = nvim_get_curwin();
-                rs_win_setheight(nvim_win_get_w_height(curwin) + prenum1);
+                rs_win_setheight(win_ref(curwin).w_height + prenum1);
             }
 
             // =================================================================
@@ -750,7 +744,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // =================================================================
             CH_MINUS => {
                 let curwin = nvim_get_curwin();
-                rs_win_setheight(nvim_win_get_w_height(curwin) - prenum1);
+                rs_win_setheight(win_ref(curwin).w_height - prenum1);
             }
 
             // =================================================================
@@ -769,7 +763,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // =================================================================
             CH_GT => {
                 let curwin = nvim_get_curwin();
-                rs_win_setwidth(nvim_win_get_w_width(curwin) + prenum1);
+                rs_win_setwidth(win_ref(curwin).w_width + prenum1);
             }
 
             // =================================================================
@@ -777,7 +771,7 @@ pub extern "C" fn rs_do_window(nchar: c_int, prenum: c_int, xchar: c_int) {
             // =================================================================
             CH_LT => {
                 let curwin = nvim_get_curwin();
-                rs_win_setwidth(nvim_win_get_w_width(curwin) - prenum1);
+                rs_win_setwidth(win_ref(curwin).w_width - prenum1);
             }
 
             // =================================================================
@@ -972,7 +966,7 @@ const GETF_ALT: c_int = 0x02;
 /// Check if a floating window is hidden or non-focusable (skip during navigation).
 #[inline]
 unsafe fn is_hidden_float(wp: WinHandle) -> bool {
-    nvim_win_get_floating(wp) != 0
+    win_ref(wp).w_floating
         && (nvim_win_get_config_hide(wp) != 0 || nvim_win_get_config_focusable(wp) == 0)
 }
 
@@ -1010,7 +1004,7 @@ pub unsafe extern "C" fn rs_do_window_wW(nchar: c_int, prenum: c_int) {
             if !is_hidden_float(w) {
                 last_focusable = w;
             }
-            let next = nvim_win_get_next(w);
+            let next = win_ref(w).w_next;
             if next.is_null() {
                 break;
             }
@@ -1018,24 +1012,24 @@ pub unsafe extern "C" fn rs_do_window_wW(nchar: c_int, prenum: c_int) {
         }
         // Skip past any trailing hidden/non-focusable floats.
         while !w.is_null() && is_hidden_float(w) {
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         wp = if w.is_null() { last_focusable } else { w };
     } else if nchar == CH_W_UPPER {
         // 'W': move backwards (wrapping at firstwin -> lastwin).
-        let mut w = nvim_win_get_prev(curwin);
+        let mut w = win_ref(curwin).w_prev;
         if w.is_null() {
             w = lastwin;
         }
         while !w.is_null() && is_hidden_float(w) {
-            w = nvim_win_get_prev(w);
+            w = win_ref(w).w_prev;
         }
         wp = w;
     } else {
         // 'w' / Ctrl-W: move forwards (wrapping at lastwin -> firstwin).
-        let mut w = nvim_win_get_next(curwin);
+        let mut w = win_ref(curwin).w_next;
         while !w.is_null() && is_hidden_float(w) {
-            w = nvim_win_get_next(w);
+            w = win_ref(w).w_next;
         }
         wp = if w.is_null() { firstwin } else { w };
     }
@@ -1057,11 +1051,11 @@ pub unsafe extern "C" fn rs_do_window_P() {
     // Walk all windows in current tab via firstwin/w_next.
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
-        if nvim_win_get_pvw(wp) != 0 {
+        if win_ref(wp).w_p_pvw() != 0 {
             found = wp;
             break;
         }
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 
     if found.is_null() {
@@ -1115,7 +1109,7 @@ pub unsafe extern "C" fn rs_do_window_hat(prenum: c_int) {
 
     let curwin = nvim_get_curwin();
     let alt_fnum = if prenum == 0 {
-        nvim_win_get_alt_fnum(curwin)
+        win_ref(curwin).w_alt_fnum
     } else {
         prenum
     };

@@ -5,9 +5,11 @@
 //! the freed space and determining how to merge frames.
 
 #![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::missing_safety_doc)]
 
 use std::ffi::c_int;
 
+use crate::win_struct::win_ref;
 use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // =============================================================================
@@ -15,8 +17,6 @@ use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 // =============================================================================
 
 extern "C" {
-    /// Get w_frame from a window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get topframe.
     fn nvim_get_topframe() -> *mut Frame;
@@ -55,12 +55,6 @@ extern "C" {
     /// Set frame to a new width (recursively).
     fn rs_frame_new_width(topfrp: *mut Frame, width: c_int, leftfirst: c_int, wfw: c_int);
 
-    /// Get w_winrow from a window.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Get w_wincol from a window.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-
     /// Get the global status-line height (0 = per-window statuslines).
     fn rs_global_stl_height() -> c_int;
 
@@ -82,27 +76,12 @@ extern "C" {
     /// Check if there is only one non-floating window in the tab.
     fn rs_one_window_in_tab(win: WinHandle, tp: *mut std::ffi::c_void) -> c_int;
 
-    /// Get w_vsep_width from a window.
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
-
-    /// Get w_status_height from a window.
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-
-    /// Get w_hsep_height from a window.
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
 }
 
 // =============================================================================
 // winframe_remove implementation
 // =============================================================================
 
-/// Rust implementation of `winframe_remove`.
-///
-/// Remove window `win` from the frame tree, giving its space to the best
-/// alternate frame. Sets `*dirp` to the direction of resize ('v' or 'h').
-/// If `unflat_altfr` is non-null, stores the (un-flattened) altfr there
-/// instead of calling `rs_frame_flatten`.
-///
 /// Returns the window that received the freed space, or null on failure.
 unsafe fn winframe_remove_impl(
     win: WinHandle,
@@ -119,7 +98,7 @@ unsafe fn winframe_remove_impl(
         return WinHandle::null();
     }
 
-    let frp_close = nvim_win_get_frame(win);
+    let frp_close = win_ref(win).w_frame;
     if frp_close.is_null() {
         return WinHandle::null();
     }
@@ -147,11 +126,11 @@ unsafe fn winframe_remove_impl(
         return WinHandle::null();
     }
     let topleft = rs_frame2win(parent);
-    let mut row = nvim_win_get_winrow(topleft);
-    let mut col = nvim_win_get_wincol(topleft);
+    let mut row = win_ref(topleft).w_winrow;
+    let mut col = win_ref(topleft).w_wincol;
 
     // If rightmost window, remove vertical separator to the left.
-    if nvim_win_get_vsep_width(win) == 0
+    if win_ref(win).w_vsep_width == 0
         && (*parent).fr_layout == FR_ROW
         && !(*frp_close).fr_prev.is_null()
     {
@@ -201,19 +180,13 @@ unsafe fn winframe_remove_impl(
 // winframe_restore implementation
 // =============================================================================
 
-/// Rust implementation of `winframe_restore`.
-///
-/// Undo changes from a prior call to `winframe_remove`, restoring frame
-/// positions, separators, and sizes.
-///
-/// # Safety
 /// All pointer arguments must be valid.
 unsafe fn winframe_restore_impl(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame) {
     if wp.is_null() || unflat_altfr.is_null() {
         return;
     }
 
-    let frp = nvim_win_get_frame(wp);
+    let frp = win_ref(wp).w_frame;
     if frp.is_null() {
         return;
     }
@@ -231,18 +204,15 @@ unsafe fn winframe_restore_impl(wp: WinHandle, dir: c_int, unflat_altfr: *mut Fr
     }
 
     // Restore vertical separators that may have been lost.
-    if nvim_win_get_vsep_width(wp) == 0
-        && (*parent).fr_layout == FR_ROW
-        && !(*frp).fr_prev.is_null()
-    {
+    if win_ref(wp).w_vsep_width == 0 && (*parent).fr_layout == FR_ROW && !(*frp).fr_prev.is_null() {
         rs_frame_set_vsep((*frp).fr_prev, 1);
     }
 
     // Restore statuslines or horizontal separators above.
     if (*parent).fr_layout == FR_COL && !(*frp).fr_prev.is_null() {
-        if rs_global_stl_height() == 0 && nvim_win_get_status_height(wp) == 0 {
+        if rs_global_stl_height() == 0 && win_ref(wp).w_status_height == 0 {
             rs_frame_add_statusline((*frp).fr_prev);
-        } else if rs_global_stl_height() > 0 && nvim_win_get_hsep_height(wp) == 0 {
+        } else if rs_global_stl_height() > 0 && win_ref(wp).w_hsep_height == 0 {
             rs_frame_add_hsep((*frp).fr_prev);
         }
     }
@@ -268,8 +238,8 @@ unsafe fn winframe_restore_impl(wp: WinHandle, dir: c_int, unflat_altfr: *mut Fr
     // Recompute positions if altframe was not adjacent and to the left/above.
     if unflat_altfr != (*frp).fr_prev {
         let topleft = rs_frame2win(parent);
-        let mut row = nvim_win_get_winrow(topleft);
-        let mut col = nvim_win_get_wincol(topleft);
+        let mut row = win_ref(topleft).w_winrow;
+        let mut col = win_ref(topleft).w_wincol;
         rs_frame_comp_pos(
             parent,
             std::ptr::addr_of_mut!(row),
@@ -282,12 +252,6 @@ unsafe fn winframe_restore_impl(wp: WinHandle, dir: c_int, unflat_altfr: *mut Fr
 // FFI exports for winframe_remove and winframe_restore
 // =============================================================================
 
-/// FFI: Remove window from frame tree, returning the window that gains space.
-///
-/// Replaces C `winframe_remove()`.
-///
-/// # Safety
-/// `win` must be a valid window handle. `dirp` must be a valid pointer.
 /// `tp` may be null (meaning current tabpage). `unflat_altfr` may be null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_winframe_remove(
@@ -299,10 +263,6 @@ pub unsafe extern "C" fn rs_winframe_remove(
     winframe_remove_impl(win, dirp, tp, unflat_altfr)
 }
 
-/// C export: `winframe_remove` — eliminates the C thin wrapper.
-///
-/// # Safety
-/// `win` must be a valid window handle. `dirp` must be a valid pointer.
 /// `tp` may be null (meaning current tabpage). `unflat_altfr` may be null.
 #[unsafe(export_name = "winframe_remove")]
 pub unsafe extern "C" fn winframe_remove(
@@ -314,20 +274,12 @@ pub unsafe extern "C" fn winframe_remove(
     winframe_remove_impl(win, dirp, tp, unflat_altfr)
 }
 
-/// FFI: Undo `winframe_remove`, restoring the frame tree.
-///
-/// Replaces C `winframe_restore()`.
-///
-/// # Safety
 /// All pointer arguments must be valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_winframe_restore(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame) {
     winframe_restore_impl(wp, dir, unflat_altfr);
 }
 
-/// C export: `winframe_restore` — eliminates the C thin wrapper.
-///
-/// # Safety
 /// All pointer arguments must be valid.
 #[unsafe(export_name = "winframe_restore")]
 pub unsafe extern "C" fn winframe_restore(wp: WinHandle, dir: c_int, unflat_altfr: *mut Frame) {
@@ -338,14 +290,6 @@ pub unsafe extern "C" fn winframe_restore(wp: WinHandle, dir: c_int, unflat_altf
 // Frame Space Redistribution
 // =============================================================================
 
-/// Find the frame that will receive the space from a closed window.
-///
-/// This implements the winframe_find_altwin logic:
-/// - Prefers previous sibling
-/// - Falls back to next sibling
-/// - For nested frames, considers parent layout
-///
-/// # Safety
 /// Caller must ensure `wp` is a valid window handle with a valid frame.
 fn find_altframe_impl(wp: WinHandle) -> *mut Frame {
     if wp.is_null() {
@@ -353,7 +297,7 @@ fn find_altframe_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return std::ptr::null_mut();
         }
@@ -373,8 +317,6 @@ fn find_altframe_impl(wp: WinHandle) -> *mut Frame {
     }
 }
 
-/// Check if a frame should be flattened after child removal.
-///
 /// A frame should be flattened when it has only one child left.
 fn frame_should_flatten_impl(frp: *const Frame) -> bool {
     if frp.is_null() {
@@ -397,8 +339,6 @@ fn frame_should_flatten_impl(frp: *const Frame) -> bool {
     }
 }
 
-/// Get the layout direction that the alt frame will expand in.
-///
 /// Returns 'v' for vertical expansion (FR_COL parent), 'h' for horizontal (FR_ROW).
 fn get_expansion_direction_impl(frp: *const Frame) -> c_int {
     if frp.is_null() {
@@ -482,9 +422,6 @@ fn total_freed_width_impl(frp: *const Frame) -> c_int {
     unsafe { (*frp).fr_width }
 }
 
-/// Calculate how much height the alt frame will gain.
-///
-/// For FR_COL parent: alt frame gains the full height
 /// For FR_ROW parent: no height change
 fn height_gain_for_alt_impl(frp: *const Frame) -> c_int {
     if frp.is_null() {
@@ -505,9 +442,6 @@ fn height_gain_for_alt_impl(frp: *const Frame) -> c_int {
     }
 }
 
-/// Calculate how much width the alt frame will gain.
-///
-/// For FR_ROW parent: alt frame gains the full width
 /// For FR_COL parent: no width change
 fn width_gain_for_alt_impl(frp: *const Frame) -> c_int {
     if frp.is_null() {
@@ -532,10 +466,6 @@ fn width_gain_for_alt_impl(frp: *const Frame) -> c_int {
 // Frame Validation for Close
 // =============================================================================
 
-/// Check if frame can be safely removed.
-///
-/// A frame can be removed if:
-/// - It's not the topframe
 /// - Its parent exists
 fn can_remove_frame_impl(frp: *const Frame) -> bool {
     if frp.is_null() {
@@ -554,9 +484,6 @@ fn can_remove_frame_impl(frp: *const Frame) -> bool {
     }
 }
 
-/// Check if closing this window would require layout adjustment.
-///
-/// Returns true if the frame tree structure would change beyond just
 /// removing the window's frame.
 fn close_needs_layout_adjustment_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
@@ -564,7 +491,7 @@ fn close_needs_layout_adjustment_impl(wp: WinHandle) -> bool {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return false;
         }
@@ -583,15 +510,6 @@ fn close_needs_layout_adjustment_impl(wp: WinHandle) -> bool {
 // Win Altframe Selection
 // =============================================================================
 
-/// Find the alternate frame that receives space when a window is closed.
-///
-/// This implements the win_altframe logic:
-/// - Prefers next sibling by default
-/// - If 'splitbelow' is set for FR_COL, prefer previous sibling
-/// - If 'splitright' is set for FR_ROW, prefer previous sibling
-/// - If target has wfh/wfw but other doesn't, reverse the selection
-///
-/// # Safety
 /// Caller must ensure `wp` is a valid window handle with a valid frame.
 fn win_altframe_impl(wp: WinHandle) -> *mut Frame {
     if wp.is_null() {
@@ -599,7 +517,7 @@ fn win_altframe_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let frp = nvim_win_get_frame(wp);
+        let frp = win_ref(wp).w_frame;
         if frp.is_null() {
             return std::ptr::null_mut();
         }
@@ -655,7 +573,6 @@ fn win_altframe_impl(wp: WinHandle) -> *mut Frame {
 // Winframe Find Altwin Helper
 // =============================================================================
 
-/// Result structure for winframe_find_altwin.
 /// This is used to return multiple values from the Rust implementation.
 #[repr(C)]
 pub struct WinframeResult {
@@ -669,12 +586,6 @@ extern "C" {
     /// Get window from frame (recursive).
     fn rs_frame2win(frp: *mut Frame) -> WinHandle;
 
-    /// Get w_p_wfh from window.
-    fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
-
-    /// Get w_p_wfw from window.
-    fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
-
     /// Get the alternate tabpage for closing.
     fn rs_alt_tabpage() -> TabpageHandle;
 
@@ -682,16 +593,6 @@ extern "C" {
     fn nvim_tabpage_get_curwin(tp: TabpageHandle) -> WinHandle;
 }
 
-/// Find the best alternate frame considering winfixheight/winfixwidth constraints.
-///
-/// When the initial altframe has wfh/wfw set, search outward from the closing
-/// window to find a frame that can accept the space.
-///
-/// # Arguments
-/// * `frp_close` - Frame of the window being closed
-/// * `altfr` - Initial alternate frame from win_altframe
-///
-/// # Returns
 /// The best frame to receive the space (may be same as altfr)
 fn find_best_altframe_for_col(frp_close: *const Frame, altfr: *mut Frame) -> *mut Frame {
     if frp_close.is_null() || altfr.is_null() {
@@ -701,7 +602,7 @@ fn find_best_altframe_for_col(frp_close: *const Frame, altfr: *mut Frame) -> *mu
     unsafe {
         // Check if altfr has a leaf window with wfh set
         let alt_win = (*altfr).fr_win;
-        if alt_win.is_null() || nvim_win_get_wfh(alt_win) == 0 {
+        if alt_win.is_null() || win_ref(alt_win).w_p_wfh() == 0 {
             return altfr; // No wfh, use as-is
         }
 
@@ -718,7 +619,7 @@ fn find_best_altframe_for_col(frp_close: *const Frame, altfr: *mut Frame) -> *mu
             }
             if !frp_next.is_null() {
                 let frp_next_win = (*frp_next).fr_win;
-                if !frp_next_win.is_null() && nvim_win_get_wfh(frp_next_win) == 0 {
+                if !frp_next_win.is_null() && win_ref(frp_next_win).w_p_wfh() == 0 {
                     return frp_next;
                 }
                 frp_next = (*frp_next).fr_next;
@@ -738,7 +639,7 @@ fn find_best_altframe_for_row(frp_close: *const Frame, altfr: *mut Frame) -> *mu
     unsafe {
         // Check if altfr has a leaf window with wfw set
         let alt_win = (*altfr).fr_win;
-        if alt_win.is_null() || nvim_win_get_wfw(alt_win) == 0 {
+        if alt_win.is_null() || win_ref(alt_win).w_p_wfw() == 0 {
             return altfr; // No wfw, use as-is
         }
 
@@ -755,7 +656,7 @@ fn find_best_altframe_for_row(frp_close: *const Frame, altfr: *mut Frame) -> *mu
             }
             if !frp_next.is_null() {
                 let frp_next_win = (*frp_next).fr_win;
-                if !frp_next_win.is_null() && nvim_win_get_wfw(frp_next_win) == 0 {
+                if !frp_next_win.is_null() && win_ref(frp_next_win).w_p_wfw() == 0 {
                     return frp_next;
                 }
                 frp_next = (*frp_next).fr_next;
@@ -766,15 +667,6 @@ fn find_best_altframe_for_row(frp_close: *const Frame, altfr: *mut Frame) -> *mu
     }
 }
 
-/// Core implementation of winframe_find_altwin.
-///
-/// Finds the frame and direction for space redistribution when closing a window.
-///
-/// # Arguments
-/// * `wp` - Window being closed
-/// * `altfr_initial` - Initial alternate frame from win_altframe
-///
-/// # Returns
 /// WinframeResult with the best altframe and direction
 fn winframe_find_altwin_impl(wp: WinHandle, altfr_initial: *mut Frame) -> WinframeResult {
     let null_result = WinframeResult {
@@ -787,7 +679,7 @@ fn winframe_find_altwin_impl(wp: WinHandle, altfr_initial: *mut Frame) -> Winfra
     }
 
     unsafe {
-        let frp_close = nvim_win_get_frame(wp);
+        let frp_close = win_ref(wp).w_frame;
         if frp_close.is_null() {
             return null_result;
         }
@@ -828,21 +720,12 @@ pub extern "C" fn rs_close_find_altframe(wp: WinHandle) -> *mut Frame {
     find_altframe_impl(wp)
 }
 
-/// FFI: Find the alternate frame using splitbelow/splitright and wfh/wfw logic.
-///
 /// This is the more sophisticated altframe selection that considers options.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_win_altframe(wp: WinHandle) -> *mut Frame {
     win_altframe_impl(wp)
 }
 
-/// FFI: Find the best altframe and direction considering wfh/wfw constraints.
-///
-/// # Arguments
-/// * `wp` - Window being closed
-/// * `altfr_initial` - Initial alternate frame from win_altframe
-///
-/// # Returns
 /// WinframeResult with the best altframe and direction
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_winframe_find_altwin(
@@ -852,19 +735,6 @@ pub extern "C" fn rs_winframe_find_altwin(
     winframe_find_altwin_impl(wp, altfr_initial)
 }
 
-/// Full winframe_find_altwin implementation absorbing win_altframe and C wrapper.
-///
-/// Equivalent to the C `winframe_find_altwin()` function. Replaces the C body.
-///
-/// - When there is only one non-floating window (`rs_one_window_in_tab`), returns null.
-/// - Finds the initial alternate frame via `win_altframe` logic (including alt_tabpage
-///   for the one-window case, which however returns NULL before reaching that).
-/// - Calls `winframe_find_altwin_impl` to refine with wfh/wfw constraints.
-/// - Returns the window that will receive the freed space (via rs_frame2win).
-/// - Writes `dir` to `*dirp` and optionally `altfr` to `*altfr_out`.
-///
-/// # Safety
-/// `win` must be valid. `dirp` must be a valid non-null pointer.
 /// `tp` and `altfr_out` may be null.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 unsafe fn winframe_find_altwin_full_impl(
@@ -897,7 +767,6 @@ unsafe fn winframe_find_altwin_full_impl(
     wp
 }
 
-/// # Safety
 /// `win` must be a valid window handle.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[unsafe(no_mangle)]
@@ -910,10 +779,6 @@ pub unsafe extern "C" fn rs_winframe_find_altwin_full(
     winframe_find_altwin_full_impl(win, dirp, tp, altfr_out)
 }
 
-/// C export: `winframe_find_altwin` — eliminates the C thin wrapper.
-///
-/// # Safety
-/// `win` must be valid. `dirp` must be a valid non-null pointer.
 /// `tp` and `altfr_out` may be null.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[unsafe(export_name = "winframe_find_altwin")]
@@ -926,90 +791,60 @@ pub unsafe extern "C" fn winframe_find_altwin(
     winframe_find_altwin_full_impl(win, dirp, tp, altfr_out)
 }
 
-/// FFI: Check if frame should be flattened after removal.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_should_flatten(frp: *const Frame) -> c_int {
     c_int::from(frame_should_flatten_impl(frp))
 }
 
-/// FFI: Get expansion direction for alt frame ('v' or 'h').
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_expansion_direction(frp: *const Frame) -> c_int {
     get_expansion_direction_impl(frp)
 }
 
-/// FFI: Check if removal would orphan parent (leave single child).
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_would_orphan_parent(frp: *const Frame) -> c_int {
     c_int::from(removal_would_orphan_parent_impl(frp))
 }
 
-/// FFI: Get frame parent.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_get_parent(frp: *const Frame) -> *mut Frame {
     get_frame_parent_impl(frp)
 }
 
-/// FFI: Check if frame is topframe.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_is_topframe(frp: *const Frame) -> c_int {
     c_int::from(is_topframe_impl(frp))
 }
 
-/// FFI: Get total freed height.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_total_freed_height(frp: *const Frame) -> c_int {
     total_freed_height_impl(frp)
 }
 
-/// FFI: Get total freed width.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_total_freed_width(frp: *const Frame) -> c_int {
     total_freed_width_impl(frp)
 }
 
-/// FFI: Calculate height gain for alt frame.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_height_gain(frp: *const Frame) -> c_int {
     height_gain_for_alt_impl(frp)
 }
 
-/// FFI: Calculate width gain for alt frame.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_width_gain(frp: *const Frame) -> c_int {
     width_gain_for_alt_impl(frp)
 }
 
-/// FFI: Check if frame can be safely removed.
-///
-/// # Safety
 /// Caller must ensure `frp` is null or a valid pointer to a Frame.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_close_can_remove_frame(frp: *const Frame) -> c_int {
@@ -1028,7 +863,7 @@ pub extern "C" fn rs_close_get_frame(wp: WinHandle) -> *mut Frame {
     if wp.is_null() {
         return std::ptr::null_mut();
     }
-    unsafe { nvim_win_get_frame(wp) }
+    unsafe { win_ref(wp).w_frame }
 }
 
 #[cfg(test)]

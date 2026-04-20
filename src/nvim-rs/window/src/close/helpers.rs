@@ -12,6 +12,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::{win_mut, win_ref};
 use crate::{BufHandle, Frame, TabpageHandle, WinHandle};
 
 // =============================================================================
@@ -20,7 +21,6 @@ use crate::{BufHandle, Frame, TabpageHandle, WinHandle};
 
 extern "C" {
     // --- Accessors ---
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
     fn nvim_buf_set_p_bl(buf: BufHandle, val: c_int);
     fn nvim_get_firstbuf_wrapper() -> BufHandle;
@@ -32,8 +32,6 @@ extern "C" {
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_tabpage_get_curwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_tabpage_set_curwin(tp: TabpageHandle, wp: WinHandle);
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     // --- Logic helpers ---
     #[link_name = "reset_synblock"]
@@ -51,7 +49,6 @@ extern "C" {
     ) -> WinHandle;
 
     /// Set win->w_locked.
-    fn nvim_win_set_locked(wp: WinHandle, val: c_int);
     /// Check if win is valid in any tab.
     fn rs_win_valid_any_tab(wp: WinHandle) -> c_int;
     /// close_buffer(win, buf, action, abort_if_last, ignore_abort).
@@ -130,7 +127,7 @@ const EVENT_WINENTER: c_int = 136;
 /// `win` must be a valid `win_T*`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_close_buffer(win: WinHandle, action: c_int, abort_if_last: c_int) {
-    let buf = nvim_win_get_buffer(win);
+    let buf = BufHandle(win_ref(win).w_buffer);
     if buf.is_null() {
         return;
     }
@@ -145,17 +142,17 @@ pub unsafe extern "C" fn rs_win_close_buffer(win: WinHandle, action: c_int, abor
     }
 
     // Close the link to the buffer (inlined nvim_close_buffer_for_win).
-    let buf = nvim_win_get_buffer(win);
+    let buf = BufHandle(win_ref(win).w_buffer);
     let curbuf_invalid = if buf.is_null() {
         0
     } else {
         let mut bufref = std::mem::MaybeUninit::<[u8; BUFREF_SIZE]>::zeroed();
         let curbuf = nvim_get_curbuf();
         nvim_set_bufref_win(bufref.as_mut_ptr().cast(), curbuf);
-        nvim_win_set_locked(win, 1);
+        win_mut(win).w_locked = true;
         close_buffer(win, buf, action, abort_if_last != 0, true);
         if rs_win_valid_any_tab(win) != 0 {
-            nvim_win_set_locked(win, 0);
+            win_mut(win).w_locked = false;
         }
         c_int::from(nvim_bufref_valid_win(bufref.as_mut_ptr().cast()) == 0)
     };
@@ -201,7 +198,7 @@ pub unsafe extern "C" fn rs_close_last_window_tabpage(
     // Go to another tab page first, then close the window and tab.
     // Don't trigger *Enter autocommands yet.
     // Do trigger *Leave autocommands unless win->w_buffer is NULL.
-    let buf = nvim_win_get_buffer(win);
+    let buf = BufHandle(win_ref(win).w_buffer);
     let trigger_leave = c_int::from(!buf.is_null());
     crate::tabpage::rs_goto_tabpage_tp_impl(
         crate::tabpage::rs_alt_tabpage(),
@@ -256,9 +253,9 @@ pub unsafe extern "C" fn rs_win_free_mem(
     let win_tp = if tp.is_null() { nvim_get_curtab() } else { tp };
 
     let wp;
-    if nvim_win_get_floating(win) == 0 {
+    if c_int::from(win_ref(win).w_floating) == 0 {
         // Remove the window and its frame from the tree of frames.
-        let frp = nvim_win_get_frame(win);
+        let frp = win_ref(win).w_frame;
         wp = rs_winframe_remove_c(win, dirp, tp, std::ptr::null_mut());
         if !frp.is_null() {
             nvim_xfree_frame(frp.cast());

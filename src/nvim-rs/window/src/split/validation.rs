@@ -12,6 +12,7 @@
 use std::ffi::c_int;
 
 use crate::frame::constants::{MIN_LINES, STATUS_HEIGHT, WSP_VERT};
+use crate::win_struct::win_ref;
 use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_ROW};
 
 // =============================================================================
@@ -38,19 +39,14 @@ extern "C" {
     fn nvim_get_topframe() -> *mut Frame;
 
     /// Get w_winbar_height from a window.
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
 
     /// Get w_status_height from a window.
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
 
     /// Get w_hsep_height from a window.
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
 
     /// Get w_next from a window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
 
     /// Check if window is floating.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
 
     /// Get tabline height.
     #[link_name = "rs_tabline_height"]
@@ -88,10 +84,10 @@ fn min_win_height(wp: WinHandle, include_status: bool) -> c_int {
 
     unsafe {
         let mut height = nvim_get_p_wmh() as c_int;
-        height += nvim_win_get_winbar_height(wp);
+        height += win_ref(wp).w_winbar_height;
         if include_status {
-            height += nvim_win_get_status_height(wp);
-            height += nvim_win_get_hsep_height(wp);
+            height += win_ref(wp).w_status_height;
+            height += win_ref(wp).w_hsep_height;
         }
         height.max(1)
     }

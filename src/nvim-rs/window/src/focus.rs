@@ -5,25 +5,20 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::{win_mut, win_ref};
 use crate::{BufHandle, Frame, TabpageHandle, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
-use crate::list::{
-    frame2win_impl, nvim_get_firstwin, nvim_win_get_floating, nvim_win_get_frame, win_valid_impl,
-};
+use crate::list::{frame2win_impl, nvim_get_firstwin, win_valid_impl};
 
 extern "C" {
     static mut State: c_int;
     /// Get the `w_wcol` field from a window (cursor column in window).
-    fn nvim_win_get_wcol(wp: WinHandle) -> c_int;
 
     /// Get the `w_wrow` field from a window (cursor row in window).
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
 
     /// Get the `w_winrow` field from a window.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
 
     /// Get the `w_wincol` field from a window.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
 
     /// Get the `tp_topframe` field from a tabpage.
     fn nvim_tabpage_get_topframe(tp: TabpageHandle) -> *mut Frame;
@@ -43,7 +38,6 @@ extern "C" {
     fn nvim_beep_flush();
 
     /// Get wp->w_buffer.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 
     /// Get curbuf.
     fn nvim_get_curbuf() -> BufHandle;
@@ -55,22 +49,16 @@ extern "C" {
     static mut VIsual_active: bool;
 
     /// Get wp->w_cursor.lnum.
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
 
     /// Set wp->w_cursor.lnum.
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, val: c_int);
 
     /// Get wp->w_cursor.col.
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> c_int;
 
     /// Set wp->w_cursor.col.
-    fn nvim_win_set_cursor_col(wp: WinHandle, val: c_int);
 
     /// Get wp->w_cursor.coladd.
-    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> c_int;
 
     /// Set wp->w_cursor.coladd.
-    fn nvim_win_set_cursor_coladd(wp: WinHandle, val: c_int);
 
     /// Check if window is valid. Returns 1 if valid.
     fn rs_win_valid(wp: WinHandle) -> c_int;
@@ -124,13 +112,13 @@ pub(crate) fn win_vert_neighbor_impl(
     }
 
     unsafe {
-        let mut foundfr = nvim_win_get_frame(wp);
+        let mut foundfr = win_ref(wp).w_frame;
 
         // If floating window, return prevwin if valid and non-floating, else firstwin
-        if nvim_win_get_floating(wp) != 0 {
+        if win_ref(wp).w_floating {
             let prevwin = nvim_get_prevwin();
             let firstwin = nvim_get_firstwin();
-            return if win_valid_impl(prevwin) && nvim_win_get_floating(prevwin) == 0 {
+            return if win_valid_impl(prevwin) && c_int::from(win_ref(prevwin).w_floating) == 0 {
                 prevwin
             } else {
                 firstwin
@@ -171,11 +159,11 @@ pub(crate) fn win_vert_neighbor_impl(
                 fr = (*nfr).fr_child;
                 if (*nfr).fr_layout == FR_ROW {
                     // Find the frame at the cursor column.
-                    let wp_wincol = nvim_win_get_wincol(wp);
-                    let wp_wcol = nvim_win_get_wcol(wp);
+                    let wp_wincol = win_ref(wp).w_wincol;
+                    let wp_wcol = win_ref(wp).w_wcol;
                     while !(*fr).fr_next.is_null() {
                         let fr_win = frame2win_impl(fr);
-                        let fr_wincol = nvim_win_get_wincol(fr_win);
+                        let fr_wincol = win_ref(fr_win).w_wincol;
                         if fr_wincol + (*fr).fr_width > wp_wincol + wp_wcol {
                             break;
                         }
@@ -217,13 +205,13 @@ pub(crate) fn win_horz_neighbor_impl(
     }
 
     unsafe {
-        let mut foundfr = nvim_win_get_frame(wp);
+        let mut foundfr = win_ref(wp).w_frame;
 
         // If floating window, return prevwin if valid and non-floating, else firstwin
-        if nvim_win_get_floating(wp) != 0 {
+        if win_ref(wp).w_floating {
             let prevwin = nvim_get_prevwin();
             let firstwin = nvim_get_firstwin();
-            return if win_valid_impl(prevwin) && nvim_win_get_floating(prevwin) == 0 {
+            return if win_valid_impl(prevwin) && c_int::from(win_ref(prevwin).w_floating) == 0 {
                 prevwin
             } else {
                 firstwin
@@ -264,11 +252,11 @@ pub(crate) fn win_horz_neighbor_impl(
                 fr = (*nfr).fr_child;
                 if (*nfr).fr_layout == FR_COL {
                     // Find the frame at the cursor row.
-                    let wp_winrow = nvim_win_get_winrow(wp);
-                    let wp_wrow = nvim_win_get_wrow(wp);
+                    let wp_winrow = win_ref(wp).w_winrow;
+                    let wp_wrow = win_ref(wp).w_wrow;
                     while !(*fr).fr_next.is_null() {
                         let fr_win = frame2win_impl(fr);
-                        let fr_winrow = nvim_win_get_winrow(fr_win);
+                        let fr_winrow = win_ref(fr_win).w_winrow;
                         if fr_winrow + (*fr).fr_height > wp_winrow + wp_wrow {
                             break;
                         }
@@ -340,7 +328,7 @@ extern "C" {
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn leaving_window_impl(win: WinHandle) {
-    if !rs_bt_prompt(nvim_win_get_buffer(win)) {
+    if !rs_bt_prompt(BufHandle(win_ref(win).w_buffer)) {
         return;
     }
 
@@ -371,7 +359,7 @@ unsafe fn leaving_window_impl(win: WinHandle) {
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn entering_window_impl(win: WinHandle) {
-    if !rs_bt_prompt(nvim_win_get_buffer(win)) {
+    if !rs_bt_prompt(BufHandle(win_ref(win).w_buffer)) {
         return;
     }
 
@@ -442,14 +430,14 @@ unsafe fn win_goto_impl(wp: WinHandle) {
         return;
     }
 
-    if nvim_win_get_buffer(wp) != nvim_get_curbuf() {
+    if BufHandle(win_ref(wp).w_buffer) != nvim_get_curbuf() {
         // careful: triggers ModeChanged autocommand
         rs_reset_VIsual_and_resel();
     } else if VIsual_active {
         // Set wp->w_cursor = curwin->w_cursor
-        nvim_win_set_cursor_lnum(wp, nvim_win_get_cursor_lnum(owp));
-        nvim_win_set_cursor_col(wp, nvim_win_get_cursor_col(owp));
-        nvim_win_set_cursor_coladd(wp, nvim_win_get_cursor_coladd(owp));
+        win_mut(wp).w_cursor.lnum = win_ref(owp).w_cursor.lnum;
+        win_mut(wp).w_cursor.col = win_ref(owp).w_cursor.col;
+        win_mut(wp).w_cursor.coladd = win_ref(owp).w_cursor.coladd;
     }
 
     // autocommand may have made wp invalid
@@ -461,11 +449,11 @@ unsafe fn win_goto_impl(wp: WinHandle) {
 
     // Conceal cursor line in previous window, unconceal in current window.
     if rs_win_valid(owp) != 0 && nvim_win_get_p_cole(owp) > 0 && msg_scrolled == 0 {
-        nvim_redrawWinline(owp, nvim_win_get_cursor_lnum(owp));
+        nvim_redrawWinline(owp, win_ref(owp).w_cursor.lnum);
     }
     let curwin = nvim_get_curwin();
     if nvim_win_get_p_cole(curwin) > 0 && msg_scrolled == 0 {
-        nvim_redrawWinline(curwin, nvim_win_get_cursor_lnum(curwin));
+        nvim_redrawWinline(curwin, win_ref(curwin).w_cursor.lnum);
     }
 }
 

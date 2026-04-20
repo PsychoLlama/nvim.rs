@@ -14,6 +14,7 @@
 use std::ffi::c_int;
 
 use crate::frame::constants::{STATUS_HEIGHT, WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_TOP, WSP_VERT};
+use crate::win_struct::win_ref;
 use crate::{Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
 
 // =============================================================================
@@ -28,28 +29,20 @@ extern "C" {
     fn nvim_get_topframe() -> *mut Frame;
 
     /// Get w_frame from a window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get w_winrow from a window.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
 
     /// Get w_wincol from a window.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
 
     /// Get w_width from a window.
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
 
     /// Get w_height from a window.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
 
     /// Get w_vsep_width from a window.
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
 
     /// Get w_status_height from a window.
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
 
     /// Get w_hsep_height from a window.
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
 
     /// Get tabline_height().
     #[link_name = "rs_tabline_height"]
@@ -158,15 +151,15 @@ fn calc_new_winrow_impl(oldwin: WinHandle, _new_height: c_int, before: bool) -> 
     }
 
     unsafe {
-        let old_winrow = nvim_win_get_winrow(oldwin);
+        let old_winrow = win_ref(oldwin).w_winrow;
 
         if before {
             // New window above - takes old window's position
             old_winrow
         } else {
             // New window below - after old window + status
-            let old_height = nvim_win_get_w_height(oldwin);
-            let old_status = nvim_win_get_status_height(oldwin);
+            let old_height = win_ref(oldwin).w_height;
+            let old_status = win_ref(oldwin).w_status_height;
             old_winrow + old_height + old_status
         }
     }
@@ -179,14 +172,14 @@ fn calc_new_wincol_impl(oldwin: WinHandle, _new_width: c_int, before: bool) -> c
     }
 
     unsafe {
-        let old_wincol = nvim_win_get_wincol(oldwin);
+        let old_wincol = win_ref(oldwin).w_wincol;
 
         if before {
             // New window left - takes old window's position
             old_wincol
         } else {
             // New window right - after old window + separator
-            let old_width = nvim_win_get_w_width(oldwin);
+            let old_width = win_ref(oldwin).w_width;
             old_wincol + old_width + 1
         }
     }
@@ -205,7 +198,7 @@ fn calc_old_win_new_pos_impl(
 
     unsafe {
         if vertical {
-            let old_wincol = nvim_win_get_wincol(oldwin);
+            let old_wincol = win_ref(oldwin).w_wincol;
             if before {
                 // New window to left, old window moves right
                 old_wincol + new_size + 1
@@ -214,7 +207,7 @@ fn calc_old_win_new_pos_impl(
                 old_wincol
             }
         } else {
-            let old_winrow = nvim_win_get_winrow(oldwin);
+            let old_winrow = win_ref(oldwin).w_winrow;
             if before {
                 // New window above, old window moves down
                 old_winrow + new_size + STATUS_HEIGHT
@@ -236,9 +229,7 @@ fn calc_frame_height_from_win_impl(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    unsafe {
-        nvim_win_get_w_height(wp) + nvim_win_get_status_height(wp) + nvim_win_get_hsep_height(wp)
-    }
+    unsafe { win_ref(wp).w_height + win_ref(wp).w_status_height + win_ref(wp).w_hsep_height }
 }
 
 /// Calculate frame width from window dimensions.
@@ -247,7 +238,7 @@ fn calc_frame_width_from_win_impl(wp: WinHandle) -> c_int {
         return 0;
     }
 
-    unsafe { nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp) }
+    unsafe { win_ref(wp).w_width + win_ref(wp).w_vsep_width }
 }
 
 /// Get appropriate status height for new window.
@@ -258,7 +249,7 @@ fn get_new_win_status_height_impl(flags: c_int, oldwin: WinHandle, before: bool)
         if (flags & WSP_VERT) != 0 {
             // Vertical split - match height-related properties
             if !oldwin.is_null() {
-                return nvim_win_get_status_height(oldwin);
+                return win_ref(oldwin).w_status_height;
             }
             if p_ls == 1 || p_ls == 2 {
                 STATUS_HEIGHT
@@ -277,7 +268,7 @@ fn get_new_win_status_height_impl(flags: c_int, oldwin: WinHandle, before: bool)
                 STATUS_HEIGHT
             } else if !oldwin.is_null() {
                 // New window below - inherit from old
-                nvim_win_get_status_height(oldwin)
+                win_ref(oldwin).w_status_height
             } else {
                 STATUS_HEIGHT
             }
@@ -297,7 +288,7 @@ fn get_new_win_hsep_height_impl(flags: c_int, oldwin: WinHandle, before: bool) -
         if (flags & WSP_VERT) != 0 {
             // Vertical split - match old window
             if !oldwin.is_null() {
-                return nvim_win_get_hsep_height(oldwin);
+                return win_ref(oldwin).w_hsep_height;
             }
             0
         } else if before {
@@ -305,7 +296,7 @@ fn get_new_win_hsep_height_impl(flags: c_int, oldwin: WinHandle, before: bool) -
             1
         } else if !oldwin.is_null() {
             // New window below - inherit from old
-            nvim_win_get_hsep_height(oldwin)
+            win_ref(oldwin).w_hsep_height
         } else {
             0
         }
@@ -321,7 +312,7 @@ fn get_new_win_vsep_width_impl(_flags: c_int, oldwin: WinHandle, before: bool) -
 
     if !oldwin.is_null() {
         // New window to right - inherit from old
-        return unsafe { nvim_win_get_vsep_width(oldwin) };
+        return unsafe { win_ref(oldwin).w_vsep_width };
     }
 
     0

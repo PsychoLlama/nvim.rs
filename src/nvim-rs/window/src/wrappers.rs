@@ -11,7 +11,8 @@
 
 use std::ffi::{c_int, c_void};
 
-use crate::{win_struct::win_ref, BufHandle, WinHandle};
+use crate::win_struct::{win_mut, win_ref};
+use crate::{BufHandle, WinHandle};
 
 // =============================================================================
 // Underlying C functions (actual implementations, not wrappers)
@@ -61,10 +62,6 @@ extern "C" {
 
     // --- nvim_status_redraw_all helpers ---
     fn nvim_get_firstwin() -> WinHandle;
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
     fn rs_global_stl_height() -> c_int;
 }
 
@@ -360,7 +357,6 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_get_curbuf() -> BufHandle;
     fn buf_is_empty(buf: BufHandle) -> bool;
     fn nvim_buf_meta_total(buf: BufHandle, kind: c_int) -> c_int;
@@ -398,7 +394,7 @@ pub unsafe extern "C" fn wrap_win_buffer_eq(wp: WinHandle, buf: BufHandle) -> c_
     if wp.is_null() {
         return 0;
     }
-    let win_buf = nvim_win_get_buffer(wp);
+    let win_buf = BufHandle(win_ref(wp).w_buffer);
     c_int::from(win_buf == buf)
 }
 
@@ -409,7 +405,7 @@ pub unsafe extern "C" fn wrap_win_buf_is_empty(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 1;
     }
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     if buf.is_null() {
         return 1;
     }
@@ -423,7 +419,7 @@ pub unsafe extern "C" fn wrap_win_buf_is_curbuf(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     let curbuf = nvim_get_curbuf();
     c_int::from(buf == curbuf)
 }
@@ -432,7 +428,7 @@ pub unsafe extern "C" fn wrap_win_buf_is_curbuf(wp: WinHandle) -> c_int {
 #[must_use]
 #[export_name = "nvim_win_buf_meta_total_signtext"]
 pub unsafe extern "C" fn wrap_win_buf_meta_total_signtext(wp: WinHandle) -> c_int {
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     c_int::from(nvim_buf_meta_total(buf, K_MT_META_SIGN_TEXT) > 0)
 }
 
@@ -440,7 +436,7 @@ pub unsafe extern "C" fn wrap_win_buf_meta_total_signtext(wp: WinHandle) -> c_in
 #[must_use]
 #[export_name = "nvim_win_buf_meta_total_lines"]
 pub unsafe extern "C" fn wrap_win_buf_meta_total_lines(wp: WinHandle) -> c_int {
-    let buf = nvim_win_get_buffer(wp);
+    let buf = BufHandle(win_ref(wp).w_buffer);
     c_int::from(nvim_buf_meta_total(buf, K_MT_META_LINES) > 0)
 }
 
@@ -518,12 +514,12 @@ pub unsafe extern "C" fn rs_nvim_status_redraw_all() {
     let global_stl = rs_global_stl_height();
     let mut wp = nvim_get_firstwin();
     while !wp.is_null() {
-        if nvim_win_get_status_height(wp) > 0 || (wp == curwin && global_stl > 0) {
-            nvim_win_set_redr_status(wp, 1);
+        if win_ref(wp).w_status_height > 0 || (wp == curwin && global_stl > 0) {
+            win_mut(wp).w_redr_status = true;
         }
-        if nvim_win_get_winbar_height(wp) > 0 {
-            nvim_win_set_redr_status(wp, 1);
+        if win_ref(wp).w_winbar_height > 0 {
+            win_mut(wp).w_redr_status = true;
         }
-        wp = nvim_win_get_next(wp);
+        wp = win_ref(wp).w_next;
     }
 }
