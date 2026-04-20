@@ -145,8 +145,6 @@ partial_T *nvim_get_vlua_partial(void) { return get_vim_var_partial(VV_LUA); }
 int nvim_blob_len(const blob_T *b) { return tv_blob_len(b); }
 int nvim_blob_get(const blob_T *b, int idx) { return (int)tv_blob_get(b, idx); }
 
-void nvim_blob_ga_clear_and_free(blob_T *b) { if (b != NULL) { ga_clear(&b->bv_ga); xfree(b); } }
-
 void nvim_blob_set_ret(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
 typval_T *nvim_di_get_tv(dictitem_T *di) { return &di->di_tv; }
 evalarg_T *nvim_get_evalarg_evaluate_ptr(void) { return &EVALARG_EVALUATE; }
@@ -172,12 +170,8 @@ void nvim_eval_di_set_tv_from_typval(dictitem_T *di, typval_T *tv)
 void nvim_eval_tv_dict_set_ret(typval_T *rettv, dict_T *d) { tv_dict_set_ret(rettv, d); }
 bool nvim_lval_dict_is_v_or_a_scope(const lval_T *lp) { return lp->ll_dict == get_vimvar_dict() || &lp->ll_dict->dv_hashtab == get_funccal_args_ht(); }
 bool nvim_lval_di_check_ro_lock(const lval_T *lp, const char *name, size_t name_len) { return var_check_ro(lp->ll_di->di_flags, name, name_len) || var_check_lock(lp->ll_di->di_flags, name, name_len); }
-void nvim_lval_set_tv_to_li_tv(lval_T *lp) { lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li); }
-void nvim_lval_tv_list_alloc_ret(lval_T *lp) { tv_list_alloc_ret(lp->ll_tv, kListLenUnknown); }
-void nvim_lval_tv_blob_alloc_ret(lval_T *lp) { tv_blob_alloc_ret(lp->ll_tv); }
 listitem_T *nvim_tv_list_check_range_index_one(lval_T *lp, bool quiet) { return tv_list_check_range_index_one(lp->ll_list, &lp->ll_n1, quiet); }
 int nvim_tv_list_check_range_index_two(lval_T *lp, bool quiet) { return tv_list_check_range_index_two(lp->ll_list, &lp->ll_n1, lp->ll_li, &lp->ll_n2, quiet); }
-bool nvim_partial_get_pt_auto(const partial_T *pt) { return pt->pt_auto; }
 
 bool nvim_lval_dict_scope_check(lval_T *lp, char *key, int len, const typval_T *rettv)
 {

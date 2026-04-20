@@ -3254,8 +3254,7 @@ extern "C" {
     // make_partial wrapper
     #[link_name = "make_partial"]
     fn nvim_make_partial(selfdict: *mut c_void, rettv: TypevalHandle);
-    // Get partial->pt_auto
-    fn nvim_partial_get_pt_auto(pt: *const c_void) -> bool;
+    // (nvim_partial_get_pt_auto inlined as (*pt.cast::<PartialT>()).pt_auto)
     // (nvim_tv_is_func inlined as TypevalHandle::is_func())
     // rs_check_luafunc_name is in the eval crate (different crate)
     fn rs_check_luafunc_name(str: *const c_char, paren: bool) -> c_int;
@@ -3273,7 +3272,7 @@ unsafe fn set_selfdict_impl(rettv: TypevalHandle, selfdict: *mut c_void) {
     if nvim_tv_get_type(rettv) == VAR_PARTIAL {
         let pt = (*rettv.as_ptr().cast::<TypvalTRepr>()).vval.v_partial;
         if !pt.is_null()
-            && !nvim_partial_get_pt_auto(pt)
+            && !(*pt.cast::<PartialT>()).pt_auto
             && !(*pt.cast::<PartialT>()).pt_dict.is_null()
         {
             return;

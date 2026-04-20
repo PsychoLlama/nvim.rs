@@ -302,9 +302,11 @@ extern "C" {
     fn tv_dict_alloc() -> *mut c_void;
 
     // tv_list_alloc_ret on ll_tv; sets ll_tv->v_type = VAR_LIST, allocates list.
-    fn nvim_lval_tv_list_alloc_ret(lp: *mut c_void);
+    #[link_name = "tv_list_alloc_ret"]
+    fn nvim_tv_list_alloc_ret_inner(rettv: *mut c_void, count_hint: isize) -> *mut c_void;
     // tv_blob_alloc_ret on ll_tv; sets ll_tv->v_type = VAR_BLOB, allocates blob.
-    fn nvim_lval_tv_blob_alloc_ret(lp: *mut c_void);
+    #[link_name = "tv_blob_alloc_ret"]
+    fn nvim_tv_blob_alloc_ret_inner(rettv: *mut c_void) -> *mut c_void;
 
     // (nvim_lval_tv_get_blob/list inlined via direct TypvalTRepr field access)
     // (nvim_lval_tv_get_type inlined via TypvalTRepr.v_type)
@@ -326,8 +328,7 @@ extern "C" {
     fn nvim_lval_di_check_ro_lock(lp: *const c_void, name: *const c_char, name_len: usize) -> bool;
 
     // (nvim_lval_set_tv_from_ll_di inlined via nvim_di_get_tv)
-    // Set lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li)
-    fn nvim_lval_set_tv_to_li_tv(lp: *mut c_void);
+    // (nvim_lval_set_tv_to_li_tv inlined: lp->ll_tv = &lp->ll_li->li_tv = ll_li + 16)
 
     // (nvim_lval_di_is_null inlined as (*lp).ll_di.is_null())
 
@@ -553,8 +554,8 @@ unsafe fn get_lval_list_impl(
         }
     }
 
-    // lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li)
-    nvim_lval_set_tv_to_li_tv(lp as *mut c_void);
+    // lp->ll_tv = TV_LIST_ITEM_TV(lp->ll_li) = &ll_li->li_tv (li_tv at offset 16)
+    (*lp).ll_tv = (*lp).ll_li.byte_add(16);
 
     OK
 }
@@ -618,11 +619,11 @@ unsafe fn get_lval_subscript_impl(
             if tv_type == VAR_LIST_TYPE
                 && (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_list.is_null()
             {
-                nvim_lval_tv_list_alloc_ret(lp as *mut c_void);
+                nvim_tv_list_alloc_ret_inner((*lp).ll_tv, -1); // kListLenUnknown = -1
             } else if tv_type == VAR_BLOB_TYPE
                 && (*(*lp).ll_tv.cast::<TypvalTRepr>()).vval.v_blob.is_null()
             {
-                nvim_lval_tv_blob_alloc_ret(lp as *mut c_void);
+                nvim_tv_blob_alloc_ret_inner((*lp).ll_tv);
             }
 
             if (*lp).ll_range {
