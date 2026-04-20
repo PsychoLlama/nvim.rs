@@ -121,8 +121,10 @@ extern "C" {
     static mut did_emsg: c_int;
     static mut called_emsg: c_int;
     static mut did_throw: bool;
+    #[link_name = "get_pressedreturn"]
     fn nvim_get_pressedreturn() -> c_int;
-    fn nvim_set_pressedreturn(val: c_int);
+    #[link_name = "set_pressedreturn"]
+    fn nvim_set_pressedreturn(val: bool);
     #[link_name = "discard_current_exception"]
     fn nvim_discard_current_exception();
 }
@@ -348,7 +350,7 @@ pub unsafe extern "C" fn rs_timer_due_cb(_tw: TimeWatcherHandle, data: *mut c_vo
         }
     }
     did_emsg = save_did_emsg;
-    nvim_set_pressedreturn(save_ex_pressedreturn);
+    nvim_set_pressedreturn(save_ex_pressedreturn != 0);
 
     let f3 = read_fields(timer);
     if f3.emsg_count >= 3 {

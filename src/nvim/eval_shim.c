@@ -298,7 +298,6 @@ void nvim_foldtext_make_obj(typval_T *tv, int tv_type, Object *out)
 }
 
 void nvim_smsg_system_cmd(const char *cmdstr) { smsg(0, _("Executing command: \"%s\""), cmdstr); }
-bool nvim_eval_os_can_exe(const char *name, char **abspath) { return os_can_exe(name, abspath, true); }
 
 
 void *nvim_save_provider_caller_scope(void)
@@ -344,8 +343,6 @@ uint64_t nvim_timers_next_id(void) { return last_timer_id++; }
 void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
 { timer_T *timer; map_foreach_value(&timers, timer, { cb(timer, userdata); }) }
 
-int nvim_get_pressedreturn(void) { extern int get_pressedreturn(void); return get_pressedreturn() ? 1 : 0; }
-void nvim_set_pressedreturn(int val) { extern void set_pressedreturn(bool); set_pressedreturn(val != 0); }
 
 int nvim_channel_is_valid_job(Channel *chan) { return chan != NULL && chan->streamtype == kChannelStreamProc && !proc_is_stopped(&chan->stream.proc); }
 

@@ -46,7 +46,8 @@ extern "C" {
     fn nvim_shell_free_argv(argv: *mut *mut c_char);
     #[link_name = "shell_argv_to_str"]
     fn nvim_shell_argv_to_str(argv: *mut *mut c_char) -> *mut c_char;
-    fn nvim_eval_os_can_exe(name: *const c_char, abspath: *mut *mut c_char) -> bool;
+    #[link_name = "os_can_exe"]
+    fn nvim_eval_os_can_exe(name: *const u8, abspath: *mut *mut u8, use_path: bool) -> c_int;
     #[link_name = "os_system"]
     fn nvim_os_system(
         argv: *mut *mut c_char,
@@ -187,8 +188,8 @@ pub unsafe extern "C" fn rs_tv_to_argv(
     let first_tv = list_item_tv(first_item).cast::<c_void>();
     let cmd0 = nvim_eval_tv_string_chk(first_tv);
 
-    let mut exe_resolved: *mut c_char = ptr::null_mut();
-    if cmd0.is_null() || !nvim_eval_os_can_exe(cmd0, &raw mut exe_resolved) {
+    let mut exe_resolved: *mut u8 = ptr::null_mut();
+    if cmd0.is_null() || nvim_eval_os_can_exe(cmd0.cast::<u8>(), &raw mut exe_resolved, true) == 0 {
         if !cmd0.is_null() && !executable.is_null() {
             // Emit "'<cmd>' is not executable" error
             let msg = build_not_executable_msg(cmd0);
@@ -199,7 +200,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
     }
 
     if !cmd_out.is_null() {
-        *cmd_out = exe_resolved;
+        *cmd_out = exe_resolved.cast::<c_char>();
     }
 
     // Allocate result_argv with (list_len + 1) slots (zero-initialized = null-terminated)
@@ -230,7 +231,7 @@ pub unsafe extern "C" fn rs_tv_to_argv(
 
     // Replace result_argv[0] with the absolute resolved path
     xfree((*result_argv).cast::<c_void>());
-    *result_argv = exe_resolved;
+    *result_argv = exe_resolved.cast::<c_char>();
 
     result_argv
 }
