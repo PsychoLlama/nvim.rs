@@ -407,8 +407,6 @@ extern "C" {
     #[link_name = "source_runtime_vim_lua"]
     fn nvim_ex2_source_runtime_vim_lua(name: *const c_char, flags: c_int) -> c_int;
 
-    // get_fileformat_force (nvim_eap_get_force_ff/bin are in ex_docmd.c)
-    fn nvim_option_buf_get_b_p_bin(buf: BufHandle) -> c_int;
 }
 
 /// EOL constants matching option_vars.h
@@ -511,11 +509,10 @@ pub unsafe extern "C" fn rs_get_fileformat_force(buf: BufHandle, eap: *const ExA
         force_ff
     } else {
         let force_bin = (*eap).force_bin;
-        let b_p_bin = nvim_option_buf_get_b_p_bin(buf);
         let is_bin = if force_bin != 0 {
             force_bin == FORCE_BIN
         } else {
-            b_p_bin != 0
+            (*buf.cast::<BufStruct>()).b_p_bin != 0
         };
         if is_bin {
             return EOL_UNIX;

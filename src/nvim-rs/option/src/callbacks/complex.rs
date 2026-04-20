@@ -852,13 +852,11 @@ pub unsafe extern "C" fn rs_did_set_scrollbind(args: *mut c_void) -> CallbackRes
 // =============================================================================
 
 extern "C" {
-    fn nvim_buf_get_p_udf(buf: *const std::ffi::c_void) -> c_int;
     fn u_compute_hash(buf: *mut std::ffi::c_void, hash: *mut u8);
     fn u_read_undo(name: *const c_char, hash: *const u8, orig_name: *const c_char) -> c_int;
     fn nvim_buf_get_b_ffname(buf: *const std::ffi::c_void) -> *const c_char;
     static mut p_udf: c_int;
     fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
-    fn nvim_buf_has_memfile(buf: *mut c_void) -> c_int;
     fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
     fn nvim_for_all_buffers(callback: unsafe extern "C" fn(*mut c_void));
     fn nvim_optset_get_flags(args: *const c_void) -> c_int;
@@ -880,7 +878,7 @@ pub unsafe extern "C" fn rs_did_set_undofile(buf: *mut std::ffi::c_void) -> Call
         return callback_ok();
     }
 
-    if nvim_buf_get_p_udf(buf) != 0 {
+    if (*buf.cast::<BufStruct>()).b_p_udf != 0 {
         // 'undofile' was set - try to read undo file
         let fname = nvim_buf_get_b_ffname(buf);
         if !fname.is_null() && *fname != 0 {
@@ -908,7 +906,7 @@ unsafe extern "C" fn undofile_buf_callback(bp: *mut c_void) {
     // if one exists, the buffer wasn't changed and the buffer was loaded.
     if (buf == bp || (flags & OPT_GLOBAL) != 0 || flags == 0)
         && nvim_buf_is_changed(bp) == 0
-        && nvim_buf_has_memfile(bp) != 0
+        && !(*bp.cast::<BufStruct>()).ml_mfp.is_null()
     {
         let fname = nvim_buf_get_b_fname(bp);
         if !fname.is_null() && *fname != 0 {
@@ -928,7 +926,7 @@ pub unsafe extern "C" fn rs_did_set_undofile_cb(args: *mut c_void) -> CallbackRe
     let buf_udf = if buf.is_null() {
         0
     } else {
-        nvim_buf_get_p_udf(buf)
+        (*buf.cast::<BufStruct>()).b_p_udf
     };
     let global_udf = p_udf;
 

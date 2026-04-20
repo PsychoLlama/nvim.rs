@@ -61,7 +61,6 @@ extern "C" {
     fn redraw_all_later(typ: c_int);
 
     // Phase 2 accessors
-    fn nvim_buf_get_p_bkc(buf: crate::BufHandle) -> *const c_char;
     static mut p_bkc: *mut c_char;
     static mut bkc_flags: c_uint;
     static mut ssop_flags: c_uint;
@@ -375,7 +374,7 @@ pub unsafe extern "C" fn rs_did_set_backupcopy(args: *mut c_void) -> CallbackRes
 
     // Determine which bkc string and flags to use: local or global
     let bkc = if opt_flags & OPT_LOCAL != 0 {
-        nvim_buf_get_p_bkc(buf)
+        (*buf.cast::<BufStruct>()).b_p_bkc
     } else {
         p_bkc.cast_const()
     };

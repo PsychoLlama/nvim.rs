@@ -68,29 +68,18 @@ void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidt
 int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
 void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
 int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
-int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
-void nvim_option_buf_set_modified_was_set(buf_T *buf, int val) { if (buf) buf->b_modified_was_set = val; }
-int nvim_option_buf_get_b_p_ro(buf_T *buf) { return buf ? buf->b_p_ro : 0; }
-void nvim_option_buf_set_b_did_warn(buf_T *buf, int val) { if (buf) buf->b_did_warn = val != 0; }
-void *nvim_option_buf_get_terminal_ptr(buf_T *buf) { return buf ? buf->terminal : NULL; }
-int nvim_option_buf_get_b_p_bin(buf_T *buf) { return buf ? buf->b_p_bin : 0; }
-void nvim_buf_set_b_p_ul(buf_T *buf, OptInt val) { buf->b_p_ul = val; }
 const char *nvim_compile_cap_prog_win(win_T *win) { return compile_cap_prog(win->w_s); }
 void nvim_callback_for_all_tab_windows(void (*callback)(win_T *))
   { FOR_ALL_TAB_WINDOWS(tp, wp) { callback(wp); } }
 void nvim_for_all_buffers(void (*callback)(buf_T *))
   { FOR_ALL_BUFFERS(bp) { callback(bp); } }
 int nvim_buf_is_changed(buf_T *buf) { return buf ? bufIsChanged(buf) : 0; }
-int nvim_buf_has_memfile(buf_T *buf) { return buf && buf->b_ml.ml_mfp != NULL; }
-int nvim_buf_get_p_bl(buf_T *buf) { return buf ? buf->b_p_bl : 0; }
 void nvim_apply_autocmds_buf_event(int event, buf_T *buf) { apply_autocmds((event_T)event, NULL, NULL, true, buf); }
 int nvim_win_get_p_pvw(win_T *win) { return win ? win->w_p_pvw : 0; }
 void nvim_win_set_p_pvw(win_T *win, int val) { if (win) win->w_p_pvw = val != 0; }
 void nvim_for_all_windows_in_curtab(void (*callback)(win_T *, void *), void *ud)
   { FOR_ALL_WINDOWS_IN_TAB(wp, curtab) { callback(wp, ud); } }
 int nvim_win_get_p_spell(win_T *win) { return win ? win->w_p_spell : 0; }
-void *nvim_buf_get_b_p_sw_addr(buf_T *buf) { return buf ? (void *)&buf->b_p_sw : NULL; }
-OptInt nvim_buf_get_b_p_sw(buf_T *buf) { return buf ? buf->b_p_sw : 0; }
 void nvim_callback_set_pum_grid_blending(int value) { pum_grid.blending = (value != 0); }
 void nvim_callback_win_clamp_winbl(win_T *win) { if (win) { if (win->w_p_winbl > 100) win->w_p_winbl = 100; if (win->w_p_winbl < 0) win->w_p_winbl = 0; } }
 void nvim_callback_win_set_hl_needs_update(win_T *win, int value) { if (win) win->w_hl_needs_update = (value != 0); }
@@ -103,7 +92,6 @@ int nvim_call_briopt_check_win(const char *val, win_T *win) { return briopt_chec
 const void *nvim_win_get_p_briopt_addr(win_T *win) { return win ? (const void *)&win->w_p_briopt : NULL; }
 const void *nvim_optset_get_varp_ptr(const void *args) { return ((const optset_T *)args)->os_varp; }
 const char *nvim_optset_get_newval_str(const void *args) { return ((const optset_T *)args)->os_newval.string.data; }
-const char *nvim_buf_get_p_bkc(buf_T *buf) { return buf->b_p_bkc; }
 unsigned nvim_win_get_spo_flags(win_T *win) { return win->w_s->b_p_spo_flags; }
 void nvim_win_set_spo_flags(win_T *win, unsigned val) { win->w_s->b_p_spo_flags = val; }
 const char *nvim_win_get_p_winhl(win_T *win) { return win ? win->w_p_winhl : NULL; }

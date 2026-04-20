@@ -71,8 +71,7 @@ extern "C" {
     static mut p_wh: crate::OptInt;
     static mut p_wiw: crate::OptInt;
 
-    // Undo state accessors (Phase 88)
-    fn nvim_buf_set_b_p_ul(buf: BufHandle, val: OptInt);
+    // Undo sync
     fn nvim_u_sync(force: bool);
 
     fn nvim_ses_win_get_height(wp: WinHandle) -> c_int;
@@ -96,22 +95,16 @@ extern "C" {
     fn save_file_ff(buf: BufHandle);
     fn nvim_optset_get_newval_boolean(args: *const c_void) -> c_int;
     fn nvim_optset_get_flags(args: *const c_void) -> c_int;
-    fn nvim_option_buf_set_modified_was_set(buf: BufHandle, val: c_int);
-    fn nvim_option_buf_get_b_p_ro(buf: BufHandle) -> c_int;
-    fn nvim_option_buf_set_b_did_warn(buf: BufHandle, val: c_int);
 
     // Scrollback callback accessors
-    fn nvim_option_buf_get_terminal_ptr(buf: BufHandle) -> *mut c_void;
     fn on_scrollback_option_changed(terminal: *mut c_void);
 
     // Undolevels callback accessors (use &raw mut crate::p_ul instead)
 
     // Binary callback
     fn set_options_bin(oldval: c_int, newval: c_int, opt_flags: c_int);
-    fn nvim_option_buf_get_b_p_bin(buf: BufHandle) -> c_int;
 
     // Buflisted callback
-    fn nvim_buf_get_p_bl(buf: BufHandle) -> c_int;
     fn nvim_apply_autocmds_buf_event(event: c_int, buf: BufHandle);
 
     // Previewwindow callback
@@ -136,16 +129,12 @@ extern "C" {
     fn nvim_compile_cap_prog_win(win: WinHandle) -> CallbackResult;
     // Shiftwidth/tabstop callback
     fn parse_cino(buf: BufHandle);
-    fn nvim_buf_get_b_p_sw_addr(buf: BufHandle) -> *mut c_void;
 
     // Xhistory callback (use &raw mut crate::p_chi instead)
     #[link_name = "qf_resize_stack"]
     fn nvim_qf_resize_stack(n: c_int);
     #[link_name = "ll_resize_stack"]
     fn nvim_ll_resize_stack(win: WinHandle, n: c_int);
-
-    // Shiftwidth buffer-local value
-    fn nvim_buf_get_b_p_sw(buf: BufHandle) -> OptInt;
 
     // fill_culopt_flags accessors
     fn nvim_win_get_p_culopt(win: WinHandle) -> *const std::ffi::c_char;
@@ -506,7 +495,7 @@ pub unsafe extern "C" fn rs_did_set_winwidth(_args: *mut c_void) -> CallbackResu
 pub unsafe extern "C" fn rs_did_set_binary_full(args: *mut c_void) -> CallbackResult {
     let buf = nvim_optset_get_buf(args);
     let old_val = nvim_optset_get_oldval_boolean(args);
-    let new_val = nvim_option_buf_get_b_p_bin(buf);
+    let new_val = (*buf.cast::<BufStruct>()).b_p_bin;
     set_options_bin(old_val, new_val, nvim_optset_get_flags(args));
     redraw_titles();
     callback_ok()
@@ -523,7 +512,7 @@ pub unsafe extern "C" fn rs_did_set_modified(args: *mut c_void) -> CallbackResul
         save_file_ff(buf);
     }
     redraw_titles();
-    nvim_option_buf_set_modified_was_set(buf, newval);
+    (*buf.cast::<BufStruct>()).b_modified_was_set = u8::from(newval != 0);
     callback_ok()
 }
 
@@ -537,13 +526,13 @@ pub unsafe extern "C" fn rs_did_set_readonly(args: *mut c_void) -> CallbackResul
     let flags = nvim_optset_get_flags(args);
 
     // when 'readonly' is reset globally, also reset readonlymode
-    if nvim_option_buf_get_b_p_ro(buf) == 0 && (flags & OPT_LOCAL) == 0 {
+    if (*buf.cast::<BufStruct>()).b_p_ro == 0 && (flags & OPT_LOCAL) == 0 {
         readonlymode = false;
     }
 
     // when 'readonly' is set may give W10 again
-    if nvim_option_buf_get_b_p_ro(buf) != 0 {
-        nvim_option_buf_set_b_did_warn(buf, 0);
+    if (*buf.cast::<BufStruct>()).b_p_ro != 0 {
+        (*buf.cast::<BufStruct>()).b_did_warn = 0;
     }
 
     redraw_titles();
@@ -559,7 +548,7 @@ pub unsafe extern "C" fn rs_did_set_scrollback(args: *mut c_void) -> CallbackRes
     let old_value = nvim_optset_get_oldval_number(args);
     let new_value = nvim_optset_get_newval_number(args);
 
-    let terminal = nvim_option_buf_get_terminal_ptr(buf);
+    let terminal = (*buf.cast::<BufStruct>()).terminal;
     if !terminal.is_null() && new_value < old_value {
         on_scrollback_option_changed(terminal);
     }
@@ -584,9 +573,9 @@ pub unsafe extern "C" fn rs_did_set_undolevels_full(args: *mut c_void) -> Callba
         p_ul = new_value;
     } else {
         // buffer local 'undolevels'
-        nvim_buf_set_b_p_ul(buf, old_value);
+        (*buf.cast::<BufStruct>()).b_p_ul = old_value;
         nvim_u_sync(true);
-        nvim_buf_set_b_p_ul(buf, new_value);
+        (*buf.cast::<BufStruct>()).b_p_ul = new_value;
     }
     callback_ok()
 }
@@ -655,7 +644,7 @@ pub extern "C" fn rs_did_set_modifiable(_args: *mut c_void) -> CallbackResult {
 pub unsafe extern "C" fn rs_did_set_buflisted(args: *mut c_void) -> CallbackResult {
     let buf = nvim_optset_get_buf(args);
     let old_val = nvim_optset_get_oldval_boolean(args);
-    let new_val = nvim_buf_get_p_bl(buf);
+    let new_val = (*buf.cast::<BufStruct>()).b_p_bl;
 
     if old_val != new_val {
         let event = if new_val != 0 {
@@ -777,13 +766,13 @@ pub unsafe extern "C" fn rs_did_set_shiftwidth_tabstop(args: *mut c_void) -> Cal
     let buf = nvim_optset_get_buf(args);
     let win = nvim_optset_get_win(args);
     let varp = nvim_optset_get_varp(args);
-    let sw_addr = nvim_buf_get_b_p_sw_addr(buf);
+    let sw_addr = std::ptr::addr_of!((*buf.cast::<BufStruct>()).b_p_sw) as *mut c_void;
 
     if rs_foldmethodIsIndent(win) != 0 {
         rs_foldUpdateAll(win);
     }
     // When 'shiftwidth' changes, or it's zero and 'tabstop' changes: parse 'cinoptions'.
-    if varp == sw_addr || nvim_buf_get_b_p_sw(buf) == 0 {
+    if varp == sw_addr || (*buf.cast::<BufStruct>()).b_p_sw == 0 {
         parse_cino(buf);
     }
     callback_ok()
