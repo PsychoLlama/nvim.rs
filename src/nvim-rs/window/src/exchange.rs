@@ -11,6 +11,7 @@
 
 use std::ffi::c_int;
 
+use crate::win_struct::{win_mut, win_ref};
 use crate::{Frame, WinHandle, FR_LEAF};
 
 // =============================================================================
@@ -25,36 +26,6 @@ extern "C" {
 
     /// Get firstwin.
     fn nvim_get_firstwin() -> WinHandle;
-
-    /// Get w_frame from window.
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
-
-    /// Get w_next from window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-
-    /// Get w_prev from window.
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
-
-    /// Get w_floating from window.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-
-    /// Get w_status_height from window.
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-
-    /// Set w_status_height on window.
-    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
-
-    /// Get w_vsep_width from window.
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
-
-    /// Set w_vsep_width on window.
-    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
-
-    /// Get w_hsep_height from window.
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
-
-    /// Set w_hsep_height on window.
-    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
 
     /// Check if only one non-floating window in the tab.
     fn rs_one_window_in_tab(wp: WinHandle, tp: crate::TabpageHandle) -> c_int;
@@ -92,9 +63,6 @@ extern "C" {
     /// Recompute window positions.
     fn rs_win_comp_pos() -> c_int;
 
-    /// Get w_buffer from window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-
     /// Get curbuf.
     fn nvim_get_curbuf() -> BufHandle;
 
@@ -115,9 +83,6 @@ extern "C" {
 
     /// Redraw all windows later.
     fn nvim_redraw_all_later(r#type: c_int);
-
-    /// Set w_pos_changed on window.
-    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
 
     /// Get lastwin.
     fn nvim_get_lastwin() -> WinHandle;
@@ -152,12 +117,12 @@ fn can_exchange_impl(wp: WinHandle) -> c_int {
 
     unsafe {
         // Cannot exchange floating windows
-        if nvim_win_get_floating(wp) != 0 {
+        if win_ref(wp).w_floating {
             return 1;
         }
 
         // Check if only one non-floating window (simplified check)
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 2;
         }
@@ -187,7 +152,7 @@ fn find_exchange_target_impl(wp: WinHandle, prenum: c_int) -> *mut Frame {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return std::ptr::null_mut();
         }
@@ -257,11 +222,11 @@ fn can_rotate_impl(wp: WinHandle) -> c_int {
 
     unsafe {
         // Cannot rotate floating windows
-        if nvim_win_get_floating(wp) != 0 {
+        if win_ref(wp).w_floating {
             return 1;
         }
 
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 2;
         }
@@ -297,7 +262,7 @@ fn count_rotation_frames_impl(wp: WinHandle) -> c_int {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return 0;
         }
@@ -324,7 +289,7 @@ fn get_first_rotation_frame_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return std::ptr::null_mut();
         }
@@ -345,7 +310,7 @@ fn get_last_rotation_frame_impl(wp: WinHandle) -> *mut Frame {
     }
 
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if frame.is_null() {
             return std::ptr::null_mut();
         }
@@ -381,9 +346,9 @@ fn get_separator_props_impl(wp: WinHandle) -> (c_int, c_int, c_int) {
 
     unsafe {
         (
-            nvim_win_get_status_height(wp),
-            nvim_win_get_vsep_width(wp),
-            nvim_win_get_hsep_height(wp),
+            win_ref(wp).w_status_height,
+            win_ref(wp).w_vsep_width,
+            win_ref(wp).w_hsep_height,
         )
     }
 }
@@ -394,7 +359,7 @@ fn windows_are_adjacent_impl(wp1: WinHandle, wp2: WinHandle) -> bool {
         return false;
     }
 
-    unsafe { nvim_win_get_prev(wp1) == wp2 || nvim_win_get_next(wp1) == wp2 }
+    unsafe { win_ref(wp1).w_prev == wp2 || win_ref(wp1).w_next == wp2 }
 }
 
 /// Get the window that will become the new last in rotation.
@@ -442,7 +407,7 @@ unsafe fn win_exchange_impl(prenum: c_int) {
     }
 
     // Cannot exchange floating windows.
-    if nvim_win_get_floating(curwin) != 0 {
+    if win_ref(curwin).w_floating {
         nvim_emsg_id(EMSG_E_FLOATEXCHANGE);
         return;
     }
@@ -460,7 +425,7 @@ unsafe fn win_exchange_impl(prenum: c_int) {
     }
 
     // Find the target frame.
-    let curframe = nvim_win_get_frame(curwin);
+    let curframe = win_ref(curwin).w_frame;
     if curframe.is_null() {
         return;
     }
@@ -496,41 +461,41 @@ unsafe fn win_exchange_impl(prenum: c_int) {
     // Step 2: insert curwin before wp in the window list.
     // Step 3 (if needed): remove wp and re-insert it after wp2.
     // Step 4: swap separator properties.
-    let wp2 = nvim_win_get_prev(curwin);
+    let wp2 = win_ref(curwin).w_prev;
     let frp2 = (*curframe).fr_prev;
 
-    if nvim_win_get_prev(wp) != curwin {
+    if win_ref(wp).w_prev != curwin {
         rs_win_remove(curwin, crate::TabpageHandle::null());
         rs_frame_remove(curframe);
-        rs_win_append(nvim_win_get_prev(wp), curwin, crate::TabpageHandle::null());
+        rs_win_append(win_ref(wp).w_prev, curwin, crate::TabpageHandle::null());
         rs_frame_insert(frp, curframe);
     }
 
     if wp != wp2 {
         rs_win_remove(wp, crate::TabpageHandle::null());
-        rs_frame_remove(nvim_win_get_frame(wp));
+        rs_frame_remove(win_ref(wp).w_frame);
         rs_win_append(wp2, wp, crate::TabpageHandle::null());
         if frp2.is_null() {
             // Insert wp's frame as the first child of parent.
             let first_child = (*parent).fr_child;
-            rs_frame_insert(first_child, nvim_win_get_frame(wp));
+            rs_frame_insert(first_child, win_ref(wp).w_frame);
         } else {
-            rs_frame_append(frp2, nvim_win_get_frame(wp));
+            rs_frame_append(frp2, win_ref(wp).w_frame);
         }
     }
 
     // Swap status_height, vsep_width, hsep_height between curwin and wp.
-    let temp_sh = nvim_win_get_status_height(curwin);
-    nvim_win_set_status_height(curwin, nvim_win_get_status_height(wp));
-    nvim_win_set_status_height(wp, temp_sh);
+    let temp_sh = win_ref(curwin).w_status_height;
+    win_mut(curwin).w_status_height = win_ref(wp).w_status_height;
+    win_mut(wp).w_status_height = temp_sh;
 
-    let temp_vw = nvim_win_get_vsep_width(curwin);
-    nvim_win_set_vsep_width(curwin, nvim_win_get_vsep_width(wp));
-    nvim_win_set_vsep_width(wp, temp_vw);
+    let temp_vw = win_ref(curwin).w_vsep_width;
+    win_mut(curwin).w_vsep_width = win_ref(wp).w_vsep_width;
+    win_mut(wp).w_vsep_width = temp_vw;
 
-    let old_hsep = nvim_win_get_hsep_height(curwin);
-    nvim_win_set_hsep_height(curwin, nvim_win_get_hsep_height(wp));
-    nvim_win_set_hsep_height(wp, old_hsep);
+    let old_hsep = win_ref(curwin).w_hsep_height;
+    win_mut(curwin).w_hsep_height = win_ref(wp).w_hsep_height;
+    win_mut(wp).w_hsep_height = old_hsep;
 
     // Fix frame geometry and recompute positions.
     rs_frame_fix_height(curwin);
@@ -540,7 +505,7 @@ unsafe fn win_exchange_impl(prenum: c_int) {
     rs_win_comp_pos();
 
     // Handle VIsual selection.
-    if nvim_win_get_buffer(wp) != nvim_get_curbuf() {
+    if BufHandle(win_ref(wp).w_buffer) != nvim_get_curbuf() {
         rs_reset_VIsual_and_resel();
     } else if VIsual_active {
         nvim_win_copy_cursor(wp, curwin);
@@ -571,7 +536,7 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
     }
 
     // Cannot rotate floating windows.
-    if nvim_win_get_floating(curwin) != 0 {
+    if win_ref(curwin).w_floating {
         nvim_emsg_id(EMSG_E_FLOATEXCHANGE);
         return;
     }
@@ -583,7 +548,7 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
     }
 
     // Check if all frames in this row/col have one window.
-    let curframe = nvim_win_get_frame(curwin);
+    let curframe = win_ref(curwin).w_frame;
     if curframe.is_null() {
         return;
     }
@@ -624,18 +589,18 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
                 last_frp = (*last_frp).fr_next;
             }
             rs_win_append((*last_frp).fr_win, wp1, crate::TabpageHandle::null());
-            rs_frame_append(last_frp, nvim_win_get_frame(wp1));
+            rs_frame_append(last_frp, win_ref(wp1).w_frame);
 
             wp2 = (*last_frp).fr_win; // previously last window
         } else {
             // last window becomes first window
             // find last window/frame in the list and remove it
-            let mut last_frp = nvim_win_get_frame(curwin);
+            let mut last_frp = win_ref(curwin).w_frame;
             while !(*last_frp).fr_next.is_null() {
                 last_frp = (*last_frp).fr_next;
             }
             wp1 = (*last_frp).fr_win;
-            wp2 = nvim_win_get_prev(wp1); // will become last window
+            wp2 = win_ref(wp1).w_prev; // will become last window
             rs_win_remove(wp1, crate::TabpageHandle::null());
             rs_frame_remove(last_frp);
             assert!(!(*parent).fr_child.is_null());
@@ -644,7 +609,7 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
             let first_child_frp = (*parent).fr_child;
             let first_child_win = (*first_child_frp).fr_win;
             rs_win_append(
-                nvim_win_get_prev(first_child_win),
+                win_ref(first_child_win).w_prev,
                 wp1,
                 crate::TabpageHandle::null(),
             );
@@ -652,20 +617,20 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
         }
 
         // Exchange status height, hsep height and vsep width of old and new last window
-        let saved_status_height = nvim_win_get_status_height(wp2);
-        nvim_win_set_status_height(wp2, nvim_win_get_status_height(wp1));
-        nvim_win_set_status_height(wp1, saved_status_height);
+        let saved_status_height = win_ref(wp2).w_status_height;
+        win_mut(wp2).w_status_height = win_ref(wp1).w_status_height;
+        win_mut(wp1).w_status_height = saved_status_height;
 
-        let saved_hsep_height = nvim_win_get_hsep_height(wp2);
-        nvim_win_set_hsep_height(wp2, nvim_win_get_hsep_height(wp1));
-        nvim_win_set_hsep_height(wp1, saved_hsep_height);
+        let saved_hsep_height = win_ref(wp2).w_hsep_height;
+        win_mut(wp2).w_hsep_height = win_ref(wp1).w_hsep_height;
+        win_mut(wp1).w_hsep_height = saved_hsep_height;
 
         rs_frame_fix_height(wp1);
         rs_frame_fix_height(wp2);
 
-        let saved_vsep_width = nvim_win_get_vsep_width(wp2);
-        nvim_win_set_vsep_width(wp2, nvim_win_get_vsep_width(wp1));
-        nvim_win_set_vsep_width(wp1, saved_vsep_width);
+        let saved_vsep_width = win_ref(wp2).w_vsep_width;
+        win_mut(wp2).w_vsep_width = win_ref(wp1).w_vsep_width;
+        win_mut(wp1).w_vsep_width = saved_vsep_width;
 
         rs_frame_fix_width(wp1);
         rs_frame_fix_width(wp2);
@@ -675,10 +640,10 @@ unsafe fn win_rotate_impl(upwards: c_int, count: c_int) {
     }
 
     if !wp1.is_null() {
-        nvim_win_set_pos_changed(wp1, 1);
+        win_mut(wp1).w_pos_changed = true;
     }
     if !wp2.is_null() {
-        nvim_win_set_pos_changed(wp2, 1);
+        win_mut(wp2).w_pos_changed = true;
     }
 
     // UPD_NOT_VALID = 40
@@ -702,10 +667,10 @@ unsafe fn win_move_after_impl(win1: WinHandle, win2: WinHandle) {
     }
 
     // Check if there is something to do: win2->w_next != win1
-    if nvim_win_get_next(win2) != win1 {
+    if win_ref(win2).w_next != win1 {
         // Check that win1 and win2 are in the same frame
-        let frame1 = nvim_win_get_frame(win1);
-        let frame2 = nvim_win_get_frame(win2);
+        let frame1 = win_ref(win1).w_frame;
+        let frame2 = win_ref(win2).w_frame;
         if frame1.is_null() || frame2.is_null() {
             return;
         }
@@ -720,46 +685,46 @@ unsafe fn win_move_after_impl(win1: WinHandle, win2: WinHandle) {
 
         // May need to swap separators if win1 is the last window or win2 is the last window
         if win1 == lastwin {
-            let prev1 = nvim_win_get_prev(win1);
+            let prev1 = win_ref(win1).w_prev;
 
-            let old_status = nvim_win_get_status_height(prev1);
-            nvim_win_set_status_height(prev1, nvim_win_get_status_height(win1));
-            nvim_win_set_status_height(win1, old_status);
+            let old_status = win_ref(prev1).w_status_height;
+            win_mut(prev1).w_status_height = win_ref(win1).w_status_height;
+            win_mut(win1).w_status_height = old_status;
 
-            let old_hsep = nvim_win_get_hsep_height(prev1);
-            nvim_win_set_hsep_height(prev1, nvim_win_get_hsep_height(win1));
-            nvim_win_set_hsep_height(win1, old_hsep);
+            let old_hsep = win_ref(prev1).w_hsep_height;
+            win_mut(prev1).w_hsep_height = win_ref(win1).w_hsep_height;
+            win_mut(win1).w_hsep_height = old_hsep;
 
-            if nvim_win_get_vsep_width(prev1) == 1 {
+            if win_ref(prev1).w_vsep_width == 1 {
                 // Remove the vertical separator from the last-but-one window,
                 // add it to the last window. Adjust the frame widths.
-                nvim_win_set_vsep_width(prev1, 0);
-                let frame_prev1 = nvim_win_get_frame(prev1);
+                win_mut(prev1).w_vsep_width = 0;
+                let frame_prev1 = win_ref(prev1).w_frame;
                 if !frame_prev1.is_null() {
                     (*frame_prev1).fr_width -= 1;
                 }
-                nvim_win_set_vsep_width(win1, 1);
+                win_mut(win1).w_vsep_width = 1;
                 if !frame1.is_null() {
                     (*frame1).fr_width += 1;
                 }
             }
         } else if win2 == lastwin {
-            let old_status = nvim_win_get_status_height(win1);
-            nvim_win_set_status_height(win1, nvim_win_get_status_height(win2));
-            nvim_win_set_status_height(win2, old_status);
+            let old_status = win_ref(win1).w_status_height;
+            win_mut(win1).w_status_height = win_ref(win2).w_status_height;
+            win_mut(win2).w_status_height = old_status;
 
-            let old_hsep = nvim_win_get_hsep_height(win1);
-            nvim_win_set_hsep_height(win1, nvim_win_get_hsep_height(win2));
-            nvim_win_set_hsep_height(win2, old_hsep);
+            let old_hsep = win_ref(win1).w_hsep_height;
+            win_mut(win1).w_hsep_height = win_ref(win2).w_hsep_height;
+            win_mut(win2).w_hsep_height = old_hsep;
 
-            if nvim_win_get_vsep_width(win1) == 1 {
+            if win_ref(win1).w_vsep_width == 1 {
                 // Remove the vertical separator from win1, add it to win2 (lastwin).
-                nvim_win_set_vsep_width(win2, 1);
-                let frame2_ptr = nvim_win_get_frame(win2);
+                win_mut(win2).w_vsep_width = 1;
+                let frame2_ptr = win_ref(win2).w_frame;
                 if !frame2_ptr.is_null() {
                     (*frame2_ptr).fr_width += 1;
                 }
-                nvim_win_set_vsep_width(win1, 0);
+                win_mut(win1).w_vsep_width = 0;
                 if !frame1.is_null() {
                     (*frame1).fr_width -= 1;
                 }
@@ -767,9 +732,9 @@ unsafe fn win_move_after_impl(win1: WinHandle, win2: WinHandle) {
         }
 
         rs_win_remove(win1, crate::TabpageHandle::null());
-        rs_frame_remove(nvim_win_get_frame(win1));
+        rs_frame_remove(win_ref(win1).w_frame);
         rs_win_append(win2, win1, crate::TabpageHandle::null());
-        rs_frame_append(nvim_win_get_frame(win2), nvim_win_get_frame(win1));
+        rs_frame_append(win_ref(win2).w_frame, win_ref(win1).w_frame);
 
         rs_win_comp_pos();
         // UPD_NOT_VALID = 40
@@ -778,8 +743,8 @@ unsafe fn win_move_after_impl(win1: WinHandle, win2: WinHandle) {
     }
 
     nvim_win_enter(win1, 0);
-    nvim_win_set_pos_changed(win1, 1);
-    nvim_win_set_pos_changed(win2, 1);
+    win_mut(win1).w_pos_changed = true;
+    win_mut(win2).w_pos_changed = true;
 }
 
 // =============================================================================

@@ -19,7 +19,8 @@ use crate::frame::constants::{
     STATUS_HEIGHT, WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HELP, WSP_NOENTER, WSP_ROOM, WSP_TOP,
     WSP_VERT,
 };
-use crate::{win_struct::win_ref, Frame, TabpageHandle, WinHandle, FR_COL, FR_ROW};
+use crate::win_struct::{win_mut, win_ref};
+use crate::{Frame, TabpageHandle, WinHandle, FR_COL, FR_ROW};
 
 // =============================================================================
 // FFI constants
@@ -65,32 +66,11 @@ extern "C" {
     fn nvim_set_p_wh(val: i64);
 
     // --- Window field accessors ---
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
-    fn nvim_win_get_prev(wp: WinHandle) -> WinHandle;
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_scr(wp: WinHandle) -> i64;
     fn nvim_win_get_config_external_int(wp: WinHandle) -> c_int;
 
     // --- Window field setters ---
-    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
-    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
-    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
-    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-    fn nvim_win_set_fraction(wp: WinHandle, val: c_int);
     fn nvim_win_set_p_scr(wp: WinHandle, val: i64);
-    fn nvim_win_set_floating(wp: WinHandle, val: c_int);
 
     // --- Wrappers for complex operations ---
     #[link_name = "win_alloc"]
@@ -252,9 +232,9 @@ unsafe fn win_split_ins_impl(
 
     // --- Insert frame ---
     let frp = if new_wp.is_null() {
-        nvim_win_get_frame(wp)
+        win_ref(wp).w_frame
     } else {
-        nvim_win_get_frame(new_wp)
+        win_ref(new_wp).w_frame
     };
     (*frp).fr_parent = (*curfrp).fr_parent;
 
@@ -269,7 +249,7 @@ unsafe fn win_split_ins_impl(
         rs_set_fraction(oldwin);
     }
     let old_fraction = win_ref(oldwin).w_fraction;
-    nvim_win_set_fraction(wp, old_fraction);
+    win_mut(wp).w_fraction = old_fraction;
 
     // --- Assign dimensions ---
     if vertical {
@@ -373,7 +353,7 @@ unsafe fn win_split_ins_impl(
 unsafe fn get_oldwin(flags: c_int) -> WinHandle {
     if (flags & WSP_TOP) != 0 {
         nvim_get_firstwin()
-    } else if (flags & WSP_BOT) != 0 || nvim_win_get_floating(nvim_get_curwin()) != 0 {
+    } else if (flags & WSP_BOT) != 0 || win_ref(nvim_get_curwin()).w_floating {
         lastwin_nofloating()
     } else {
         nvim_get_curwin()
@@ -384,9 +364,9 @@ unsafe fn get_oldwin(flags: c_int) -> WinHandle {
 unsafe fn calc_need_status(oldwin: WinHandle) -> c_int {
     if nvim_one_window_firstwin(nvim_get_firstwin(), TabpageHandle::null()) != 0
         && nvim_get_p_ls() == 1
-        && nvim_win_get_status_height(oldwin) == 0
+        && win_ref(oldwin).w_status_height == 0
     {
-        if nvim_win_get_w_height(oldwin) <= nvim_get_p_wmh() as c_int {
+        if win_ref(oldwin).w_height <= nvim_get_p_wmh() as c_int {
             // will fail with noroom — handled by caller
             return -1; // signal error
         }
@@ -419,7 +399,7 @@ unsafe fn calc_vertical_split(
         needed += nvim_get_p_wiw() as c_int - wmw1;
     }
 
-    let oldwin_frame = nvim_win_get_frame(oldwin);
+    let oldwin_frame = win_ref(oldwin).w_frame;
     let topframe = nvim_get_topframe();
     let (minwidth, available);
 
@@ -457,17 +437,17 @@ unsafe fn calc_vertical_split(
     }
 
     let mut new_size = if size == 0 {
-        nvim_win_get_w_width(oldwin) / 2
+        win_ref(oldwin).w_width / 2
     } else {
         size
     };
     new_size = new_size.min(available - minwidth - 1).max(wmw1);
 
-    let mut do_equal = nvim_win_get_w_width(oldwin) - new_size - 1 < p_wmw;
+    let mut do_equal = win_ref(oldwin).w_width - new_size - 1 < p_wmw;
 
     // winfixwidth: try to expand oldwin
-    if nvim_win_get_wfw(oldwin) != 0 {
-        nvim_win_setwidth_win_wrapper(nvim_win_get_w_width(oldwin) + new_size + 1, oldwin);
+    if win_ref(oldwin).w_p_wfw() != 0 {
+        nvim_win_setwidth_win_wrapper(win_ref(oldwin).w_width + new_size + 1, oldwin);
     }
 
     // Check siblings for equalization
@@ -479,8 +459,8 @@ unsafe fn calc_vertical_split(
                 let fw = (*frp).fr_win;
                 if fw != oldwin
                     && !fw.is_null()
-                    && (nvim_win_get_w_width(fw) > new_size
-                        || nvim_win_get_w_width(fw) > nvim_win_get_w_width(oldwin) - new_size - 1)
+                    && (win_ref(fw).w_width > new_size
+                        || win_ref(fw).w_width > win_ref(oldwin).w_width - new_size - 1)
                 {
                     do_equal = true;
                     break;
@@ -513,16 +493,16 @@ unsafe fn calc_horizontal_split(
     }
 
     let p_wmh = nvim_get_p_wmh() as c_int;
-    let wmh1 = p_wmh.max(1) + nvim_win_get_winbar_height(oldwin);
+    let wmh1 = p_wmh.max(1) + win_ref(oldwin).w_winbar_height;
     let mut needed = wmh1 + STATUS_HEIGHT;
     if (flags & WSP_ROOM) != 0 {
-        needed += nvim_get_p_wh() as c_int - wmh1 + nvim_win_get_winbar_height(oldwin);
+        needed += nvim_get_p_wh() as c_int - wmh1 + win_ref(oldwin).w_winbar_height;
     }
     if p_ch < 1 {
         needed += 1; // cmdheight=0 adjustment
     }
 
-    let oldwin_frame = nvim_win_get_frame(oldwin);
+    let oldwin_frame = win_ref(oldwin).w_frame;
     let topframe = nvim_get_topframe();
     let (minheight, available);
 
@@ -559,9 +539,9 @@ unsafe fn calc_horizontal_split(
         return None;
     }
 
-    let mut oldwin_height = nvim_win_get_w_height(oldwin);
+    let mut oldwin_height = win_ref(oldwin).w_height;
     if need_status != 0 {
-        nvim_win_set_status_height(oldwin, STATUS_HEIGHT);
+        win_mut(oldwin).w_status_height = STATUS_HEIGHT;
         oldwin_height -= STATUS_HEIGHT;
     }
 
@@ -575,14 +555,11 @@ unsafe fn calc_horizontal_split(
     let mut did_set_fraction = false;
 
     // winfixheight
-    if nvim_win_get_wfh(oldwin) != 0 {
+    if win_ref(oldwin).w_p_wfh() != 0 {
         rs_set_fraction(oldwin);
         did_set_fraction = true;
-        nvim_win_setheight_win_wrapper(
-            nvim_win_get_w_height(oldwin) + new_size + STATUS_HEIGHT,
-            oldwin,
-        );
-        oldwin_height = nvim_win_get_w_height(oldwin);
+        nvim_win_setheight_win_wrapper(win_ref(oldwin).w_height + new_size + STATUS_HEIGHT, oldwin);
+        oldwin_height = win_ref(oldwin).w_height;
         if need_status != 0 {
             oldwin_height -= STATUS_HEIGHT;
         }
@@ -597,8 +574,8 @@ unsafe fn calc_horizontal_split(
                 let fw = (*frp).fr_win;
                 if fw != oldwin
                     && !fw.is_null()
-                    && (nvim_win_get_w_height(fw) > new_size
-                        || nvim_win_get_w_height(fw) > oldwin_height - new_size - STATUS_HEIGHT)
+                    && (win_ref(fw).w_height > new_size
+                        || win_ref(fw).w_height > oldwin_height - new_size - STATUS_HEIGHT)
                 {
                     do_equal = true;
                     break;
@@ -636,7 +613,7 @@ unsafe fn alloc_and_link(
         oldwin
     } else {
         // new window above/left
-        nvim_win_get_prev(oldwin)
+        win_ref(oldwin).w_prev
     };
 
     if new_wp.is_null() {
@@ -653,11 +630,11 @@ unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
         // Fresh allocation
         rs_new_frame(wp);
         rs_win_init(wp, nvim_get_curwin(), flags);
-    } else if nvim_win_get_floating(wp) != 0 {
+    } else if win_ref(wp).w_floating {
         // Moving a floating window into the layout
         nvim_ui_comp_remove_grid_win(wp);
         if nvim_ui_has_multigrid() != 0 {
-            nvim_win_set_pos_changed(wp, 1);
+            win_mut(wp).w_pos_changed = true;
         } else {
             nvim_ui_call_win_hide_win(wp);
             rs_win_free_grid(wp, true);
@@ -668,7 +645,7 @@ unsafe fn init_new_window(wp: WinHandle, new_wp: WinHandle, flags: c_int) {
             crate::close::win_close::fixup_external_curwin(wp);
         }
 
-        nvim_win_set_floating(wp, 0);
+        win_mut(wp).w_floating = false;
         rs_new_frame(wp);
         nvim_merge_win_config_init(wp);
     }
@@ -701,7 +678,7 @@ unsafe fn reorganize_frame_tree(
         }
         before = (flags & WSP_TOP) != 0;
     } else {
-        curfrp = nvim_win_get_frame(oldwin);
+        curfrp = win_ref(oldwin).w_frame;
         if (flags & WSP_BELOW) != 0 {
             before = false;
         } else if (flags & WSP_ABOVE) != 0 {
@@ -742,10 +719,8 @@ unsafe fn reorganize_frame_tree(
 
 /// Set w_frame for a window via its accessor.
 unsafe fn set_win_frame(wp: WinHandle, frp: *mut Frame) {
-    extern "C" {
-        fn nvim_win_set_frame(wp: WinHandle, frp: *mut Frame);
-    }
-    nvim_win_set_frame(wp, frp);
+    extern "C" {}
+    win_mut(wp).w_frame = frp;
 }
 
 /// Assign dimensions for a vertical split.
@@ -765,33 +740,33 @@ unsafe fn assign_vertical_dimensions(
     nvim_win_set_p_scr(wp, nvim_win_get_p_scr(curwin));
 
     if need_status != 0 {
-        rs_win_new_height(oldwin, nvim_win_get_w_height(oldwin) - 1);
-        nvim_win_set_status_height(oldwin, need_status);
+        rs_win_new_height(oldwin, win_ref(oldwin).w_height - 1);
+        win_mut(oldwin).w_status_height = need_status;
     }
 
     let p_ls = nvim_get_p_ls();
     if toplevel {
-        nvim_win_set_winrow(wp, rs_tabline_height());
+        win_mut(wp).w_winrow = rs_tabline_height();
         rs_win_new_height(
             wp,
             (*curfrp).fr_height - c_int::from(p_ls == 1 || p_ls == 2),
         );
-        nvim_win_set_status_height(wp, c_int::from(p_ls == 1 || p_ls == 2));
-        nvim_win_set_hsep_height(wp, 0);
+        win_mut(wp).w_status_height = c_int::from(p_ls == 1 || p_ls == 2);
+        win_mut(wp).w_hsep_height = 0;
     } else {
-        nvim_win_set_winrow(wp, nvim_win_get_winrow(oldwin));
-        rs_win_new_height(wp, nvim_win_get_w_height(oldwin));
-        nvim_win_set_status_height(wp, nvim_win_get_status_height(oldwin));
-        nvim_win_set_hsep_height(wp, nvim_win_get_hsep_height(oldwin));
+        win_mut(wp).w_winrow = win_ref(oldwin).w_winrow;
+        rs_win_new_height(wp, win_ref(oldwin).w_height);
+        win_mut(wp).w_status_height = win_ref(oldwin).w_status_height;
+        win_mut(wp).w_hsep_height = win_ref(oldwin).w_hsep_height;
     }
     (*frp).fr_height = (*curfrp).fr_height;
 
     rs_win_new_width(wp, new_size);
     if before {
-        nvim_win_set_vsep_width(wp, 1);
+        win_mut(wp).w_vsep_width = 1;
     } else {
-        nvim_win_set_vsep_width(wp, nvim_win_get_vsep_width(oldwin));
-        nvim_win_set_vsep_width(oldwin, 1);
+        win_mut(wp).w_vsep_width = win_ref(oldwin).w_vsep_width;
+        win_mut(oldwin).w_vsep_width = 1;
     }
 
     if toplevel {
@@ -805,17 +780,14 @@ unsafe fn assign_vertical_dimensions(
             0,
         );
     } else {
-        rs_win_new_width(oldwin, nvim_win_get_w_width(oldwin) - (new_size + 1));
+        rs_win_new_width(oldwin, win_ref(oldwin).w_width - (new_size + 1));
     }
 
     if before {
-        nvim_win_set_wincol(wp, nvim_win_get_wincol(oldwin));
-        nvim_win_set_wincol(oldwin, nvim_win_get_wincol(oldwin) + new_size + 1);
+        win_mut(wp).w_wincol = win_ref(oldwin).w_wincol;
+        win_mut(oldwin).w_wincol = win_ref(oldwin).w_wincol + new_size + 1;
     } else {
-        nvim_win_set_wincol(
-            wp,
-            nvim_win_get_wincol(oldwin) + nvim_win_get_w_width(oldwin) + 1,
-        );
+        win_mut(wp).w_wincol = win_ref(oldwin).w_wincol + win_ref(oldwin).w_width + 1;
     }
 
     rs_frame_fix_width(oldwin);
@@ -838,23 +810,23 @@ unsafe fn assign_horizontal_dimensions(
     let is_stl_global = rs_global_stl_height() > 0;
 
     if toplevel {
-        nvim_win_set_wincol(wp, 0);
+        win_mut(wp).w_wincol = 0;
         rs_win_new_width(wp, Columns);
-        nvim_win_set_vsep_width(wp, 0);
+        win_mut(wp).w_vsep_width = 0;
     } else {
-        nvim_win_set_wincol(wp, nvim_win_get_wincol(oldwin));
-        rs_win_new_width(wp, nvim_win_get_w_width(oldwin));
-        nvim_win_set_vsep_width(wp, nvim_win_get_vsep_width(oldwin));
+        win_mut(wp).w_wincol = win_ref(oldwin).w_wincol;
+        rs_win_new_width(wp, win_ref(oldwin).w_width);
+        win_mut(wp).w_vsep_width = win_ref(oldwin).w_vsep_width;
     }
     (*frp).fr_width = (*curfrp).fr_width;
 
     rs_win_new_height(wp, new_size);
-    let old_status_height = nvim_win_get_status_height(oldwin);
+    let old_status_height = win_ref(oldwin).w_status_height;
     if before {
-        nvim_win_set_hsep_height(wp, c_int::from(is_stl_global));
+        win_mut(wp).w_hsep_height = c_int::from(is_stl_global);
     } else {
-        nvim_win_set_hsep_height(wp, nvim_win_get_hsep_height(oldwin));
-        nvim_win_set_hsep_height(oldwin, c_int::from(is_stl_global));
+        win_mut(wp).w_hsep_height = win_ref(oldwin).w_hsep_height;
+        win_mut(oldwin).w_hsep_height = c_int::from(is_stl_global);
     }
 
     if toplevel {
@@ -881,36 +853,26 @@ unsafe fn assign_horizontal_dimensions(
 
     if before {
         // new window above current one
-        nvim_win_set_winrow(wp, nvim_win_get_winrow(oldwin));
+        win_mut(wp).w_winrow = win_ref(oldwin).w_winrow;
         if is_stl_global {
-            nvim_win_set_status_height(wp, 0);
-            nvim_win_set_winrow(
-                oldwin,
-                nvim_win_get_winrow(oldwin) + nvim_win_get_w_height(wp) + 1,
-            );
+            win_mut(wp).w_status_height = 0;
+            win_mut(oldwin).w_winrow = win_ref(oldwin).w_winrow + win_ref(wp).w_height + 1;
         } else {
-            nvim_win_set_status_height(wp, STATUS_HEIGHT);
-            nvim_win_set_winrow(
-                oldwin,
-                nvim_win_get_winrow(oldwin) + nvim_win_get_w_height(wp) + STATUS_HEIGHT,
-            );
+            win_mut(wp).w_status_height = STATUS_HEIGHT;
+            win_mut(oldwin).w_winrow =
+                win_ref(oldwin).w_winrow + win_ref(wp).w_height + STATUS_HEIGHT;
         }
     } else {
         // new window below current one
         if is_stl_global {
-            nvim_win_set_winrow(
-                wp,
-                nvim_win_get_winrow(oldwin) + nvim_win_get_w_height(oldwin) + 1,
-            );
-            nvim_win_set_status_height(wp, 0);
+            win_mut(wp).w_winrow = win_ref(oldwin).w_winrow + win_ref(oldwin).w_height + 1;
+            win_mut(wp).w_status_height = 0;
         } else {
-            nvim_win_set_winrow(
-                wp,
-                nvim_win_get_winrow(oldwin) + nvim_win_get_w_height(oldwin) + STATUS_HEIGHT,
-            );
-            nvim_win_set_status_height(wp, old_status_height);
+            win_mut(wp).w_winrow =
+                win_ref(oldwin).w_winrow + win_ref(oldwin).w_height + STATUS_HEIGHT;
+            win_mut(wp).w_status_height = old_status_height;
             if (flags & WSP_BOT) == 0 {
-                nvim_win_set_status_height(oldwin, STATUS_HEIGHT);
+                win_mut(oldwin).w_status_height = STATUS_HEIGHT;
             }
         }
     }
@@ -978,7 +940,7 @@ pub(crate) unsafe fn win_split_ins_full_impl(
     }
 
     if rs_win_valid(oldwin) != 0 {
-        nvim_win_set_pos_changed(oldwin, 1);
+        win_mut(oldwin).w_pos_changed = true;
     }
 
     res.wp
@@ -1129,7 +1091,7 @@ unsafe fn win_split_impl(size: c_int, flags: c_int) -> c_int {
 /// Calls C accessor functions.
 unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int {
     let mut dir: c_int = 0;
-    let height = nvim_win_get_w_height(wp);
+    let height = win_ref(wp).w_height;
 
     // Nothing to do if wp is the only window.
     if nvim_one_window_firstwin(wp, TabpageHandle::null()) != 0 {
@@ -1165,7 +1127,7 @@ unsafe fn win_splitmove_impl(wp: WinHandle, size: c_int, flags: c_int) -> c_int 
             // an existing window, so just undo winframe_remove.
             rs_winframe_restore(wp, dir, unflat_altfr);
         }
-        rs_win_append(nvim_win_get_prev(wp), wp, WinHandle::null());
+        rs_win_append(win_ref(wp).w_prev, wp, WinHandle::null());
         return FAIL;
     }
 

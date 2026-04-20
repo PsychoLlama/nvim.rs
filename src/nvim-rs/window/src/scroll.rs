@@ -10,7 +10,8 @@
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::{win_struct::win_ref, WinHandle};
+use crate::win_struct::{win_mut, win_ref};
+use crate::WinHandle;
 
 // =============================================================================
 // Constants
@@ -45,12 +46,6 @@ extern "C" {
     /// Get the first window in the current tab.
     fn nvim_get_firstwin() -> WinHandle;
 
-    /// Get the `w_next` field from a window.
-    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
-
-    /// Get wp->w_floating.
-    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
-
     /// Get *p_spk character: 'c' = cursor, 's' = screen, 't' = topline.
     fn nvim_win_get_p_spk_char() -> c_int;
 
@@ -60,44 +55,8 @@ extern "C" {
     /// Get skip_win_fix_cursor global.
     fn nvim_get_skip_win_fix_cursor() -> c_int;
 
-    /// Set wp->w_do_win_fix_cursor.
-    fn nvim_win_set_do_win_fix_cursor(wp: WinHandle, val: c_int);
-
-    /// Get wp->w_height.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-
-    /// Set wp->w_prev_height.
-    fn nvim_win_set_prev_height(wp: WinHandle, val: c_int);
-
-    /// Get wp->w_winrow.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Set wp->w_prev_winrow.
-    fn nvim_win_set_prev_winrow(wp: WinHandle, val: c_int);
-
-    /// Get wp->w_botline.
-    fn nvim_win_get_botline(wp: WinHandle) -> c_int;
-
     /// Get wp->w_buffer line count (b_ml.ml_line_count).
     fn nvim_win_buf_line_count(wp: WinHandle) -> c_int;
-
-    /// Get wp->w_cursor.lnum.
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> c_int;
-
-    /// Set wp->w_cursor.lnum.
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: c_int);
-
-    /// Get wp->w_topline.
-    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
-
-    /// Get wp->w_view_height.
-    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
-
-    /// Set wp->w_fraction.
-    fn nvim_win_set_fraction(wp: WinHandle, val: c_int);
-
-    /// Clear w_valid bits: wp->w_valid &= ~bits.
-    fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
 
     /// cursor_down_inner(wp, n, skip_conceal).
     #[link_name = "cursor_down_inner"]
@@ -207,28 +166,28 @@ fn win_fix_scroll_impl(resize: bool) {
         // Iterate all windows in the current tabpage (FOR_ALL_WINDOWS_IN_TAB).
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
-            let height = nvim_win_get_w_height(wp);
+            let height = win_ref(wp).w_height;
             let prev_height = win_ref(wp).w_prev_height;
-            let floating = nvim_win_get_floating(wp);
+            let floating = c_int::from(win_ref(wp).w_floating);
 
             // Skip when window height has not changed or when floating.
             if floating == 0 && height != prev_height {
                 // Cursor position in this window may now be invalid.
-                nvim_win_set_do_win_fix_cursor(wp, 1);
+                win_mut(wp).w_do_win_fix_cursor = true;
 
                 // If window has moved, update botline to keep the same screenlines.
-                let winrow = nvim_win_get_winrow(wp);
+                let winrow = win_ref(wp).w_winrow;
                 let prev_winrow = win_ref(wp).w_prev_winrow;
-                let botline = nvim_win_get_botline(wp);
+                let botline = win_ref(wp).w_botline;
                 let line_count = nvim_win_buf_line_count(wp);
 
                 if p_spk == c_int::from(b's') && winrow != prev_winrow && botline - 1 <= line_count
                 {
                     let diff = (winrow - prev_winrow) + (height - prev_height);
-                    let saved_lnum = nvim_win_get_cursor_lnum(wp);
+                    let saved_lnum = win_ref(wp).w_cursor.lnum;
 
                     // Set cursor to botline - 1 for scroll calculation
-                    nvim_win_set_cursor_lnum(wp, botline - 1);
+                    win_mut(wp).w_cursor.lnum = botline - 1;
 
                     // Add difference in height and row to botline.
                     if diff > 0 {
@@ -238,14 +197,14 @@ fn win_fix_scroll_impl(resize: bool) {
                     }
 
                     // Scroll to put the new cursor position at the bottom of screen.
-                    nvim_win_set_fraction(wp, FRACTION_MULT);
+                    win_mut(wp).w_fraction = FRACTION_MULT;
                     rs_scroll_to_fraction(wp, prev_height);
 
                     // Restore original cursor position
-                    nvim_win_set_cursor_lnum(wp, saved_lnum);
-                    nvim_win_clear_valid_bits(wp, VALID_WCOL);
+                    win_mut(wp).w_cursor.lnum = saved_lnum;
+                    win_mut(wp).w_valid &= !VALID_WCOL;
                 } else if wp == curwin {
-                    nvim_win_clear_valid_bits(wp, VALID_CROW);
+                    win_mut(wp).w_valid &= !VALID_CROW;
                 }
 
                 nvim_invalidate_botline(wp);
@@ -253,10 +212,10 @@ fn win_fix_scroll_impl(resize: bool) {
             }
 
             // Update splitkeep snapshot values.
-            nvim_win_set_prev_height(wp, nvim_win_get_w_height(wp));
-            nvim_win_set_prev_winrow(wp, nvim_win_get_winrow(wp));
+            win_mut(wp).w_prev_height = win_ref(wp).w_height;
+            win_mut(wp).w_prev_winrow = win_ref(wp).w_winrow;
 
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
 
         nvim_set_skip_update_topline(0);
@@ -304,36 +263,36 @@ fn win_fix_cursor_impl(normal: bool) {
             return;
         }
 
-        let view_height = nvim_win_get_view_height(wp);
+        let view_height = win_ref(wp).w_view_height;
         let line_count = nvim_win_buf_line_count(wp);
 
         if line_count < view_height {
             return;
         }
 
-        nvim_win_set_do_win_fix_cursor(wp, 0);
+        win_mut(wp).w_do_win_fix_cursor = false;
 
         // Determine valid cursor range using scrolloff:
         // so = MIN(w_view_height / 2, rs_get_scrolloff_value(wp))
         let so = rs_get_scrolloff_value(wp).min(view_height / 2);
-        let lnum = nvim_win_get_cursor_lnum(wp);
+        let lnum = win_ref(wp).w_cursor.lnum;
 
         // Find top boundary: move from topline down by 'so'
-        nvim_win_set_cursor_lnum(wp, nvim_win_get_topline(wp));
+        win_mut(wp).w_cursor.lnum = win_ref(wp).w_topline;
         nvim_cursor_down_inner(wp, so, false);
-        let top = nvim_win_get_cursor_lnum(wp);
+        let top = win_ref(wp).w_cursor.lnum;
 
         // Find bottom boundary: move from botline-1 up by 'so'
-        nvim_win_set_cursor_lnum(wp, nvim_win_get_botline(wp) - 1);
+        win_mut(wp).w_cursor.lnum = win_ref(wp).w_botline - 1;
         nvim_cursor_up_inner(wp, so, false);
-        let bot = nvim_win_get_cursor_lnum(wp);
+        let bot = win_ref(wp).w_cursor.lnum;
 
         // Restore original cursor position
-        nvim_win_set_cursor_lnum(wp, lnum);
+        win_mut(wp).w_cursor.lnum = lnum;
 
         // Check if cursor is outside the valid range.
-        let botline = nvim_win_get_botline(wp);
-        let topline = nvim_win_get_topline(wp);
+        let botline = win_ref(wp).w_botline;
+        let topline = win_ref(wp).w_topline;
 
         let nlnum = if lnum > bot && (botline - line_count) != 1 {
             bot
@@ -351,11 +310,11 @@ fn win_fix_cursor_impl(normal: bool) {
         if normal {
             // Save to jumplist and move cursor directly (avoid scrolling).
             setmark(c_int::from(b'\''));
-            nvim_win_set_cursor_lnum(wp, nlnum);
+            win_mut(wp).w_cursor.lnum = nlnum;
         } else {
             // Scroll to make cursor valid.
             let fraction = if nlnum == bot { FRACTION_MULT } else { 0 };
-            nvim_win_set_fraction(wp, fraction);
+            win_mut(wp).w_fraction = fraction;
             let prev_height = win_ref(wp).w_prev_height;
             rs_scroll_to_fraction(wp, prev_height);
             nvim_validate_botline(wp);
@@ -403,13 +362,6 @@ extern "C" {
     fn nvim_event_ignored_winresized(wp: WinHandle) -> c_int;
     fn nvim_has_event_winscrolled() -> c_int;
     fn nvim_has_event_winresized() -> c_int;
-
-    // Window field getters (some already declared in existing extern block above)
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_get_leftcol(wp: WinHandle) -> c_int;
-    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
 
     // Typval compound operations
     fn nvim_tv_dict_alloc_refcount1() -> DictHandle;
@@ -486,20 +438,20 @@ fn check_window_scroll_resize_scan() -> ScrollResizeScan {
             // Inlined nvim_win_init_float_snapshot: copy current state to w_last_* fields.
             let mut snap = WinSnapshot::default();
             nvim_win_get_snapshot(wp, std::ptr::addr_of_mut!(snap));
-            if nvim_win_get_floating(wp) != 0 && snap.topline == 0 {
+            if win_ref(wp).w_floating && snap.topline == 0 {
                 let mut cur = WinSnapshot::default();
                 nvim_win_get_scroll_fields(wp, std::ptr::addr_of_mut!(cur));
                 nvim_win_set_snapshot(wp, std::ptr::addr_of!(cur));
-                wp = nvim_win_get_next(wp);
+                wp = win_ref(wp).w_next;
                 continue;
             }
 
-            let cur_width = nvim_win_get_w_width(wp);
-            let cur_height = nvim_win_get_w_height(wp);
-            let cur_topline = nvim_win_get_topline(wp);
-            let cur_topfill = nvim_win_get_topfill(wp);
-            let cur_leftcol = nvim_win_get_leftcol(wp);
-            let cur_skipcol = nvim_win_get_skipcol(wp);
+            let cur_width = win_ref(wp).w_width;
+            let cur_height = win_ref(wp).w_height;
+            let cur_topline = win_ref(wp).w_topline;
+            let cur_topfill = win_ref(wp).w_topfill;
+            let cur_leftcol = win_ref(wp).w_leftcol;
+            let cur_skipcol = win_ref(wp).w_skipcol;
 
             let ignore_scroll = nvim_event_ignored_winscrolled(wp) != 0;
             let size_changed = nvim_event_ignored_winresized(wp) == 0
@@ -527,7 +479,7 @@ fn check_window_scroll_resize_scan() -> ScrollResizeScan {
                 result.first_scroll_win = wp;
             }
 
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 
@@ -542,20 +494,19 @@ fn check_window_scroll_resize_build_list(list: ListHandle) {
         while !wp.is_null() {
             let mut snap = WinSnapshot::default();
             nvim_win_get_snapshot(wp, std::ptr::addr_of_mut!(snap));
-            if nvim_win_get_floating(wp) != 0 && snap.topline == 0 {
-                wp = nvim_win_get_next(wp);
+            if win_ref(wp).w_floating && snap.topline == 0 {
+                wp = win_ref(wp).w_next;
                 continue;
             }
 
             let size_changed = nvim_event_ignored_winresized(wp) == 0
-                && (snap.width != nvim_win_get_w_width(wp)
-                    || snap.height != nvim_win_get_w_height(wp));
+                && (snap.width != win_ref(wp).w_width || snap.height != win_ref(wp).w_height);
 
             if size_changed {
-                nvim_tv_list_append_number(list, nvim_win_get_handle(wp));
+                nvim_tv_list_append_number(list, win_ref(wp).handle);
             }
 
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
     }
 }
@@ -641,17 +592,17 @@ fn check_window_scroll_resize_build_dict() -> DictHandle {
         while !wp.is_null() {
             let mut snap = WinSnapshot::default();
             nvim_win_get_snapshot(wp, std::ptr::addr_of_mut!(snap));
-            if nvim_win_get_floating(wp) != 0 && snap.topline == 0 {
-                wp = nvim_win_get_next(wp);
+            if win_ref(wp).w_floating && snap.topline == 0 {
+                wp = win_ref(wp).w_next;
                 continue;
             }
 
-            let cur_width = nvim_win_get_w_width(wp);
-            let cur_height = nvim_win_get_w_height(wp);
-            let cur_topline = nvim_win_get_topline(wp);
-            let cur_topfill = nvim_win_get_topfill(wp);
-            let cur_leftcol = nvim_win_get_leftcol(wp);
-            let cur_skipcol = nvim_win_get_skipcol(wp);
+            let cur_width = win_ref(wp).w_width;
+            let cur_height = win_ref(wp).w_height;
+            let cur_topline = win_ref(wp).w_topline;
+            let cur_topfill = win_ref(wp).w_topfill;
+            let cur_leftcol = win_ref(wp).w_leftcol;
+            let cur_skipcol = win_ref(wp).w_skipcol;
 
             let ignore_scroll = nvim_event_ignored_winscrolled(wp) != 0;
             let size_changed = nvim_event_ignored_winresized(wp) == 0
@@ -678,7 +629,7 @@ fn check_window_scroll_resize_build_dict() -> DictHandle {
                 }
 
                 // Format window handle as NUL-terminated decimal string
-                let handle = nvim_win_get_handle(wp);
+                let handle = win_ref(wp).handle;
                 let mut winid_buf = [0u8; 24];
                 let key_len = format_int_to_buf(handle, &mut winid_buf);
 
@@ -700,7 +651,7 @@ fn check_window_scroll_resize_build_dict() -> DictHandle {
                 tot_skipcol += skipcol.abs();
             }
 
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
 
         // Add "all" totals sub-dict (non-fatal if it fails, matching C original)
@@ -867,7 +818,7 @@ fn may_trigger_win_scrolled_resized_impl() {
         // Save winid strings and buf fnums before autocmds (windows can be freed)
         let mut resize_winid = [0u8; 24];
         let resize_buf_fnum: c_int = if trigger_resize && !scan.first_size_win.is_null() {
-            format_int_to_buf(nvim_win_get_handle(scan.first_size_win), &mut resize_winid);
+            format_int_to_buf(win_ref(scan.first_size_win).handle, &mut resize_winid);
             nvim_win_get_buf_fnum(scan.first_size_win)
         } else {
             0
@@ -875,10 +826,7 @@ fn may_trigger_win_scrolled_resized_impl() {
 
         let mut scroll_winid = [0u8; 24];
         let scroll_buf_fnum: c_int = if trigger_scroll && !scan.first_scroll_win.is_null() {
-            format_int_to_buf(
-                nvim_win_get_handle(scan.first_scroll_win),
-                &mut scroll_winid,
-            );
+            format_int_to_buf(win_ref(scan.first_scroll_win).handle, &mut scroll_winid);
             nvim_win_get_buf_fnum(scan.first_scroll_win)
         } else {
             0
