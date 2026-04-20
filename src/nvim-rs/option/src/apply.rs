@@ -14,7 +14,7 @@ use std::ffi::{c_char, c_int, c_uint};
 
 use crate::storage::OptVal;
 use crate::{
-    K_OPT_FLAG_CURSWANT, K_OPT_FLAG_HL_ONLY, K_OPT_FLAG_INSECURE, K_OPT_FLAG_REDR_ALL,
+    win_ref, K_OPT_FLAG_CURSWANT, K_OPT_FLAG_HL_ONLY, K_OPT_FLAG_INSECURE, K_OPT_FLAG_REDR_ALL,
     K_OPT_FLAG_SECURE, K_OPT_FLAG_UI_OPTION, OPT_MODELINE, SID_NONE, UPD_NOT_VALID,
 };
 
@@ -91,7 +91,6 @@ extern "C" {
     static mut curwin: *mut std::ffi::c_void;
     fn nvim_curwin_get_w_curswant() -> c_int;
     fn nvim_curwin_set_w_set_curswant(val: bool);
-    fn nvim_win_get_briopt_list(win: *mut std::ffi::c_void) -> c_int;
 
     // comp_col(), setmouse(), redraw_all_later(), set_winbar()
     fn comp_col();
@@ -263,8 +262,7 @@ pub unsafe extern "C" fn rs_did_set_option(
 
     if opt_idx == crate::opt_index::K_OPT_MOUSE {
         setmouse();
-    } else if opt_idx == crate::opt_index::K_OPT_FORMATLISTPAT
-        && nvim_win_get_briopt_list(curwin) != 0
+    } else if opt_idx == crate::opt_index::K_OPT_FORMATLISTPAT && win_ref(curwin).w_briopt_list != 0
     {
         redraw_all_later(UPD_NOT_VALID);
     } else if opt_idx == crate::opt_index::K_OPT_WINBAR {

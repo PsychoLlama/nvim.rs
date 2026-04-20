@@ -11,6 +11,7 @@ use std::ffi::{c_char, c_int, c_uint, c_void};
 use nvim_buffer::buf_struct::BufStruct;
 
 use super::{callback_ok, CallbackResult};
+use crate::win_ref;
 
 // Result type matching OptStringsFlagsResult from optionstr crate (must match C layout)
 #[repr(C)]
@@ -57,7 +58,6 @@ extern "C" {
     static mut cmdpreview: bool;
     static mut VIsual_active: bool;
     fn redraw_curbuf_later(redraw_type: c_int);
-    fn nvim_win_get_briopt_list(win: crate::WinHandle) -> c_int;
     fn redraw_all_later(typ: c_int);
 
     // Phase 2 accessors
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn rs_did_set_breakindentopt(args: *mut c_void) -> Callbac
         return E_INVARG;
     }
     // List setting requires a redraw when applied to current window
-    if varp == briopt_addr && nvim_win_get_briopt_list(win) != 0 {
+    if varp == briopt_addr && win_ref(win).w_briopt_list != 0 {
         redraw_all_later(UPD_NOT_VALID);
     }
     callback_ok()

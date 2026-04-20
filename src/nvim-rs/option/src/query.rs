@@ -56,7 +56,6 @@ extern "C" {
 
     // reset_modifiable
     static mut p_ma: c_int;
-    fn nvim_curbuf_set_b_p_ma(v: c_int);
 
     // TTY options (Phase 2)
     fn rs_is_tty_option(name: *const c_char) -> c_int;
@@ -217,7 +216,7 @@ pub unsafe extern "C" fn rs_set_imsearch_global(buf: BufHandle) {
 /// Reset the 'modifiable' option and its default value.
 #[export_name = "reset_modifiable"]
 pub unsafe extern "C" fn rs_reset_modifiable() {
-    nvim_curbuf_set_b_p_ma(0);
+    (*curbuf.cast::<BufStruct>()).b_p_ma = 0;
     p_ma = 0;
     crate::defaults::rs_change_option_default(
         K_OPT_MODIFIABLE as c_int,
