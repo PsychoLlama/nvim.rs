@@ -298,6 +298,23 @@ pub struct InfoPtrHandle {
     _private: [u8; 0],
 }
 
+/// Concrete mirror of `infoptr_T` for pointer arithmetic on `ml_stack` arrays.
+///
+/// Layout (24 bytes, 8-byte aligned):
+/// - `ip_bnum`:  blocknr_T (i64), offset 0
+/// - `ip_low`:   linenr_T (i32), offset 8
+/// - `ip_high`:  linenr_T (i32), offset 12
+/// - `ip_index`: int (i32),      offset 16
+/// - 4 bytes trailing padding
+#[repr(C)]
+pub struct InfoPtr {
+    pub ip_bnum: i64,
+    pub ip_low: i32,
+    pub ip_high: i32,
+    pub ip_index: std::ffi::c_int,
+    _pad: [u8; 4],
+}
+
 /// Opaque handle to `DataBlock` in C.
 ///
 /// Data blocks are leaf nodes in the B-tree containing actual line text.
@@ -328,6 +345,19 @@ pub struct ZeroBlockHandle {
 #[repr(C)]
 pub struct ChunkSizeHandle {
     _private: [u8; 0],
+}
+
+/// Repr(C) mirror of `chunksize_T` from C.
+///
+/// Used for direct indexed access into `buf->b_ml.ml_chunksize[idx]`.
+/// Layout: two `c_int` fields = 8 bytes total, matching `sizeof(chunksize_T) == 8`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ChunkSizeEntry {
+    /// Number of lines in this chunk (`mlcs_numlines`)
+    pub mlcs_numlines: c_int,
+    /// Total byte size of all lines in this chunk (`mlcs_totalsize`)
+    pub mlcs_totalsize: c_int,
 }
 
 /// Opaque handle to `pos_T` (cursor position) in C.

@@ -69,16 +69,53 @@ pub struct BufStruct {
     pub handle: HandleT,
     _pad0: [u8; 4], // to offset 8
 
-    // offset 8: memline_T b_ml (112 bytes total).
-    //   ml_line_count at sub-offset  0 (linenr_T = i32)
-    //   ml_mfp        at sub-offset  8 (pointer = 8 bytes)
-    //   ml_flags      at sub-offset 32 (int = 4 bytes)
-    pub ml_line_count: LineNr, // abs 8
-    _pad_ml0: [u8; 4],         // abs 12..15
-    pub ml_mfp: *mut c_void,   // abs 16 (memfile_T*)
-    _pad_ml1: [u8; 16],        // abs 24..39
-    pub ml_flags: c_int,       // abs 40
-    _pad_ml2: [u8; 76],        // abs 44..119  (total memline_T = 112, ends at 120)
+    // offset 8: memline_T b_ml (112 bytes total, ends at abs 120).
+    //
+    // memline_T layout (sub-offsets within b_ml, abs = sub + 8):
+    //   ml_line_count    sub  0  abs  8   linenr_T (i32)
+    //   (gap)            sub  4  abs 12   4 bytes alignment
+    //   ml_mfp           sub  8  abs 16   memfile_T* (8 bytes)
+    //   ml_stack         sub 16  abs 24   infoptr_T* (8 bytes)
+    //   ml_stack_top     sub 24  abs 32   int (4 bytes)
+    //   ml_stack_size    sub 28  abs 36   int (4 bytes)
+    //   ml_flags         sub 32  abs 40   int (4 bytes)
+    //   ml_line_len      sub 36  abs 44   colnr_T (i32)
+    //   ml_line_lnum     sub 40  abs 48   linenr_T (i32)
+    //   (gap)            sub 44  abs 52   4 bytes alignment
+    //   ml_line_ptr      sub 48  abs 56   char* (8 bytes)
+    //   ml_line_offset   sub 56  abs 64   size_t (8 bytes)
+    //   ml_line_offset_ff sub 64 abs 72   int (4 bytes)
+    //   (gap)            sub 68  abs 76   4 bytes alignment
+    //   ml_locked        sub 72  abs 80   bhdr_T* (8 bytes)
+    //   ml_locked_low    sub 80  abs 88   linenr_T (i32)
+    //   ml_locked_high   sub 84  abs 92   linenr_T (i32)
+    //   ml_locked_lineadd sub 88 abs 96   int (4 bytes)
+    //   (gap)            sub 92  abs 100  4 bytes alignment
+    //   ml_chunksize     sub 96  abs 104  chunksize_T* (8 bytes)
+    //   ml_numchunks     sub 104 abs 112  int (4 bytes)
+    //   ml_usedchunks    sub 108 abs 116  int (4 bytes)
+    pub ml_line_count: LineNr,     // abs 8 (linenr_T = i32)
+    _pad_ml0: [u8; 4],             // abs 12..15 (alignment gap)
+    pub ml_mfp: *mut c_void,       // abs 16 (memfile_T*)
+    pub ml_stack: *mut c_void,     // abs 24 (infoptr_T*)
+    pub ml_stack_top: c_int,       // abs 32
+    pub ml_stack_size: c_int,      // abs 36
+    pub ml_flags: c_int,           // abs 40
+    pub ml_line_len: ColNr,        // abs 44 (colnr_T = i32)
+    pub ml_line_lnum: LineNr,      // abs 48 (linenr_T = i32)
+    _pad_ml2a: [u8; 4],            // abs 52..55 (alignment gap)
+    pub ml_line_ptr: *mut c_char,  // abs 56 (char*)
+    pub ml_line_offset: usize,     // abs 64 (size_t)
+    pub ml_line_offset_ff: c_int,  // abs 72
+    _pad_ml2b: [u8; 4],            // abs 76..79 (alignment gap)
+    pub ml_locked: *mut c_void,    // abs 80 (bhdr_T*)
+    pub ml_locked_low: LineNr,     // abs 88 (linenr_T = i32)
+    pub ml_locked_high: LineNr,    // abs 92 (linenr_T = i32)
+    pub ml_locked_lineadd: c_int,  // abs 96
+    _pad_ml2c: [u8; 4],            // abs 100..103 (alignment gap)
+    pub ml_chunksize: *mut c_void, // abs 104 (chunksize_T*)
+    pub ml_numchunks: c_int,       // abs 112
+    pub ml_usedchunks: c_int,      // abs 116
 
     // --- BUFFER LIST (offsets 120-159) ---
 

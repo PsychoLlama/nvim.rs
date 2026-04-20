@@ -22,6 +22,8 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+use nvim_buffer::buf_struct::BufStruct;
+
 use crate::types::{
     DataBlockHeader, PointerBlockHeader, PointerEntry, DATA_BLOCK_HEADER_SIZE, DB_INDEX_MASK,
 };
@@ -379,23 +381,15 @@ use crate::types::BufHandle;
 /// # Safety
 /// `buf` must point to a valid `buf_T`.
 pub(crate) unsafe fn buf_init_ml_empty(buf: *mut BufHandle) {
-    nvim_buf_set_ml_stack_size(buf, 0);
-    nvim_buf_set_ml_stack(buf, std::ptr::null_mut());
-    nvim_buf_set_ml_stack_top(buf, 0);
-    nvim_buf_set_ml_locked(buf, std::ptr::null_mut());
-    nvim_buf_set_ml_line_lnum(buf, 0);
-    nvim_buf_set_ml_line_offset(buf, 0);
-    nvim_buf_set_ml_chunksize_ptr(buf, std::ptr::null_mut());
-    nvim_buf_set_ml_usedchunks(buf, 0);
+    let bs = buf.cast::<BufStruct>();
+    (*bs).ml_stack_size = 0;
+    (*bs).ml_stack = std::ptr::null_mut();
+    (*bs).ml_stack_top = 0;
+    (*bs).ml_locked = std::ptr::null_mut();
+    (*bs).ml_line_lnum = 0;
+    (*bs).ml_line_offset = 0;
+    (*bs).ml_chunksize = std::ptr::null_mut();
+    (*bs).ml_usedchunks = 0;
 }
 
-extern "C" {
-    fn nvim_buf_set_ml_stack_size(buf: *mut BufHandle, n: c_int);
-    fn nvim_buf_set_ml_stack(buf: *mut BufHandle, ptr: *mut c_void);
-    fn nvim_buf_set_ml_stack_top(buf: *mut BufHandle, n: c_int);
-    fn nvim_buf_set_ml_locked(buf: *mut BufHandle, hp: *mut c_void);
-    fn nvim_buf_set_ml_line_lnum(buf: *mut BufHandle, lnum: i64);
-    fn nvim_buf_set_ml_line_offset(buf: *mut BufHandle, offset: usize);
-    fn nvim_buf_set_ml_chunksize_ptr(buf: *mut BufHandle, ptr: *mut c_void);
-    fn nvim_buf_set_ml_usedchunks(buf: *mut BufHandle, val: c_int);
-}
+extern "C" {}

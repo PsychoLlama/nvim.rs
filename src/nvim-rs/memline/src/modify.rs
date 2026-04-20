@@ -22,9 +22,11 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void};
 
+use nvim_buffer::buf_struct::BufStruct;
+
 use crate::block_ops;
 use crate::types::{
-    BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtrHandle, LineNr, PointerBlockHeader,
+    BlockNr, BufHandle, ColNr, DataBlockHeader, InfoPtr, LineNr, PointerBlockHeader,
     DATA_BLOCK_HEADER_SIZE, DB_INDEX_MASK, DB_MARKED, INDEX_SIZE, ML_ALLOCATED, ML_APPEND_MARK,
     ML_APPEND_NEW, ML_CHNK_ADDLINE, ML_CHNK_DELLINE, ML_CHNK_UPDLINE, ML_DEL_MESSAGE, ML_EMPTY,
     ML_FIND, ML_FLUSH, ML_INSERT, ML_LINE_DIRTY, ML_LOCKED_DIRTY, ML_LOCKED_POS, PTR_ID,
@@ -39,30 +41,6 @@ extern "C" {
     // -------------------------------------------------------------------------
     // Buffer Memline Accessors
     // -------------------------------------------------------------------------
-
-    /// Get buffer's line count (`buf->b_ml.ml_line_count`)
-    fn nvim_buf_get_ml_line_count(buf: *mut BufHandle) -> LineNr;
-
-    /// Get buffer's ml_flags (`buf->b_ml.ml_flags`)
-    fn nvim_buf_get_ml_flags(buf: *mut BufHandle) -> c_int;
-
-    /// Set buffer's ml_flags (`buf->b_ml.ml_flags`)
-    fn nvim_buf_set_ml_flags(buf: *mut BufHandle, flags: c_int);
-
-    /// Get buffer's cached line number (`buf->b_ml.ml_line_lnum`)
-    fn nvim_buf_get_ml_line_lnum(buf: *mut BufHandle) -> LineNr;
-
-    /// Get buffer's cached line pointer (`buf->b_ml.ml_line_ptr`)
-    fn nvim_buf_get_ml_line_ptr(buf: *mut BufHandle) -> *mut c_char;
-
-    /// Check if buffer has a valid memfile (`buf->b_ml.ml_mfp != NULL`)
-    fn nvim_buf_has_ml_mfp(buf: *mut BufHandle) -> c_int;
-
-    /// Get buffer's ml_locked_low
-    fn nvim_buf_get_ml_locked_low(buf: *mut BufHandle) -> LineNr;
-
-    /// Get buffer's ml_locked_high
-    fn nvim_buf_get_ml_locked_high(buf: *mut BufHandle) -> LineNr;
 
     /// Get current buffer (curbuf)
     fn nvim_get_curbuf() -> *mut BufHandle;
@@ -129,39 +107,12 @@ extern "C" {
     /// Get UTF codepoint/codeunit length of string
     fn mb_utflen(s: *const c_char, len: usize, codepoints: *mut usize, codeunits: *mut usize);
 
-    /// Get buf->b_ml.ml_stack_top
-    fn nvim_buf_get_ml_stack_top(buf: *mut BufHandle) -> c_int;
-
-    /// Get buf->b_ml.ml_stack_size
-    fn nvim_buf_get_ml_stack_size(buf: *mut BufHandle) -> c_int;
-
-    /// Set buf->b_ml.ml_stack_size
-    fn nvim_buf_set_ml_stack_size(buf: *mut BufHandle, n: c_int);
-
-    /// Increment buf->b_ml.ml_stack_top and return old value
-    fn nvim_buf_inc_ml_stack_top(buf: *mut BufHandle) -> c_int;
-
-    /// Get buf->b_ml.ml_stack as void* (same as nvim_buf_get_ml_stack_void)
-    fn nvim_buf_get_ml_stack(buf: *mut BufHandle) -> *mut std::ffi::c_void;
-
-    /// Set buf->b_ml.ml_stack
-    fn nvim_buf_set_ml_stack(buf: *mut BufHandle, ptr: *mut std::ffi::c_void);
-
-    /// Get sizeof(infoptr_T)
-    fn nvim_get_infoptr_size() -> usize;
-
     /// Reallocate memory
     fn xrealloc(ptr: *mut std::ffi::c_void, size: usize) -> *mut std::ffi::c_void;
 
     // -------------------------------------------------------------------------
     // Pass 3 Phase 3: ml_replace_buf_len accessors
     // -------------------------------------------------------------------------
-
-    /// Set buffer's cached line pointer (`buf->b_ml.ml_line_ptr = ptr`)
-    fn nvim_buf_set_ml_line_ptr(buf: *mut BufHandle, ptr: *mut c_char);
-
-    /// Set buffer's cached line number (`buf->b_ml.ml_line_lnum = lnum`)
-    fn nvim_buf_set_ml_line_lnum(buf: *mut BufHandle, lnum: LineNr);
 
     /// Get number of update callbacks for a buffer
     fn nvim_buf_get_update_callbacks_size(buf: *mut BufHandle) -> usize;
@@ -172,8 +123,6 @@ extern "C" {
     /// Duplicate a memory region, NUL-terminated (xmalloc + memcpy + NUL)
     fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void;
 
-    /// Set buffer's cached line length (`buf->b_ml.ml_line_len = len`)
-    fn nvim_buf_set_ml_line_len(buf: *mut BufHandle, len: ColNr);
 }
 
 // =============================================================================
@@ -181,12 +130,6 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    /// Get buffer's memfile pointer (`buf->b_ml.ml_mfp`)
-    fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut std::ffi::c_void;
-
-    /// Decrement buf->b_ml.ml_line_count and return new value
-    fn nvim_buf_dec_ml_line_count(buf: *mut BufHandle) -> LineNr;
-
     /// Get buf->b_prev_line_count
     fn nvim_buf_get_b_prev_line_count(buf: *mut BufHandle) -> LineNr;
 
@@ -203,17 +146,11 @@ extern "C" {
     #[link_name = "mf_free"]
     fn nvim_mf_free(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void);
 
-    /// Get buf->b_ml.ml_locked_lineadd
-    fn nvim_buf_get_ml_locked_lineadd(buf: *mut BufHandle) -> c_int;
-
-    /// Get buf->b_ml.ml_stack[idx]
-    fn nvim_buf_get_ml_stack_ip(buf: *mut BufHandle, idx: c_int) -> *mut InfoPtrHandle;
-
     /// Get ip->ip_index
-    fn nvim_ip_get_index(ip: *const InfoPtrHandle) -> c_int;
+    fn nvim_ip_get_index(ip: *const InfoPtr) -> c_int;
 
     /// Get ip->ip_bnum as BlockNr
-    fn nvim_ip_get_bnum(ip: *const InfoPtrHandle) -> BlockNr;
+    fn nvim_ip_get_bnum(ip: *const InfoPtr) -> BlockNr;
 
     /// Get memfile block (mf_get)
     fn mf_get(mfp: *mut std::ffi::c_void, bnum: BlockNr, count: c_int) -> *mut std::ffi::c_void;
@@ -222,16 +159,10 @@ extern "C" {
     fn mf_put(mfp: *mut std::ffi::c_void, hp: *mut std::ffi::c_void, dirty: bool, release: bool);
 
     /// Add count to ip->ip_high
-    fn nvim_ip_add_high(ip: *mut InfoPtrHandle, count: c_int);
+    fn nvim_ip_add_high(ip: *mut InfoPtr, count: c_int);
 
     /// Set ip->ip_index
-    fn nvim_ip_set_index(ip: *mut InfoPtrHandle, idx: c_int);
-
-    /// Set buf->b_ml.ml_locked
-    fn nvim_buf_set_ml_locked(buf: *mut BufHandle, hp: *mut std::ffi::c_void);
-
-    /// Set buf->b_ml.ml_stack_top
-    fn nvim_buf_set_ml_stack_top(buf: *mut BufHandle, n: c_int);
+    fn nvim_ip_set_index(ip: *mut InfoPtr, idx: c_int);
 
     /// Adjust the B-tree pointer block line counts after insert/delete (in navigate.rs)
     fn rs_ml_lineadd(buf: *mut BufHandle, count: c_int);
@@ -253,15 +184,6 @@ extern "C" {
 
     /// iemsg for "E318: Updated too many blocks?"
     fn nvim_iemsg_e318_updated_too_many();
-
-    /// Set buf->b_ml.ml_locked_lineadd
-    fn nvim_buf_set_ml_locked_lineadd(buf: *mut BufHandle, val: c_int);
-
-    /// Increment buf->b_ml.ml_line_count and return new value
-    fn nvim_buf_inc_ml_line_count(buf: *mut BufHandle) -> LineNr;
-
-    /// Set buf->b_ml.ml_locked_high
-    fn nvim_buf_set_ml_locked_high(buf: *mut BufHandle, val: LineNr);
 
 }
 
@@ -358,17 +280,12 @@ extern "C" {
     // Pass 5 Phase 2: rs_ml_flush_line accessors
     // -------------------------------------------------------------------------
 
-    /// Get ml_line_len (cached line length including NUL)
-    fn nvim_buf_get_ml_line_len(buf: *mut BufHandle) -> ColNr;
-
     /// Increment buf->flush_count
     fn nvim_buf_inc_flush_count(buf: *mut BufHandle);
 
     /// Print "E320: Cannot find line N" error
     fn nvim_siemsg_e320_cannot_find_line(lnum: i64);
 
-    /// Set buffer's ml_line_offset to 0
-    fn nvim_buf_set_ml_line_offset(buf: *mut BufHandle, offset: usize);
 }
 
 // =============================================================================
@@ -589,7 +506,7 @@ pub unsafe extern "C" fn rs_ml_replace_buf_len(
         line = xmemdupz(line_arg.cast(), len_arg).cast::<c_char>();
     }
 
-    if nvim_buf_get_ml_line_lnum(buf) != lnum {
+    if (LineNr::from((*buf.cast::<BufStruct>()).ml_line_lnum)) != lnum {
         // Another line is buffered - flush it
         rs_ml_flush_line(buf, 0);
     }
@@ -600,17 +517,23 @@ pub unsafe extern "C" fn rs_ml_replace_buf_len(
         rs_ml_add_deleted_len_buf(buf, current_line, -1);
     }
 
-    let flags = nvim_buf_get_ml_flags(buf);
+    let flags = (*buf.cast::<BufStruct>()).ml_flags;
     if (flags & (ML_LINE_DIRTY | ML_ALLOCATED)) != 0 {
         // Free previously allocated line
-        xfree(nvim_buf_get_ml_line_ptr(buf).cast());
+        xfree((*buf.cast::<BufStruct>()).ml_line_ptr.cast());
     }
 
-    nvim_buf_set_ml_line_ptr(buf, line);
-    nvim_buf_set_ml_line_len(buf, len + 1);
-    nvim_buf_set_ml_line_lnum(buf, lnum);
-    let new_flags = (nvim_buf_get_ml_flags(buf) | ML_LINE_DIRTY) & !ML_EMPTY;
-    nvim_buf_set_ml_flags(buf, new_flags);
+    {
+        (*buf.cast::<BufStruct>()).ml_line_ptr = line;
+    };
+    (*buf.cast::<BufStruct>()).ml_line_len = len + 1;
+    {
+        (*buf.cast::<BufStruct>()).ml_line_lnum = (lnum) as i32;
+    };
+    let new_flags = ((*buf.cast::<BufStruct>()).ml_flags | ML_LINE_DIRTY) & !ML_EMPTY;
+    {
+        (*buf.cast::<BufStruct>()).ml_flags = new_flags;
+    };
 
     if noalloc != 0 {
         rs_ml_flush_line(buf, 1);
@@ -783,7 +706,7 @@ pub unsafe extern "C" fn rs_ml_append_buf_impl(
     if buf.is_null() {
         return FAIL;
     }
-    if nvim_buf_has_ml_mfp(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).ml_mfp.is_null() {
         return FAIL;
     }
     let flags = if newfile != 0 { ML_APPEND_NEW } else { 0 };
@@ -800,7 +723,7 @@ pub unsafe extern "C" fn rs_ml_append_buf_impl(
 pub unsafe extern "C" fn rs_ml_delete_flags_impl(lnum: LineNr, flags: c_int) -> c_int {
     let buf = nvim_get_curbuf();
     rs_ml_flush_line(buf, 0);
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = LineNr::from((*buf.cast::<BufStruct>()).ml_line_count);
     if lnum < 1 || lnum > line_count {
         return FAIL;
     }
@@ -903,7 +826,9 @@ pub unsafe extern "C" fn rs_ml_append_int(
         len_arg
     };
 
-    if lnum > nvim_buf_get_ml_line_count(buf) || nvim_buf_has_ml_mfp(buf) == 0 {
+    if lnum > (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count))
+        || (*buf.cast::<BufStruct>()).ml_mfp.is_null()
+    {
         return FAIL; // lnum out of range
     }
 
@@ -911,7 +836,7 @@ pub unsafe extern "C" fn rs_ml_append_int(
 
     let space_needed = len + INDEX_SIZE as ColNr; // space for text + index entry
 
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     let page_size = nvim_mf_get_page_size(mfp) as c_int;
 
     // Find the data block containing the previous line.
@@ -922,17 +847,18 @@ pub unsafe extern "C" fn rs_ml_append_int(
     }
 
     // Clear ML_EMPTY flag now that we have at least one real line.
-    let cur_flags = nvim_buf_get_ml_flags(buf);
-    nvim_buf_set_ml_flags(buf, cur_flags & !ML_EMPTY);
+    let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
+    (*buf.cast::<BufStruct>()).ml_flags = cur_flags & !ML_EMPTY;
 
     let mut db_idx: c_int = if lnum == 0 {
         -1 // prepending before line 1
     } else {
-        (lnum - nvim_buf_get_ml_locked_low(buf)) as c_int
+        (lnum - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low))) as c_int
     };
     // line count (number of indexes) in current block before insertion
-    let mut line_count =
-        (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf)) as c_int;
+    let mut line_count = ((LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high))
+        - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low)))
+        as c_int;
 
     let mut dp = nvim_bhdr_get_bh_data(hp);
     let mut dp_header = dp.cast::<DataBlockHeader>();
@@ -941,27 +867,32 @@ pub unsafe extern "C" fn rs_ml_append_int(
     // insert in front of the next block instead.
     if ((*dp_header).db_free as c_int) < space_needed
         && db_idx == line_count - 1
-        && lnum < nvim_buf_get_ml_line_count(buf)
+        && lnum < (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count))
     {
         // The line counts in pointer blocks need adjustment via ml_locked_lineadd.
-        let lineadd_val = nvim_buf_get_ml_locked_lineadd(buf) - 1;
-        nvim_buf_set_ml_locked_lineadd(buf, lineadd_val);
-        nvim_buf_set_ml_locked_high(buf, nvim_buf_get_ml_locked_high(buf) - 1);
+        let lineadd_val = (*buf.cast::<BufStruct>()).ml_locked_lineadd - 1;
+        {
+            (*buf.cast::<BufStruct>()).ml_locked_lineadd = lineadd_val;
+        };
+        (*buf.cast::<BufStruct>()).ml_locked_high =
+            ((LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high)) - 1) as i32;
         hp = rs_ml_find_line(buf, lnum + 1, ML_INSERT);
         if hp.is_null() {
             return FAIL;
         }
         db_idx = -1; // prepending in this new block
-        line_count = (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf)) as c_int;
-        debug_assert!(nvim_buf_get_ml_locked_low(buf) == lnum + 1);
+        line_count = ((LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high))
+            - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low)))
+            as c_int;
+        debug_assert!((LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low)) == lnum + 1);
         dp = nvim_bhdr_get_bh_data(hp);
         dp_header = dp.cast::<DataBlockHeader>();
     }
 
     if nvim_buf_get_b_prev_line_count(buf) == 0 {
-        nvim_buf_set_b_prev_line_count(buf, nvim_buf_get_ml_line_count(buf));
+        nvim_buf_set_b_prev_line_count(buf, LineNr::from((*buf.cast::<BufStruct>()).ml_line_count));
     }
-    nvim_buf_inc_ml_line_count(buf);
+    (*buf.cast::<BufStruct>()).ml_line_count += 1;
 
     let db_idx_arr: *mut u32 = db_index_ptr(dp);
 
@@ -1009,7 +940,7 @@ pub unsafe extern "C" fn rs_ml_append_int(
         }
 
         // Mark the block dirty.
-        let cur_flags = nvim_buf_get_ml_flags(buf);
+        let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
         let new_flags = cur_flags
             | ML_LOCKED_DIRTY
             | if (flags & ML_APPEND_NEW) == 0 {
@@ -1017,7 +948,9 @@ pub unsafe extern "C" fn rs_ml_append_int(
             } else {
                 0
             };
-        nvim_buf_set_ml_flags(buf, new_flags);
+        {
+            (*buf.cast::<BufStruct>()).ml_flags = new_flags;
+        };
     } else {
         // -----------------------------------------------------------------------
         // Not enough space: create a new data block and copy some lines into it.
@@ -1168,23 +1101,25 @@ pub unsafe extern "C" fn rs_ml_append_int(
 
         // Release the two data blocks.
         if lines_moved > 0 || in_left {
-            let cur_flags = nvim_buf_get_ml_flags(buf);
-            nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_DIRTY);
+            let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
+            (*buf.cast::<BufStruct>()).ml_flags = cur_flags | ML_LOCKED_DIRTY;
         }
         if (flags & ML_APPEND_NEW) == 0 && db_idx >= 0 && in_left {
-            let cur_flags = nvim_buf_get_ml_flags(buf);
-            nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_POS);
+            let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
+            (*buf.cast::<BufStruct>()).ml_flags = cur_flags | ML_LOCKED_POS;
         }
         mf_put(mfp, hp_new, true, false);
 
         // Flush the old data block.
         // Set ml_locked_lineadd to 0 because pointer block updates are done below.
-        let lineadd = nvim_buf_get_ml_locked_lineadd(buf);
-        nvim_buf_set_ml_locked_lineadd(buf, 0);
+        let lineadd = (*buf.cast::<BufStruct>()).ml_locked_lineadd;
+        {
+            (*buf.cast::<BufStruct>()).ml_locked_lineadd = 0;
+        };
         rs_ml_find_line(buf, 0, ML_FLUSH); // flush data block
 
         // Update pointer blocks for the new data block.
-        let stack_top = nvim_buf_get_ml_stack_top(buf);
+        let stack_top = (*buf.cast::<BufStruct>()).ml_stack_top;
         let mut bnum_left_cur: BlockNr = bnum_left;
         let mut bnum_right_cur: BlockNr = bnum_right;
         let mut page_count_left_cur = page_count_left;
@@ -1196,7 +1131,10 @@ pub unsafe extern "C" fn rs_ml_append_int(
 
         let mut stack_idx = stack_top - 1;
         while stack_idx >= 0 {
-            let ip = nvim_buf_get_ml_stack_ip(buf, stack_idx);
+            let ip = (*buf.cast::<BufStruct>())
+                .ml_stack
+                .cast::<InfoPtr>()
+                .add((stack_idx) as usize);
             let pb_idx = nvim_ip_get_index(ip);
             let bnum = nvim_ip_get_bnum(ip);
             let block_hp = mf_get(mfp, bnum, 1);
@@ -1238,16 +1176,21 @@ pub unsafe extern "C" fn rs_ml_append_int(
                 }
 
                 mf_put(mfp, block_hp, true, false);
-                nvim_buf_set_ml_stack_top(buf, stack_idx + 1); // truncate stack
+                (*buf.cast::<BufStruct>()).ml_stack_top = stack_idx + 1; // truncate stack
 
                 if lineadd != 0 {
-                    let new_top = nvim_buf_get_ml_stack_top(buf) - 1;
-                    nvim_buf_set_ml_stack_top(buf, new_top);
+                    let new_top = (*buf.cast::<BufStruct>()).ml_stack_top - 1;
+                    {
+                        (*buf.cast::<BufStruct>()).ml_stack_top = new_top;
+                    };
                     rs_ml_lineadd(buf, lineadd);
                     // fix stack itself
-                    let top_ip = nvim_buf_get_ml_stack_ip(buf, nvim_buf_get_ml_stack_top(buf));
+                    let top_ip = (*buf.cast::<BufStruct>())
+                        .ml_stack
+                        .cast::<InfoPtr>()
+                        .add((*buf.cast::<BufStruct>()).ml_stack_top as usize);
                     nvim_ip_add_high(top_ip, lineadd);
-                    nvim_buf_set_ml_stack_top(buf, nvim_buf_get_ml_stack_top(buf) + 1);
+                    (*buf.cast::<BufStruct>()).ml_stack_top += 1;
                 }
 
                 // Done -- break the loop.
@@ -1289,7 +1232,8 @@ pub unsafe extern "C" fn rs_ml_append_int(
                 (*pp_root).pb_count = 1;
                 let root_arr = block_ops::pb_pointer_ptr(cur_pp);
                 (*root_arr).pe_bnum = nvim_bhdr_get_bh_bnum(hp_new);
-                (*root_arr).pe_line_count = nvim_buf_get_ml_line_count(buf) as i32;
+                (*root_arr).pe_line_count =
+                    (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count)) as i32;
                 (*root_arr).pe_old_lnum = 1;
                 (*root_arr).pe_page_count = 1;
                 mf_put(mfp, cur_block_hp, true, false); // release block 1
@@ -1373,7 +1317,9 @@ pub unsafe extern "C" fn rs_ml_append_int(
         // Safety check: fell out of the for loop without inserting?
         if stack_idx < 0 {
             nvim_iemsg_e318_updated_too_many();
-            nvim_buf_set_ml_stack_top(buf, 0); // invalidate stack
+            {
+                (*buf.cast::<BufStruct>()).ml_stack_top = 0;
+            }; // invalidate stack
         }
     }
 
@@ -1399,10 +1345,10 @@ pub unsafe extern "C" fn rs_ml_append_flush(
     len: ColNr,
     flags: c_int,
 ) -> c_int {
-    if lnum > nvim_buf_get_ml_line_count(buf) {
+    if lnum > (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count)) {
         return FAIL; // lnum out of range
     }
-    if nvim_buf_get_ml_line_lnum(buf) != 0 {
+    if (LineNr::from((*buf.cast::<BufStruct>()).ml_line_lnum)) != 0 {
         // This may also invoke rs_ml_append_int().
         rs_ml_flush_line(buf, 0);
     }
@@ -1444,11 +1390,13 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
         return;
     }
 
-    if nvim_buf_get_ml_line_lnum(buf) == 0 || nvim_buf_has_ml_mfp(buf) == 0 {
+    if (LineNr::from((*buf.cast::<BufStruct>()).ml_line_lnum)) == 0
+        || (*buf.cast::<BufStruct>()).ml_mfp.is_null()
+    {
         return; // nothing to do
     }
 
-    let flags = nvim_buf_get_ml_flags(buf);
+    let flags = (*buf.cast::<BufStruct>()).ml_flags;
 
     if (flags & ML_LINE_DIRTY) != 0 {
         // This code doesn't work recursively.
@@ -1459,8 +1407,8 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
 
         nvim_buf_inc_flush_count(buf);
 
-        let lnum = nvim_buf_get_ml_line_lnum(buf);
-        let new_line: *mut c_char = nvim_buf_get_ml_line_ptr(buf);
+        let lnum = LineNr::from((*buf.cast::<BufStruct>()).ml_line_lnum);
+        let new_line: *mut c_char = (*buf.cast::<BufStruct>()).ml_line_ptr;
 
         let hp = rs_ml_find_line(buf, lnum, ML_FIND);
         if hp.is_null() {
@@ -1470,7 +1418,7 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
             let dp = dp_raw.cast::<u8>();
             let dp_header = dp_raw.cast::<DataBlockHeader>();
 
-            let idx = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
+            let idx = (lnum - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low))) as usize;
 
             // db_index array follows immediately after the DataBlockHeader
             let db_index: *mut u32 = dp.add(DATA_BLOCK_HEADER_SIZE).cast();
@@ -1484,15 +1432,16 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
                 (*db_index.add(idx - 1) & DB_INDEX_MASK) as usize - start
             };
 
-            let new_len = nvim_buf_get_ml_line_len(buf) as usize;
+            let new_len = (*buf.cast::<BufStruct>()).ml_line_len as usize;
             // extra is positive if line grows, negative if it shrinks
             let extra = new_len as i64 - old_len as i64;
 
             // If new line fits in data block, replace directly
             if i64::from((*dp_header).db_free) >= extra {
                 // If length changes and there are following lines, shift text
-                let count = (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf) + 1)
-                    as usize;
+                let count = ((LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high))
+                    - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low))
+                    + 1) as usize;
 
                 if extra != 0 && idx < count - 1 {
                     // Move text of following lines to make room (or fill gap)
@@ -1528,8 +1477,8 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
                 std::ptr::copy_nonoverlapping(new_line.cast::<u8>(), dest, new_len);
 
                 // Mark the locked block dirty and needing a positive block number
-                let cur_flags = nvim_buf_get_ml_flags(buf);
-                nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_DIRTY | ML_LOCKED_POS);
+                let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
+                (*buf.cast::<BufStruct>()).ml_flags = cur_flags | ML_LOCKED_DIRTY | ML_LOCKED_POS;
 
                 // Update chunk tracking if size changed
                 if extra != 0 {
@@ -1558,14 +1507,18 @@ pub unsafe extern "C" fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int) {
     } else if (flags & ML_ALLOCATED) != 0 {
         // Line was allocated (e.g. for address sanitizer) but not dirtied.
         // assert(!noalloc) -- caller must set ML_LINE_DIRTY with noalloc
-        xfree(nvim_buf_get_ml_line_ptr(buf).cast::<c_void>());
+        xfree((*buf.cast::<BufStruct>()).ml_line_ptr.cast::<c_void>());
     }
 
     // Clear the dirty/allocated flags and invalidate the line cache
-    let cur_flags = nvim_buf_get_ml_flags(buf);
-    nvim_buf_set_ml_flags(buf, cur_flags & !(ML_LINE_DIRTY | ML_ALLOCATED));
-    nvim_buf_set_ml_line_lnum(buf, 0);
-    nvim_buf_set_ml_line_offset(buf, 0);
+    let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
+    (*buf.cast::<BufStruct>()).ml_flags = cur_flags & !(ML_LINE_DIRTY | ML_ALLOCATED);
+    {
+        (*buf.cast::<BufStruct>()).ml_line_lnum = 0_i32;
+    };
+    {
+        (*buf.cast::<BufStruct>()).ml_line_offset = 0;
+    };
 }
 
 /// Check if the buffer has a dirty cached line.
@@ -1580,8 +1533,8 @@ pub unsafe extern "C" fn rs_ml_has_dirty_line(buf: *mut BufHandle) -> c_int {
         return 0;
     }
 
-    let flags = nvim_buf_get_ml_flags(buf);
-    let lnum = nvim_buf_get_ml_line_lnum(buf);
+    let flags = (*buf.cast::<BufStruct>()).ml_flags;
+    let lnum = LineNr::from((*buf.cast::<BufStruct>()).ml_line_lnum);
 
     // Has dirty line if ml_line_lnum is set and ML_LINE_DIRTY flag is set
     c_int::from(lnum != 0 && (flags & ML_LINE_DIRTY) != 0)
@@ -1599,11 +1552,11 @@ pub unsafe extern "C" fn rs_ml_clear_cached_line(buf: *mut BufHandle) {
         return;
     }
 
-    let flags = nvim_buf_get_ml_flags(buf);
-    let lnum = nvim_buf_get_ml_line_lnum(buf);
+    let flags = (*buf.cast::<BufStruct>()).ml_flags;
+    let lnum = LineNr::from((*buf.cast::<BufStruct>()).ml_line_lnum);
 
     if lnum != 0 && (flags & (ML_LINE_DIRTY | ML_ALLOCATED)) != 0 {
-        let ptr = nvim_buf_get_ml_line_ptr(buf);
+        let ptr = (*buf.cast::<BufStruct>()).ml_line_ptr;
         if !ptr.is_null() {
             xfree(ptr.cast());
         }
@@ -1695,16 +1648,23 @@ pub unsafe extern "C" fn rs_ml_add_deleted_len_buf(
     clippy::cast_possible_wrap
 )]
 pub unsafe extern "C" fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int {
-    let top = nvim_buf_get_ml_stack_top(buf);
-    let stack_size = nvim_buf_get_ml_stack_size(buf);
+    let top = (*buf.cast::<BufStruct>()).ml_stack_top;
+    let stack_size = (*buf.cast::<BufStruct>()).ml_stack_size;
     if top == stack_size {
-        let new_size = (stack_size as usize + STACK_INCR) * nvim_get_infoptr_size();
-        let old_ptr = nvim_buf_get_ml_stack(buf);
+        let new_size =
+            (stack_size as usize + STACK_INCR) * std::mem::size_of::<crate::types::InfoPtr>();
+        let old_ptr = (*buf.cast::<BufStruct>()).ml_stack;
         let new_ptr = xrealloc(old_ptr, new_size);
-        nvim_buf_set_ml_stack(buf, new_ptr);
-        nvim_buf_set_ml_stack_size(buf, stack_size + STACK_INCR as c_int);
+        {
+            (*buf.cast::<BufStruct>()).ml_stack = new_ptr;
+        };
+        (*buf.cast::<BufStruct>()).ml_stack_size = stack_size + STACK_INCR as c_int;
     }
-    nvim_buf_inc_ml_stack_top(buf)
+    {
+        let old_top = (*buf.cast::<BufStruct>()).ml_stack_top;
+        (*buf.cast::<BufStruct>()).ml_stack_top += 1;
+        old_top
+    }
 }
 
 // =============================================================================
@@ -1724,7 +1684,10 @@ pub unsafe extern "C" fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int {
 #[export_name = "ml_setmarked"]
 pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
     let buf = nvim_get_curbuf();
-    if lnum < 1 || lnum > nvim_buf_get_ml_line_count(buf) || nvim_buf_has_ml_mfp(buf) == 0 {
+    if lnum < 1
+        || lnum > (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count))
+        || (*buf.cast::<BufStruct>()).ml_mfp.is_null()
+    {
         return;
     }
 
@@ -1740,12 +1703,12 @@ pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
     let dp = nvim_bhdr_get_bh_data(hp);
     let db_idx = db_index_ptr(dp);
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    let i = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
+    let i = (lnum - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low))) as usize;
     *db_idx.add(i) |= DB_MARKED;
 
     // Mark the block dirty
-    let flags = nvim_buf_get_ml_flags(buf);
-    nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY);
+    let flags = (*buf.cast::<BufStruct>()).ml_flags;
+    (*buf.cast::<BufStruct>()).ml_flags = flags | ML_LOCKED_DIRTY;
 }
 
 /// Find the first marked line (Rust implementation).
@@ -1758,12 +1721,12 @@ pub unsafe extern "C" fn rs_ml_setmarked(lnum: LineNr) {
 #[export_name = "ml_firstmarked"]
 pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
     let buf = nvim_get_curbuf();
-    if nvim_buf_has_ml_mfp(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).ml_mfp.is_null() {
         return 0;
     }
 
     let mut lnum = LOWEST_MARKED;
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = LineNr::from((*buf.cast::<BufStruct>()).ml_line_count);
 
     while lnum <= line_count {
         let hp = rs_ml_find_line(buf, lnum, crate::types::ML_FIND);
@@ -1773,16 +1736,16 @@ pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
         let dp = nvim_bhdr_get_bh_data(hp);
         let db_idx = db_index_ptr(dp);
 
-        let locked_low = nvim_buf_get_ml_locked_low(buf);
-        let locked_high = nvim_buf_get_ml_locked_high(buf);
+        let locked_low = LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low);
+        let locked_high = LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high);
 
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let mut i = (lnum - locked_low) as usize;
         while lnum <= locked_high {
             if (*db_idx.add(i)) & DB_MARKED != 0 {
                 *db_idx.add(i) &= DB_INDEX_MASK;
-                let flags = nvim_buf_get_ml_flags(buf);
-                nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY);
+                let flags = (*buf.cast::<BufStruct>()).ml_flags;
+                (*buf.cast::<BufStruct>()).ml_flags = flags | ML_LOCKED_DIRTY;
                 LOWEST_MARKED = lnum + 1;
                 return lnum;
             }
@@ -1804,12 +1767,12 @@ pub unsafe extern "C" fn rs_ml_firstmarked() -> LineNr {
 #[export_name = "ml_clearmarked"]
 pub unsafe extern "C" fn rs_ml_clearmarked() {
     let buf = nvim_get_curbuf();
-    if nvim_buf_has_ml_mfp(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).ml_mfp.is_null() {
         return;
     }
 
     let mut lnum = LOWEST_MARKED;
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = LineNr::from((*buf.cast::<BufStruct>()).ml_line_count);
 
     while lnum <= line_count {
         let hp = rs_ml_find_line(buf, lnum, crate::types::ML_FIND);
@@ -1819,16 +1782,16 @@ pub unsafe extern "C" fn rs_ml_clearmarked() {
         let dp = nvim_bhdr_get_bh_data(hp);
         let db_idx = db_index_ptr(dp);
 
-        let locked_low = nvim_buf_get_ml_locked_low(buf);
-        let locked_high = nvim_buf_get_ml_locked_high(buf);
+        let locked_low = LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low);
+        let locked_high = LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high);
 
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let mut i = (lnum - locked_low) as usize;
         while lnum <= locked_high {
             if (*db_idx.add(i)) & DB_MARKED != 0 {
                 *db_idx.add(i) &= DB_INDEX_MASK;
-                let flags = nvim_buf_get_ml_flags(buf);
-                nvim_buf_set_ml_flags(buf, flags | ML_LOCKED_DIRTY);
+                let flags = (*buf.cast::<BufStruct>()).ml_flags;
+                (*buf.cast::<BufStruct>()).ml_flags = flags | ML_LOCKED_DIRTY;
             }
             i += 1;
             lnum += 1;
@@ -1855,11 +1818,11 @@ pub unsafe extern "C" fn rs_ml_can_modify(buf: *mut BufHandle, lnum: LineNr) -> 
     }
 
     // Must have memfile
-    if nvim_buf_has_ml_mfp(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).ml_mfp.is_null() {
         return 0;
     }
 
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = LineNr::from((*buf.cast::<BufStruct>()).ml_line_count);
 
     // Line number must be valid
     c_int::from(lnum >= 1 && lnum <= line_count)
@@ -1878,11 +1841,11 @@ pub unsafe extern "C" fn rs_ml_can_append(buf: *mut BufHandle, lnum: LineNr) -> 
     }
 
     // Must have memfile
-    if nvim_buf_has_ml_mfp(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).ml_mfp.is_null() {
         return 0;
     }
 
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = LineNr::from((*buf.cast::<BufStruct>()).ml_line_count);
 
     // Can append after line 0 through line_count
     c_int::from(lnum >= 0 && lnum <= line_count)
@@ -1898,7 +1861,7 @@ pub unsafe extern "C" fn rs_ml_is_empty(buf: *mut BufHandle) -> c_int {
         return 1; // Treat null as empty
     }
 
-    let flags = nvim_buf_get_ml_flags(buf);
+    let flags = (*buf.cast::<BufStruct>()).ml_flags;
     c_int::from((flags & ML_EMPTY) != 0)
 }
 
@@ -2308,7 +2271,7 @@ pub unsafe extern "C" fn rs_ml_delete_int(
     rs_ml_adjust_lowest_marked_for_delete(lnum);
 
     // If the file becomes empty, replace the last line with an empty line.
-    if nvim_buf_get_ml_line_count(buf) == 1 {
+    if (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count)) == 1 {
         if (flags & ML_DEL_MESSAGE) != 0 {
             nvim_set_keep_msg_no_lines();
         }
@@ -2320,15 +2283,15 @@ pub unsafe extern "C" fn rs_ml_delete_int(
             1, // copy=true
             0, // noalloc=false
         );
-        let cur_flags = nvim_buf_get_ml_flags(buf);
-        nvim_buf_set_ml_flags(buf, cur_flags | ML_EMPTY);
+        let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
+        (*buf.cast::<BufStruct>()).ml_flags = cur_flags | ML_EMPTY;
         return i;
     }
 
     // Find the data block containing the line.
     // This also fills the stack with the blocks from root to data block,
     // and releases any previously locked block.
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null() {
         return FAIL;
     }
@@ -2343,14 +2306,16 @@ pub unsafe extern "C" fn rs_ml_delete_int(
     let dp_header = dp_raw.cast::<DataBlockHeader>();
 
     // count = number of lines in block before the delete
-    let count = (nvim_buf_get_ml_locked_high(buf) - nvim_buf_get_ml_locked_low(buf) + 2) as usize;
-    let idx = (lnum - nvim_buf_get_ml_locked_low(buf)) as usize;
+    let count = ((LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high))
+        - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low))
+        + 2) as usize;
+    let idx = (lnum - (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_low))) as usize;
 
     // Update b_prev_line_count if not already set
     if nvim_buf_get_b_prev_line_count(buf) == 0 {
-        nvim_buf_set_b_prev_line_count(buf, nvim_buf_get_ml_line_count(buf));
+        nvim_buf_set_b_prev_line_count(buf, LineNr::from((*buf.cast::<BufStruct>()).ml_line_count));
     }
-    nvim_buf_dec_ml_line_count(buf);
+    (*buf.cast::<BufStruct>()).ml_line_count -= 1;
 
     // db_index array follows immediately after the DataBlockHeader
     let db_index: *mut u32 = dp.add(DATA_BLOCK_HEADER_SIZE).cast();
@@ -2378,13 +2343,18 @@ pub unsafe extern "C" fn rs_ml_delete_int(
         // Free the data block and walk up the pointer block stack to remove
         // the pointer entry. If a pointer block becomes empty, keep going up.
         nvim_mf_free(mfp, hp);
-        nvim_buf_set_ml_locked(buf, std::ptr::null_mut());
+        (*buf.cast::<BufStruct>()).ml_locked = std::ptr::null_mut();
 
-        let stack_top = nvim_buf_get_ml_stack_top(buf);
+        let stack_top = (*buf.cast::<BufStruct>()).ml_stack_top;
         let mut stack_idx = stack_top - 1;
         while stack_idx >= 0 {
-            nvim_buf_set_ml_stack_top(buf, 0); // stack is invalid when failing
-            let ip = nvim_buf_get_ml_stack_ip(buf, stack_idx);
+            {
+                (*buf.cast::<BufStruct>()).ml_stack_top = 0;
+            }; // stack is invalid when failing
+            let ip = (*buf.cast::<BufStruct>())
+                .ml_stack
+                .cast::<InfoPtr>()
+                .add((stack_idx) as usize);
             let cur_idx = nvim_ip_get_index(ip) as usize;
             let bnum = nvim_ip_get_bnum(ip);
             let block_hp = mf_get(mfp, bnum, 1);
@@ -2414,16 +2384,21 @@ pub unsafe extern "C" fn rs_ml_delete_int(
                 }
                 mf_put(mfp, block_hp, true, false);
 
-                nvim_buf_set_ml_stack_top(buf, stack_idx); // truncate stack
+                {
+                    (*buf.cast::<BufStruct>()).ml_stack_top = stack_idx;
+                }; // truncate stack
 
                 // fix line count for remaining blocks in the stack
-                let lineadd = nvim_buf_get_ml_locked_lineadd(buf);
+                let lineadd = (*buf.cast::<BufStruct>()).ml_locked_lineadd;
                 if lineadd != 0 {
                     rs_ml_lineadd(buf, lineadd);
-                    let top_ip = nvim_buf_get_ml_stack_ip(buf, nvim_buf_get_ml_stack_top(buf));
+                    let top_ip = (*buf.cast::<BufStruct>())
+                        .ml_stack
+                        .cast::<InfoPtr>()
+                        .add((*buf.cast::<BufStruct>()).ml_stack_top as usize);
                     nvim_ip_add_high(top_ip, lineadd);
                 }
-                nvim_buf_set_ml_stack_top(buf, nvim_buf_get_ml_stack_top(buf) + 1);
+                (*buf.cast::<BufStruct>()).ml_stack_top += 1;
 
                 ret = OK;
                 break;
@@ -2451,8 +2426,8 @@ pub unsafe extern "C" fn rs_ml_delete_int(
         (*dp_header).db_line_count -= 1;
 
         // Mark the block dirty and needing a positive block number (for recovery)
-        let cur_flags = nvim_buf_get_ml_flags(buf);
-        nvim_buf_set_ml_flags(buf, cur_flags | ML_LOCKED_DIRTY | ML_LOCKED_POS);
+        let cur_flags = (*buf.cast::<BufStruct>()).ml_flags;
+        (*buf.cast::<BufStruct>()).ml_flags = cur_flags | ML_LOCKED_DIRTY | ML_LOCKED_POS;
 
         ret = OK;
     }
@@ -2479,11 +2454,11 @@ pub unsafe extern "C" fn rs_ml_can_replace(buf: *mut BufHandle, lnum: LineNr) ->
     }
 
     // Must have memfile
-    if nvim_buf_has_ml_mfp(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).ml_mfp.is_null() {
         return 0;
     }
 
-    let line_count = nvim_buf_get_ml_line_count(buf);
+    let line_count = LineNr::from((*buf.cast::<BufStruct>()).ml_line_count);
 
     // Line number must be valid (1 to line_count)
     c_int::from(lnum >= 1 && lnum <= line_count)

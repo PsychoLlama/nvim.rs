@@ -40,36 +40,12 @@ extern "C" {
     // Buffer Accessors
     // -------------------------------------------------------------------------
 
-    /// Check if buffer has a valid memfile
-    fn nvim_buf_has_ml_mfp(buf: *mut BufHandle) -> c_int;
-
     // -------------------------------------------------------------------------
     // Phase 3: Buffer lifecycle accessors
     // -------------------------------------------------------------------------
 
-    /// Get buf->b_ml.ml_mfp as void*
-    fn nvim_buf_get_ml_mfp(buf: *mut BufHandle) -> *mut std::ffi::c_void;
-
     /// Close a memfile
     fn mf_close(mfp: *mut std::ffi::c_void, del_file: c_int);
-
-    /// Get buf->b_ml.ml_line_lnum
-    fn nvim_buf_get_ml_line_lnum(buf: *mut BufHandle) -> i64;
-
-    /// Get buf->b_ml.ml_flags
-    fn nvim_buf_get_ml_flags(buf: *mut BufHandle) -> c_int;
-
-    /// Get buf->b_ml.ml_line_ptr
-    fn nvim_buf_get_ml_line_ptr(buf: *mut BufHandle) -> *mut c_char;
-
-    /// Get buf->b_ml.ml_stack as void*
-    fn nvim_buf_get_ml_stack_void(buf: *mut BufHandle) -> *mut std::ffi::c_void;
-
-    /// XFREE_CLEAR buf->b_ml.ml_chunksize
-    fn nvim_buf_xfree_clear_ml_chunksize(buf: *mut BufHandle);
-
-    /// Set buf->b_ml.ml_mfp = NULL and clear BF_RECOVERED
-    fn nvim_buf_clear_ml_after_close(buf: *mut BufHandle);
 
     /// Get current buffer
     fn nvim_get_curbuf() -> *mut BufHandle;
@@ -142,9 +118,9 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
         return crate::types::FAIL;
     }
 
-    nvim_buf_set_ml_mfp(buf, mfp);
-    nvim_buf_set_ml_flags(buf, crate::types::ML_EMPTY);
-    nvim_buf_set_ml_line_count(buf, 1);
+    (*buf.cast::<BufStruct>()).ml_mfp = mfp;
+    (*buf.cast::<BufStruct>()).ml_flags = crate::types::ML_EMPTY;
+    (*buf.cast::<BufStruct>()).ml_line_count = 1;
 
     // A helper macro-like closure for the error path.
     // Puts hp back (if non-null) then closes the memfile.
@@ -153,7 +129,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
             mf_put(mfp, hp, false, false);
         }
         mf_close(mfp, 1); // del_file = true
-        nvim_buf_set_ml_mfp(buf, std::ptr::null_mut());
+        (*buf.cast::<BufStruct>()).ml_mfp = std::ptr::null_mut();
     };
 
     // Allocate block 0 (expected bh_bnum == 0)
@@ -235,7 +211,7 @@ pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
         return;
     }
 
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null() {
         return;
     }
@@ -355,7 +331,7 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
         return;
     }
 
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null()
         || nvim_mf_get_fd(mfp) >= 0
         || nvim_buf_get_p_swf(buf) == 0
@@ -480,21 +456,29 @@ pub unsafe extern "C" fn rs_ml_close(buf: *mut BufHandle, del_file: c_int) {
     if buf.is_null() {
         return;
     }
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null() {
         return; // not open
     }
     mf_close(mfp, del_file); // close the .swp file
 
-    let line_lnum = nvim_buf_get_ml_line_lnum(buf);
-    let flags = nvim_buf_get_ml_flags(buf);
+    let line_lnum = LineNr::from((*buf.cast::<BufStruct>()).ml_line_lnum);
+    let flags = (*buf.cast::<BufStruct>()).ml_flags;
     if line_lnum != 0 && (flags & (ML_LINE_DIRTY | ML_ALLOCATED)) != 0 {
-        xfree(nvim_buf_get_ml_line_ptr(buf).cast());
+        xfree((*buf.cast::<BufStruct>()).ml_line_ptr.cast());
     }
-    xfree(nvim_buf_get_ml_stack_void(buf));
-    nvim_buf_xfree_clear_ml_chunksize(buf);
-    nvim_buf_clear_ml_after_close(buf); // sets ml_mfp=NULL, clears BF_RECOVERED
-    let _ = BF_RECOVERED; // BF_RECOVERED cleared by nvim_buf_clear_ml_after_close
+    xfree((*buf.cast::<BufStruct>()).ml_stack);
+    {
+        let bs = buf.cast::<BufStruct>();
+        xfree((*bs).ml_chunksize);
+        (*bs).ml_chunksize = std::ptr::null_mut();
+    }
+    // Inline nvim_buf_clear_ml_after_close: ml_mfp = NULL; b_flags &= ~BF_RECOVERED
+    {
+        let bs = buf.cast::<BufStruct>();
+        (*bs).ml_mfp = std::ptr::null_mut();
+        (*bs).b_flags &= !BF_RECOVERED;
+    }
 }
 
 /// Close all existing memlines and memfiles.
@@ -594,7 +578,7 @@ pub unsafe extern "C" fn rs_ml_setflags(buf: *mut BufHandle) {
     if buf.is_null() {
         return;
     }
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null() {
         return;
     }
@@ -719,13 +703,6 @@ extern "C" {
 // =============================================================================
 
 extern "C" {
-    /// Initialize all ml fields to zero/NULL for a new buffer
-    /// Set buf->b_ml.ml_mfp
-    fn nvim_buf_set_ml_mfp(buf: *mut BufHandle, mfp: *mut std::ffi::c_void);
-
-    /// Set buf->b_ml.ml_line_count
-    fn nvim_buf_set_ml_line_count(buf: *mut BufHandle, count: c_int);
-
     /// Initialize block 0 header (magic numbers, version, page_size)
     fn nvim_b0_init_header(b0p: *mut std::ffi::c_void, page_size: c_uint);
 
@@ -779,8 +756,6 @@ extern "C" {
     /// nvim_bhdr_get_bh_bnum: get block header block number
     fn nvim_bhdr_get_bh_bnum(hp: *mut std::ffi::c_void) -> i64;
 
-    /// nvim_buf_set_ml_flags: set buf->b_ml.ml_flags
-    fn nvim_buf_set_ml_flags(buf: *mut BufHandle, flags: c_int);
 }
 
 // =============================================================================
@@ -1120,7 +1095,7 @@ pub unsafe extern "C" fn rs_ml_has_swap(buf: *mut BufHandle) -> c_int {
     if buf.is_null() {
         return 0;
     }
-    nvim_buf_has_ml_mfp(buf)
+    c_int::from(!(*buf.cast::<BufStruct>()).ml_mfp.is_null())
 }
 
 /// Check if a buffer needs its swap file to be synced.
@@ -1136,7 +1111,7 @@ pub unsafe extern "C" fn rs_ml_needs_sync(buf: *mut BufHandle) -> c_int {
     }
 
     // Check if buffer has a memfile
-    if nvim_buf_has_ml_mfp(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).ml_mfp.is_null() {
         return 0;
     }
 
@@ -1519,7 +1494,7 @@ extern "C" {
 /// - `buf` must be a valid buffer pointer
 #[no_mangle]
 pub unsafe extern "C" fn rs_ml_upd_block0(buf: *mut BufHandle, what: c_int) {
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null() {
         return;
     }
@@ -2222,15 +2197,6 @@ extern "C" {
     /// Check if buffer has unsaved changes
     fn nvim_buf_is_changed(buf: *mut BufHandle) -> c_int;
 
-    /// Set buf->b_ml.ml_stack_top
-    fn nvim_buf_set_ml_stack_top(buf: *mut BufHandle, n: c_int);
-
-    /// Get buf->b_ml.ml_line_count
-    fn nvim_buf_get_ml_line_count(buf: *mut BufHandle) -> LineNr;
-
-    /// Get buf->b_ml.ml_locked_high
-    fn nvim_buf_get_ml_locked_high(buf: *mut BufHandle) -> LineNr;
-
     /// Flush buffered line for buffer
     #[link_name = "ml_flush_line"]
     fn rs_ml_flush_line(buf: *mut BufHandle, noalloc: c_int);
@@ -2264,7 +2230,7 @@ pub unsafe extern "C" fn rs_ml_sync_one(
     check_char: c_int,
     do_fsync: bool,
 ) -> c_int {
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null() {
         return 0;
     }
@@ -2312,7 +2278,7 @@ pub unsafe extern "C" fn rs_ml_sync_one(
 /// Calls into C via FFI.
 #[export_name = "ml_preserve"]
 pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_fsync: bool) {
-    let mfp = nvim_buf_get_ml_mfp(buf);
+    let mfp = (*buf.cast::<BufStruct>()).ml_mfp;
     if mfp.is_null() || nvim_buf_get_ml_mfp_fname(buf).is_null() {
         if message {
             nvim_emsg_no_swapfile();
@@ -2332,7 +2298,7 @@ pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_f
     let mut status = nvim_mf_sync(mfp, sync_flags);
 
     // stack is invalid after mf_sync(.., MFS_ALL)
-    nvim_buf_set_ml_stack_top(buf, 0);
+    (*buf.cast::<BufStruct>()).ml_stack_top = 0;
 
     // Some data blocks may have changed from negative to positive block numbers.
     // In that case the pointer blocks need to be updated.
@@ -2340,20 +2306,22 @@ pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_f
     // getting the first line of each data block.
     if nvim_mf_need_trans(mfp) != 0 && !unsafe { got_int } {
         let mut lnum: LineNr = 1;
-        while nvim_mf_need_trans(mfp) != 0 && lnum <= nvim_buf_get_ml_line_count(buf) {
+        while nvim_mf_need_trans(mfp) != 0
+            && lnum <= (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count))
+        {
             let hp = rs_ml_find_line(buf, lnum, ML_FIND);
             if hp.is_null() {
                 status = crate::types::FAIL;
                 break;
             }
-            lnum = nvim_buf_get_ml_locked_high(buf) + 1;
+            lnum = (LineNr::from((*buf.cast::<BufStruct>()).ml_locked_high)) + 1;
         }
         rs_ml_find_line(buf, 0, ML_FLUSH); // flush locked block
                                            // sync the updated pointer blocks
         if nvim_mf_sync(mfp, sync_flags) == crate::types::FAIL {
             status = crate::types::FAIL;
         }
-        nvim_buf_set_ml_stack_top(buf, 0); // stack is invalid now
+        (*buf.cast::<BufStruct>()).ml_stack_top = 0; // stack is invalid now
     }
 
     // Restore got_int (OR with saved value so prior interrupt is not lost)

@@ -195,14 +195,52 @@ _Static_assert(offsetof(buf_T, deleted_codepoints) == 12704, "deleted_codepoints
 _Static_assert(offsetof(buf_T, deleted_codeunits) == 12712, "deleted_codeunits offset mismatch");
 _Static_assert(offsetof(buf_T, flush_count) == 12720, "flush_count offset mismatch");
 
-// memline_T subfield offsets (for ml_line_count/ml_mfp/ml_flags within b_ml)
+// memline_T subfield offsets (all 17 fields exposed in BufStruct)
 _Static_assert(offsetof(memline_T, ml_line_count) == 0,
                "memline_T.ml_line_count offset mismatch");
 _Static_assert(offsetof(memline_T, ml_mfp) == 8,
                "memline_T.ml_mfp offset mismatch");
+_Static_assert(offsetof(memline_T, ml_stack) == 16,
+               "memline_T.ml_stack offset mismatch");
+_Static_assert(offsetof(memline_T, ml_stack_top) == 24,
+               "memline_T.ml_stack_top offset mismatch");
+_Static_assert(offsetof(memline_T, ml_stack_size) == 28,
+               "memline_T.ml_stack_size offset mismatch");
 _Static_assert(offsetof(memline_T, ml_flags) == 32,
                "memline_T.ml_flags offset mismatch");
+_Static_assert(offsetof(memline_T, ml_line_len) == 36,
+               "memline_T.ml_line_len offset mismatch");
+_Static_assert(offsetof(memline_T, ml_line_lnum) == 40,
+               "memline_T.ml_line_lnum offset mismatch");
+_Static_assert(offsetof(memline_T, ml_line_ptr) == 48,
+               "memline_T.ml_line_ptr offset mismatch");
+_Static_assert(offsetof(memline_T, ml_line_offset) == 56,
+               "memline_T.ml_line_offset offset mismatch");
+_Static_assert(offsetof(memline_T, ml_line_offset_ff) == 64,
+               "memline_T.ml_line_offset_ff offset mismatch");
+_Static_assert(offsetof(memline_T, ml_locked) == 72,
+               "memline_T.ml_locked offset mismatch");
+_Static_assert(offsetof(memline_T, ml_locked_low) == 80,
+               "memline_T.ml_locked_low offset mismatch");
+_Static_assert(offsetof(memline_T, ml_locked_high) == 84,
+               "memline_T.ml_locked_high offset mismatch");
+_Static_assert(offsetof(memline_T, ml_locked_lineadd) == 88,
+               "memline_T.ml_locked_lineadd offset mismatch");
+_Static_assert(offsetof(memline_T, ml_chunksize) == 96,
+               "memline_T.ml_chunksize offset mismatch");
+_Static_assert(offsetof(memline_T, ml_numchunks) == 104,
+               "memline_T.ml_numchunks offset mismatch");
+_Static_assert(offsetof(memline_T, ml_usedchunks) == 108,
+               "memline_T.ml_usedchunks offset mismatch");
 _Static_assert(sizeof(memline_T) == 112, "memline_T size mismatch");
+_Static_assert(sizeof(chunksize_T) == 8, "chunksize_T size mismatch");
+
+// infoptr_T layout checks (used by Rust InfoPtr struct)
+_Static_assert(sizeof(infoptr_T) == 24, "infoptr_T size mismatch");
+_Static_assert(offsetof(infoptr_T, ip_bnum) == 0, "infoptr_T.ip_bnum offset mismatch");
+_Static_assert(offsetof(infoptr_T, ip_low) == 8, "infoptr_T.ip_low offset mismatch");
+_Static_assert(offsetof(infoptr_T, ip_high) == 12, "infoptr_T.ip_high offset mismatch");
+_Static_assert(offsetof(infoptr_T, ip_index) == 16, "infoptr_T.ip_index offset mismatch");
 
 // visualinfo_T layout checks
 _Static_assert(sizeof(visualinfo_T) == 32, "visualinfo_T size mismatch");

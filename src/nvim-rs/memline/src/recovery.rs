@@ -22,11 +22,12 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void, CString};
 
+use nvim_buffer::buf_struct::BufStruct;
+
 use crate::block_ops;
 use crate::types::{
-    BlockNr, BufHandle, InfoPtrHandle, B0_FF_MASK, B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC,
-    B0_VERSION_SIZE, DATA_BLOCK_HEADER_SIZE, DATA_ID, HLF_E, MIN_SWAP_PAGE_SIZE, PTR_ID,
-    UPD_NOT_VALID,
+    BlockNr, BufHandle, InfoPtr, B0_FF_MASK, B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC, B0_VERSION_SIZE,
+    DATA_BLOCK_HEADER_SIZE, DATA_ID, HLF_E, MIN_SWAP_PAGE_SIZE, PTR_ID, UPD_NOT_VALID,
 };
 
 // =============================================================================
@@ -201,16 +202,11 @@ extern "C" {
     fn nvim_recover_check_timestamps(mfp: *mut c_void, mtime_b0: c_int) -> c_int;
     fn nvim_get_buf_t_size() -> usize;
     fn rs_ml_add_stack(buf: *mut BufHandle) -> c_int;
-    fn nvim_buf_set_ml_mfp(buf: *mut BufHandle, mfp: *mut c_void);
-    fn nvim_buf_get_ml_stack_void(buf: *mut BufHandle) -> *mut c_void;
-    fn nvim_buf_get_ml_stack_top(buf: *mut BufHandle) -> c_int;
-    fn nvim_buf_get_ml_stack_ip(buf: *mut BufHandle, idx: c_int) -> *mut InfoPtrHandle;
-    fn nvim_buf_dec_ml_stack_top(buf: *mut c_void) -> c_int;
     fn nvim_buf_reset_ml_stack(buf: *mut c_void);
-    fn nvim_ip_set_bnum(ip: *mut InfoPtrHandle, bnum: BlockNr);
-    fn nvim_ip_set_index(ip: *mut InfoPtrHandle, idx: c_int);
-    fn nvim_ip_get_bnum(ip: *const InfoPtrHandle) -> BlockNr;
-    fn nvim_ip_get_index(ip: *const InfoPtrHandle) -> c_int;
+    fn nvim_ip_set_bnum(ip: *mut InfoPtr, bnum: BlockNr);
+    fn nvim_ip_set_index(ip: *mut InfoPtr, idx: c_int);
+    fn nvim_ip_get_bnum(ip: *const InfoPtr) -> BlockNr;
+    fn nvim_ip_get_index(ip: *const InfoPtr) -> c_int;
     fn nvim_getout_one();
     fn nvim_readfile_for_recovery(fname: *const c_char) -> c_int;
     fn nvim_readfile_from_original(
@@ -513,7 +509,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
             );
             break 'cleanup;
         }
-        nvim_buf_set_ml_mfp(buf.cast::<BufHandle>(), mfp);
+        (*buf.cast::<BufHandle>().cast::<BufStruct>()).ml_mfp = mfp;
 
         // Use minimum page size to be able to read block 0
         nvim_mf_new_page_size_wrapper(mfp, MIN_SWAP_PAGE_SIZE);
@@ -763,7 +759,7 @@ pub unsafe extern "C" fn rs_ml_recover(checkext: c_int) {
         nvim_mf_close_nodelete(mfp);
     }
     if !buf.is_null() {
-        xfree(nvim_buf_get_ml_stack_void(buf.cast::<BufHandle>()));
+        xfree((*buf.cast::<BufHandle>().cast::<BufStruct>()).ml_stack);
         xfree(buf);
     }
     if serious_error && called_from_main != 0 {
@@ -928,7 +924,10 @@ unsafe fn recover_btree(
 
                     // Push current position and descend
                     let top = rs_ml_add_stack(buf);
-                    let ip = nvim_buf_get_ml_stack_ip(buf, top);
+                    let ip = (*buf.cast::<BufStruct>())
+                        .ml_stack
+                        .cast::<InfoPtr>()
+                        .add((top) as usize);
                     nvim_ip_set_bnum(ip, bnum);
                     nvim_ip_set_index(ip, idx);
 
@@ -1030,13 +1029,18 @@ unsafe fn recover_btree(
         } // end block processing
 
         // Check if traversal stack is empty (finished)
-        if nvim_buf_get_ml_stack_top(buf) == 0 {
+        if (*buf.cast::<BufStruct>()).ml_stack_top == 0 {
             break 'traverse;
         }
 
         // Pop one level and advance to next sibling
-        let new_top = nvim_buf_dec_ml_stack_top(buf.cast::<c_void>());
-        let ip = nvim_buf_get_ml_stack_ip(buf, new_top);
+        let bs = buf.cast::<BufStruct>();
+        (*bs).ml_stack_top -= 1;
+        let new_top = (*bs).ml_stack_top;
+        let ip = (*buf.cast::<BufStruct>())
+            .ml_stack
+            .cast::<InfoPtr>()
+            .add((new_top) as usize);
         bnum = nvim_ip_get_bnum(ip);
         idx = nvim_ip_get_index(ip) + 1;
         page_count = 1;
