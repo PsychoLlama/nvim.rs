@@ -72,6 +72,8 @@ pub mod wrappers;
 
 use std::ffi::{c_char, c_int};
 
+use crate::win_struct::{win_mut, win_ref};
+
 /// Opaque handle to a Neovim window (`win_T*`).
 ///
 /// This is an opaque pointer type - Rust code should not attempt to
@@ -272,20 +274,6 @@ pub type FramePtr = *mut Frame;
 extern "C" {
     static Rows: c_int;
     static Columns: c_int;
-    /// Get the `w_locked` field from a window.
-    fn nvim_win_get_locked(win: WinHandle) -> c_int;
-
-    /// Get the `w_floating` field from a window.
-    fn nvim_win_get_floating(win: WinHandle) -> c_int;
-
-    /// Get the `w_p_pvw` (preview window) field from a window.
-    fn nvim_win_get_pvw(win: WinHandle) -> c_int;
-
-    /// Get the `w_next` field from a window.
-    fn nvim_win_get_next(win: WinHandle) -> WinHandle;
-
-    /// Get the `w_prev` field from a window.
-    fn nvim_win_get_prev(win: WinHandle) -> WinHandle;
 
     // Global state accessors
     /// Get the current window.
@@ -309,21 +297,6 @@ extern "C" {
     /// Get the first tabpage (`first_tabpage` global).
     fn nvim_get_first_tabpage() -> TabpageHandle;
 
-    /// Get the `w_frame` field from a window (returns Frame pointer).
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
-
-    /// Get the `w_p_wfh` (winfixheight) field from a window.
-    fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
-
-    /// Get the `w_p_wfw` (winfixwidth) field from a window.
-    fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
-
-    /// Get the `handle` field from a window.
-    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
-
-    /// Get the `w_buffer` field from a window.
-    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
-
     /// Get the current buffer (`curbuf` global).
     fn nvim_get_curbuf() -> BufHandle;
 
@@ -341,13 +314,12 @@ extern "C" {
 ///
 /// A locked window cannot be closed by autocommands.
 #[inline]
-fn win_locked_impl(wp: WinHandle) -> bool {
+const fn win_locked_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    // SAFETY: We check for null above, and nvim_win_get_locked
-    // is a simple field accessor that handles the pointer safely.
-    unsafe { nvim_win_get_locked(wp) != 0 }
+    // SAFETY: We check for null above; wp is a valid win_T*.
+    unsafe { win_ref(wp).w_locked }
 }
 
 /// FFI wrapper for `win_locked`.
@@ -362,13 +334,12 @@ pub extern "C" fn rs_win_locked(wp: WinHandle) -> c_int {
 ///
 /// A floating window is a popup window that appears above other windows.
 #[inline]
-fn win_floating_impl(wp: WinHandle) -> bool {
+const fn win_floating_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    // SAFETY: We check for null above, and nvim_win_get_floating
-    // is a simple field accessor that handles the pointer safely.
-    unsafe { nvim_win_get_floating(wp) != 0 }
+    // SAFETY: We check for null above; wp is a valid win_T*.
+    unsafe { win_ref(wp).w_floating }
 }
 
 /// FFI wrapper for `win_floating`.
@@ -383,13 +354,12 @@ pub extern "C" fn rs_win_floating(wp: WinHandle) -> c_int {
 ///
 /// A preview window is used for displaying preview information.
 #[inline]
-fn win_pvw_impl(wp: WinHandle) -> bool {
+const fn win_pvw_impl(wp: WinHandle) -> bool {
     if wp.is_null() {
         return false;
     }
-    // SAFETY: We check for null above, and nvim_win_get_pvw
-    // is a simple field accessor that handles the pointer safely.
-    unsafe { nvim_win_get_pvw(wp) != 0 }
+    // SAFETY: We check for null above; wp is a valid win_T*.
+    unsafe { win_ref(wp).w_p_pvw() != 0 }
 }
 
 /// FFI wrapper for `win_pvw`.
@@ -433,8 +403,8 @@ fn tabpage_win_valid_impl(tp: TabpageHandle, win: WinHandle) -> bool {
         if wp == win {
             return true;
         }
-        // SAFETY: nvim_win_get_next is a safe field accessor
-        wp = unsafe { nvim_win_get_next(wp) };
+        // SAFETY: wp is a valid non-null win_T*
+        wp = unsafe { win_ref(wp).w_next };
     }
     false
 }
@@ -479,11 +449,11 @@ fn win_float_valid_impl(win: WinHandle) -> bool {
     let mut wp = get_tabpage_firstwin(curtab);
     while !wp.is_null() {
         if wp == win {
-            // SAFETY: nvim_win_get_floating is a safe field accessor
-            return unsafe { nvim_win_get_floating(wp) != 0 };
+            // SAFETY: wp is a valid non-null win_T*
+            return unsafe { win_ref(wp).w_floating };
         }
-        // SAFETY: nvim_win_get_next is a safe field accessor
-        wp = unsafe { nvim_win_get_next(wp) };
+        // SAFETY: wp is a valid non-null win_T*
+        wp = unsafe { win_ref(wp).w_next };
     }
     false
 }
@@ -519,11 +489,12 @@ fn only_one_window_impl() -> bool {
         let mut wp = get_tabpage_firstwin(curtab);
 
         while !wp.is_null() {
-            let buf = nvim_win_get_buffer(wp);
+            // SAFETY: wp is a valid non-null win_T*
+            let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
                 let is_help = rs_bt_help(buf);
-                let is_floating = nvim_win_get_floating(wp) != 0;
-                let is_pvw = nvim_win_get_pvw(wp) != 0;
+                let is_floating = win_ref(wp).w_floating;
+                let is_pvw = win_ref(wp).w_p_pvw() != 0;
                 let is_curwin = wp == curwin;
                 let is_aucmd = rs_is_aucmd_win(wp) != 0;
 
@@ -536,7 +507,7 @@ fn only_one_window_impl() -> bool {
                     count += 1;
                 }
             }
-            wp = nvim_win_get_next(wp);
+            wp = win_ref(wp).w_next;
         }
 
         count <= 1
@@ -674,9 +645,9 @@ fn one_window_in_tab_impl(win: WinHandle, tp: TabpageHandle) -> bool {
     }
 
     // Check if win->w_next is NULL or floating
-    // SAFETY: nvim_win_get_next and nvim_win_get_floating are safe accessors
-    let next = unsafe { nvim_win_get_next(win) };
-    next.is_null() || unsafe { nvim_win_get_floating(next) != 0 }
+    // SAFETY: win is a valid non-null win_T*
+    let next = unsafe { win_ref(win).w_next };
+    next.is_null() || unsafe { win_ref(next).w_floating }
 }
 
 /// FFI wrapper for `one_window`.
@@ -770,7 +741,7 @@ fn frame_fixed_height_impl(frp: *const Frame) -> bool {
         if layout == FR_LEAF {
             // Leaf frame with a window - check w_p_wfh
             let win = frame.fr_win;
-            return !win.is_null() && nvim_win_get_wfh(win) != 0;
+            return !win.is_null() && win_ref(win).w_p_wfh() != 0;
         }
 
         if layout == FR_ROW {
@@ -826,7 +797,7 @@ fn frame_fixed_width_impl(frp: *const Frame) -> bool {
         if layout == FR_LEAF {
             // Leaf frame with a window - check w_p_wfw
             let win = frame.fr_win;
-            return !win.is_null() && nvim_win_get_wfw(win) != 0;
+            return !win.is_null() && win_ref(win).w_p_wfw() != 0;
         }
 
         if layout == FR_COL {
@@ -875,8 +846,8 @@ fn is_bottom_win_impl(wp: WinHandle) -> bool {
     }
 
     // Get the window's frame
-    // SAFETY: wp is not null, and nvim_win_get_frame is a safe accessor
-    let mut frp = unsafe { nvim_win_get_frame(wp) };
+    // SAFETY: wp is a valid non-null win_T*
+    let mut frp = unsafe { win_ref(wp).w_frame };
 
     // Traverse up the frame tree
     // SAFETY: We access frame fields directly
@@ -996,11 +967,11 @@ fn win_find_by_handle_impl(handle: c_int) -> WinHandle {
     let curtab = unsafe { nvim_get_curtab() };
     let mut wp = get_tabpage_firstwin(curtab);
     while !wp.is_null() {
-        // SAFETY: nvim_win_get_handle is a safe accessor
-        if unsafe { nvim_win_get_handle(wp) } == handle {
+        // SAFETY: wp is a valid non-null win_T*
+        if unsafe { win_ref(wp).handle } == handle {
             return wp;
         }
-        wp = unsafe { nvim_win_get_next(wp) };
+        wp = unsafe { win_ref(wp).w_next };
     }
     // Return null if not found
     unsafe { WinHandle::from_ptr(std::ptr::null_mut()) }
@@ -1034,7 +1005,8 @@ fn win_find_tabpage_impl(win: WinHandle) -> TabpageHandle {
             if wp == win {
                 return tp;
             }
-            wp = unsafe { nvim_win_get_next(wp) };
+            // SAFETY: wp is a valid non-null win_T*
+            wp = unsafe { win_ref(wp).w_next };
         }
         tp = unsafe { nvim_tabpage_get_next(tp) };
     }
@@ -1056,12 +1028,12 @@ pub extern "C" fn rs_win_find_tabpage(win: WinHandle) -> TabpageHandle {
 /// Iterates through all windows in the current tab (firstwin -> `w_next`).
 #[inline]
 fn win_count_impl() -> c_int {
-    // SAFETY: nvim_get_firstwin and nvim_win_get_next are safe accessors
     let mut count: c_int = 0;
     let mut wp = unsafe { nvim_get_firstwin() };
     while !wp.is_null() {
         count += 1;
-        wp = unsafe { nvim_win_get_next(wp) };
+        // SAFETY: wp is a valid non-null win_T*
+        wp = unsafe { win_ref(wp).w_next };
     }
     count
 }
@@ -1116,7 +1088,8 @@ fn valid_tabpage_win_impl(tpc: TabpageHandle) -> bool {
                 if win_valid_any_tab_impl(wp) {
                     return true;
                 }
-                wp = unsafe { nvim_win_get_next(wp) };
+                // SAFETY: wp is a valid non-null win_T*
+                wp = unsafe { win_ref(wp).w_next };
             }
             return false;
         }
@@ -1164,19 +1137,6 @@ extern "C" {
     /// Get the `last_win_id` global.
     fn nvim_get_last_win_id() -> c_int;
 
-    // Accessors for frame_minheight/frame_minwidth
-    /// Get the `w_winbar_height` field from a window.
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-
-    /// Get the `w_status_height` field from a window.
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-
-    /// Get the `w_hsep_height` field from a window (already declared but repeated for clarity).
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
-
-    /// Get the `w_vsep_width` field from a window (already declared but repeated for clarity).
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
-
     /// Get the global `p_wh` (winheight) option value.
     fn nvim_get_p_wh() -> i64;
 
@@ -1189,33 +1149,8 @@ extern "C" {
     /// Get the global `p_wmw` (winminwidth) option value.
     fn nvim_get_p_wmw() -> i64;
 
-    // Accessors for win_comp_pos/frame_comp_pos
-    /// Set the w_winrow field of a window.
-    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
-
-    /// Set the w_wincol field of a window.
-    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
-
-    /// Set the w_redr_status field of a window.
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
-
-    /// Set the w_pos_changed field of a window.
-    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-
     /// Get the w_config.relative field from a window.
     fn nvim_win_get_config_relative(wp: WinHandle) -> c_int;
-
-    /// Get the w_winrow field from a window.
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-
-    /// Get the w_wincol field from a window.
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-
-    /// Get the w_width field from a window.
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-
-    /// Get the w_height field from a window.
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
 
     /// Get the topframe global.
     fn nvim_get_topframe() -> *mut Frame;
@@ -1254,10 +1189,10 @@ pub extern "C" fn rs_get_last_winid() -> c_int {
 /// Iterates backwards from `lastwin` to find the first non-floating window.
 #[inline]
 fn lastwin_nofloating_impl() -> WinHandle {
-    // SAFETY: nvim_get_lastwin, nvim_win_get_prev, nvim_win_get_floating are safe accessors
     let mut res = unsafe { nvim_get_lastwin() };
-    while !res.is_null() && unsafe { nvim_win_get_floating(res) } != 0 {
-        res = unsafe { nvim_win_get_prev(res) };
+    // SAFETY: res is a valid non-null win_T* while not null
+    while !res.is_null() && unsafe { win_ref(res).w_floating } {
+        res = unsafe { win_ref(res).w_prev };
     }
     res
 }
@@ -1319,9 +1254,10 @@ fn frame_minheight_impl(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
             let wp = frame.fr_win;
 
             // Combined height of window bar and separator or status line
-            let extra_height = nvim_win_get_winbar_height(wp)
-                + nvim_win_get_hsep_height(wp)
-                + nvim_win_get_status_height(wp);
+            // SAFETY: wp is a valid non-null win_T*
+            let extra_height = win_ref(wp).w_winbar_height
+                + win_ref(wp).w_hsep_height
+                + win_ref(wp).w_status_height;
 
             let m = if wp == next_curwin {
                 // This window will be the current window - use p_wh
@@ -1405,12 +1341,13 @@ fn frame_minwidth_impl(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
             // Leaf frame with a window
             let wp = frame.fr_win;
 
+            // SAFETY: wp is a valid non-null win_T*
             let m = if wp == next_curwin {
                 // This window will be the current window - use p_wiw
-                nvim_get_p_wiw() as c_int + nvim_win_get_vsep_width(wp)
+                nvim_get_p_wiw() as c_int + win_ref(wp).w_vsep_width
             } else {
                 // Use p_wmw for non-current windows
-                let mut m = nvim_get_p_wmw() as c_int + nvim_win_get_vsep_width(wp);
+                let mut m = nvim_get_p_wmw() as c_int + win_ref(wp).w_vsep_width;
 
                 // Check if this is curwin and next_curwin is NULL (not NOWIN)
                 let curwin = nvim_get_curwin();
@@ -1503,28 +1440,27 @@ fn frame_comp_pos_impl(topfrp: *mut Frame, row: &mut c_int, col: &mut c_int) {
             }
         } else {
             // Leaf frame with a window
-            let old_row = nvim_win_get_winrow(wp);
-            let old_col = nvim_win_get_wincol(wp);
+            // SAFETY: wp is a valid non-null win_T* (checked before this unsafe block)
+            let old_row = win_ref(wp).w_winrow;
+            let old_col = win_ref(wp).w_wincol;
 
             if old_row != *row || old_col != *col {
                 // Position changed, update and redraw
-                nvim_win_set_winrow(wp, *row);
-                nvim_win_set_wincol(wp, *col);
+                win_mut(wp).w_winrow = *row;
+                win_mut(wp).w_wincol = *col;
                 redraw_later(wp, UPD_NOT_VALID);
-                nvim_win_set_redr_status(wp, 1);
-                nvim_win_set_pos_changed(wp, 1);
+                win_mut(wp).w_redr_status = true;
+                win_mut(wp).w_pos_changed = true;
             }
 
             // Calculate height adjustment
-            let h = nvim_win_get_w_height(wp)
-                + nvim_win_get_hsep_height(wp)
-                + nvim_win_get_status_height(wp);
+            let h = win_ref(wp).w_height + win_ref(wp).w_hsep_height + win_ref(wp).w_status_height;
             *row += if h > frame.fr_height {
                 frame.fr_height
             } else {
                 h
             };
-            *col += nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp);
+            *col += win_ref(wp).w_width + win_ref(wp).w_vsep_width;
         }
     }
 }
@@ -1562,11 +1498,12 @@ fn win_comp_pos_impl() -> c_int {
 
         // Check floating windows anchored to moved windows
         let mut wp = nvim_get_lastwin();
-        while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+        // SAFETY: wp is a valid non-null win_T* while not null
+        while !wp.is_null() && win_ref(wp).w_floating {
             if nvim_win_get_config_relative(wp) == K_FLOAT_RELATIVE_WINDOW {
-                nvim_win_set_pos_changed(wp, 1);
+                win_mut(wp).w_pos_changed = true;
             }
-            wp = nvim_win_get_prev(wp);
+            wp = win_ref(wp).w_prev;
         }
 
         row + global_stl_height()
@@ -1586,25 +1523,6 @@ pub extern "C" fn rs_win_comp_pos() -> c_int {
 // ============================================================================
 
 extern "C" {
-    /// Get the global Rows value.
-
-    /// Get the global Columns value.
-
-    /// Set the w_height field of a window (raw field accessor).
-    fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
-
-    /// Set the w_hsep_height field of a window.
-    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
-
-    /// Set the w_status_height field of a window.
-    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
-
-    /// Set the w_width field of a window (raw field accessor).
-    fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
-
-    /// Set the w_vsep_width field of a window.
-    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
-
     /// Wrapper for win_config_float().
     fn nvim_win_config_float(wp: WinHandle);
 
@@ -1663,7 +1581,8 @@ fn win_setheight_win_impl(mut height: c_int, win: WinHandle) {
         // Keep window at least two lines high if 'winbar' is enabled.
         let curwin = nvim_get_curwin();
         let p_wmh = nvim_get_p_wmh() as c_int;
-        let winbar_height = nvim_win_get_winbar_height(win);
+        // SAFETY: win is a valid non-null win_T*
+        let winbar_height = win_ref(win).w_winbar_height;
 
         let min_height = if win == curwin {
             std::cmp::max(p_wmh, 1) + winbar_height
@@ -1672,16 +1591,17 @@ fn win_setheight_win_impl(mut height: c_int, win: WinHandle) {
         };
         height = std::cmp::max(height, min_height);
 
-        if nvim_win_get_floating(win) != 0 {
+        if win_ref(win).w_floating {
             // Floating window
             nvim_win_set_config_height(win, std::cmp::max(height, 1));
             nvim_win_config_float(win);
             redraw_later(win, UPD_VALID);
         } else {
             // Normal window - use frame_setheight
-            let frame = nvim_win_get_frame(win);
-            let hsep_height = nvim_win_get_hsep_height(win);
-            let status_height = nvim_win_get_status_height(win);
+            // SAFETY: win is a valid non-null win_T*
+            let frame = win_ref(win).w_frame;
+            let hsep_height = win_ref(win).w_hsep_height;
+            let status_height = win_ref(win).w_status_height;
             frame_setheight_impl(frame, height + hsep_height + status_height);
 
             // recompute the window positions
@@ -1753,7 +1673,8 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
                 let mut frp = parent.fr_child;
                 while !frp.is_null() {
                     let fr = &*frp;
-                    if frp != curfrp && !fr.fr_win.is_null() && nvim_win_get_wfh(fr.fr_win) != 0 {
+                    // SAFETY: fr.fr_win is a valid non-null win_T*
+                    if frp != curfrp && !fr.fr_win.is_null() && win_ref(fr.fr_win).w_p_wfh() != 0 {
                         room_reserved += fr.fr_height;
                     }
                     room += fr.fr_height;
@@ -1767,13 +1688,14 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
                 if frame.fr_width == Columns {
                     let wp = lastwin_nofloating_impl();
                     let p_ch = nvim_get_window_p_ch() as c_int;
+                    // SAFETY: wp is a valid non-null win_T* (lastwin_nofloating never returns null here)
                     room_cmdline = Rows
                         - p_ch
                         - global_stl_height()
-                        - (nvim_win_get_winrow(wp)
-                            + nvim_win_get_w_height(wp)
-                            + nvim_win_get_hsep_height(wp)
-                            + nvim_win_get_status_height(wp));
+                        - (win_ref(wp).w_winrow
+                            + win_ref(wp).w_height
+                            + win_ref(wp).w_hsep_height
+                            + win_ref(wp).w_status_height);
                     room_cmdline = std::cmp::max(room_cmdline, 0);
                 } else {
                     room_cmdline = 0;
@@ -1837,7 +1759,10 @@ fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
                 while !frp.is_null() && take != 0 {
                     let fr = &*frp;
                     let h = frame_minheight_impl(frp, WinHandle::from_ptr(std::ptr::null_mut()));
-                    if room_reserved > 0 && !fr.fr_win.is_null() && nvim_win_get_wfh(fr.fr_win) != 0
+                    // SAFETY: fr.fr_win is a valid non-null win_T*
+                    if room_reserved > 0
+                        && !fr.fr_win.is_null()
+                        && win_ref(fr.fr_win).w_p_wfh() != 0
                     {
                         if room_reserved >= fr.fr_height {
                             room_reserved -= fr.fr_height;
@@ -1928,7 +1853,8 @@ fn frame_setwidth_impl(curfrp: *mut Frame, mut width: c_int) {
                 let mut frp = parent.fr_child;
                 while !frp.is_null() {
                     let fr = &*frp;
-                    if frp != curfrp && !fr.fr_win.is_null() && nvim_win_get_wfw(fr.fr_win) != 0 {
+                    // SAFETY: fr.fr_win is a valid non-null win_T*
+                    if frp != curfrp && !fr.fr_win.is_null() && win_ref(fr.fr_win).w_p_wfw() != 0 {
                         room_reserved += fr.fr_width;
                     }
                     room += fr.fr_width;
@@ -1987,7 +1913,10 @@ fn frame_setwidth_impl(curfrp: *mut Frame, mut width: c_int) {
                 while !frp.is_null() && take != 0 {
                     let fr = &*frp;
                     let w = frame_minwidth_impl(frp, WinHandle::from_ptr(std::ptr::null_mut()));
-                    if room_reserved > 0 && !fr.fr_win.is_null() && nvim_win_get_wfw(fr.fr_win) != 0
+                    // SAFETY: fr.fr_win is a valid non-null win_T*
+                    if room_reserved > 0
+                        && !fr.fr_win.is_null()
+                        && win_ref(fr.fr_win).w_p_wfw() != 0
                     {
                         if room_reserved >= fr.fr_width {
                             room_reserved -= fr.fr_width;
@@ -2051,13 +1980,14 @@ fn win_setwidth_win_impl(mut width: c_int, wp: WinHandle) {
             width = 0;
         }
 
-        if nvim_win_get_floating(wp) != 0 {
+        // SAFETY: wp is a valid non-null win_T*
+        if win_ref(wp).w_floating {
             nvim_win_set_config_width(wp, width);
             nvim_win_config_float(wp);
             redraw_later(wp, UPD_NOT_VALID);
         } else {
-            let frame = nvim_win_get_frame(wp);
-            let vsep_width = nvim_win_get_vsep_width(wp);
+            let frame = win_ref(wp).w_frame;
+            let vsep_width = win_ref(wp).w_vsep_width;
             frame_setwidth_impl(frame, width + vsep_width);
 
             // recompute the window positions
@@ -2090,7 +2020,8 @@ fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
     // SAFETY: All pointer accesses are guarded by null checks
     unsafe {
         let topframe = nvim_get_topframe();
-        let mut fr = nvim_win_get_frame(dragwin);
+        // SAFETY: dragwin is a valid non-null win_T*
+        let mut fr = win_ref(dragwin).w_frame;
         if fr.is_null() {
             return;
         }
@@ -2244,7 +2175,8 @@ fn win_drag_vsep_line_impl(dragwin: WinHandle, mut offset: c_int) {
     // SAFETY: All pointer accesses are guarded by null checks
     unsafe {
         let topframe = nvim_get_topframe();
-        let mut fr = nvim_win_get_frame(dragwin);
+        // SAFETY: dragwin is a valid non-null win_T*
+        let mut fr = win_ref(dragwin).w_frame;
         if fr.is_null() {
             return;
         }
@@ -2472,7 +2404,8 @@ fn frame_add_statusline_impl(frp: *mut Frame) {
         if frame.fr_layout == FR_LEAF {
             // Leaf frame - add status to window
             let wp = frame.fr_win;
-            nvim_win_set_status_height(wp, STATUS_HEIGHT);
+            // SAFETY: wp is a valid non-null win_T*
+            win_mut(wp).w_status_height = STATUS_HEIGHT;
         } else if frame.fr_layout == FR_ROW {
             // Handle all the frames in the row
             let mut child = frame.fr_child;
@@ -2513,18 +2446,19 @@ fn frame_set_vsep_impl(frp: *const Frame, add: bool) {
 
         if frame.fr_layout == FR_LEAF {
             let wp = frame.fr_win;
-            let vsep_width = nvim_win_get_vsep_width(wp);
-            let w_width = nvim_win_get_w_width(wp);
+            // SAFETY: wp is a valid non-null win_T*
+            let vsep_width = win_ref(wp).w_vsep_width;
+            let w_width = win_ref(wp).w_width;
 
             if add && vsep_width == 0 {
                 if w_width > 0 {
                     // don't make it negative
                     crate::resize::execute::win_new_width_impl(wp, w_width - 1);
                 }
-                nvim_win_set_vsep_width(wp, 1);
+                win_mut(wp).w_vsep_width = 1;
             } else if !add && vsep_width == 1 {
                 crate::resize::execute::win_new_width_impl(wp, w_width + 1);
-                nvim_win_set_vsep_width(wp, 0);
+                win_mut(wp).w_vsep_width = 0;
             }
         } else if frame.fr_layout == FR_COL {
             // Handle all the frames in the column
@@ -2566,7 +2500,8 @@ fn frame_add_hsep_impl(frp: *const Frame) {
 
         if frame.fr_layout == FR_LEAF {
             let wp = frame.fr_win;
-            nvim_win_set_hsep_height(wp, 1);
+            // SAFETY: wp is a valid non-null win_T*
+            win_mut(wp).w_hsep_height = 1;
         } else if frame.fr_layout == FR_ROW {
             // Handle all the frames in the row
             let mut child = frame.fr_child;
@@ -2600,12 +2535,12 @@ fn frame_fix_width_impl(wp: WinHandle) {
         return;
     }
 
-    // SAFETY: Window pointer is valid
+    // SAFETY: wp is a valid non-null win_T*
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if !frame.is_null() {
-            let w_width = nvim_win_get_w_width(wp);
-            let vsep_width = nvim_win_get_vsep_width(wp);
+            let w_width = win_ref(wp).w_width;
+            let vsep_width = win_ref(wp).w_vsep_width;
             (*frame).fr_width = w_width + vsep_width;
         }
     }
@@ -2625,13 +2560,13 @@ fn frame_fix_height_impl(wp: WinHandle) {
         return;
     }
 
-    // SAFETY: Window pointer is valid
+    // SAFETY: wp is a valid non-null win_T*
     unsafe {
-        let frame = nvim_win_get_frame(wp);
+        let frame = win_ref(wp).w_frame;
         if !frame.is_null() {
-            let w_height = nvim_win_get_w_height(wp);
-            let hsep_height = nvim_win_get_hsep_height(wp);
-            let status_height = nvim_win_get_status_height(wp);
+            let w_height = win_ref(wp).w_height;
+            let hsep_height = win_ref(wp).w_hsep_height;
+            let status_height = win_ref(wp).w_status_height;
             (*frame).fr_height = w_height + hsep_height + status_height;
         }
     }
@@ -2668,7 +2603,8 @@ fn win_redraw_last_status_impl(frp: *const Frame) {
             // Leaf frame - mark the window for status redraw
             let wp = frame.fr_win;
             if !wp.is_null() {
-                nvim_win_set_redr_status(wp, 1);
+                // SAFETY: wp is a valid non-null win_T*
+                win_mut(wp).w_redr_status = true;
             }
         } else if frame.is_row() {
             // Row layout - process all children
@@ -2722,13 +2658,10 @@ const VALID_BOTLINE_AP: c_int = 0x40;
 /// w_topline is valid (for cursor position)
 const VALID_TOPLINE: c_int = 0x80;
 
-// C accessor for w_valid field
-extern "C" {
-    /// Get the w_valid field from a window.
-    fn nvim_win_get_valid(wp: WinHandle) -> c_int;
-
-    /// Clear specific bits from the w_valid field.
-    fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
+// w_valid manipulation helpers (inline, no extern needed)
+#[inline]
+unsafe fn win_clear_valid_bits(wp: WinHandle, bits: c_int) {
+    win_mut(wp).w_valid &= !bits;
 }
 
 /// Invalidate the bottom line position and approximation flags.
@@ -2741,7 +2674,7 @@ fn invalidate_botline_impl(wp: WinHandle) {
         return;
     }
     unsafe {
-        nvim_win_clear_valid_bits(wp, VALID_BOTLINE | VALID_BOTLINE_AP);
+        win_clear_valid_bits(wp, VALID_BOTLINE | VALID_BOTLINE_AP);
     }
 }
 
@@ -2764,7 +2697,7 @@ fn approximate_botline_win_impl(wp: WinHandle) {
         return;
     }
     unsafe {
-        nvim_win_clear_valid_bits(wp, VALID_BOTLINE);
+        win_clear_valid_bits(wp, VALID_BOTLINE);
     }
 }
 
@@ -2786,7 +2719,7 @@ fn changed_cline_bef_curs_impl(wp: WinHandle) {
         return;
     }
     unsafe {
-        nvim_win_clear_valid_bits(
+        win_clear_valid_bits(
             wp,
             VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE,
         );
@@ -2810,7 +2743,7 @@ fn changed_line_abv_curs_impl() {
     unsafe {
         let curwin = nvim_get_curwin();
         if !curwin.is_null() {
-            nvim_win_clear_valid_bits(
+            win_clear_valid_bits(
                 curwin,
                 VALID_WROW
                     | VALID_WCOL
@@ -2840,7 +2773,7 @@ fn changed_line_abv_curs_win_impl(wp: WinHandle) {
         return;
     }
     unsafe {
-        nvim_win_clear_valid_bits(
+        win_clear_valid_bits(
             wp,
             VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE,
         );
@@ -2859,12 +2792,6 @@ pub extern "C" fn rs_changed_line_abv_curs_win(wp: WinHandle) {
 // Window Setting Change Functions
 // =============================================================================
 
-// C accessor for w_lines_valid
-extern "C" {
-    /// Set the w_lines_valid field (number of valid w_lines entries).
-    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
-}
-
 /// Handle window setting changes that require recomputation.
 ///
 /// This is the Rust equivalent of `changed_window_setting()` in move.c.
@@ -2878,11 +2805,12 @@ fn changed_window_setting_impl(wp: WinHandle) {
     }
     unsafe {
         // Invalidate all line cache entries
-        nvim_win_set_lines_valid(wp, 0);
+        // SAFETY: wp is a valid non-null win_T*
+        win_mut(wp).w_lines_valid = 0;
         // Clear validity flags for lines above cursor
         changed_line_abv_curs_win_impl(wp);
         // Clear botline and topline validity
-        nvim_win_clear_valid_bits(wp, VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
+        win_clear_valid_bits(wp, VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
         // Schedule complete redraw
         redraw_later(wp, UPD_NOT_VALID);
     }
@@ -2909,7 +2837,8 @@ fn changed_window_setting_all_impl() {
             let mut wp = nvim_tabpage_get_firstwin(tp);
             while !wp.is_null() {
                 changed_window_setting_impl(wp);
-                wp = nvim_win_get_next(wp);
+                // SAFETY: wp is a valid non-null win_T*
+                wp = win_ref(wp).w_next;
             }
             tp = nvim_tabpage_get_next(tp);
         }
@@ -2981,12 +2910,6 @@ pub extern "C" fn syntax_present_export(win: WinHandle) -> bool {
 // =============================================================================
 
 extern "C" {
-    /// Get the w_wcol field from a window (cursor column in window).
-    fn nvim_win_get_wcol(wp: WinHandle) -> c_int;
-
-    /// Get the w_wrow field from a window (cursor row in window).
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
-
     /// Get the tp_topframe field from a tabpage.
     fn nvim_tabpage_get_topframe(tp: TabpageHandle) -> *mut Frame;
 
@@ -3012,13 +2935,14 @@ fn win_vert_neighbor_impl(
     }
 
     unsafe {
-        let mut foundfr = nvim_win_get_frame(wp);
+        // SAFETY: wp is a valid non-null win_T*
+        let mut foundfr = win_ref(wp).w_frame;
 
         // If floating window, return prevwin if valid and non-floating, else firstwin
-        if nvim_win_get_floating(wp) != 0 {
+        if win_ref(wp).w_floating {
             let prevwin = nvim_get_prevwin();
             let firstwin = nvim_get_firstwin();
-            return if win_valid_impl(prevwin) && nvim_win_get_floating(prevwin) == 0 {
+            return if win_valid_impl(prevwin) && !win_ref(prevwin).w_floating {
                 prevwin
             } else {
                 firstwin
@@ -3059,11 +2983,13 @@ fn win_vert_neighbor_impl(
                 fr = (*nfr).fr_child;
                 if (*nfr).fr_layout == FR_ROW {
                     // Find the frame at the cursor column.
-                    let wp_wincol = nvim_win_get_wincol(wp);
-                    let wp_wcol = nvim_win_get_wcol(wp);
+                    // SAFETY: wp is a valid non-null win_T*
+                    let wp_wincol = win_ref(wp).w_wincol;
+                    let wp_wcol = win_ref(wp).w_wcol;
                     while !(*fr).fr_next.is_null() {
                         let fr_win = frame2win_impl(fr);
-                        let fr_wincol = nvim_win_get_wincol(fr_win);
+                        // SAFETY: fr_win is a valid non-null win_T*
+                        let fr_wincol = win_ref(fr_win).w_wincol;
                         if fr_wincol + (*fr).fr_width > wp_wincol + wp_wcol {
                             break;
                         }
@@ -3118,13 +3044,14 @@ fn win_horz_neighbor_impl(
     }
 
     unsafe {
-        let mut foundfr = nvim_win_get_frame(wp);
+        // SAFETY: wp is a valid non-null win_T*
+        let mut foundfr = win_ref(wp).w_frame;
 
         // If floating window, return prevwin if valid and non-floating, else firstwin
-        if nvim_win_get_floating(wp) != 0 {
+        if win_ref(wp).w_floating {
             let prevwin = nvim_get_prevwin();
             let firstwin = nvim_get_firstwin();
-            return if win_valid_impl(prevwin) && nvim_win_get_floating(prevwin) == 0 {
+            return if win_valid_impl(prevwin) && !win_ref(prevwin).w_floating {
                 prevwin
             } else {
                 firstwin
@@ -3165,11 +3092,13 @@ fn win_horz_neighbor_impl(
                 fr = (*nfr).fr_child;
                 if (*nfr).fr_layout == FR_COL {
                     // Find the frame at the cursor row.
-                    let wp_winrow = nvim_win_get_winrow(wp);
-                    let wp_wrow = nvim_win_get_wrow(wp);
+                    // SAFETY: wp is a valid non-null win_T*
+                    let wp_winrow = win_ref(wp).w_winrow;
+                    let wp_wrow = win_ref(wp).w_wrow;
                     while !(*fr).fr_next.is_null() {
                         let fr_win = frame2win_impl(fr);
-                        let fr_winrow = nvim_win_get_winrow(fr_win);
+                        // SAFETY: fr_win is a valid non-null win_T*
+                        let fr_winrow = win_ref(fr_win).w_winrow;
                         if fr_winrow + (*fr).fr_height > wp_winrow + wp_wrow {
                             break;
                         }
