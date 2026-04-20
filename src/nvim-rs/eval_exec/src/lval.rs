@@ -1271,8 +1271,9 @@ use std::cell::Cell;
 extern "C" {
     // vimconv_T accessor: returns conv->vc_type (0 = CONV_NONE)
     fn nvim_vimconv_get_type(conv: *const c_void) -> c_int;
-    // string_convert wrapper; returns allocated string or NULL
-    fn nvim_string_convert(conv: *const c_void, str: *const c_char) -> *mut c_char;
+    // string_convert (real C function, passing NULL for lenp)
+    #[link_name = "string_convert"]
+    fn nvim_string_convert(conv: *const c_void, str: *mut c_char, lenp: *mut usize) -> *mut c_char;
     // xstrdup
     fn xstrdup(s: *const c_char) -> *mut c_char;
     // tv type setter
@@ -1384,7 +1385,8 @@ unsafe fn var_item_copy_impl(
             } else {
                 to.set_type(VAR_STRING);
                 (*to.0.cast::<TypvalTRepr>()).v_lock = VAR_UNLOCKED;
-                let converted = nvim_string_convert(conv, from_str);
+                let converted =
+                    nvim_string_convert(conv, from_str.cast_mut(), std::ptr::null_mut());
                 let s = if converted.is_null() {
                     xstrdup(from_str)
                 } else {

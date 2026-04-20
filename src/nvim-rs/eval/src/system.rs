@@ -57,7 +57,7 @@ extern "C" {
     ) -> c_int;
 
     // ----- profiling -----
-    fn nvim_do_profiling_active() -> bool;
+    static do_profiling: c_int; // 0=PROF_NONE, 1=PROF_YES
     #[link_name = "prof_child_enter"]
     fn nvim_prof_child_enter(tm: *mut u64);
     #[link_name = "prof_child_exit"]
@@ -70,8 +70,8 @@ extern "C" {
     fn msg_puts(s: *const c_char);
     fn nvim_smsg_system_cmd(cmdstr: *const c_char);
 
-    // ----- VV_SHELL_ERROR -----
-    fn nvim_set_shell_error(status: c_int);
+    // ----- set_vim_var_nr (for VV_SHELL_ERROR = 6) -----
+    fn set_vim_var_nr(idx: c_int, val: i64);
 
     // ----- error messages: now in crate::errors -----
 
@@ -284,7 +284,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
     let cmd_argv = rs_tv_to_argv(arg0, ptr::null_mut(), &raw mut executable);
     if cmd_argv.is_null() {
         if !executable {
-            nvim_set_shell_error(-1);
+            set_vim_var_nr(6, -1); // VV_SHELL_ERROR = 6
         }
         xfree(input.cast::<c_void>());
         return;
@@ -301,7 +301,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
     }
 
     // Profiling
-    let profiling = nvim_do_profiling_active();
+    let profiling = do_profiling == 1; // PROF_YES = 1
     let mut wait_time: u64 = 0;
     if profiling {
         nvim_prof_child_enter(&raw mut wait_time);
@@ -323,7 +323,7 @@ unsafe fn get_system_output_impl(argvars: *mut c_void, rettv: *mut c_void, retli
     }
 
     xfree(input.cast::<c_void>());
-    nvim_set_shell_error(status);
+    set_vim_var_nr(6, i64::from(status)); // VV_SHELL_ERROR = 6
 
     if res.is_null() {
         if retlist {

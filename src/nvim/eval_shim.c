@@ -257,7 +257,6 @@ void nvim_get_tty_option_as_tv(const char *name, typval_T *rettv)
 { OptVal value = get_tty_option(name); assert(value.type != kOptValTypeNil); *rettv = optval_as_tv(value, true); }
 
 int nvim_vimconv_get_type(const vimconv_T *conv) { return conv == NULL ? CONV_NONE : (int)conv->vc_type; }
-char *nvim_string_convert(const vimconv_T *conv, const char *str) { return string_convert((vimconv_T *)conv, (char *)str, NULL); }
 int nvim_tv_list_copyid(const list_T *list) { return tv_list_copyid(list); }
 list_T *nvim_tv_list_latest_copy(const list_T *list) { return tv_list_latest_copy(list); }
 void nvim_tv_list_ref(list_T *list) { tv_list_ref(list); }
@@ -272,7 +271,6 @@ void nvim_eap_set_cmdlinep_deref(exarg_T *eap, char *val) { *eap->cmdlinep = val
 LineGetter nvim_eap_get_getline(const exarg_T *eap) { return eap->ea_getline; }
 void *nvim_eap_get_cookie(const exarg_T *eap) { return eap->cookie; }
 
-typval_T *nvim_alloc_typval(void) { return xmalloc(sizeof(typval_T)); }
 void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv) { set_var(name, name_len, tv, false); }
 void nvim_set_vim_var_argv_list(list_T *list) { set_vim_var_list(VV_ARGV, list); }
 const char *nvim_sourcing_name_get(void) { return SOURCING_NAME; }
@@ -307,9 +305,7 @@ void nvim_foldtext_make_obj(typval_T *tv, int tv_type, Object *out)
   }
 }
 
-void nvim_set_shell_error(int status) { set_vim_var_nr(VV_SHELL_ERROR, (varnumber_T)status); }
 void nvim_smsg_system_cmd(const char *cmdstr) { smsg(0, _("Executing command: \"%s\""), cmdstr); }
-bool nvim_do_profiling_active(void) { return do_profiling == PROF_YES; }
 bool nvim_eval_os_can_exe(const char *name, char **abspath) { return os_can_exe(name, abspath, true); }
 int nvim_eval_variable(const char *name, int len, typval_T *rettv, bool verbose,
                        bool import_script) { return eval_variable(name, len, rettv, NULL, verbose, import_script); }

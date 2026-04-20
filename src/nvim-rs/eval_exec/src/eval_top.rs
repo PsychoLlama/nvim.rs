@@ -152,8 +152,7 @@ extern "C" {
     fn strstr(haystack: *const c_char, needle: *const c_char) -> *mut c_char;
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
     fn skipdigits(p: *const c_char) -> *mut c_char;
-    /// Allocate exactly sizeof(typval_T) bytes, zeroed, for a heap typval.
-    fn nvim_alloc_typval() -> *mut c_void;
+    fn xmalloc(size: usize) -> *mut c_void;
 }
 
 // eval_to_string delegates to rs_eval_to_string (defined here) -- but eval_to_string_safe
@@ -808,7 +807,7 @@ pub unsafe extern "C" fn rs_eval_expr_ext(
     eap: ExargHandle,
     use_simple_function: bool,
 ) -> *mut c_void {
-    let tv = nvim_alloc_typval();
+    let tv = xmalloc(16); // sizeof(typval_T) = 16 bytes
     let tv_handle = TypevalHandle::from_ptr(tv);
 
     let eap_skip = !eap.is_null() && nvim_eap_get_skip_local(eap) != 0;
@@ -1379,7 +1378,7 @@ pub unsafe extern "C" fn rs_eval_foldexpr(wp: *mut c_void, cp: *mut c_int) -> c_
     textlock += 1;
     *cp = 0; // NUL
 
-    let tv = nvim_alloc_typval();
+    let tv = xmalloc(16); // sizeof(typval_T) = 16 bytes
     let tv_handle = TypevalHandle::from_ptr(tv);
 
     let evalarg = nvim_get_evalarg_evaluate_ptr();
@@ -1472,7 +1471,7 @@ pub unsafe extern "C" fn rs_eval_foldtext(wp: *mut c_void, out: *mut c_void) {
     }
     textlock += 1;
 
-    let tv = nvim_alloc_typval();
+    let tv = xmalloc(16); // sizeof(typval_T) = 16 bytes
     let tv_handle = TypevalHandle::from_ptr(tv);
 
     let evalarg = nvim_get_evalarg_evaluate_ptr();

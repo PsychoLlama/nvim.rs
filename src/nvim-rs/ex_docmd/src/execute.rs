@@ -364,8 +364,8 @@ extern "C" {
     fn nvim_cstack_alloc() -> CstackHandle;
     fn nvim_curbuf_is_terminal() -> c_int;
 
-    // profile_cmd helpers
-    fn nvim_do_profiling_active() -> bool;
+    // profile_cmd helpers: do_profiling global (0=PROF_NONE, 1=PROF_YES)
+    static do_profiling: c_int;
     fn nvim_cstack_get_idx(cs: CstackHandle) -> c_int;
     fn nvim_cstack_get_flags(cs: CstackHandle, idx: c_int) -> c_int;
     static mut did_emsg: c_int;
@@ -496,7 +496,8 @@ pub unsafe extern "C" fn rs_profile_cmd(
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) {
-    if !nvim_do_profiling_active() {
+    if do_profiling != 1 {
+        // PROF_YES = 1
         return;
     }
 
