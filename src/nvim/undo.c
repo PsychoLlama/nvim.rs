@@ -196,18 +196,9 @@ void nvim_msg_oldest_change(void) { msg(_("Already at oldest change"), 0); }
 
 void nvim_msg_newest_change(void) { msg(_("Already at newest change"), 0); }
 
-void nvim_get_curwin_cursor(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
-{
-  *lnum = curwin->w_cursor.lnum;
-  *col = curwin->w_cursor.col;
-  *coladd = curwin->w_cursor.coladd;
-}
-
 bool nvim_curwin_virtual_active(void) { return virtual_active(curwin); }
 
 colnr_T nvim_getviscol(void) { return getviscol(); }
-
-void nvim_buf_set_b_new_change(buf_T *buf, bool val) { buf->b_new_change = val; }
 
 // nvim_uhp_copy_marks_visual: migrated to Rust (rs_uhp_copy_marks_visual_impl).
 
@@ -217,15 +208,8 @@ void nvim_emsg_line_count_changed(void) { emsg(_("E881: Line count changed unexp
 // Check if buf equals curbuf
 bool nvim_buf_is_curbuf(buf_T *buf) { return buf == curbuf; }
 
-colnr_T nvim_undo_curwin_get_cursor_col(void) { return curwin->w_cursor.col; }
-
-void nvim_undo_curwin_set_cursor_col(colnr_T col) { curwin->w_cursor.col = col; }
-
-void nvim_undo_curwin_set_cursor_lnum(linenr_T lnum) { curwin->w_cursor.lnum = lnum; }
-
+// nvim_check_cursor_col_curwin: still used by ops crate.
 void nvim_check_cursor_col_curwin(void) { check_cursor_col(curwin); }
-
-linenr_T nvim_undo_curwin_get_cursor_lnum(void) { return curwin->w_cursor.lnum; }
 
 // Strftime wrapper for Rust time formatting
 size_t nvim_undo_strftime(char *buf, size_t buflen, const char *fmt, time_t tt)
@@ -384,20 +368,6 @@ void nvim_tv_dict_add_nr(dict_T *dict, const char *key, size_t key_len, varnumbe
 
 /// Current window handle accessor
 win_T *nvim_undo_get_curwin(void) { return curwin; }
-
-/// Window buffer accessor
-buf_T *nvim_undo_win_get_buffer(win_T *win) { return win->w_buffer; }
-
-/// Set window cursor
-void nvim_undo_win_set_cursor_pos(win_T *win, linenr_T lnum, colnr_T col, colnr_T coladd)
-{
-  win->w_cursor.lnum = lnum;
-  win->w_cursor.col = col;
-  win->w_cursor.coladd = coladd;
-}
-
-/// Get window cursor line
-linenr_T nvim_undo_win_get_cursor_lnum(win_T *win) { return win->w_cursor.lnum; }
 
 bool nvim_get_global_busy(void) { return global_busy; }
 

@@ -363,7 +363,6 @@ unsafe fn buf_mut<'a>(bp: BufHandle) -> &'a mut BufStruct {
 ///
 /// # Safety
 /// `wp` must be a valid non-null `win_T*`.
-#[allow(dead_code)]
 #[inline]
 unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
     &*(wp.0.cast::<WinStruct>())
@@ -373,7 +372,6 @@ unsafe fn win_ref<'a>(wp: WinHandle) -> &'a WinStruct {
 ///
 /// # Safety
 /// `wp` must be a valid non-null `win_T*` with exclusive access.
-#[allow(dead_code)]
 #[inline]
 unsafe fn win_mut<'a>(wp: WinHandle) -> &'a mut WinStruct {
     &mut *(wp.0.cast::<WinStruct>())
@@ -594,7 +592,6 @@ extern "C" {
     /// got_int global (interrupt flag)
     #[link_name = "got_int"]
     static nvim_got_int_global: bool;
-    fn nvim_get_curwin_cursor(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
     fn nvim_curwin_virtual_active() -> bool;
     #[link_name = "getviscol"]
     fn nvim_getviscol() -> ColnrT;
@@ -612,12 +609,9 @@ extern "C" {
 
     // u_find_first_changed infrastructure (cursor now accessed via direct field access)
 
-    // u_undoline accessors (line_colnr now via direct field access)
-    fn nvim_undo_curwin_get_cursor_col() -> ColnrT;
-    fn nvim_undo_curwin_set_cursor_col(col: ColnrT);
-    fn nvim_undo_curwin_get_cursor_lnum() -> LinenrT;
-    fn nvim_undo_curwin_set_cursor_lnum(lnum: LinenrT);
-    fn nvim_check_cursor_col_curwin();
+    // u_undoline: check_cursor_col via direct FFI link
+    #[link_name = "check_cursor_col"]
+    fn nvim_check_cursor_col(win: WinHandle);
 
     /// Notify extmarks of a column splice on curbuf.
     #[link_name = "extmark_splice_cols"]
@@ -796,15 +790,6 @@ extern "C" {
 
     /// Current window handle accessor
     fn nvim_undo_get_curwin() -> WinHandle;
-
-    /// Window buffer accessor
-    fn nvim_undo_win_get_buffer(win: WinHandle) -> BufHandle;
-
-    /// Set window cursor
-    fn nvim_undo_win_set_cursor_pos(win: WinHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
-
-    /// Get window cursor line
-    fn nvim_undo_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
 
     /// Get global_busy flag
     fn nvim_get_global_busy() -> bool;
@@ -1201,9 +1186,9 @@ unsafe fn u_saveline(buf: BufHandle, lnum: LinenrT) {
     rs_u_clearline(buf);
     buf_mut(buf).b_u_line_lnum = lnum;
     let win = nvim_undo_get_curwin();
-    let win_buf = nvim_undo_win_get_buffer(win);
-    if win_buf.0 == buf.0 && nvim_undo_win_get_cursor_lnum(win) == lnum {
-        buf_mut(buf).b_u_line_colnr = nvim_undo_curwin_get_cursor_col();
+    let win_buf = BufHandle(win_ref(win).w_buffer);
+    if win_buf.0 == buf.0 && win_ref(win).w_cursor.lnum == lnum {
+        buf_mut(buf).b_u_line_colnr = win_ref(nvim_undo_get_curwin()).w_cursor.col;
     } else {
         buf_mut(buf).b_u_line_colnr = 0;
     }
@@ -1775,30 +1760,40 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
 ///
 /// Must be called with valid win, buf, and curhead handles. curwin must be win.
 unsafe fn undoredo_adjust_cursor(win: WinHandle, buf: BufHandle, curhead: UHeaderHandle) {
-    let mut cur_lnum = nvim_undo_curwin_get_cursor_lnum();
+    let mut cur_lnum = win_ref(nvim_undo_get_curwin()).w_cursor.lnum;
 
     // If cursor is only off by one line, restore it (handles "o" command)
     if (*curhead).uh_cursor.lnum + 1 == cur_lnum && cur_lnum > 1 {
         cur_lnum -= 1;
-        nvim_undo_curwin_set_cursor_lnum(cur_lnum);
+        win_mut(nvim_undo_get_curwin()).w_cursor.lnum = cur_lnum;
     }
 
     let ml_count = buf_ref(buf).ml_line_count;
     if cur_lnum <= ml_count {
         if (*curhead).uh_cursor.lnum == cur_lnum {
             let col = (*curhead).uh_cursor.col;
-            nvim_undo_curwin_set_cursor_col(col);
+            win_mut(nvim_undo_get_curwin()).w_cursor.col = col;
             if nvim_curwin_virtual_active() && (*curhead).uh_cursor_vcol >= 0 {
                 undo_coladvance(win, (*curhead).uh_cursor_vcol);
             } else {
                 // Zero coladd by writing all three cursor fields
-                nvim_undo_win_set_cursor_pos(win, cur_lnum, col, 0);
+                {
+                    let _wp = win_mut(win);
+                    _wp.w_cursor.lnum = cur_lnum;
+                    _wp.w_cursor.col = col;
+                    _wp.w_cursor.coladd = 0;
+                }
             }
         } else {
             undo_beginline(BL_SOL | BL_FIX);
         }
     } else {
-        nvim_undo_win_set_cursor_pos(win, cur_lnum, 0, 0);
+        {
+            let _wp = win_mut(win);
+            _wp.w_cursor.lnum = cur_lnum;
+            _wp.w_cursor.col = 0;
+            _wp.w_cursor.coladd = 0;
+        }
     }
     undo_check_cursor(win);
 }
@@ -1817,7 +1812,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     let win = nvim_undo_get_curwin();
 
     let mut newlnum: LinenrT = MAXLNUM;
-    let mut new_curpos_lnum = nvim_undo_win_get_cursor_lnum(win);
+    let mut new_curpos_lnum = win_ref(win).w_cursor.lnum;
 
     // Don't want autocommands using the undo structures here, they are
     // invalid till the end.
@@ -2025,7 +2020,12 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     }
 
     // Set the cursor to the desired position. Check that the line is valid.
-    nvim_undo_win_set_cursor_pos(win, new_curpos_lnum, 0, 0);
+    {
+        let _wp = win_mut(win);
+        _wp.w_cursor.lnum = new_curpos_lnum;
+        _wp.w_cursor.col = 0;
+        _wp.w_cursor.coladd = 0;
+    }
     nvim_undo_check_cursor_lnum(win);
 
     (*curhead).uh_entry = newlist;
@@ -2418,13 +2418,15 @@ pub unsafe extern "C" fn rs_u_savecommon(
         (*uhp).uh_getbot_entry = ptr::null_mut();
 
         // Save cursor position
-        let mut lnum: LinenrT = 0;
-        let mut col: ColnrT = 0;
-        let mut coladd: ColnrT = 0;
-        nvim_get_curwin_cursor(&mut lnum, &mut col, &mut coladd);
-        (*uhp).uh_cursor.lnum = lnum;
-        (*uhp).uh_cursor.col = col;
-        (*uhp).uh_cursor.coladd = coladd;
+        let coladd: ColnrT;
+        {
+            let _cw = nvim_undo_get_curwin();
+            let cursor = &win_ref(_cw).w_cursor;
+            (*uhp).uh_cursor.lnum = cursor.lnum;
+            (*uhp).uh_cursor.col = cursor.col;
+            coladd = cursor.coladd;
+            (*uhp).uh_cursor.coladd = coladd;
+        }
 
         if nvim_curwin_virtual_active() && coladd > 0 {
             (*uhp).uh_cursor_vcol = nvim_getviscol();
@@ -2587,10 +2589,11 @@ pub unsafe extern "C" fn rs_u_savecommon(
 /// Must be called from a valid Neovim context with curwin set.
 #[export_name = "u_save_cursor"]
 pub unsafe extern "C" fn rs_u_save_cursor() -> c_int {
-    let mut lnum: LinenrT = 0;
-    let mut col: ColnrT = 0;
-    let mut coladd: ColnrT = 0;
-    nvim_get_curwin_cursor(&mut lnum, &mut col, &mut coladd);
+    let (lnum, _col, _coladd) = {
+        let _cw = nvim_undo_get_curwin();
+        let cursor = &win_ref(_cw).w_cursor;
+        (cursor.lnum, cursor.col, cursor.coladd)
+    };
 
     let top = if lnum > 0 { lnum - 1 } else { 0 };
     let bot = lnum + 1;
@@ -2764,12 +2767,13 @@ pub unsafe extern "C" fn rs_u_undoline() {
 
     // Handle column position
     let t = buf_ref(curbuf).b_u_line_colnr;
-    if nvim_undo_curwin_get_cursor_lnum() == line_lnum {
-        buf_mut(curbuf).b_u_line_colnr = nvim_undo_curwin_get_cursor_col();
+    if win_ref(nvim_undo_get_curwin()).w_cursor.lnum == line_lnum {
+        buf_mut(curbuf).b_u_line_colnr = win_ref(nvim_undo_get_curwin()).w_cursor.col;
     }
-    nvim_undo_curwin_set_cursor_col(t);
-    nvim_undo_curwin_set_cursor_lnum(line_lnum);
-    nvim_check_cursor_col_curwin();
+    let curwin = nvim_undo_get_curwin();
+    win_mut(curwin).w_cursor.col = t;
+    win_mut(curwin).w_cursor.lnum = line_lnum;
+    nvim_check_cursor_col(curwin);
 }
 
 /// Given a buffer, return the undo header. If none is set, create one first.
