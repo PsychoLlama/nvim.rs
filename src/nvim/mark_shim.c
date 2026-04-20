@@ -43,7 +43,6 @@ pos_T nvim_mark_win_get_prev_pcmark(win_T *win) { return win->w_prev_pcmark; }
 void nvim_mark_win_set_prev_pcmark(win_T *win, pos_T pos) { win->w_prev_pcmark = pos; }
 pos_T nvim_mark_win_get_cursor(win_T *win) { return win->w_cursor; }
 buf_T *nvim_mark_win_get_buffer(win_T *win) { return win->w_buffer; }
-void nvim_mark_win_set_topline(win_T *win, linenr_T topline) { set_topline(win, topline); }
 fmark_T *nvim_mark_buf_get_last_cursor(buf_T *buf) { return &buf->b_last_cursor; }
 const char *nvim_mark_get_e_umark(void) { return _(e_umark); }
 const char *nvim_mark_get_e_marknotset(void) { return _(e_marknotset); }
@@ -123,8 +122,5 @@ int nvim_mark_get_iosize(void) { return IOSIZE; }
 char *nvim_mark_get_namebuff(void) { return NameBuff; }
 int nvim_mark_get_maxpathl(void) { return MAXPATHL; }
 size_t nvim_mark_expand_env(const char *src, char *dst, size_t dstlen) { return expand_env((char *)src, dst, (int)dstlen); }
-void nvim_mark_os_dirname(char *buf, size_t len) { os_dirname(buf, len); }
 char *nvim_mark_path_shorten_fname(char *full_path, char *dir_name) { return path_shorten_fname(full_path, dir_name); }
 buf_T *nvim_mark_buflist_new(char *ffname, char *sfname, int lnum, int flags) { return buflist_new(ffname, sfname, (linenr_T)lnum, flags); }
-bool nvim_mark_vim_ispathsep_nocolon(int c) { return vim_ispathsep_nocolon(c); }
-size_t nvim_mark_xstrlcpy(char *dst, const char *src, size_t dstsize) { return xstrlcpy(dst, src, dstsize); }

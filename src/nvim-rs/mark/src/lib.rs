@@ -101,6 +101,7 @@ extern "C" {
     fn nvim_mark_win_set_prev_pcmark(win: WinHandle, pos: PosT);
     fn nvim_mark_win_get_cursor(win: WinHandle) -> PosT;
     fn nvim_mark_win_get_buffer(win: WinHandle) -> BufHandle;
+    #[link_name = "set_topline"]
     fn nvim_mark_win_set_topline(win: WinHandle, topline: LinenrT);
 
     // Buffer mark accessors
@@ -130,6 +131,7 @@ extern "C" {
     fn nvim_mark_get_namebuff() -> *mut c_char;
     fn nvim_mark_get_maxpathl() -> c_int;
     fn nvim_mark_expand_env(src: *const c_char, dst: *mut c_char, dstlen: usize) -> usize;
+    #[link_name = "os_dirname"]
     fn nvim_mark_os_dirname(buf: *mut c_char, len: usize);
     fn nvim_mark_path_shorten_fname(full_path: *mut c_char, dir_name: *mut c_char) -> *mut c_char;
     fn nvim_mark_buflist_new(
@@ -138,7 +140,9 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> BufHandle;
+    #[link_name = "vim_ispathsep_nocolon"]
     fn nvim_mark_vim_ispathsep_nocolon(c: c_int) -> bool;
+    #[link_name = "xstrlcpy"]
     fn nvim_mark_xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
 
     // Static inline wrappers (can't call these C functions directly from Rust)

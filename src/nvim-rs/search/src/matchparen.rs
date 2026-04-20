@@ -82,6 +82,7 @@ extern "C" {
     static mut got_int: bool;
     // Line access
     fn nvim_search_ml_get(lnum: LinenrT) -> *const c_char;
+    #[link_name = "ml_get_len"]
     fn nvim_search_ml_get_len(lnum: LinenrT) -> ColnrT;
     fn nvim_search_get_line_count() -> LinenrT;
 
@@ -109,6 +110,7 @@ extern "C" {
     fn line_breakcheck();
 
     // Comment check
+    #[link_name = "check_linecomment"]
     fn nvim_search_check_linecomment(line: *const c_char) -> c_int;
 
     // Oap setter
