@@ -58,7 +58,6 @@ bool nvim_eval_list_foreach_tv(list_T *l, int copyID, ht_stack_T **ht_stack, lis
 void nvim_eval_dict_foreach_watcher_callback(dict_T *dd, int copyID, ht_stack_T **ht_stack, list_stack_T **list_stack)
 { QUEUE *w = NULL; DictWatcher *watcher = NULL; QUEUE_FOREACH(w, &dd->watchers, { watcher = tv_dict_watcher_node_data(w); rs_set_ref_in_callback(&watcher->callback, copyID, ht_stack, list_stack); }) }
 
-int nvim_eval_buf_line_count(const buf_T *buf) { return buf->b_ml.ml_line_count; }
 
 
 void nvim_do_string_sub_restore_cpo_complex(char *save_cpo)
@@ -267,7 +266,6 @@ LineGetter nvim_eap_get_getline(const exarg_T *eap) { return eap->ea_getline; }
 void *nvim_eap_get_cookie(const exarg_T *eap) { return eap->cookie; }
 
 void nvim_set_var_wrapper(const char *name, size_t name_len, typval_T *tv) { set_var(name, name_len, tv, false); }
-void nvim_set_vim_var_argv_list(list_T *list) { set_vim_var_list(VV_ARGV, list); }
 const char *nvim_sourcing_name_get(void) { return SOURCING_NAME; }
 linenr_T nvim_sourcing_lnum_get(void) { return SOURCING_LNUM; }
 

@@ -860,7 +860,7 @@ extern "C" {
     #[link_name = "tv_list_append_string"]
     fn nvim_tv_list_append_string(l: *mut c_void, s: *const c_char, len: isize);
     fn nvim_tv_list_last_fix_lock(l: *mut c_void);
-    fn nvim_set_vim_var_argv_list(list: *mut c_void);
+    fn set_vim_var_list(idx: c_int, val: *mut c_void);
 
     // Phase 1: var_set_global accessors
     fn nvim_set_var_wrapper(name: *const c_char, name_len: usize, tv: TypevalHandle);
@@ -1005,7 +1005,7 @@ pub unsafe extern "C" fn rs_set_argv_var(argv: *mut *mut c_char, argc: c_int) {
         nvim_tv_list_append_string(l, s, -1);
         nvim_tv_list_last_fix_lock(l);
     }
-    nvim_set_vim_var_argv_list(l);
+    set_vim_var_list(88, l); // VV_ARGV = 88
 }
 
 /// Set a global variable via save_funccal/set_var/restore_funccal.
