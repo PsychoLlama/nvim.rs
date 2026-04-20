@@ -67,9 +67,6 @@ bool *eval_lavars_used = NULL;
 
 #include "eval_shim.c.generated.h"
 
-static uint64_t last_timer_id = 1;
-static PMap(uint64_t) timers = MAP_INIT;
-
 dict_T *get_v_event(save_v_event_T *sve)
 {
   dict_T *v_event = get_vim_var_dict(VV_EVENT);
@@ -129,9 +126,6 @@ bool nvim_gc_mark_tabs(int copyID, bool abort)
 
 bool nvim_gc_mark_channels(int copyID, bool abort)
 { Channel *data; map_foreach_value(&channels, data, { abort = abort || rs_set_ref_in_callback_reader(&data->on_data, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback_reader(&data->on_stderr, copyID, NULL, NULL); abort = abort || rs_set_ref_in_callback(&data->on_exit, copyID, NULL, NULL); }) return abort; }
-
-bool nvim_gc_mark_timers(int copyID, bool abort)
-{ timer_T *timer; map_foreach_value(&timers, timer, { abort = abort || rs_set_ref_in_callback(&timer->callback, copyID, NULL, NULL); }) return abort; }
 
 void nvim_gc_verb_msg_abort(void)
 {
@@ -333,15 +327,6 @@ void nvim_timer_tw_close(timer_T *timer) { time_watcher_close(&timer->tw, rs_tim
 void nvim_timer_tw_set_events_child(timer_T *timer) { timer->tw.events = multiqueue_new_child(rs_loop_get_events(&main_loop)); }
 void nvim_timer_tw_set_blockable(timer_T *timer, int blockable) { timer->tw.blockable = blockable != 0; }
 void nvim_timer_tw_free_events(timer_T *timer) { multiqueue_free(timer->tw.events); }
-
-timer_T *nvim_timers_get(int64_t id) { return pmap_get(uint64_t)(&timers, (uint64_t)id); }
-void nvim_timers_put(timer_T *timer) { pmap_put(uint64_t)(&timers, (uint64_t)timer->timer_id, timer); }
-void nvim_timers_del(int64_t id) { pmap_del(uint64_t)(&timers, (uint64_t)id, NULL); }
-size_t nvim_timers_size(void) { return map_size(&timers); }
-uint64_t nvim_timers_next_id(void) { return last_timer_id++; }
-
-void nvim_timers_foreach(void (*cb)(timer_T *, void *), void *userdata)
-{ timer_T *timer; map_foreach_value(&timers, timer, { cb(timer, userdata); }) }
 
 
 int nvim_channel_is_valid_job(Channel *chan) { return chan != NULL && chan->streamtype == kChannelStreamProc && !proc_is_stopped(&chan->stream.proc); }

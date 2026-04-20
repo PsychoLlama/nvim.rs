@@ -7,10 +7,46 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::missing_panics_doc)] // Mutex::lock() won't poison in single-threaded Neovim
 
+use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
 
 use super::typval::{tv_init as tv_init_typval, TypvalT as TypvalTRepr};
+
+// =============================================================================
+// Timer state -- formerly C statics last_timer_id and timers PMap
+// =============================================================================
+
+/// Next timer ID (was `last_timer_id` in eval_shim.c).
+static LAST_TIMER_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Wrapper so we can put a *mut c_void in a Mutex.
+struct TimerMap(HashMap<u64, usize>);
+// SAFETY: Neovim's main loop is single-threaded for eval/timer operations.
+unsafe impl Send for TimerMap {}
+unsafe impl Sync for TimerMap {}
+
+static TIMERS: LazyLock<Mutex<TimerMap>> = LazyLock::new(|| Mutex::new(TimerMap(HashMap::new())));
+
+/// Get the next timer ID (was `last_timer_id++` in C).
+fn next_timer_id() -> u64 {
+    LAST_TIMER_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+fn timers_get(id: u64) -> TimerHandle {
+    TIMERS.lock().unwrap().0.get(&id).copied().unwrap_or(0) as TimerHandle
+}
+
+fn timers_put_entry(timer: TimerHandle, timer_id: u64) {
+    TIMERS.lock().unwrap().0.insert(timer_id, timer as usize);
+}
+
+fn timers_del(id: u64) {
+    TIMERS.lock().unwrap().0.remove(&id);
+}
 
 // =============================================================================
 // Opaque handle types
@@ -76,16 +112,7 @@ extern "C" {
     fn nvim_timer_tw_set_blockable(timer: TimerHandle, blockable: c_int);
     fn nvim_timer_tw_free_events(timer: TimerHandle);
 
-    // -- Timer map operations --
-    fn nvim_timers_get(id: i64) -> TimerHandle;
-    fn nvim_timers_put(timer: TimerHandle);
-    fn nvim_timers_del(id: i64);
-    fn nvim_timers_size() -> usize;
-    fn nvim_timers_next_id() -> u64;
-    fn nvim_timers_foreach(
-        cb: unsafe extern "C" fn(TimerHandle, *mut c_void),
-        userdata: *mut c_void,
-    );
+    // (Timer map operations are now in Rust -- see TIMERS / LAST_TIMER_ID above)
 
     // -- typval operations --
     fn nvim_tv_set_number(tv: TvHandle, num: i64);
@@ -127,6 +154,14 @@ extern "C" {
     fn nvim_set_pressedreturn(val: bool);
     #[link_name = "discard_current_exception"]
     fn nvim_discard_current_exception();
+
+    // -- GC support --
+    fn rs_set_ref_in_callback(
+        cb: CallbackHandle,
+        copy_id: c_int,
+        ht_stack: *mut *mut c_void,
+        list_stack: *mut *mut c_void,
+    ) -> bool;
 }
 
 // =============================================================================
@@ -174,7 +209,7 @@ unsafe fn write_fields(timer: TimerHandle, f: &TimerFields) {
 #[must_use]
 #[export_name = "find_timer_by_nr"]
 pub unsafe extern "C" fn rs_find_timer_by_nr(xx: i64) -> TimerHandle {
-    nvim_timers_get(xx)
+    timers_get(xx as u64)
 }
 
 /// Add information about a single timer to the return list.
@@ -221,15 +256,22 @@ pub unsafe extern "C" fn rs_add_timer_info(rettv: TvHandle, timer: TimerHandle) 
 /// `rettv` must be a valid typval_T pointer.
 #[export_name = "add_timer_info_all"]
 pub unsafe extern "C" fn rs_add_timer_info_all(rettv: TvHandle) {
-    unsafe extern "C" fn foreach_cb(timer: TimerHandle, userdata: *mut c_void) {
+    let timers_snapshot: Vec<TimerHandle> = {
+        TIMERS
+            .lock()
+            .unwrap()
+            .0
+            .values()
+            .map(|&p| p as TimerHandle)
+            .collect()
+    };
+    nvim_tv_list_alloc_ret(rettv, timers_snapshot.len() as isize);
+    for timer in timers_snapshot {
         let f = read_fields(timer);
         if !f.stopped || f.refcount > 1 {
-            rs_add_timer_info(userdata as TvHandle, timer);
+            rs_add_timer_info(rettv, timer);
         }
     }
-
-    nvim_tv_list_alloc_ret(rettv, nvim_timers_size() as isize);
-    nvim_timers_foreach(foreach_cb, rettv);
 }
 
 /// Decrement the timer's refcount and free it if it reaches 0.
@@ -258,7 +300,7 @@ pub unsafe extern "C" fn rs_timer_close_cb(_tw: TimeWatcherHandle, data: *mut c_
     let cb_ptr = nvim_timer_get_callback_ptr(timer);
     nvim_callback_free(cb_ptr);
     let f = read_fields(timer);
-    nvim_timers_del(i64::from(f.timer_id));
+    timers_del(f.timer_id as u64);
     timer_decref(timer);
 }
 
@@ -394,7 +436,7 @@ pub unsafe extern "C" fn rs_timer_start(
 
     nvim_timer_set_callback(timer, callback);
 
-    let id = nvim_timers_next_id() as c_int;
+    let id = next_timer_id() as c_int;
     let mut f2 = f;
     f2.timer_id = id;
     write_fields(timer, &f2);
@@ -405,7 +447,7 @@ pub unsafe extern "C" fn rs_timer_start(
     nvim_timer_tw_set_blockable(timer, 1);
     nvim_timer_tw_start(timer, timeout as u64, timeout as u64);
 
-    nvim_timers_put(timer);
+    timers_put_entry(timer, id as u64);
     id as u64
 }
 
@@ -415,10 +457,16 @@ pub unsafe extern "C" fn rs_timer_start(
 /// Safe to call from C.
 #[export_name = "timer_stop_all"]
 pub unsafe extern "C" fn rs_timer_stop_all() {
-    unsafe extern "C" fn foreach_cb(timer: TimerHandle, _userdata: *mut c_void) {
+    let timers_snapshot: Vec<TimerHandle> = TIMERS
+        .lock()
+        .unwrap()
+        .0
+        .values()
+        .map(|&p| p as TimerHandle)
+        .collect();
+    for timer in timers_snapshot {
         rs_timer_stop(timer);
     }
-    nvim_timers_foreach(foreach_cb, std::ptr::null_mut());
 }
 
 /// Teardown all timers (calls timer_stop_all).
@@ -428,4 +476,27 @@ pub unsafe extern "C" fn rs_timer_stop_all() {
 #[export_name = "timer_teardown"]
 pub unsafe extern "C" fn rs_timer_teardown() {
     rs_timer_stop_all();
+}
+
+/// GC mark function for timers -- formerly nvim_gc_mark_timers in eval_shim.c.
+///
+/// Called from gc.rs during garbage collection.
+///
+/// # Safety
+/// Called during GC; all timer pointers must be valid.
+#[export_name = "nvim_gc_mark_timers"]
+pub unsafe extern "C" fn rs_gc_mark_timers(copy_id: c_int, mut abort: bool) -> bool {
+    let timers_snapshot: Vec<TimerHandle> = TIMERS
+        .lock()
+        .unwrap()
+        .0
+        .values()
+        .map(|&p| p as TimerHandle)
+        .collect();
+    for timer in timers_snapshot {
+        let cb_ptr = nvim_timer_get_callback_ptr(timer);
+        abort = abort
+            || rs_set_ref_in_callback(cb_ptr, copy_id, std::ptr::null_mut(), std::ptr::null_mut());
+    }
+    abort
 }
