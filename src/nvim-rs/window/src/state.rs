@@ -5,10 +5,11 @@
 //! and other fields needed for window management.
 
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)]
 
 use std::ffi::c_int;
 
-use crate::win_struct::win_ref;
+use crate::win_struct::{win_mut, win_ref};
 use crate::WinHandle;
 
 // Type aliases matching C types
@@ -16,116 +17,11 @@ type LineNr = c_int;
 type ColNr = c_int;
 
 // =============================================================================
-// External C accessor functions
+// External C accessor functions (only those that cannot be replaced)
 // =============================================================================
 
 extern "C" {
-    // Window dimension accessors
-    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_field_width(wp: WinHandle, val: c_int);
-    fn nvim_win_set_field_height(wp: WinHandle, val: c_int);
-
-    // Window position accessors
-    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
-    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
-    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
-
-    // Cursor position accessors
-    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LineNr;
-    fn nvim_win_get_cursor_col(wp: WinHandle) -> ColNr;
-    fn nvim_win_get_cursor_coladd(wp: WinHandle) -> ColNr;
-    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LineNr);
-    fn nvim_win_set_cursor_col(wp: WinHandle, col: ColNr);
-    fn nvim_win_get_curswant(wp: WinHandle) -> ColNr;
-    fn nvim_win_set_curswant(wp: WinHandle, val: ColNr);
-    fn nvim_win_get_set_curswant(wp: WinHandle) -> c_int;
-    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
-
-    // View position accessors
-    fn nvim_win_get_topline(wp: WinHandle) -> LineNr;
-    fn nvim_win_set_topline(wp: WinHandle, val: LineNr);
-    fn nvim_win_get_botline(wp: WinHandle) -> LineNr;
-    fn nvim_win_set_botline(wp: WinHandle, val: c_int);
-    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
-    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
-    fn nvim_win_get_leftcol(wp: WinHandle) -> ColNr;
-    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
-    fn nvim_win_get_skipcol(wp: WinHandle) -> ColNr;
-    fn nvim_win_set_skipcol(wp: WinHandle, val: ColNr);
-
-    // Separator accessors
-    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
-    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
-    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
-    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
-    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
-    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
-
-    // Redraw state accessors
-    fn nvim_win_get_redr_status(wp: WinHandle) -> c_int;
-    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
-    fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
-    fn nvim_win_set_redr_type(wp: WinHandle, val: c_int);
-    fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
-    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
-    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
-    fn nvim_win_set_viewport_invalid(wp: WinHandle, val: c_int);
-
-    // Redraw range accessors
-    fn nvim_win_get_redraw_top(wp: WinHandle) -> LineNr;
-    fn nvim_win_set_redraw_top(wp: WinHandle, val: LineNr);
-    fn nvim_win_get_redraw_bot(wp: WinHandle) -> LineNr;
-    fn nvim_win_set_redraw_bot(wp: WinHandle, val: LineNr);
-
-    // Current line info accessors
-    fn nvim_win_get_cline_row(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cline_row(wp: WinHandle, val: c_int);
-    fn nvim_win_get_cline_height(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cline_height(wp: WinHandle, val: c_int);
-    fn nvim_win_get_cline_folded(wp: WinHandle) -> c_int;
-    fn nvim_win_set_cline_folded(wp: WinHandle, val: c_int);
-    fn nvim_win_get_cursorline(wp: WinHandle) -> LineNr;
-
-    // Valid cursor/scroll accessors
-    fn nvim_win_get_valid_cursor_lnum(wp: WinHandle) -> LineNr;
-    fn nvim_win_get_valid_cursor_col(wp: WinHandle) -> ColNr;
-    fn nvim_win_get_valid_cursor_coladd(wp: WinHandle) -> ColNr;
-    fn nvim_win_set_valid_cursor(wp: WinHandle, lnum: LineNr, col: ColNr, coladd: ColNr);
-    fn nvim_win_set_valid_cursor_col(wp: WinHandle, col: ColNr);
-    fn nvim_win_set_valid_cursor_coladd(wp: WinHandle, coladd: ColNr);
-    fn nvim_win_set_valid_leftcol(wp: WinHandle, val: ColNr);
-    fn nvim_win_set_valid_skipcol(wp: WinHandle, val: ColNr);
-
-    // Window display info
-    fn nvim_win_get_wcol(wp: WinHandle) -> c_int;
-    fn nvim_win_set_wcol(wp: WinHandle, val: c_int);
-    fn nvim_win_get_wrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
-    fn nvim_win_set_empty_rows(wp: WinHandle, val: c_int);
-    fn nvim_win_get_endrow(wp: WinHandle) -> c_int;
-    fn nvim_win_get_endcol(wp: WinHandle) -> c_int;
-
-    // Window options
-    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_rl(wp: WinHandle) -> c_int;
-    fn nvim_win_set_p_rl(wp: WinHandle, val: c_int);
-    fn nvim_win_get_p_bri(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_cuc(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_nu(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_fen(wp: WinHandle) -> c_int;
-    fn nvim_win_get_p_arab(wp: WinHandle) -> c_int;
-
-    // Misc window state
-    fn nvim_win_get_virtcol(wp: WinHandle) -> ColNr;
-    fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
-    fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
+    // nvim_win_argcount uses C macro WARGCOUNT -- cannot be replaced with direct field access
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
 }
 
@@ -139,7 +35,7 @@ pub unsafe extern "C" fn rs_win_get_width(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_w_width(wp)
+    win_ref(wp).w_width
 }
 
 /// Get window height.
@@ -148,7 +44,7 @@ pub unsafe extern "C" fn rs_win_get_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_w_height(wp)
+    win_ref(wp).w_height
 }
 
 /// Get window field width (raw w_width).
@@ -157,7 +53,7 @@ pub unsafe extern "C" fn rs_win_field_width(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_w_width(wp)
+    win_ref(wp).w_width
 }
 
 /// Get window field height (raw w_height).
@@ -166,14 +62,14 @@ pub unsafe extern "C" fn rs_win_field_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_w_height(wp)
+    win_ref(wp).w_height
 }
 
 /// Set window field width.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_field_width(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_field_width(wp, val);
+        win_mut(wp).w_width = val;
     }
 }
 
@@ -181,7 +77,7 @@ pub unsafe extern "C" fn rs_win_set_field_width(wp: WinHandle, val: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_field_height(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_field_height(wp, val);
+        win_mut(wp).w_height = val;
     }
 }
 
@@ -195,7 +91,7 @@ pub unsafe extern "C" fn rs_win_get_winrow(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_winrow(wp)
+    win_ref(wp).w_winrow
 }
 
 /// Get window column position in screen.
@@ -204,14 +100,14 @@ pub unsafe extern "C" fn rs_win_get_wincol(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_wincol(wp)
+    win_ref(wp).w_wincol
 }
 
 /// Set window row position.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_winrow(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_winrow(wp, val);
+        win_mut(wp).w_winrow = val;
     }
 }
 
@@ -219,7 +115,7 @@ pub unsafe extern "C" fn rs_win_set_winrow(wp: WinHandle, val: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_wincol(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_wincol(wp, val);
+        win_mut(wp).w_wincol = val;
     }
 }
 
@@ -235,7 +131,7 @@ pub unsafe extern "C" fn rs_win_get_cursor_col(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_cursor_col(wp)
+    win_ref(wp).w_cursor.col
 }
 
 /// Get cursor column add (for virtual columns).
@@ -244,14 +140,14 @@ pub unsafe extern "C" fn rs_win_get_cursor_coladd(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_cursor_coladd(wp)
+    win_ref(wp).w_cursor.coladd
 }
 
 /// Set cursor line number.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_cursor_lnum(wp: WinHandle, lnum: LineNr) {
     if !wp.is_null() {
-        nvim_win_set_cursor_lnum(wp, lnum);
+        win_mut(wp).w_cursor.lnum = lnum;
     }
 }
 
@@ -259,7 +155,7 @@ pub unsafe extern "C" fn rs_win_set_cursor_lnum(wp: WinHandle, lnum: LineNr) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_cursor_col(wp: WinHandle, col: ColNr) {
     if !wp.is_null() {
-        nvim_win_set_cursor_col(wp, col);
+        win_mut(wp).w_cursor.col = col;
     }
 }
 
@@ -269,14 +165,14 @@ pub unsafe extern "C" fn rs_win_get_curswant(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_curswant(wp)
+    win_ref(wp).w_curswant
 }
 
 /// Set curswant.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_curswant(wp: WinHandle, val: ColNr) {
     if !wp.is_null() {
-        nvim_win_set_curswant(wp, val);
+        win_mut(wp).w_curswant = val;
     }
 }
 
@@ -286,14 +182,14 @@ pub unsafe extern "C" fn rs_win_get_set_curswant(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_set_curswant(wp)
+    win_ref(wp).w_set_curswant
 }
 
 /// Set set_curswant flag.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_set_curswant(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_set_curswant(wp, val);
+        win_mut(wp).w_set_curswant = val;
     }
 }
 
@@ -307,7 +203,7 @@ pub unsafe extern "C" fn rs_win_set_set_curswant(wp: WinHandle, val: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_topline(wp: WinHandle, val: LineNr) {
     if !wp.is_null() {
-        nvim_win_set_topline(wp, val);
+        win_mut(wp).w_topline = val;
     }
 }
 
@@ -317,7 +213,7 @@ pub unsafe extern "C" fn rs_win_set_topline(wp: WinHandle, val: LineNr) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_botline(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_botline(wp, val);
+        win_mut(wp).w_botline = val;
     }
 }
 
@@ -327,14 +223,14 @@ pub unsafe extern "C" fn rs_win_get_topfill(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_topfill(wp)
+    win_ref(wp).w_topfill
 }
 
 /// Set topfill.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_topfill(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_topfill(wp, val);
+        win_mut(wp).w_topfill = val;
     }
 }
 
@@ -344,14 +240,14 @@ pub unsafe extern "C" fn rs_win_get_leftcol(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_leftcol(wp)
+    win_ref(wp).w_leftcol
 }
 
 /// Set leftcol.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_leftcol(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_leftcol(wp, val);
+        win_mut(wp).w_leftcol = val;
     }
 }
 
@@ -361,7 +257,7 @@ pub unsafe extern "C" fn rs_win_set_leftcol(wp: WinHandle, val: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_skipcol(wp: WinHandle, val: ColNr) {
     if !wp.is_null() {
-        nvim_win_set_skipcol(wp, val);
+        win_mut(wp).w_skipcol = val;
     }
 }
 
@@ -375,7 +271,7 @@ pub unsafe extern "C" fn rs_win_get_hsep_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_hsep_height(wp)
+    win_ref(wp).w_hsep_height
 }
 
 /// Get vertical separator width.
@@ -384,14 +280,14 @@ pub unsafe extern "C" fn rs_win_get_vsep_width(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_vsep_width(wp)
+    win_ref(wp).w_vsep_width
 }
 
 /// Set horizontal separator height.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_hsep_height(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_hsep_height(wp, val);
+        win_mut(wp).w_hsep_height = val;
     }
 }
 
@@ -399,7 +295,7 @@ pub unsafe extern "C" fn rs_win_set_hsep_height(wp: WinHandle, val: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_vsep_width(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_vsep_width(wp, val);
+        win_mut(wp).w_vsep_width = val;
     }
 }
 
@@ -409,14 +305,14 @@ pub unsafe extern "C" fn rs_win_get_status_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_status_height(wp)
+    win_ref(wp).w_status_height
 }
 
 /// Set status line height.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_status_height(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_status_height(wp, val);
+        win_mut(wp).w_status_height = val;
     }
 }
 
@@ -426,7 +322,7 @@ pub unsafe extern "C" fn rs_win_get_winbar_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_winbar_height(wp)
+    win_ref(wp).w_winbar_height
 }
 
 // =============================================================================
@@ -439,14 +335,14 @@ pub unsafe extern "C" fn rs_win_get_redr_status(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_redr_status(wp)
+    c_int::from(win_ref(wp).w_redr_status)
 }
 
 /// Set redraw status flag.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_redr_status(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_redr_status(wp, val);
+        win_mut(wp).w_redr_status = val != 0;
     }
 }
 
@@ -462,7 +358,7 @@ pub unsafe extern "C" fn rs_win_set_redr_status(wp: WinHandle, val: c_int) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_pos_changed(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_pos_changed(wp, val);
+        win_mut(wp).w_pos_changed = val != 0;
     }
 }
 
@@ -479,7 +375,7 @@ pub unsafe extern "C" fn rs_win_get_viewport_invalid(wp: WinHandle) -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_viewport_invalid(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_viewport_invalid(wp, val);
+        win_mut(wp).w_viewport_invalid = val != 0;
     }
 }
 
@@ -505,14 +401,14 @@ pub unsafe extern "C" fn rs_win_get_cline_row(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_cline_row(wp)
+    win_ref(wp).w_cline_row
 }
 
 /// Set cline_row.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_cline_row(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_cline_row(wp, val);
+        win_mut(wp).w_cline_row = val;
     }
 }
 
@@ -522,14 +418,14 @@ pub unsafe extern "C" fn rs_win_get_cline_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 1;
     }
-    nvim_win_get_cline_height(wp)
+    win_ref(wp).w_cline_height
 }
 
 /// Set cline_height.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_cline_height(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_cline_height(wp, val);
+        win_mut(wp).w_cline_height = val;
     }
 }
 
@@ -539,14 +435,14 @@ pub unsafe extern "C" fn rs_win_get_cline_folded(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_cline_folded(wp)
+    c_int::from(win_ref(wp).w_cline_folded)
 }
 
 /// Set cline_folded flag.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_cline_folded(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_cline_folded(wp, val);
+        win_mut(wp).w_cline_folded = val != 0;
     }
 }
 
@@ -556,7 +452,7 @@ pub unsafe extern "C" fn rs_win_get_cursorline(wp: WinHandle) -> LineNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_cursorline(wp)
+    win_ref(wp).w_cursorline
 }
 
 // =============================================================================
@@ -569,7 +465,7 @@ pub unsafe extern "C" fn rs_win_get_valid_cursor_lnum(wp: WinHandle) -> LineNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_valid_cursor_lnum(wp)
+    win_ref(wp).w_valid_cursor.lnum
 }
 
 /// Get valid cursor column.
@@ -578,7 +474,7 @@ pub unsafe extern "C" fn rs_win_get_valid_cursor_col(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_valid_cursor_col(wp)
+    win_ref(wp).w_valid_cursor.col
 }
 
 /// Get valid cursor coladd.
@@ -587,7 +483,7 @@ pub unsafe extern "C" fn rs_win_get_valid_cursor_coladd(wp: WinHandle) -> ColNr 
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_valid_cursor_coladd(wp)
+    win_ref(wp).w_valid_cursor.coladd
 }
 
 /// Set valid cursor position.
@@ -599,7 +495,10 @@ pub unsafe extern "C" fn rs_win_set_valid_cursor(
     coladd: ColNr,
 ) {
     if !wp.is_null() {
-        nvim_win_set_valid_cursor(wp, lnum, col, coladd);
+        let ws = win_mut(wp);
+        ws.w_valid_cursor.lnum = lnum;
+        ws.w_valid_cursor.col = col;
+        ws.w_valid_cursor.coladd = coladd;
     }
 }
 
@@ -607,7 +506,7 @@ pub unsafe extern "C" fn rs_win_set_valid_cursor(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_valid_cursor_col(wp: WinHandle, col: ColNr) {
     if !wp.is_null() {
-        nvim_win_set_valid_cursor_col(wp, col);
+        win_mut(wp).w_valid_cursor.col = col;
     }
 }
 
@@ -615,7 +514,7 @@ pub unsafe extern "C" fn rs_win_set_valid_cursor_col(wp: WinHandle, col: ColNr) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_valid_cursor_coladd(wp: WinHandle, coladd: ColNr) {
     if !wp.is_null() {
-        nvim_win_set_valid_cursor_coladd(wp, coladd);
+        win_mut(wp).w_valid_cursor.coladd = coladd;
     }
 }
 
@@ -632,7 +531,7 @@ pub const unsafe extern "C" fn rs_win_get_valid_leftcol(wp: WinHandle) -> ColNr 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_valid_leftcol(wp: WinHandle, val: ColNr) {
     if !wp.is_null() {
-        nvim_win_set_valid_leftcol(wp, val);
+        win_mut(wp).w_valid_leftcol = val;
     }
 }
 
@@ -649,7 +548,7 @@ pub const unsafe extern "C" fn rs_win_get_valid_skipcol(wp: WinHandle) -> ColNr 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_valid_skipcol(wp: WinHandle, val: ColNr) {
     if !wp.is_null() {
-        nvim_win_set_valid_skipcol(wp, val);
+        win_mut(wp).w_valid_skipcol = val;
     }
 }
 
@@ -663,14 +562,14 @@ pub unsafe extern "C" fn rs_win_get_wcol(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_wcol(wp)
+    win_ref(wp).w_wcol
 }
 
 /// Set wcol.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_wcol(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_wcol(wp, val);
+        win_mut(wp).w_wcol = val;
     }
 }
 
@@ -680,7 +579,7 @@ pub unsafe extern "C" fn rs_win_get_wrow(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_wrow(wp)
+    win_ref(wp).w_wrow
 }
 
 /// Get empty_rows (filler rows at end of window).
@@ -689,33 +588,35 @@ pub unsafe extern "C" fn rs_win_get_empty_rows(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_empty_rows(wp)
+    win_ref(wp).w_empty_rows
 }
 
 /// Set empty_rows.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_empty_rows(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_empty_rows(wp, val);
+        win_mut(wp).w_empty_rows = val;
     }
 }
 
-/// Get endrow (last row of window content).
+/// Get endrow (last row of window content = w_winrow + w_height).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_get_endrow(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_endrow(wp)
+    let ws = win_ref(wp);
+    ws.w_winrow + ws.w_height
 }
 
-/// Get endcol (last column of window content).
+/// Get endcol (last column of window content = w_wincol + w_width).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_get_endcol(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_endcol(wp)
+    let ws = win_ref(wp);
+    ws.w_wincol + ws.w_width
 }
 
 // =============================================================================
@@ -728,7 +629,7 @@ pub unsafe extern "C" fn rs_win_get_p_wrap(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_wrap(wp)
+    win_ref(wp).w_p_wrap()
 }
 
 /// Get 'rightleft' option.
@@ -737,14 +638,14 @@ pub unsafe extern "C" fn rs_win_get_p_rl(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_rl(wp)
+    win_ref(wp).w_p_rl()
 }
 
 /// Set 'rightleft' option.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_win_set_p_rl(wp: WinHandle, val: c_int) {
     if !wp.is_null() {
-        nvim_win_set_p_rl(wp, val);
+        win_mut(wp).set_w_p_rl(val);
     }
 }
 
@@ -754,7 +655,7 @@ pub unsafe extern "C" fn rs_win_get_p_bri(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_bri(wp)
+    win_ref(wp).w_p_bri()
 }
 
 /// Get 'cursorline' option.
@@ -763,7 +664,7 @@ pub unsafe extern "C" fn rs_win_get_p_cul(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_cul(wp)
+    win_ref(wp).w_p_cul()
 }
 
 /// Get 'cursorcolumn' option.
@@ -772,7 +673,7 @@ pub unsafe extern "C" fn rs_win_get_p_cuc(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_cuc(wp)
+    win_ref(wp).w_p_cuc()
 }
 
 /// Get cursorlineopt flags.
@@ -790,7 +691,7 @@ pub unsafe extern "C" fn rs_win_get_p_nu(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_nu(wp)
+    win_ref(wp).w_p_nu()
 }
 
 /// Get 'relativenumber' option.
@@ -799,7 +700,7 @@ pub unsafe extern "C" fn rs_win_get_p_rnu(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_rnu(wp)
+    win_ref(wp).w_p_rnu()
 }
 
 /// Get 'list' option.
@@ -808,7 +709,7 @@ pub unsafe extern "C" fn rs_win_get_p_list(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_list(wp)
+    win_ref(wp).w_p_list()
 }
 
 /// Get 'diff' option.
@@ -817,7 +718,7 @@ pub unsafe extern "C" fn rs_win_get_p_diff(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_diff(wp)
+    win_ref(wp).w_p_diff()
 }
 
 /// Get 'foldenable' option.
@@ -826,7 +727,7 @@ pub unsafe extern "C" fn rs_win_get_p_fen(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_fen(wp)
+    win_ref(wp).w_p_fen()
 }
 
 /// Get 'arabic' option.
@@ -835,7 +736,7 @@ pub unsafe extern "C" fn rs_win_get_p_arab(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_p_arab(wp)
+    win_ref(wp).w_p_arab()
 }
 
 // =============================================================================
@@ -848,7 +749,7 @@ pub unsafe extern "C" fn rs_win_get_virtcol(wp: WinHandle) -> ColNr {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_virtcol(wp)
+    win_ref(wp).w_virtcol
 }
 
 /// Get wrap flags.
@@ -866,7 +767,7 @@ pub unsafe extern "C" fn rs_win_get_arg_idx(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_arg_idx(wp)
+    win_ref(wp).w_arg_idx
 }
 
 /// Get argument index invalid flag.
@@ -875,7 +776,7 @@ pub unsafe extern "C" fn rs_win_get_arg_idx_invalid(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_arg_idx_invalid(wp)
+    win_ref(wp).w_arg_idx_invalid
 }
 
 /// Get argument count.
@@ -912,10 +813,11 @@ pub unsafe extern "C" fn rs_win_get_cursor(wp: WinHandle) -> WinCursor {
             coladd: 0,
         };
     }
+    let ws = win_ref(wp);
     WinCursor {
-        lnum: nvim_win_get_cursor_lnum(wp),
-        col: nvim_win_get_cursor_col(wp),
-        coladd: nvim_win_get_cursor_coladd(wp),
+        lnum: ws.w_cursor.lnum,
+        col: ws.w_cursor.col,
+        coladd: ws.w_cursor.coladd,
     }
 }
 
@@ -946,12 +848,13 @@ pub unsafe extern "C" fn rs_win_get_view(wp: WinHandle) -> WinView {
             skipcol: 0,
         };
     }
+    let ws = win_ref(wp);
     WinView {
-        topline: nvim_win_get_topline(wp),
-        botline: nvim_win_get_botline(wp),
-        topfill: nvim_win_get_topfill(wp),
-        leftcol: nvim_win_get_leftcol(wp),
-        skipcol: nvim_win_get_skipcol(wp),
+        topline: ws.w_topline,
+        botline: ws.w_botline,
+        topfill: ws.w_topfill,
+        leftcol: ws.w_leftcol,
+        skipcol: ws.w_skipcol,
     }
 }
 
@@ -991,15 +894,16 @@ pub unsafe extern "C" fn rs_win_get_dimensions(wp: WinHandle) -> WinDimensions {
             winbar_height: 0,
         };
     }
+    let ws = win_ref(wp);
     WinDimensions {
-        width: nvim_win_get_w_width(wp),
-        height: nvim_win_get_w_height(wp),
-        winrow: nvim_win_get_winrow(wp),
-        wincol: nvim_win_get_wincol(wp),
-        hsep_height: nvim_win_get_hsep_height(wp),
-        vsep_width: nvim_win_get_vsep_width(wp),
-        status_height: nvim_win_get_status_height(wp),
-        winbar_height: nvim_win_get_winbar_height(wp),
+        width: ws.w_width,
+        height: ws.w_height,
+        winrow: ws.w_winrow,
+        wincol: ws.w_wincol,
+        hsep_height: ws.w_hsep_height,
+        vsep_width: ws.w_vsep_width,
+        status_height: ws.w_status_height,
+        winbar_height: ws.w_winbar_height,
     }
 }
 
@@ -1009,10 +913,8 @@ pub unsafe extern "C" fn rs_win_total_height(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_w_height(wp)
-        + nvim_win_get_hsep_height(wp)
-        + nvim_win_get_status_height(wp)
-        + nvim_win_get_winbar_height(wp)
+    let ws = win_ref(wp);
+    ws.w_height + ws.w_hsep_height + ws.w_status_height + ws.w_winbar_height
 }
 
 /// Get total window width including separator.
@@ -1021,7 +923,8 @@ pub unsafe extern "C" fn rs_win_total_width(wp: WinHandle) -> c_int {
     if wp.is_null() {
         return 0;
     }
-    nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp)
+    let ws = win_ref(wp);
+    ws.w_width + ws.w_vsep_width
 }
 
 #[cfg(test)]
