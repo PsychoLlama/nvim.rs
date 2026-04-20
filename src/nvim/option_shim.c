@@ -124,18 +124,9 @@ int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_
 sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : options[opt_idx].script_ctx; }
 sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) { return (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : win->w_p_script_ctx[opt_idx]; }
 sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) { return (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : buf->b_p_script_ctx[opt_idx]; }
-int nvim_curbuf_get_b_p_tw_nobin(void) { return (int)curbuf->b_p_tw_nobin; }
-void nvim_curbuf_set_b_p_tw_nobin(OptInt v) { curbuf->b_p_tw_nobin = v; }
-int nvim_curbuf_get_b_p_wm_nobin(void) { return (int)curbuf->b_p_wm_nobin; }
-void nvim_curbuf_set_b_p_wm_nobin(OptInt v) { curbuf->b_p_wm_nobin = v; }
-void nvim_curbuf_set_b_p_ml_nobin(int v) { curbuf->b_p_ml_nobin = v != 0; }
-void nvim_curbuf_set_b_p_et_nobin(int v) { curbuf->b_p_et_nobin = v != 0; }
 void nvim_curbuf_set_b_p_tw(OptInt v) { curbuf->b_p_tw = v; }
-void nvim_curbuf_set_b_p_wm(OptInt v) { curbuf->b_p_wm = v; }
 int nvim_curbuf_get_b_p_ml(void) { return curbuf->b_p_ml; }
-void nvim_curbuf_set_b_p_ml(int v) { curbuf->b_p_ml = v != 0; }
 int nvim_curbuf_get_b_p_et(void) { return curbuf->b_p_et; }
-void nvim_curbuf_set_b_p_et(int v) { curbuf->b_p_et = v != 0; }
 const char *nvim_curbuf_get_b_p_ep(void) { return curbuf->b_p_ep; }
 const char *nvim_curbuf_get_b_p_ffu(void) { return curbuf->b_p_ffu; }
 unsigned nvim_win_get_ve_flags(win_T *wp) { return wp->w_ve_flags; }

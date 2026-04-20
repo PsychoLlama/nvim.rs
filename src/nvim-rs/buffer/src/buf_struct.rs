@@ -516,8 +516,8 @@ pub struct BufStruct {
     // offset 10696: OptInt b_p_tw_nopaste (int64_t)
     pub b_p_tw_nopaste: OptInt,
 
-    // offset 10704..10711: gap (8 bytes, opaque)
-    _pad45: [u8; 8],
+    // offset 10704: OptInt b_p_wm (WrapMargin, int64_t)
+    pub b_p_wm: OptInt,
 
     // offset 10712: OptInt b_p_wm_nobin (int64_t)
     pub b_p_wm_nobin: OptInt,

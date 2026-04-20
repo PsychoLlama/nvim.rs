@@ -140,20 +140,6 @@ extern "C" {
     fn nvim_win_get_p_culopt(win: WinHandle) -> *const std::ffi::c_char;
     fn nvim_win_set_p_culopt_flags(win: WinHandle, flags: u8);
 
-    fn nvim_curbuf_get_b_p_tw() -> c_int;
-    fn nvim_curbuf_set_b_p_tw(v: OptInt);
-    fn nvim_curbuf_get_b_p_wm() -> c_int;
-    fn nvim_curbuf_set_b_p_wm(v: OptInt);
-    fn nvim_curbuf_get_b_p_ml() -> c_int;
-    fn nvim_curbuf_set_b_p_ml(v: c_int);
-    fn nvim_curbuf_get_b_p_et() -> c_int;
-    fn nvim_curbuf_set_b_p_et(v: c_int);
-    fn nvim_curbuf_get_b_p_tw_nobin() -> c_int;
-    fn nvim_curbuf_set_b_p_tw_nobin(v: OptInt);
-    fn nvim_curbuf_get_b_p_wm_nobin() -> c_int;
-    fn nvim_curbuf_set_b_p_wm_nobin(v: OptInt);
-    fn nvim_curbuf_set_b_p_ml_nobin(v: c_int);
-    fn nvim_curbuf_set_b_p_et_nobin(v: c_int);
     fn nvim_bin_didset_sctx_all(opt_flags: c_int);
 
     // Phase 99: filetype_or_syntax / verbosefile / helpfile accessors
@@ -951,10 +937,11 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
             // switched on
             if (opt_flags & OPT_GLOBAL_BIN) == 0 {
                 // save local buffer options
-                nvim_curbuf_set_b_p_tw_nobin(OptInt::from(nvim_curbuf_get_b_p_tw()));
-                nvim_curbuf_set_b_p_wm_nobin(OptInt::from(nvim_curbuf_get_b_p_wm()));
-                nvim_curbuf_set_b_p_ml_nobin(nvim_curbuf_get_b_p_ml());
-                nvim_curbuf_set_b_p_et_nobin(nvim_curbuf_get_b_p_et());
+                let cb = &mut *curbuf.cast::<BufStruct>();
+                cb.b_p_tw_nobin = cb.b_p_tw;
+                cb.b_p_wm_nobin = cb.b_p_wm;
+                cb.b_p_ml_nobin = cb.b_p_ml;
+                cb.b_p_et_nobin = cb.b_p_et;
             }
             if (opt_flags & OPT_LOCAL_BIN) == 0 {
                 // save global options
@@ -967,10 +954,11 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
 
         if (opt_flags & OPT_GLOBAL_BIN) == 0 {
             // set bin-compatible local buffer values
-            nvim_curbuf_set_b_p_tw(0);
-            nvim_curbuf_set_b_p_wm(0);
-            nvim_curbuf_set_b_p_ml(0);
-            nvim_curbuf_set_b_p_et(0);
+            let cb = &mut *curbuf.cast::<BufStruct>();
+            cb.b_p_tw = 0;
+            cb.b_p_wm = 0;
+            cb.b_p_ml = 0;
+            cb.b_p_et = 0;
         }
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
             // set bin-compatible global values
@@ -983,10 +971,11 @@ pub unsafe extern "C" fn rs_set_options_bin(oldval: c_int, newval: c_int, opt_fl
     } else if oldval != 0 {
         // switched off: restore saved values
         if (opt_flags & OPT_GLOBAL_BIN) == 0 {
-            nvim_curbuf_set_b_p_tw(OptInt::from(nvim_curbuf_get_b_p_tw_nobin()));
-            nvim_curbuf_set_b_p_wm(OptInt::from(nvim_curbuf_get_b_p_wm_nobin()));
-            nvim_curbuf_set_b_p_ml(nvim_curbuf_get_b_p_ml());
-            nvim_curbuf_set_b_p_et(nvim_curbuf_get_b_p_et());
+            let cb = &mut *curbuf.cast::<BufStruct>();
+            cb.b_p_tw = cb.b_p_tw_nobin;
+            cb.b_p_wm = cb.b_p_wm_nobin;
+            cb.b_p_ml = cb.b_p_ml_nobin;
+            cb.b_p_et = cb.b_p_et_nobin;
         }
         if (opt_flags & OPT_LOCAL_BIN) == 0 {
             crate::set_textwidth(crate::callbacks::complex::P_TW_NOBIN);
