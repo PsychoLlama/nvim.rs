@@ -534,17 +534,15 @@ impl FileHandle {
 // FFI declarations for C accessor functions
 #[allow(dead_code)]
 extern "C" {
-    // Buffer state accessors
-    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
+    // Buffer state accessors (b_changed via direct field access)
     fn nvim_bt_dontwrite(buf: BufHandle) -> bool;
     #[link_name = "rs_bt_prompt"]
     fn nvim_bt_prompt(buf: BufHandle) -> bool;
     #[link_name = "file_ff_differs"]
     fn nvim_file_ff_differs(buf: BufHandle, strict: bool) -> bool;
 
-    // Global buffer iteration
+    // Global buffer iteration (b_next via direct field access)
     fn nvim_get_firstbuf() -> BufHandle;
-    fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
     fn nvim_get_curbuf() -> BufHandle;
 
     // Memory functions
@@ -563,8 +561,6 @@ extern "C" {
     // Global state accessors
     fn nvim_get_no_u_sync() -> c_int;
     fn nvim_get_undolevel(buf: BufHandle) -> i64;
-
-    // Buffer b_did_warn accessor (Phase 3 will remove this too)
 
     // undo_allowed accessors
     fn nvim_buf_is_modifiable(buf: BufHandle) -> bool;
@@ -670,9 +666,6 @@ extern "C" {
     fn nvim_undo_get4c(fp: FileHandle) -> c_int;
     #[link_name = "get8ctime"]
     fn nvim_undo_get8ctime(fp: FileHandle) -> TimeT;
-
-    // Buffer file path accessors
-    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
 
     // File system operations
     #[link_name = "os_path_exists"]
@@ -837,39 +830,9 @@ extern "C" {
     // nvim_undoredo_init_op_marks, nvim_uhp_copy_marks_visual:
     // migrated to Rust (see rs_uhp_copy_marks_visual etc. below).
 
-    /// Pointer to buf->b_namedm array (NMARKS fmark_T entries).
-    fn nvim_buf_get_namedm_ptr(buf: BufHandle) -> *mut FmarkT;
-
-    /// Pointer to buf->b_visual (visualinfo_T).
-    fn nvim_buf_get_b_visual_ptr(buf: BufHandle) -> *mut VisualInfoT;
-
-    /// Set b_op_start.col
-    fn nvim_buf_set_op_start_col(buf: BufHandle, col: ColnrT);
-
-    /// Set b_op_end.col
-    fn nvim_buf_set_op_end_col(buf: BufHandle, col: ColnrT);
-
     /// free_fmark(fm): frees fm.additional_data.
     #[link_name = "free_fmark"]
     fn nvim_free_fmark(fm: FmarkT);
-
-    /// Get b_op_start.lnum
-    fn nvim_buf_get_op_start_lnum(buf: BufHandle) -> LinenrT;
-
-    /// Get b_op_end.lnum
-    fn nvim_buf_get_op_end_lnum(buf: BufHandle) -> LinenrT;
-
-    /// Set b_op_start.lnum
-    fn nvim_buf_set_op_start_lnum(buf: BufHandle, lnum: LinenrT);
-
-    /// Adjust b_op_start.lnum by delta
-    fn nvim_buf_adjust_op_start_lnum(buf: BufHandle, delta: LinenrT);
-
-    /// Set b_op_end.lnum
-    fn nvim_buf_set_op_end_lnum(buf: BufHandle, lnum: LinenrT);
-
-    /// Adjust b_op_end.lnum by delta
-    fn nvim_buf_adjust_op_end_lnum(buf: BufHandle, delta: LinenrT);
 
     /// Set ML_EMPTY flag if needed
     fn nvim_undoredo_set_ml_empty(buf: BufHandle, old_flags: c_int);
@@ -1031,12 +994,16 @@ unsafe fn rs_zero_fmark_additional_data(fmarks: *mut FmarkT) {
 ///
 /// `buf` and `uhp` must be valid non-null pointers.
 unsafe fn rs_uhp_copy_marks_visual_impl(buf: BufHandle, uhp: UHeaderHandle) {
-    let namedm = nvim_buf_get_namedm_ptr(buf);
+    let namedm = buf_ref(buf).b_namedm.as_ptr().cast::<FmarkT>().cast_mut();
     rs_zero_fmark_additional_data(namedm);
     // Copy all NMARKS entries from buf->b_namedm into uhp->uh_namedm.
     ptr::copy_nonoverlapping(namedm, (*uhp).uh_namedm.as_mut_ptr(), NMARKS);
     // Copy buf->b_visual into uhp->uh_visual.
-    (*uhp).uh_visual = *nvim_buf_get_b_visual_ptr(buf);
+    // Both VisualInfoT types are repr(C) identical; cast via raw pointer.
+    (*uhp).uh_visual = ptr::read(
+        (&buf_ref(buf).b_visual as *const nvim_buffer::buf_struct::VisualInfoT)
+            .cast::<VisualInfoT>(),
+    );
 }
 
 /// Save named marks before undo/redo (zeros additional_data on buf's namedm).
@@ -1047,7 +1014,7 @@ unsafe fn rs_uhp_copy_marks_visual_impl(buf: BufHandle, uhp: UHeaderHandle) {
 ///
 /// `buf` must be a valid non-null pointer.
 unsafe fn rs_undoredo_save_marks_impl(buf: BufHandle) {
-    rs_zero_fmark_additional_data(nvim_buf_get_namedm_ptr(buf));
+    rs_zero_fmark_additional_data(buf_ref(buf).b_namedm.as_ptr().cast::<FmarkT>().cast_mut());
 }
 
 /// Copy buf->b_namedm and buf->b_visual to output buffers.
@@ -1063,8 +1030,15 @@ unsafe fn rs_undoredo_get_buf_marks_impl(
     out_namedm: *mut FmarkT,
     out_visual: *mut VisualInfoT,
 ) {
-    ptr::copy_nonoverlapping(nvim_buf_get_namedm_ptr(buf), out_namedm, NMARKS);
-    *out_visual = *nvim_buf_get_b_visual_ptr(buf);
+    ptr::copy_nonoverlapping(
+        buf_ref(buf).b_namedm.as_ptr().cast::<FmarkT>().cast_mut(),
+        out_namedm,
+        NMARKS,
+    );
+    *out_visual = ptr::read(
+        (&buf_ref(buf).b_visual as *const nvim_buffer::buf_struct::VisualInfoT)
+            .cast::<VisualInfoT>(),
+    );
 }
 
 /// Restore named marks from undo header to buffer and vice versa.
@@ -1080,7 +1054,7 @@ unsafe fn rs_undoredo_restore_marks_impl(
     curhead: UHeaderHandle,
     saved_namedm: *const FmarkT,
 ) {
-    let buf_namedm = nvim_buf_get_namedm_ptr(buf);
+    let buf_namedm = buf_ref(buf).b_namedm.as_ptr().cast::<FmarkT>().cast_mut();
     for i in 0..NMARKS {
         let uhp_mark = &mut (*curhead).uh_namedm[i];
         let buf_mark = buf_namedm.add(i);
@@ -1110,7 +1084,11 @@ unsafe fn rs_undoredo_swap_visual_impl(
     saved_visual: *const VisualInfoT,
 ) {
     if (*curhead).uh_visual.vi_start.lnum != 0 {
-        *nvim_buf_get_b_visual_ptr(buf) = (*curhead).uh_visual;
+        ptr::write(
+            (&mut buf_mut(buf).b_visual as *mut nvim_buffer::buf_struct::VisualInfoT)
+                .cast::<VisualInfoT>(),
+            (*curhead).uh_visual,
+        );
         (*curhead).uh_visual = *saved_visual;
     }
 }
@@ -1123,10 +1101,10 @@ unsafe fn rs_undoredo_swap_visual_impl(
 ///
 /// `buf` must be a valid non-null pointer.
 unsafe fn rs_undoredo_init_op_marks_impl(buf: BufHandle) {
-    nvim_buf_set_op_start_lnum(buf, buf_ref(buf).ml_line_count);
-    nvim_buf_set_op_start_col(buf, 0);
-    nvim_buf_set_op_end_lnum(buf, 0);
-    nvim_buf_set_op_end_col(buf, 0);
+    buf_mut(buf).b_op_start.lnum = buf_ref(buf).ml_line_count;
+    buf_mut(buf).b_op_start.col = 0;
+    buf_mut(buf).b_op_end.lnum = 0;
+    buf_mut(buf).b_op_end.col = 0;
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -1140,7 +1118,7 @@ pub unsafe extern "C" fn rs_buf_is_changed(buf: BufHandle) -> bool {
     // In a "prompt" buffer we do respect 'modified', so that we can control
     // closing the window by setting or resetting that option.
     (!nvim_bt_dontwrite(buf) || nvim_bt_prompt(buf))
-        && (nvim_buf_get_b_changed(buf) || nvim_file_ff_differs(buf, true))
+        && ((buf_ref(buf).b_changed != 0) || nvim_file_ff_differs(buf, true))
 }
 
 /// Return true if any buffer has changes. Also buffers that are not written.
@@ -1155,7 +1133,7 @@ pub unsafe extern "C" fn rs_any_buf_is_changed() -> bool {
         if rs_buf_is_changed(buf) {
             return true;
         }
-        buf = nvim_buf_get_next(buf);
+        buf = BufHandle(buf_ref(buf).b_next.cast::<c_void>());
     }
     false
 }
@@ -1847,7 +1825,7 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     let old_flags = (*curhead).uh_flags;
     // Inline nvim_undoredo_compute_new_flags
-    let new_flags: c_int = (if nvim_buf_get_b_changed(buf) {
+    let new_flags: c_int = (if buf_ref(buf).b_changed != 0 {
         UH_CHANGED
     } else {
         0
@@ -1974,13 +1952,13 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         if oldsize != newsize {
             // kExtmarkNOOP = 0
             nvim_undo_mark_adjust(top + 1, top + oldsize, MAXLNUM, newsize - oldsize, 0);
-            let op_start = nvim_buf_get_op_start_lnum(buf);
+            let op_start = buf_ref(buf).b_op_start.lnum;
             if op_start > top + oldsize {
-                nvim_buf_adjust_op_start_lnum(buf, newsize - oldsize);
+                buf_mut(buf).b_op_start.lnum += newsize - oldsize;
             }
-            let op_end = nvim_buf_get_op_end_lnum(buf);
+            let op_end = buf_ref(buf).b_op_end.lnum;
             if op_end > top + oldsize {
-                nvim_buf_adjust_op_end_lnum(buf, newsize - oldsize);
+                buf_mut(buf).b_op_end.lnum += newsize - oldsize;
             }
         }
 
@@ -1993,16 +1971,16 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
         }
 
         // Set the '[ mark.
-        let op_start = nvim_buf_get_op_start_lnum(buf);
+        let op_start = buf_ref(buf).b_op_start.lnum;
         if top + 1 < op_start {
-            nvim_buf_set_op_start_lnum(buf, top + 1);
+            buf_mut(buf).b_op_start.lnum = top + 1;
         }
         // Set the '] mark.
-        let op_end = nvim_buf_get_op_end_lnum(buf);
+        let op_end = buf_ref(buf).b_op_end.lnum;
         if newsize == 0 && top + 1 > op_end {
-            nvim_buf_set_op_end_lnum(buf, top + 1);
+            buf_mut(buf).b_op_end.lnum = top + 1;
         } else if top + newsize > op_end {
-            nvim_buf_set_op_end_lnum(buf, top + newsize);
+            buf_mut(buf).b_op_end.lnum = top + newsize;
         }
 
         set_u_newcount(get_u_newcount() + newsize as c_int);
@@ -2021,10 +1999,10 @@ unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     // Ensure the '[ and '] marks are within bounds.
     {
         let line_count = buf_ref(buf).ml_line_count;
-        let op_start = nvim_buf_get_op_start_lnum(buf).min(line_count);
-        nvim_buf_set_op_start_lnum(buf, op_start);
-        let op_end = nvim_buf_get_op_end_lnum(buf).min(line_count);
-        nvim_buf_set_op_end_lnum(buf, op_end);
+        let op_start = buf_ref(buf).b_op_start.lnum.min(line_count);
+        buf_mut(buf).b_op_start.lnum = op_start;
+        let op_end = buf_ref(buf).b_op_end.lnum.min(line_count);
+        buf_mut(buf).b_op_end.lnum = op_end;
     }
 
     // Adjust Extmarks
@@ -2455,7 +2433,7 @@ pub unsafe extern "C" fn rs_u_savecommon(
         }
 
         // Save changed and buffer empty flag
-        let changed = nvim_buf_get_b_changed(buf);
+        let changed = buf_ref(buf).b_changed != 0;
         let ml_empty = nvim_buf_ml_is_empty(buf);
         let flags = (if changed { 1 } else { 0 }) + (if ml_empty { 2 } else { 0 });
         (*uhp).uh_flags = flags;
@@ -4591,7 +4569,7 @@ pub unsafe extern "C" fn rs_u_write_undo(
 
     // Get the undo file name
     if name.is_null() {
-        let ffname = nvim_buf_get_b_ffname(buf);
+        let ffname = buf_ref(buf).b_ffname;
         file_name = u_get_undo_file_name(ffname, false);
         if file_name.is_null() {
             if nvim_get_p_verbose() > 0 {
@@ -4608,7 +4586,7 @@ pub unsafe extern "C" fn rs_u_write_undo(
     // Decide about the permission to use for the undo file. If the buffer
     // has a name use the permission of the original file. Otherwise only
     // allow the user to access the undo file.
-    let ffname = nvim_buf_get_b_ffname(buf);
+    let ffname = buf_ref(buf).b_ffname;
     let mut perm: c_int = 0o600;
     if !ffname.is_null() {
         perm = nvim_os_getperm(ffname);
@@ -5129,7 +5107,7 @@ pub unsafe extern "C" fn rs_u_read_undo(
 
     // Get the undo file name
     if name.is_null() {
-        let ffname = nvim_buf_get_b_ffname(buf);
+        let ffname = buf_ref(buf).b_ffname;
         file_name = u_get_undo_file_name(ffname, true);
         if file_name.is_null() {
             return;

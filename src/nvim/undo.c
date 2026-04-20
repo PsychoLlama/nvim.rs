@@ -149,15 +149,16 @@ void f_undofile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   rettv->vval.v_string = rs_f_undofile(fname);
 }
 
-// Buffer state accessors
+bool nvim_bt_dontwrite(buf_T *buf) { return bt_dontwrite(buf); }
+
+// These accessors are still used by other crates (memline, window).
+// They can be removed once those crates migrate to direct struct access.
 bool nvim_buf_get_b_changed(buf_T *buf) { return buf->b_changed; }
 
-bool nvim_bt_dontwrite(buf_T *buf) { return bt_dontwrite(buf); }
+buf_T *nvim_buf_get_next(buf_T *buf) { return buf->b_next; }
 
 // Global buffer iteration
 buf_T *nvim_get_firstbuf(void) { return firstbuf; }
-
-buf_T *nvim_buf_get_next(buf_T *buf) { return buf->b_next; }
 
 // Error message wrappers
 void nvim_iemsg_undo_list_corrupt(void) { iemsg(_(e_undo_list_corrupt)); }
@@ -314,26 +315,8 @@ void nvim_undo_finished_reading(const char *file_name) { smsg(0, _("Finished rea
 // nvim_undoredo_save_marks, nvim_undoredo_restore_marks,
 // nvim_undoredo_swap_visual, nvim_undoredo_get_buf_marks,
 // nvim_undoredo_init_op_marks: migrated to Rust (Phase 1).
-
-linenr_T nvim_buf_get_op_start_lnum(buf_T *buf) { return buf->b_op_start.lnum; }
-
-linenr_T nvim_buf_get_op_end_lnum(buf_T *buf) { return buf->b_op_end.lnum; }
-
-void nvim_buf_set_op_start_lnum(buf_T *buf, linenr_T lnum) { buf->b_op_start.lnum = lnum; }
-
-void nvim_buf_adjust_op_start_lnum(buf_T *buf, linenr_T delta) { buf->b_op_start.lnum += delta; }
-
-void nvim_buf_set_op_end_lnum(buf_T *buf, linenr_T lnum) { buf->b_op_end.lnum = lnum; }
-
-void nvim_buf_adjust_op_end_lnum(buf_T *buf, linenr_T delta) { buf->b_op_end.lnum += delta; }
-
-void nvim_buf_set_op_start_col(buf_T *buf, colnr_T col) { buf->b_op_start.col = col; }
-
-void nvim_buf_set_op_end_col(buf_T *buf, colnr_T col) { buf->b_op_end.col = col; }
-
-fmark_T *nvim_buf_get_namedm_ptr(buf_T *buf) { return buf->b_namedm; }
-
-visualinfo_T *nvim_buf_get_b_visual_ptr(buf_T *buf) { return &buf->b_visual; }
+// nvim_buf_get_op_start/end, nvim_buf_set/adjust_op_*: migrated to direct field access (Phase 3).
+// nvim_buf_get_namedm_ptr, nvim_buf_get_b_visual_ptr: migrated to direct field access (Phase 3).
 
 void nvim_undoredo_set_ml_empty(buf_T *buf, int old_flags)
 {
