@@ -14,6 +14,7 @@
 )]
 
 use nvim_normal::types::{OpargT, PosT};
+use nvim_window::win_struct::{win_mut, win_ref};
 use std::ffi::{c_char, c_int, c_void};
 
 // -----------------------------------------------------------------------
@@ -147,10 +148,6 @@ extern "C" {
 
     // curwin->w_set_curswant
     fn nvim_curwin_set_curswant(val: bool);
-
-    // curwin->w_ve_flags
-    fn nvim_curwin_get_w_ve_flags() -> u32;
-    fn nvim_curwin_set_w_ve_flags(val: u32);
 
     // curbuf->b_op_start_orig accessors (ops_shim.c)
     fn nvim_curbuf_get_b_op_start_orig_lnum() -> c_int;
@@ -364,12 +361,13 @@ pub unsafe extern "C" fn rs_op_insert(oap: *mut c_void, count1: c_int) {
 
     if (*oap_t).motion_type == K_MT_BLOCK_WISE {
         if nvim_get_cursor_coladd() > 0 {
-            let old_ve_flags = nvim_curwin_get_w_ve_flags();
+            let curwin = nvim_window::WinHandle::from_ptr(nvim_dpo_get_curwin());
+            let old_ve_flags = win_ref(curwin).w_ve_flags();
 
             if u_save_cursor() == FAIL {
                 return;
             }
-            nvim_curwin_set_w_ve_flags(K_OPT_VE_FLAG_ALL);
+            win_mut(curwin).set_w_ve_flags(K_OPT_VE_FLAG_ALL);
             let target_col = if (*oap_t).op_type == OP_APPEND {
                 (*oap_t).end_vcol + 1
             } else {
@@ -380,7 +378,7 @@ pub unsafe extern "C" fn rs_op_insert(oap: *mut c_void, count1: c_int) {
                 let col = nvim_get_cursor_col();
                 nvim_set_cursor_col(col - 1);
             }
-            nvim_curwin_set_w_ve_flags(old_ve_flags);
+            win_mut(curwin).set_w_ve_flags(old_ve_flags);
         }
         // Get the info about the block before entering the text
         block_prep(

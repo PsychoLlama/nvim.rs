@@ -326,25 +326,6 @@ void nvim_win_grid_alloc_invalidate(win_T *wp)
   grid_invalidate(&wp->w_grid_alloc);
 }
 
-// =============================================================================
-// Phase 2: nvim_win_visual_region_impl accessors
-// =============================================================================
-
-/// Return curwin->w_p_lbr.
-int nvim_curwin_get_w_p_lbr(void) { return curwin->w_p_lbr; }
-
-/// Return curwin->w_ve_flags.
-unsigned nvim_curwin_get_w_ve_flags(void) { return curwin->w_ve_flags; }
-
-/// Set curwin->w_ve_flags.
-void nvim_curwin_set_w_ve_flags(unsigned val) { curwin->w_ve_flags = val; }
-
-// =============================================================================
-// Phase 3: win_redraw_signcols accessors
-// =============================================================================
-
-/// Return true if *wp->w_p_stc != NUL (statuscolumn option is set).
-bool nvim_win_get_w_p_stc_nul(win_T *wp) { return *wp->w_p_stc != NUL; }
 
 
 // =============================================================================
@@ -464,9 +445,6 @@ linenr_T nvim_buf_get_syn_sync_linebreaks(buf_T *buf)
 // =============================================================================
 
 // nvim_buf_get_mod_xlines is in syntax_accessors.c
-
-/// Return true if *wp->w_p_fdt == NUL.
-bool nvim_win_get_w_p_fdt_nul(win_T *wp) { return *wp->w_p_fdt == NUL; }
 
 /// Send win_extmarks if needed (kv_size/kv_A loop + ui_call_win_extmark).
 void nvim_win_send_extmarks(win_T *wp)

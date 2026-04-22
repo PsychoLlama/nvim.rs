@@ -539,6 +539,36 @@ const unsafe fn write_optint_at(ws: &mut WinStruct, abs_offset: usize, val: OptI
     ptr.write_unaligned(val);
 }
 
+/// Read a `u32` (unsigned) at `abs_offset` bytes from the start of a WinStruct.
+///
+/// # Safety
+/// The caller must ensure `abs_offset` is a valid field offset for the
+/// `win_T` struct, as validated by `_Static_assert` in window_struct_check.c.
+#[inline]
+#[allow(clippy::cast_ptr_alignment)]
+const unsafe fn read_uint_at(ws: &WinStruct, abs_offset: usize) -> u32 {
+    let ptr = std::ptr::addr_of!(*ws)
+        .cast::<u8>()
+        .add(abs_offset)
+        .cast::<u32>();
+    ptr.read_unaligned()
+}
+
+/// Write a `u32` (unsigned) at `abs_offset` bytes from the start of a WinStruct.
+///
+/// # Safety
+/// The caller must ensure `abs_offset` is a valid field offset for the
+/// `win_T` struct, as validated by `_Static_assert` in window_struct_check.c.
+#[inline]
+#[allow(clippy::cast_ptr_alignment)]
+const unsafe fn write_uint_at(ws: &mut WinStruct, abs_offset: usize, val: u32) {
+    let ptr = std::ptr::addr_of_mut!(*ws)
+        .cast::<u8>()
+        .add(abs_offset)
+        .cast::<u32>();
+    ptr.write_unaligned(val);
+}
+
 /// Read a `*mut c_char` pointer at `abs_offset` bytes from the start of a WinStruct.
 ///
 /// # Safety
@@ -881,6 +911,47 @@ impl WinStruct {
     #[inline]
     pub const fn w_p_wrap_flags(&self) -> c_int {
         unsafe { read_int_at(self, 1176) }
+    }
+
+    /// `w_p_lbr` (linebreak) - at absolute offset 920 (int)
+    #[must_use]
+    #[inline]
+    pub const fn w_p_lbr(&self) -> c_int {
+        unsafe { read_int_at(self, 920) }
+    }
+
+    /// `w_ve_flags` (virtualedit flags) - at absolute offset 944 (unsigned)
+    #[must_use]
+    #[inline]
+    pub const fn w_ve_flags(&self) -> u32 {
+        unsafe { read_uint_at(self, 944) }
+    }
+
+    /// Set `w_ve_flags` (virtualedit flags) - at absolute offset 944 (unsigned)
+    ///
+    /// # Safety
+    /// Caller must hold exclusive access to this window.
+    #[inline]
+    pub const unsafe fn set_w_ve_flags(&mut self, val: u32) {
+        write_uint_at(self, 944, val);
+    }
+
+    /// Return true if `*wp->w_p_stc == NUL` (statuscolumn option is empty).
+    /// At absolute offset 1048 (char*).
+    #[must_use]
+    #[inline]
+    pub unsafe fn w_p_stc_is_nul(&self) -> bool {
+        let ptr = read_cstr_ptr_at(self, 1048);
+        ptr.is_null() || *ptr == 0
+    }
+
+    /// Return true if `*wp->w_p_fdt == NUL` (foldtext option is empty).
+    /// At absolute offset 904 (char*).
+    #[must_use]
+    #[inline]
+    pub unsafe fn w_p_fdt_is_nul(&self) -> bool {
+        let ptr = read_cstr_ptr_at(self, 904);
+        ptr.is_null() || *ptr == 0
     }
 }
 

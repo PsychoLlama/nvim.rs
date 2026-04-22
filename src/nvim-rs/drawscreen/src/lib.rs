@@ -3101,12 +3101,6 @@ extern "C" {
 
     /// Get wp->w_valid flags.
 
-    /// Get curwin->w_p_lbr.
-    fn nvim_curwin_get_w_p_lbr() -> c_int;
-    /// Get curwin->w_ve_flags.
-    fn nvim_curwin_get_w_ve_flags() -> u32;
-    /// Set curwin->w_ve_flags.
-    fn nvim_curwin_set_w_ve_flags(val: u32);
     /// Get VIsual.lnum.
     fn nvim_get_VIsual_lnum() -> c_int;
     /// Get VIsual.col.
@@ -3149,12 +3143,11 @@ const K_OPT_VE_FLAG_BLOCK: c_int = 0x05;
 /// # Safety
 /// Must be called in a visual block context with valid `wp`.
 unsafe fn win_visual_block_cols_impl(wp: WinHandle, fromc_out: *mut ColnrT, toc_out: *mut ColnrT) {
-    let save_ve_flags = nvim_curwin_get_w_ve_flags();
-    if nvim_curwin_get_w_p_lbr() != 0 {
-        nvim_curwin_set_w_ve_flags(K_OPT_VE_FLAG_ALL);
-    }
-
     let curwin = nvim_get_curwin();
+    let save_ve_flags = win_ref(curwin).w_ve_flags();
+    if win_ref(curwin).w_p_lbr() != 0 {
+        win_mut(curwin).set_w_ve_flags(K_OPT_VE_FLAG_ALL);
+    }
     let cursor = win_ref(curwin).w_cursor;
 
     // Build VIsual as PosT from individual accessors.
@@ -3178,7 +3171,7 @@ unsafe fn win_visual_block_cols_impl(wp: WinHandle, fromc_out: *mut ColnrT, toc_
         &raw mut toc,
     );
     toc += 1;
-    nvim_curwin_set_w_ve_flags(save_ve_flags);
+    win_mut(curwin).set_w_ve_flags(save_ve_flags);
 
     let curswant = win_ref(curwin).w_curswant;
     if curswant == MAXCOL {
@@ -3448,7 +3441,6 @@ const MAXLNUM: LinenrT = 0x7fff_ffff;
 
 extern "C" {
     fn nvim_win_get_maxscwidth(wp: WinHandle) -> c_int;
-    fn nvim_win_get_w_p_stc_nul(wp: WinHandle) -> bool;
 
     fn nvim_buf_signcols_get_autom(buf: BufHandle) -> bool;
     fn nvim_buf_signcols_set_autom(buf: BufHandle, val: bool);
@@ -3482,7 +3474,7 @@ pub unsafe extern "C" fn rs_win_redraw_signcols(wp: WinHandle) -> bool {
     let buf = BufHandle(win_ref(wp).w_buffer);
     let maxscwidth = nvim_win_get_maxscwidth(wp);
     let minscwidth = win_ref(wp).w_minscwidth;
-    let has_stc = nvim_win_get_w_p_stc_nul(wp);
+    let has_stc = !win_ref(wp).w_p_stc_is_nul();
 
     if !nvim_buf_signcols_get_autom(buf)
         && (has_stc || (maxscwidth > 1 && minscwidth != maxscwidth))
@@ -3640,8 +3632,6 @@ extern "C" {
 
 // Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize FFI
 extern "C" {
-    /// Return true if *wp->w_p_fdt == NUL.
-    fn nvim_win_get_w_p_fdt_nul(wp: WinHandle) -> bool;
     /// Send win_extmarks (kv_size/kv_A + ui_call_win_extmark loop).
     fn nvim_win_send_extmarks(wp: WinHandle);
     /// Reset state for statuscolumn restart: clears idx/row/lnum/lines_valid,
@@ -3867,7 +3857,7 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
     }
 
     let nrwidth_before = win_ref(wp).w_nrwidth;
-    let has_stc = nvim_win_get_w_p_stc_nul(wp);
+    let has_stc = !win_ref(wp).w_p_stc_is_nul();
     let nrwidth_new = if win_ref(wp).w_p_nu() != 0 || win_ref(wp).w_p_rnu() != 0 || has_stc {
         nvim_number_width(wp)
     } else {
@@ -4556,7 +4546,7 @@ unsafe fn win_update_body_draw_loop(
                     }
 
                     let display_buf_line =
-                        !concealed && (foldinfo.fi_lines == 0 || nvim_win_get_w_p_fdt_nul(wp));
+                        !concealed && (foldinfo.fi_lines == 0 || win_ref(wp).w_p_fdt_is_nul());
 
                     let mut zero_spv = SpvT::default();
                     let spv_ptr = if display_buf_line {

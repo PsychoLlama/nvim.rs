@@ -192,6 +192,9 @@ _Static_assert(offsetof(win_T, w_p_cole) == 1104, "w_p_cole offset mismatch");
 _Static_assert(offsetof(win_T, w_p_nuw) == 952, "w_p_nuw offset mismatch");
 _Static_assert(offsetof(win_T, w_p_winbl) == 1168, "w_p_winbl offset mismatch");
 _Static_assert(offsetof(win_T, w_p_wrap_flags) == 1176, "w_p_wrap_flags offset mismatch");
+_Static_assert(offsetof(win_T, w_p_lbr) == 920, "w_p_lbr offset mismatch");
+_Static_assert(offsetof(win_T, w_ve_flags) == 944, "w_ve_flags offset mismatch");
+_Static_assert(offsetof(win_T, w_p_fdt) == 904, "w_p_fdt offset mismatch");
 // String option pointer fields (in w_onebuf_opt)
 _Static_assert(offsetof(win_T, w_p_fdc) == 808, "w_p_fdc offset mismatch");
 _Static_assert(offsetof(win_T, w_p_eiw) == 816, "w_p_eiw offset mismatch");
