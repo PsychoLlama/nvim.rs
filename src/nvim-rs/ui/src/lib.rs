@@ -276,6 +276,10 @@ static mut UI_FLUSH_WAS_BUSY: bool = false;
 // =============================================================================
 
 extern "C" {
+    static mut updating_screen: bool;
+}
+
+extern "C" {
     /// Get number of active UIs
     fn nvim_ui_active() -> usize;
     /// Get termguicolors option value
@@ -422,8 +426,6 @@ extern "C" {
     fn nvim_get_p_lz() -> c_int;
     /// Set p_lz option
     fn nvim_set_p_lz(val: c_int);
-    /// Get updating_screen global
-    fn nvim_get_updating_screen() -> bool;
     /// Schedule a UI refresh
     fn ui_schedule_refresh();
     /// Resize the screen
@@ -1193,7 +1195,7 @@ pub unsafe extern "C" fn ui_refresh() {
         return;
     }
 
-    if nvim_get_updating_screen() {
+    if updating_screen {
         ui_schedule_refresh();
         return;
     }

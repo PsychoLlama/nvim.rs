@@ -23,6 +23,7 @@ use crate::{
 
 extern "C" {
     static mut jop_flags: c_uint;
+    static mut updating_screen: bool;
 }
 
 // =============================================================================
@@ -56,8 +57,6 @@ extern "C" {
     fn nvim_ecmd_emsg_closing_buffer();
 
     // can_unload_buffer accessors
-    /// Get the `updating_screen` global.
-    fn nvim_get_updating_screen() -> bool;
     /// Get the first window in the current tab (`firstwin`).
     fn nvim_get_firstwin() -> *mut c_void;
     /// Get `wp->w_next` for current-tab iteration.
@@ -1259,7 +1258,7 @@ pub unsafe extern "C" fn rs_can_unload_buffer(buf: BufHandle) -> bool {
         return false;
     }
 
-    if nvim_get_updating_screen() {
+    if updating_screen {
         let mut wp = nvim_get_firstwin();
         while !wp.is_null() {
             if nvim_win_get_buffer(wp) == buf {

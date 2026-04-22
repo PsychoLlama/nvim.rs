@@ -2205,7 +2205,6 @@ extern "C" {
     fn nvim_aucmd_try_match(event: c_int, i: usize, apc: *mut c_void) -> c_int;
     fn nvim_aucmd_set_entry(event: c_int, i: usize, apc: *mut c_void);
     fn nvim_aucmd_clear_entry();
-    fn nvim_get_got_int() -> c_int;
     fn line_breakcheck();
 
     // Accessor for ac->nested
@@ -2263,7 +2262,7 @@ unsafe fn aucmd_next_rs(apc: *mut c_void) {
     let event = nvim_apc_get_event(apc);
     let ausize = nvim_apc_get_ausize(apc);
     let mut i = nvim_apc_get_auidx(apc);
-    while i < ausize && nvim_get_got_int() == 0 {
+    while i < ausize && !got_int {
         let result = nvim_aucmd_try_match(event, i, apc);
         if result == 0 {
             i += 1;

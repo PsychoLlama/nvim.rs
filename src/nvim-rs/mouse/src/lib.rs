@@ -2705,7 +2705,6 @@ extern "C" {
 
     // Visual/cursor operations
     fn nvim_curwin_coladvance(col: c_int) -> c_int;
-    fn nvim_curwin_get_curswant() -> c_int;
     fn nvim_set_curswant_flag();
     fn nvim_set_VIsual_to_cursor();
     fn nvim_get_VIsual_pos(lnum: *mut linenr_T, col: *mut c_int, coladd: *mut c_int);
@@ -3335,7 +3334,7 @@ unsafe fn rs_do_mouse_impl(
                 &raw mut leftcol,
                 &raw mut rightcol,
             );
-            let curswant = nvim_curwin_get_curswant();
+            let curswant = win_ref(nvim_get_curwin()).w_curswant;
             let target_col = if curswant > i32::midpoint(leftcol, rightcol) {
                 leftcol
             } else {

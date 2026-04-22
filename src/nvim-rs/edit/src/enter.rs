@@ -373,7 +373,6 @@ extern "C" {
     #[link_name = "update_curswant"]
     fn nvim_update_curswant();
     fn nvim_get_ins_at_eol() -> bool;
-    fn nvim_curwin_get_curswant() -> ColnrT;
     fn nvim_curwin_get_w_virtcol() -> ColnrT;
     fn nvim_get_cursor_line_ptr() -> *const std::ffi::c_char;
     fn nvim_utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
@@ -400,7 +399,7 @@ unsafe fn handle_restart_edit_cursor_impl() -> c_int {
         let cursor_col = nvim_curwin_get_cursor_col();
         let ins_at_eol = nvim_get_ins_at_eol();
         let o_lnum = nvim_get_o_lnum();
-        let curswant = nvim_curwin_get_curswant();
+        let curswant = nvim_window::win_struct::win_ref(nvim_get_curwin()).w_curswant;
         let virtcol = nvim_curwin_get_w_virtcol();
 
         if (ins_at_eol && cursor_lnum == o_lnum) || curswant > virtcol {

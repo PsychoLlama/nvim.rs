@@ -70,8 +70,6 @@ int nvim_default_grid_needs_alloc(void)
   return 1;
 }
 
-bool nvim_get_updating_screen(void) { return updating_screen; }
-
 /// Return true if default_grid.chars is non-NULL.
 bool nvim_default_grid_has_chars(void) { return default_grid.chars != NULL; }
 
@@ -359,12 +357,6 @@ unsigned nvim_curwin_get_w_ve_flags(void) { return curwin->w_ve_flags; }
 /// Set curwin->w_ve_flags.
 void nvim_curwin_set_w_ve_flags(unsigned val) { curwin->w_ve_flags = val; }
 
-/// Return curwin->w_curswant.
-colnr_T nvim_curwin_get_curswant(void) { return curwin->w_curswant; }
-
-/// Return true if buf == curwin->w_buffer.
-bool nvim_buf_is_curwin_buf(buf_T *buf) { return buf == curwin->w_buffer; }
-
 // =============================================================================
 // Phase 3: win_redraw_signcols accessors
 // =============================================================================
@@ -380,11 +372,6 @@ bool nvim_win_get_w_p_stc_nul(win_T *wp) { return *wp->w_p_stc != NUL; }
 // --- w_lines[] / wline_T setters (getters already in window_shim.c) ---
 
 
-
-// --- Global variable accessors ---
-
-/// Get global got_int.
-int nvim_get_got_int(void) { return got_int; }
 
 // --- FOR_ALL_WINDOWS_IN_TAB signcols helper ---
 
@@ -529,18 +516,6 @@ int nvim_number_width(win_T *wp)
 // Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize accessors
 // =============================================================================
 
-/// Get wp->w_redr_statuscol.
-bool nvim_win_get_redr_statuscol(win_T *wp) { return wp->w_redr_statuscol; }
-
-/// Set wp->w_valid &= ~mask.
-void nvim_win_and_w_valid(win_T *wp, int mask) { wp->w_valid &= (unsigned)mask; }
-
-/// Set wp->w_valid |= mask.
-void nvim_win_or_w_valid(win_T *wp, int mask) { wp->w_valid |= (unsigned)mask; }
-
-/// Return true if wp->w_match_head != NULL.
-bool nvim_win_get_match_head_nonnull(win_T *wp) { return wp->w_match_head != NULL; }
-
 // nvim_buf_get_mod_xlines is in syntax_accessors.c
 
 /// Return true if *wp->w_p_fdt == NUL.
@@ -609,15 +584,6 @@ void nvim_curs_columns_curwin(void)
   curs_columns(curwin, true);
 }
 
-/// Set curbuf->b_mod_set.
-void nvim_curbuf_set_mod_set(int val) { curbuf->b_mod_set = (val != 0); }
-
-/// Get curbuf->b_mod_set.
-int nvim_curbuf_get_mod_set(void) { return curbuf->b_mod_set ? 1 : 0; }
-
-/// Return true if buf->terminal != NULL.
-bool nvim_buf_has_terminal(buf_T *buf) { return buf->terminal != NULL; }
-
 // nvim_buf_terminal_check_size is in buffer_shim.c
 
 /// Set syn_set_timeout(NULL) (end syntax parsing timeout).
@@ -659,9 +625,6 @@ uint32_t nvim_win_get_fcs_eob(win_T *wp) { return (uint32_t)wp->w_p_fcs_chars.eo
 /// nvim_get_dy_flags() is already defined in window_shim.c
 
 // nvim_get_dollar_vcol is in edit.c
-
-/// Return must_redraw.
-int nvim_get_must_redraw(void) { return must_redraw; }
 
 // nvim_set_must_redraw is already in window_shim.c (calls set_must_redraw)
 

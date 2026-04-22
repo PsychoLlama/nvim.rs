@@ -6133,8 +6133,6 @@ extern "C" {
     fn nvim_win_get_fcs_fold(wp: WinHandle) -> ScharT;
     /// nvim_get_cmdwin_type (cmdwin_type global, c_int).
     fn nvim_get_cmdwin_type() -> c_int;
-    /// wp->w_redr_statuscol.
-    fn nvim_win_get_redr_statuscol(wp: WinHandle) -> bool;
     /// wp->w_scwidth.
     #[link_name = "nvim_win_get_scwidth"]
     fn nvim_win_get_w_scwidth_drawline(wp: WinHandle) -> c_int;
@@ -6236,7 +6234,7 @@ pub unsafe extern "C" fn rs_win_line_draw_cols(
             col_rows,
             statuscol,
         );
-        if nvim_win_get_redr_statuscol(wp) {
+        if win_ref(wp).w_redr_statuscol {
             res.action = DRAW_COLS_ACTION_BREAK;
             res.win_col_offset = (*wlv).off;
             res.ptr_offset = v;

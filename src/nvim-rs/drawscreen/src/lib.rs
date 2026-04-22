@@ -41,6 +41,8 @@ extern "C" {
     static mut redraw_not_allowed: bool;
     /// Global updating_screen flag.
     static mut updating_screen: bool;
+    /// Global got_int flag (interrupt flag).
+    static mut got_int: bool;
     /// Global RedrawingDisabled counter.
     static mut RedrawingDisabled: c_int;
     /// Global VIsual_mode character.
@@ -3109,9 +3111,6 @@ extern "C" {
     fn nvim_curwin_get_w_ve_flags() -> u32;
     /// Set curwin->w_ve_flags.
     fn nvim_curwin_set_w_ve_flags(val: u32);
-    /// Return true if buf == curwin->w_buffer.
-    fn nvim_buf_is_curwin_buf(buf: BufHandle) -> bool;
-
     /// Get VIsual.lnum.
     fn nvim_get_VIsual_lnum() -> c_int;
     /// Get VIsual.col.
@@ -3251,7 +3250,7 @@ unsafe fn win_update_visual_region_impl(
     mid_end: *mut c_int,
 ) {
     let visual_active = VIsual_active;
-    let buf_is_curwin = nvim_buf_is_curwin_buf(buf);
+    let buf_is_curwin = buf == BufHandle(win_ref(nvim_get_curwin()).w_buffer);
     let old_cursor_lnum = win_ref(wp).w_old_cursor_lnum;
 
     // check if we are updating or removing the inverted part
@@ -3388,7 +3387,7 @@ unsafe fn win_update_visual_region_impl(
     }
 
     // Save visual state for next iteration
-    if visual_active && nvim_buf_is_curwin_buf(buf) {
+    if visual_active && buf == BufHandle(win_ref(nvim_get_curwin()).w_buffer) {
         let cursor_lnum = win_ref(nvim_get_curwin()).w_cursor.lnum;
         let visual_lnum = nvim_get_VIsual_lnum();
         let visual_col = nvim_get_VIsual_col();
@@ -3618,8 +3617,6 @@ extern "C" {
     fn nvim_win_update_syn_timeout_start(wp: WinHandle);
     /// nvim_win_update_signcols_for_tab: FOR_ALL_WINDOWS_IN_TAB signcols helper.
     fn nvim_win_update_signcols_for_tab(wp: WinHandle);
-    /// nvim_get_got_int: get global got_int.
-    fn nvim_get_got_int() -> c_int;
     /// nvim_win_get_redraw_top: get wp->w_redraw_top.
     #[link_name = "nvim_win_get_redraw_top"]
     fn win_get_redraw_top(wp: WinHandle) -> LinenrT;
@@ -3656,12 +3653,6 @@ extern "C" {
 
 // Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize FFI
 extern "C" {
-    /// Apply wp->w_valid &= mask.
-    fn nvim_win_and_w_valid(wp: WinHandle, mask: c_int);
-    /// Apply wp->w_valid |= mask.
-    fn nvim_win_or_w_valid(wp: WinHandle, mask: c_int);
-    /// Return true if wp->w_match_head != NULL.
-    fn nvim_win_get_match_head_nonnull(wp: WinHandle) -> bool;
     /// Return true if *wp->w_p_fdt == NUL.
     fn nvim_win_get_w_p_fdt_nul(wp: WinHandle) -> bool;
     /// Get raw w_lines pointer (unchecked, Rust must bounds-check).
@@ -3681,12 +3672,6 @@ extern "C" {
     fn nvim_win_may_fill(wp: WinHandle) -> bool;
     /// Call curs_columns(curwin, true).
     fn nvim_curs_columns_curwin();
-    /// Set curbuf->b_mod_set.
-    fn nvim_curbuf_set_mod_set(val: c_int);
-    /// Get curbuf->b_mod_set.
-    fn nvim_curbuf_get_mod_set() -> c_int;
-    /// Return true if buf->terminal != NULL.
-    fn nvim_buf_has_terminal(buf: BufHandle) -> bool;
     /// Call terminal_check_size(buf->terminal).
     fn nvim_buf_terminal_check_size(buf: BufHandle);
     /// Call syn_set_timeout(NULL).
@@ -3706,8 +3691,6 @@ extern "C" {
     fn nvim_get_dy_flags_body() -> c_int;
     /// Return dollar_vcol (colnr_T = c_int).
     fn nvim_get_dollar_vcol() -> ColnrT;
-    /// Return must_redraw.
-    fn nvim_get_must_redraw() -> c_int;
     /// Set got_int.
     fn nvim_set_got_int(val: c_int);
     /// Call update_topline(curwin).
@@ -3838,7 +3821,7 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
 
     // Save got_int; the C from_scroll function will zero and restore it.
     // (Zeroing got_int + syn_set_timeout is done in C where proftime_T stays in scope.)
-    let save_got_int = nvim_get_got_int();
+    let save_got_int = c_int::from(got_int);
 
     // win_extmark_arr.size = 0
     nvim_win_extmark_arr_reset();
@@ -4384,7 +4367,7 @@ unsafe fn win_update_body_draw_loop(
                                     && ((rs_foldmethodIsSyntax(wp) != 0
                                         && rs_hasAnyFolding(wp) != 0)
                                         || syntax_check_changed(lnum)))
-                                || (nvim_win_get_match_head_nonnull(wp)
+                                || (!win_ref(wp).w_match_head.is_null()
                                     && mod_set
                                     && bref(buf).b_mod_xlines != 0)))))
                 || lnum == w_cursorline
@@ -4904,29 +4887,29 @@ unsafe fn win_update_body_finalize(
 
     // Botline validation + recursive topline correction.
     if nvim_get_dollar_vcol() == -1 || wp != curwin {
-        nvim_win_or_w_valid(wp, VALID_BOTLINE);
+        win_mut(wp).w_valid |= VALID_BOTLINE;
         {
             win_mut(wp).w_viewport_invalid = true;
         };
         let new_botline = win_ref(wp).w_botline;
         if wp == curwin && new_botline != old_botline && !RECURSIVE {
             RECURSIVE = true;
-            nvim_win_and_w_valid(curwin, !VALID_TOPLINE);
+            win_mut(curwin).w_valid &= !VALID_TOPLINE;
             nvim_update_topline_curwin();
-            if nvim_get_must_redraw() != 0 {
-                let mod_set = nvim_curbuf_get_mod_set();
-                nvim_curbuf_set_mod_set(0);
+            if must_redraw != 0 {
+                let mod_set = c_int::from(buf_mut_raw(nvim_get_curbuf()).b_mod_set != 0);
+                buf_mut_raw(nvim_get_curbuf()).b_mod_set = 0;
                 nvim_curs_columns_curwin();
                 rs_win_update(curwin);
                 must_redraw = 0; // directly zero, not via set_must_redraw (which takes max)
-                nvim_curbuf_set_mod_set(mod_set);
+                buf_mut_raw(nvim_get_curbuf()).b_mod_set = (mod_set != 0) as u8;
             }
             RECURSIVE = false;
         }
     }
 
     // Terminal resize if nrwidth changed.
-    if st.nrwidth_before != win_ref(wp).w_nrwidth && nvim_buf_has_terminal(buf) {
+    if st.nrwidth_before != win_ref(wp).w_nrwidth && !bref(buf).terminal.is_null() {
         nvim_buf_terminal_check_size(buf);
     }
 }
@@ -4984,7 +4967,7 @@ pub unsafe extern "C" fn rs_win_update(wp: WinHandle) {
 
     nvim_syn_set_timeout_null();
     // Restore got_int unless CTRL-C was hit during redraw.
-    if nvim_get_got_int() == 0 {
+    if !got_int {
         nvim_set_got_int(state.save_got_int);
     }
 }
