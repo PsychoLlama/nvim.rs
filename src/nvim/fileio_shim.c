@@ -62,34 +62,6 @@
 #include "nvim/vim_defs.h"
 
 // =============================================================================
-// Global variable accessors
-// =============================================================================
-
-int nvim_fileio_get_stdin_fd(void) { return stdin_fd; }
-int nvim_fileio_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
-void nvim_fileio_set_msg_scroll(int val) { msg_scroll = (val != 0); }
-int nvim_fileio_get_msg_scrolled(void) { return msg_scrolled; }
-int nvim_fileio_get_got_int(void) { return got_int ? 1 : 0; }
-void nvim_fileio_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
-int nvim_fileio_get_readonlymode(void) { return readonlymode ? 1 : 0; }
-int nvim_fileio_get_recoverymode(void) { return recoverymode ? 1 : 0; }
-int nvim_fileio_get_p_verbose(void) { return (int)p_verbose; }
-const char *nvim_fileio_get_p_cpo(void) { return p_cpo; }
-const char *nvim_fileio_get_p_ffs(void) { return p_ffs; }
-const char *nvim_fileio_get_p_fencs(void) { return p_fencs; }
-const char *nvim_fileio_get_p_ccv(void) { return p_ccv; }
-int nvim_fileio_get_msg_listdo_overwrite(void) { return msg_listdo_overwrite ? 1 : 0; }
-int nvim_fileio_get_exmode_active(void) { return exmode_active ? 1 : 0; }
-int nvim_fileio_get_restart_edit(void) { return restart_edit; }
-int nvim_fileio_get_need_wait_return(void) { return need_wait_return ? 1 : 0; }
-int nvim_fileio_get_msg_col(void) { return msg_col; }
-int nvim_fileio_get_msg_scrolled_ign(void) { return msg_scrolled_ign ? 1 : 0; }
-void nvim_fileio_set_msg_scrolled_ign(int val) { msg_scrolled_ign = (val != 0); }
-int nvim_fileio_get_cmdmod_lockmarks(void) {
-  return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0 ? 1 : 0;
-}
-
-// =============================================================================
 // curbuf field accessors (mfp dirty state only -- others accessed via BufStruct)
 // =============================================================================
 
@@ -392,8 +364,4 @@ int nvim_fileio_is_chr_dev(int perm, const char *fname) {
 #endif
 }
 
-// =============================================================================
-// swap_exists_action accessor
-// =============================================================================
-int nvim_fileio_get_swap_exists_action(void) { return swap_exists_action; }
 
