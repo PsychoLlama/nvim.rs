@@ -90,52 +90,9 @@ int nvim_fileio_get_cmdmod_lockmarks(void) {
 }
 
 // =============================================================================
-// curbuf field accessors
+// curbuf field accessors (mfp dirty state only -- others accessed via BufStruct)
 // =============================================================================
 
-int nvim_fileio_curbuf_get_b_au_did_filetype(void) { return curbuf->b_au_did_filetype ? 1 : 0; }
-void nvim_fileio_curbuf_set_b_au_did_filetype(int val) { curbuf->b_au_did_filetype = (val != 0); }
-int nvim_fileio_curbuf_get_b_no_eol_lnum(void) { return (int)curbuf->b_no_eol_lnum; }
-void nvim_fileio_curbuf_set_b_no_eol_lnum(int val) { curbuf->b_no_eol_lnum = (linenr_T)val; }
-char *nvim_fileio_curbuf_get_b_ffname(void) { return curbuf->b_ffname; }
-char *nvim_fileio_curbuf_get_b_fname(void) { return curbuf->b_fname; }
-int nvim_fileio_curbuf_get_b_flags(void) { return (int)curbuf->b_flags; }
-void nvim_fileio_curbuf_set_b_flags(int val) { curbuf->b_flags = (int)val; }
-void nvim_fileio_curbuf_set_b_flags_and(int mask) { curbuf->b_flags &= mask; }
-void nvim_fileio_curbuf_set_b_flags_or(int flags) { curbuf->b_flags |= flags; }
-int nvim_fileio_curbuf_get_b_help(void) { return curbuf->b_help ? 1 : 0; }
-int nvim_fileio_curbuf_get_b_p_ro(void) { return curbuf->b_p_ro ? 1 : 0; }
-void nvim_fileio_curbuf_set_b_p_ro(int val) { curbuf->b_p_ro = (val != 0); }
-void nvim_fileio_curbuf_set_b_p_eof(int val) { curbuf->b_p_eof = (val != 0); }
-int nvim_fileio_curbuf_get_b_p_eol(void) { return curbuf->b_p_eol ? 1 : 0; }
-void nvim_fileio_curbuf_set_b_p_eol(int val) { curbuf->b_p_eol = (val != 0); }
-void nvim_fileio_curbuf_set_b_start_eof(int val) { curbuf->b_start_eof = (val != 0); }
-void nvim_fileio_curbuf_set_b_start_eol(int val) { curbuf->b_start_eol = (val != 0); }
-int nvim_fileio_curbuf_get_b_p_bomb(void) { return curbuf->b_p_bomb ? 1 : 0; }
-void nvim_fileio_curbuf_set_b_p_bomb(int val) { curbuf->b_p_bomb = (val != 0); }
-void nvim_fileio_curbuf_set_b_start_bomb(int val) { curbuf->b_start_bomb = (val != 0); }
-int nvim_fileio_curbuf_get_b_p_bin(void) { return curbuf->b_p_bin ? 1 : 0; }
-const char *nvim_fileio_curbuf_get_b_p_fenc(void) { return curbuf->b_p_fenc; }
-int nvim_fileio_curbuf_get_b_p_udf(void) { return curbuf->b_p_udf ? 1 : 0; }
-int nvim_fileio_curbuf_get_b_bad_char(void) { return (int)curbuf->b_bad_char; }
-void nvim_fileio_curbuf_set_b_bad_char(int val) { curbuf->b_bad_char = (char)val; }
-const char *nvim_fileio_curbuf_get_b_p_ft(void) { return curbuf->b_p_ft; }
-int nvim_fileio_curbuf_get_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
-int nvim_fileio_curbuf_get_ml_flags(void) { return (int)curbuf->b_ml.ml_flags; }
-int nvim_fileio_curbuf_get_b_mtime(void) { return (int)curbuf->b_mtime; }
-void nvim_fileio_curbuf_set_b_mtime(int val) { curbuf->b_mtime = (time_t)val; }
-void nvim_fileio_curbuf_set_b_mtime_ns(int val) { curbuf->b_mtime_ns = (long)val; }
-void nvim_fileio_curbuf_set_b_mtime_read(int val) { curbuf->b_mtime_read = (time_t)val; }
-void nvim_fileio_curbuf_set_b_mtime_read_ns(int val) { curbuf->b_mtime_read_ns = (long)val; }
-void nvim_fileio_curbuf_set_b_orig_size(int64_t val) { curbuf->b_orig_size = (uint64_t)val; }
-void nvim_fileio_curbuf_set_b_orig_mode(int val) { curbuf->b_orig_mode = val; }
-void nvim_fileio_curbuf_set_deleted_bytes_zero(void) {
-  curbuf->deleted_bytes = 0;
-  curbuf->deleted_bytes2 = 0;
-  curbuf->deleted_codepoints = 0;
-  curbuf->deleted_codeunits = 0;
-}
-int nvim_fileio_curbuf_has_mfp(void) { return curbuf->b_ml.ml_mfp != NULL ? 1 : 0; }
 int nvim_fileio_curbuf_mfp_dirty_is_nosync(void) {
   return (curbuf->b_ml.ml_mfp != NULL &&
           curbuf->b_ml.ml_mfp->mf_dirty == MF_DIRTY_YES_NOSYNC) ? 1 : 0;
@@ -144,20 +101,6 @@ void nvim_fileio_curbuf_mfp_set_dirty_yes(void) {
   if (curbuf->b_ml.ml_mfp != NULL) {
     curbuf->b_ml.ml_mfp->mf_dirty = MF_DIRTY_YES;
   }
-}
-
-// op_start/op_end accessors (pos_T is {lnum: i32, col: i32, coladd: i32})
-void nvim_fileio_curbuf_get_b_op_start(int *lnum, int *col) {
-  *lnum = (int)curbuf->b_op_start.lnum;
-  *col = (int)curbuf->b_op_start.col;
-}
-void nvim_fileio_curbuf_set_b_op_start(int lnum, int col) {
-  curbuf->b_op_start.lnum = (linenr_T)lnum;
-  curbuf->b_op_start.col = (colnr_T)col;
-}
-void nvim_fileio_curbuf_set_b_op_end(int lnum, int col) {
-  curbuf->b_op_end.lnum = (linenr_T)lnum;
-  curbuf->b_op_end.col = (colnr_T)col;
 }
 
 // =============================================================================
@@ -177,7 +120,6 @@ int nvim_fileio_curbuf_check_identity(void *saved_curbuf_ptr,
   return 0;
 }
 
-void *nvim_fileio_get_curbuf(void) { return (void *)curbuf; }
 void *nvim_fileio_get_curwin(void) { return (void *)curwin; }
 
 // =============================================================================
@@ -283,7 +225,6 @@ int nvim_fileio_aborting(void) { return aborting() ? 1 : 0; }
 // memline accessors
 // =============================================================================
 
-int nvim_fileio_ml_line_count(void) { return (int)curbuf->b_ml.ml_line_count; }
 const char *nvim_fileio_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
 int nvim_fileio_ml_append(int lnum, const char *line, int len, int newfile) {
   return ml_append((linenr_T)lnum, (char *)line, (colnr_T)len, newfile != 0);
