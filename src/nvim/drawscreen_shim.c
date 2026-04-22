@@ -389,6 +389,7 @@ void nvim_win_update_syn_timeout_start(win_T *wp)
 
 /// Call win_scroll_lines(wp, row, count).
 
+
 /// Call win_lines_concealed(wp).
 int nvim_win_lines_concealed(win_T *wp) { return win_lines_concealed(wp) ? 1 : 0; }
 
@@ -457,18 +458,6 @@ linenr_T nvim_buf_get_syn_sync_linebreaks(buf_T *buf)
   return buf->b_s.b_syn_sync_linebreaks;
 }
 
-/// Wrap hasFolding(wp, lnum, lo, hi). lo and hi are linenr_T pointers (may be NULL).
-/// Returns true if lnum is in a fold.
-bool nvim_hasFolding_win(win_T *wp, linenr_T lnum, linenr_T *lo, linenr_T *hi)
-{
-  return hasFolding(wp, lnum, lo, hi);
-}
-
-/// Call number_width(wp) and return.
-int nvim_number_width(win_T *wp)
-{
-  return number_width(wp);
-}
 
 // =============================================================================
 // Phase 2+3 (plan 78e2a5ac): scroll + draw loop + finalize accessors
@@ -518,19 +507,7 @@ int nvim_plines_correct_topline_adv(win_T *wp, linenr_T lnum, linenr_T *nextp)
   return plines_correct_topline(wp, lnum, nextp, true, NULL);
 }
 
-/// Call plines_win(wp, lnum, true) (convenience with limit=true).
-int nvim_plines_win_true(win_T *wp, linenr_T lnum)
-{
-  return plines_win(wp, lnum, true);
-}
-
 // nvim_win_get_fill is already in plines.c
-
-/// Call win_may_fill(wp).
-bool nvim_win_may_fill(win_T *wp)
-{
-  return win_may_fill(wp);
-}
 
 /// Call curs_columns(curwin, true).
 void nvim_curs_columns_curwin(void)
@@ -539,9 +516,6 @@ void nvim_curs_columns_curwin(void)
 }
 
 // nvim_buf_terminal_check_size is in buffer_shim.c
-
-/// Set syn_set_timeout(NULL) (end syntax parsing timeout).
-void nvim_syn_set_timeout_null(void) { syn_set_timeout(NULL); }
 
 /// Zero got_int and set up syntax timeout.
 /// Returns the proftime_T value as opaque int64 (not used by Rust; timeout ptr is stored in C).
@@ -557,12 +531,6 @@ void nvim_win_setup_syntax_tm(void)
   got_int = 0;
   syntax_tm = profile_setlimit(p_rdt);
   syn_set_timeout(&syntax_tm);
-}
-
-/// Call set_empty_rows(wp, srow).
-void nvim_set_empty_rows_win(win_T *wp, int srow)
-{
-  set_empty_rows(wp, srow);
 }
 
 /// Call hl_combine_attr(a, b).

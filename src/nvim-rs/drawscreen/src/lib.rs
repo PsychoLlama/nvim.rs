@@ -3572,7 +3572,8 @@ extern "C" {
     /// Set wp->w_skipcol.
     /// Set wp->w_nrwidth.
     /// Get wp->w_upd_rows.
-    /// hasFolding wrapper: returns true if lnum is in a fold.
+    /// hasFolding: returns true if lnum is in a fold.
+    #[link_name = "hasFolding"]
     fn nvim_hasFolding_win(
         wp: WinHandle,
         lnum: LinenrT,
@@ -3583,14 +3584,15 @@ extern "C" {
     #[link_name = "changed_line_abv_curs_win"]
     fn nvim_changed_line_abv_curs_win(wp: WinHandle);
     /// Call number_width(wp).
+    #[link_name = "number_width"]
     fn nvim_number_width(wp: WinHandle) -> c_int;
     /// Get search_hl_has_cursor_lnum.
     fn nvim_get_search_hl_has_cursor_lnum() -> LinenrT;
     /// Set search_hl_has_cursor_lnum.
     fn nvim_set_search_hl_has_cursor_lnum(val: LinenrT);
-    /// nvim_win_lines_concealed: returns 1 if window has concealed lines.
-    #[link_name = "nvim_win_lines_concealed"]
-    fn nvim_win_lines_concealed_init(wp: WinHandle) -> c_int;
+    /// win_lines_concealed: returns true if window has concealed lines.
+    #[link_name = "win_lines_concealed"]
+    fn nvim_win_lines_concealed_init(wp: WinHandle) -> bool;
     /// compute_foldcolumn: compute fold column width.
     #[link_name = "compute_foldcolumn"]
     fn compute_foldcolumn_init(wp: WinHandle, extra: c_int) -> c_int;
@@ -3649,19 +3651,23 @@ extern "C" {
     fn nvim_prepare_search_hl_win(wp: WinHandle, lnum: LinenrT);
     /// Call plines_correct_topline(wp, lnum, nextp, true, NULL).
     fn nvim_plines_correct_topline_adv(wp: WinHandle, lnum: LinenrT, nextp: *mut LinenrT) -> c_int;
-    /// Call plines_win_true(wp, lnum) [= plines_win(wp, lnum, true)].
-    fn nvim_plines_win_true(wp: WinHandle, lnum: LinenrT) -> c_int;
-    /// Call win_may_fill(wp).
+    /// plines_win(wp, lnum, true): count screen lines with limit=true.
+    #[link_name = "plines_win"]
+    fn nvim_plines_win_true(wp: WinHandle, lnum: LinenrT, limit: bool) -> c_int;
+    /// win_may_fill(wp).
+    #[link_name = "win_may_fill"]
     fn nvim_win_may_fill(wp: WinHandle) -> bool;
     /// Call curs_columns(curwin, true).
     fn nvim_curs_columns_curwin();
     /// Call terminal_check_size(buf->terminal).
     fn nvim_buf_terminal_check_size(buf: BufHandle);
-    /// Call syn_set_timeout(NULL).
-    fn nvim_syn_set_timeout_null();
+    /// syn_set_timeout(ptr): set/clear syntax parsing timeout.
+    #[link_name = "syn_set_timeout"]
+    fn nvim_syn_set_timeout(ptr: *mut c_void);
     /// Zero got_int and set up proftime_T for syntax timeout (static proftime_T in C).
     fn nvim_win_setup_syntax_tm();
-    /// Call set_empty_rows(wp, srow).
+    /// set_empty_rows(wp, srow).
+    #[link_name = "set_empty_rows"]
     fn nvim_set_empty_rows_win(wp: WinHandle, srow: c_int);
     /// Call hl_combine_attr(a, b).
     #[link_name = "hl_combine_attr"]
@@ -3709,7 +3715,8 @@ extern "C" {
         endrow: c_int,
         hl: c_int,
     );
-    /// spell_check_window wrapper.
+    /// spell_check_window(wp): returns true if spell checking is enabled.
+    #[link_name = "spell_check_window"]
     fn nvim_spell_check_window(wp: WinHandle) -> bool;
     /// Check if fold method is Syntax for this window.
     fn rs_foldmethodIsSyntax(wp: WinHandle) -> c_int;
@@ -3928,7 +3935,7 @@ unsafe fn win_update_body_init(wp: WinHandle) -> WinUpdateBodyState {
             }
         }
 
-        if mod_top != 0 && nvim_win_lines_concealed_init(wp) != 0 {
+        if mod_top != 0 && nvim_win_lines_concealed_init(wp) {
             // A change in a line can cause lines above it to become folded or
             // unfolded. Find the top most buffer line that may be affected.
             let topline = win_get_topline_body(wp);
@@ -4090,7 +4097,7 @@ unsafe fn win_update_body_scroll(wp: WinHandle, st: &mut WinUpdateBodyState) {
                 || (topline_conceal == wlines0_lnum && topfill > old_topfill))
         {
             // New topline is above old topline: may scroll down.
-            let j = if nvim_win_lines_concealed_init(wp) != 0 {
+            let j = if nvim_win_lines_concealed_init(wp) {
                 // Count lines we are off, skipping concealed/folded lines.
                 let mut j: c_int = 0;
                 let mut ln = topline;
@@ -4607,7 +4614,8 @@ unsafe fn win_update_body_draw_loop(
                 if row > view_height {
                     // past end of grid
                     if dollar_vcol == -1 || !is_curline {
-                        (*wlines.add(idx as usize)).wl_size = nvim_plines_win_true(wp, lnum) as u16;
+                        (*wlines.add(idx as usize)).wl_size =
+                            nvim_plines_win_true(wp, lnum, true) as u16;
                     }
                     idx += 1;
                     break 'draw_loop;
@@ -4964,7 +4972,7 @@ pub unsafe extern "C" fn rs_win_update(wp: WinHandle) {
     let (eof, didline, lnum, srow, row, idx) = win_update_body_draw_loop(wp, &mut state);
     win_update_body_finalize(wp, &mut state, eof, didline, lnum, srow, row, idx);
 
-    nvim_syn_set_timeout_null();
+    nvim_syn_set_timeout(std::ptr::null_mut());
     // Restore got_int unless CTRL-C was hit during redraw.
     if !got_int {
         nvim_set_got_int(state.save_got_int);
