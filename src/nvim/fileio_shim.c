@@ -92,8 +92,6 @@ int nvim_fileio_curbuf_check_identity(void *saved_curbuf_ptr,
   return 0;
 }
 
-void *nvim_fileio_get_curwin(void) { return (void *)curwin; }
-
 // =============================================================================
 // curwin field accessors
 // =============================================================================
@@ -183,11 +181,6 @@ int nvim_fileio_apply_autocmds(int event, const char *pat, const char *fname,
                           force_it != 0, (buf_T *)buf) ? 1 : 0;
 }
 
-// =============================================================================
-// Shortmess / misc message helpers
-// =============================================================================
-int nvim_fileio_aborting(void) { return aborting() ? 1 : 0; }
-
 // vim_lseek wrapper
 int64_t nvim_fileio_vim_lseek(int fd, int64_t offset, int whence) {
   return (int64_t)vim_lseek(fd, (off_T)offset, whence);
@@ -196,43 +189,17 @@ int64_t nvim_fileio_vim_lseek(int fd, int64_t offset, int whence) {
 // =============================================================================
 // file options / encoding setup
 // =============================================================================
-void nvim_fileio_set_fileformat(int ff) { set_fileformat((int)ff, OPT_LOCAL); }
 void nvim_fileio_set_option_direct_fenc(const char *fenc) {
   set_option_direct(kOptFileencoding, CSTR_AS_OPTVAL((char *)fenc), OPT_LOCAL, 0);
 }
-int nvim_fileio_get_fileformat_force(void *eap) {
-  return get_fileformat_force(curbuf, (exarg_T *)eap);
-}
-int nvim_fileio_shortmess(int msg_id) { return shortmess(msg_id) ? 1 : 0; }
 
 // =============================================================================
-// check_need_swap wrapper
+// Message / display helpers (kept: snprintf_iobuff uses IObuff+IOSIZE inline)
 // =============================================================================
-
-void nvim_fileio_check_need_swap(int newfile) { check_need_swap(newfile != 0); }
-
-// =============================================================================
-// Message / display helpers
-// =============================================================================
-
-void nvim_fileio_filemess(const char *fname, const char *s) {
-  filemess(curbuf, (char *)fname, (char *)s);
-}
-char *nvim_fileio_msg_trunc(char *s) { return msg_trunc(s, false, 0); }
-void nvim_fileio_set_keep_msg(const char *s) { set_keep_msg((char *)s, 0); }
-void nvim_fileio_XFREE_CLEAR_keep_msg(void) { XFREE_CLEAR(keep_msg); }
-void nvim_fileio_xstrlcat(char *dst, const char *src, size_t dst_size) {
-  xstrlcat(dst, (char *)src, dst_size);
-}
 void nvim_fileio_snprintf_iobuff(int offset, const char *fmt, int64_t val) {
   // For the two snprintf calls in readfile post-read section
   snprintf(IObuff + offset, (size_t)(IOSIZE - offset), fmt, val);
 }
-void nvim_fileio_add_quoted_fname(char *sfname) {
-  add_quoted_fname(IObuff, IOSIZE, curbuf, sfname);
-}
-char *nvim_fileio_get_IObuff(void) { return IObuff; }
-int nvim_fileio_strlen_IObuff(void) { return (int)strlen(IObuff); }
 
 // =============================================================================
 // Undo helpers
@@ -246,22 +213,6 @@ void nvim_fileio_sha256_finish(void *ctx, uint8_t *hash) {
 void nvim_fileio_u_read_undo(uint8_t *hash, const char *fname) {
   u_read_undo(NULL, hash, (char *)fname);
 }
-// =============================================================================
-// redraw / display
-// =============================================================================
-
-void nvim_fileio_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_NOT_VALID); }
-void nvim_fileio_appended_lines_mark(int from, int linecnt) {
-  appended_lines_mark((linenr_T)from, (long)linecnt);
-}
-
-// =============================================================================
-// cursor movement
-// =============================================================================
-
-void nvim_fileio_check_cursor_lnum(void) { check_cursor_lnum(curwin); }
-void nvim_fileio_beginline(void) { beginline(BL_WHITE | BL_FIX); }
-
 // =============================================================================
 // iconv helpers (C wrappers for Rust)
 // =============================================================================

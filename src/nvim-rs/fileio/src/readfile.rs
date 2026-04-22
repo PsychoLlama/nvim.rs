@@ -23,6 +23,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
+use std::ptr::{addr_of, addr_of_mut};
 
 use nvim_buffer::buf_struct::BufStruct;
 
@@ -76,7 +77,8 @@ extern "C" {
     // --- curbuf / curwin globals ---
     #[link_name = "curbuf"]
     static mut g_curbuf: *mut c_void;
-    fn nvim_fileio_get_curwin() -> *mut c_void;
+    #[link_name = "curwin"]
+    static mut g_curwin: *mut c_void;
     fn nvim_fileio_curwin_cursor_lnum() -> c_int;
     fn nvim_fileio_curwin_set_cursor_lnum(lnum: c_int);
     // mfp dirty state (accesses nested pointer fields, kept as C shim)
@@ -148,7 +150,8 @@ extern "C" {
     ) -> c_int;
 
     // --- shortmess / aborting ---
-    fn nvim_fileio_aborting() -> c_int;
+    #[link_name = "aborting"]
+    fn nvim_fileio_aborting() -> bool;
 
     // --- memline ---
     #[link_name = "ml_get"]
@@ -174,26 +177,34 @@ extern "C" {
     fn nvim_fileio_enc_canonize(enc: *const c_char) -> *mut c_char;
     #[link_name = "save_file_ff"]
     fn nvim_fileio_save_file_ff(buf: *mut c_void);
-    fn nvim_fileio_set_fileformat(ff: c_int);
+    #[link_name = "set_fileformat"]
+    fn nvim_fileio_set_fileformat(eol_style: c_int, opt_flags: c_int);
     fn nvim_fileio_set_option_direct_fenc(fenc: *const c_char);
-    fn nvim_fileio_get_fileformat_force(eap: *mut c_void) -> c_int;
-    fn nvim_fileio_shortmess(msg_id: c_int) -> c_int;
-    fn nvim_fileio_check_need_swap(newfile: c_int);
+    #[link_name = "get_fileformat_force"]
+    fn nvim_fileio_get_fileformat_force(buf: *mut c_void, eap: *mut c_void) -> c_int;
+    #[link_name = "shortmess"]
+    fn nvim_fileio_shortmess(msg_id: c_int) -> bool;
+    #[link_name = "check_need_swap"]
+    fn nvim_fileio_check_need_swap(newfile: bool);
 
     // --- messages ---
-    fn nvim_fileio_filemess(fname: *const c_char, s: *const c_char);
+    #[link_name = "filemess"]
+    fn nvim_fileio_filemess(buf: *mut c_void, fname: *const c_char, s: *const c_char);
     #[link_name = "msg_end"]
     fn nvim_fileio_msg_end();
     #[link_name = "msg_putchar"]
     fn nvim_fileio_msg_putchar(c: c_int);
-    fn nvim_fileio_msg_trunc(s: *mut c_char) -> *mut c_char;
-    fn nvim_fileio_set_keep_msg(s: *const c_char);
-    fn nvim_fileio_XFREE_CLEAR_keep_msg();
-    fn nvim_fileio_xstrlcat(dst: *mut c_char, src: *const c_char, dst_size: usize);
+    #[link_name = "msg_trunc"]
+    fn nvim_fileio_msg_trunc(s: *mut c_char, force: bool, hl_id: c_int) -> *mut c_char;
+    #[link_name = "set_keep_msg"]
+    fn nvim_fileio_set_keep_msg(s: *const c_char, hl_id: c_int);
+    #[link_name = "xstrlcat"]
+    fn nvim_fileio_xstrlcat(dst: *mut c_char, src: *const c_char, dst_size: usize) -> usize;
     fn nvim_fileio_snprintf_iobuff(offset: c_int, fmt: *const c_char, val: i64);
-    fn nvim_fileio_add_quoted_fname(sfname: *mut c_char);
-    fn nvim_fileio_get_IObuff() -> *mut c_char;
-    fn nvim_fileio_strlen_IObuff() -> c_int;
+    #[link_name = "IObuff"]
+    static mut g_IObuff: [c_char; 1025];
+    #[link_name = "keep_msg"]
+    static mut g_keep_msg: *mut c_char;
     #[link_name = "e_interr"]
     static e_interr: *const c_char;
     #[link_name = "emsg"]
@@ -213,10 +224,14 @@ extern "C" {
     fn nvim_fileio_u_read_undo(hash: *mut u8, fname: *const c_char);
 
     // --- redraw/display ---
-    fn nvim_fileio_redraw_curbuf_later();
+    #[link_name = "redraw_curbuf_later"]
+    fn nvim_fileio_redraw_curbuf_later(type_: c_int);
+    #[link_name = "appended_lines_mark"]
     fn nvim_fileio_appended_lines_mark(from: c_int, linecnt: c_int);
-    fn nvim_fileio_check_cursor_lnum();
-    fn nvim_fileio_beginline();
+    #[link_name = "check_cursor_lnum"]
+    fn nvim_fileio_check_cursor_lnum(win: *mut c_void);
+    #[link_name = "beginline"]
+    fn nvim_fileio_beginline(flags: c_int);
     #[link_name = "os_set_cloexec"]
     fn nvim_fileio_os_set_cloexec(fd: c_int);
     #[link_name = "os_breakcheck"]
@@ -596,7 +611,7 @@ pub unsafe extern "C" fn rs_readfile(
             ) != 0
             {
                 retval = ok;
-                if nvim_fileio_aborting() != 0 {
+                if nvim_fileio_aborting() {
                     retval = fail;
                 }
                 if retval == ok {
@@ -626,11 +641,7 @@ pub unsafe extern "C" fn rs_readfile(
             eap,
         ) != 0
         {
-            retval = if nvim_fileio_aborting() != 0 {
-                fail
-            } else {
-                ok
-            };
+            retval = if nvim_fileio_aborting() { fail } else { ok };
             {
                 let b = curbuf_mut();
                 b.b_op_start.lnum = orig_start_lnum;
@@ -662,7 +673,7 @@ pub unsafe extern "C" fn rs_readfile(
     }
 
     // Set msg_scroll based on shortmess and buffer type
-    if (nvim_fileio_shortmess(SHM_OVER) != 0 && g_msg_listdo_overwrite == 0)
+    if (nvim_fileio_shortmess(SHM_OVER) && g_msg_listdo_overwrite == 0)
         || curbuf_ref().b_help as c_int != 0 && g_p_verbose as c_int == 0
     {
         g_msg_scroll = 0; // overwrite previous file message
@@ -675,7 +686,7 @@ pub unsafe extern "C" fn rs_readfile(
         let namelen = libc_strlen(fname);
         if namelen >= 4096 {
             // MAXPATHL
-            nvim_fileio_filemess(fname, msg_ptr!(MSG_ILLEGAL_FILENAME));
+            nvim_fileio_filemess(g_curbuf, fname, msg_ptr!(MSG_ILLEGAL_FILENAME));
             nvim_fileio_msg_end();
             g_msg_scroll = msg_save;
             // goto theend
@@ -687,7 +698,7 @@ pub unsafe extern "C" fn rs_readfile(
         }
         if nvim_fileio_after_pathsep(fname, fname.add(namelen)) != 0 {
             if silent == 0 {
-                nvim_fileio_filemess(fname, msg_ptr!(MSG_IS_A_DIRECTORY));
+                nvim_fileio_filemess(g_curbuf, fname, msg_ptr!(MSG_IS_A_DIRECTORY));
             }
             nvim_fileio_msg_end();
             g_msg_scroll = msg_save;
@@ -714,11 +725,11 @@ pub unsafe extern "C" fn rs_readfile(
         {
             if nvim_fileio_is_s_isdir(perm) != 0 {
                 if silent == 0 {
-                    nvim_fileio_filemess(fname, msg_ptr!(MSG_IS_A_DIRECTORY));
+                    nvim_fileio_filemess(g_curbuf, fname, msg_ptr!(MSG_IS_A_DIRECTORY));
                 }
                 retval = notdone;
             } else {
-                nvim_fileio_filemess(fname, msg_ptr!(MSG_IS_NOT_A_FILE));
+                nvim_fileio_filemess(g_curbuf, fname, msg_ptr!(MSG_IS_NOT_A_FILE));
             }
             nvim_fileio_msg_end();
             g_msg_scroll = msg_save;
@@ -790,7 +801,7 @@ pub unsafe extern "C" fn rs_readfile(
             };
 
             if nvim_fileio_bt_dontwrite(g_curbuf) as c_int == 0 {
-                nvim_fileio_check_need_swap(newfile as c_int);
+                nvim_fileio_check_need_swap(newfile);
                 if nvim_fileio_curbuf_check_identity(
                     old_curbuf,
                     old_b_ffname,
@@ -809,9 +820,9 @@ pub unsafe extern "C" fn rs_readfile(
             }
             if silent == 0 {
                 if nvim_fileio_dir_of_file_exists(fname) {
-                    nvim_fileio_filemess(sfname, msg_ptr!(MSG_NEW));
+                    nvim_fileio_filemess(g_curbuf, sfname, msg_ptr!(MSG_NEW));
                 } else {
-                    nvim_fileio_filemess(sfname, msg_ptr!(MSG_NEW_DIRECTORY));
+                    nvim_fileio_filemess(g_curbuf, sfname, msg_ptr!(MSG_NEW_DIRECTORY));
                 }
             }
             rs_check_marks_read();
@@ -820,7 +831,7 @@ pub unsafe extern "C" fn rs_readfile(
             }
             nvim_fileio_apply_autocmds_exarg(EVENT_BUFNEWFILE, sfname, sfname, 0, g_curbuf, eap);
             nvim_fileio_save_file_ff(g_curbuf);
-            if nvim_fileio_aborting() == 0 {
+            if !nvim_fileio_aborting() {
                 retval = ok;
             }
             // goto theend
@@ -838,7 +849,7 @@ pub unsafe extern "C" fn rs_readfile(
             } else {
                 msg_ptr!(MSG_PERMISSION_DENIED)
             };
-            nvim_fileio_filemess(sfname, msg);
+            nvim_fileio_filemess(g_curbuf, sfname, msg);
         }
         #[cfg(not(all(unix, feature = "have_eoverflow")))]
         {
@@ -847,7 +858,7 @@ pub unsafe extern "C" fn rs_readfile(
             } else {
                 msg_ptr!(MSG_PERMISSION_DENIED)
             };
-            nvim_fileio_filemess(sfname, msg);
+            nvim_fileio_filemess(g_curbuf, sfname, msg);
         }
         {
             curbuf_mut().b_p_ro = 1;
@@ -891,7 +902,7 @@ pub unsafe extern "C" fn rs_readfile(
 
     // Create swap file
     if nvim_fileio_bt_dontwrite(g_curbuf) as c_int == 0 {
-        nvim_fileio_check_need_swap(newfile as c_int);
+        nvim_fileio_check_need_swap(newfile);
         if !read_stdin
             && nvim_fileio_curbuf_check_identity(
                 old_curbuf,
@@ -1015,7 +1026,7 @@ pub unsafe extern "C" fn rs_readfile(
             g_msg_scroll = m;
         }
 
-        if nvim_fileio_aborting() != 0 {
+        if nvim_fileio_aborting() {
             nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
             g_msg_scroll = msg_save;
             {
@@ -1073,7 +1084,7 @@ pub unsafe extern "C" fn rs_readfile(
     if g_recoverymode as c_int == 0 && !filtering && (flags & READ_DUMMY) == 0 && silent == 0 {
         if !read_stdin && !read_buffer {
             let empty: [u8; 1] = [0u8];
-            nvim_fileio_filemess(sfname, empty.as_ptr() as *const c_char);
+            nvim_fileio_filemess(g_curbuf, sfname, empty.as_ptr() as *const c_char);
         }
     }
 
@@ -1152,7 +1163,7 @@ pub unsafe extern "C" fn rs_readfile(
         if keep_fileformat {
             keep_fileformat = false;
         } else if !eap.is_null() && nvim_fileio_eap_force_ff(eap) != 0 {
-            fileformat = nvim_fileio_get_fileformat_force(eap);
+            fileformat = nvim_fileio_get_fileformat_force(g_curbuf, eap);
             try_unix = false;
             try_dos = false;
             try_mac = false;
@@ -1770,7 +1781,7 @@ pub unsafe extern "C" fn rs_readfile(
                 }
 
                 if set_options {
-                    nvim_fileio_set_fileformat(fileformat);
+                    nvim_fileio_set_fileformat(fileformat, 0x02); // OPT_LOCAL
                 }
             }
 
@@ -1857,7 +1868,8 @@ pub unsafe extern "C" fn rs_readfile(
                                 {
                                     fileformat = eol_unix;
                                     if set_options {
-                                        nvim_fileio_set_fileformat(eol_unix);
+                                        nvim_fileio_set_fileformat(eol_unix, 0x02);
+                                        // OPT_LOCAL
                                     }
                                     file_rewind = true;
                                     keep_fileformat = true;
@@ -1994,16 +2006,16 @@ pub unsafe extern "C" fn rs_readfile(
         linecnt = if filesize == 0 { 0 } else { new_linecnt };
 
         if newfile || read_buffer {
-            nvim_fileio_redraw_curbuf_later();
+            nvim_fileio_redraw_curbuf_later(40); // UPD_NOT_VALID
             rs_diff_invalidate(g_curbuf);
-            rs_foldUpdateAll(nvim_fileio_get_curwin());
+            rs_foldUpdateAll(g_curwin);
         } else if linecnt != 0 {
             nvim_fileio_appended_lines_mark(from, linecnt);
         }
 
         if g_got_int as c_int != 0 {
             if (flags & READ_DUMMY) == 0 {
-                nvim_fileio_filemess(sfname, e_interr);
+                nvim_fileio_filemess(g_curbuf, sfname, e_interr);
                 if newfile {
                     {
                         curbuf_mut().b_p_ro = 1;
@@ -2023,9 +2035,9 @@ pub unsafe extern "C" fn rs_readfile(
         }
 
         if !filtering && (flags & READ_DUMMY) == 0 && silent == 0 {
-            nvim_fileio_add_quoted_fname(sfname);
+            add_quoted_fname(addr_of_mut!(g_IObuff).cast(), IOSIZE, g_curbuf, sfname);
 
-            let iobuff = nvim_fileio_get_IObuff();
+            let iobuff = addr_of_mut!(g_IObuff).cast::<c_char>();
             let iosize = IOSIZE;
             let mut c_bool = false;
 
@@ -2044,7 +2056,7 @@ pub unsafe extern "C" fn rs_readfile(
             }
 
             if curbuf_ref().b_p_ro != 0 {
-                let ro_msg = if nvim_fileio_shortmess(SHM_RO) != 0 {
+                let ro_msg = if nvim_fileio_shortmess(SHM_RO) {
                     msg_ptr!(MSG_RO)
                 } else {
                     msg_ptr!(MSG_READONLY)
@@ -2072,7 +2084,7 @@ pub unsafe extern "C" fn rs_readfile(
                 c_bool = true;
             }
             if conv_error != 0 {
-                let offset = nvim_fileio_strlen_IObuff();
+                let offset = libc_strlen(addr_of!(g_IObuff).cast()) as c_int;
                 nvim_fileio_snprintf_iobuff(
                     offset,
                     msg_ptr!(MSG_CONVERSION_ERROR),
@@ -2080,7 +2092,7 @@ pub unsafe extern "C" fn rs_readfile(
                 );
                 c_bool = true;
             } else if illegal_byte > 0 {
-                let offset = nvim_fileio_strlen_IObuff();
+                let offset = libc_strlen(addr_of!(g_IObuff).cast()) as c_int;
                 nvim_fileio_snprintf_iobuff(
                     offset,
                     msg_ptr!(MSG_ILLEGAL_BYTE),
@@ -2097,7 +2109,8 @@ pub unsafe extern "C" fn rs_readfile(
 
             msg_add_lines(c_bool as c_int, linecnt, filesize);
 
-            nvim_fileio_XFREE_CLEAR_keep_msg();
+            nvim_fileio_xfree(g_keep_msg as *mut c_void);
+            g_keep_msg = ptr::null_mut();
             g_msg_scrolled_ign = true;
 
             let msg_p: *mut c_char;
@@ -2105,7 +2118,7 @@ pub unsafe extern "C" fn rs_readfile(
                 if g_msg_col > 0 {
                     nvim_fileio_msg_putchar(b'\r' as c_int);
                 }
-                msg_p = nvim_fileio_msg_trunc(iobuff);
+                msg_p = nvim_fileio_msg_trunc(iobuff, false, 0);
             } else {
                 msg_p = ptr::null_mut();
             }
@@ -2115,7 +2128,7 @@ pub unsafe extern "C" fn rs_readfile(
                 || g_restart_edit != 0
                 || (g_msg_scrolled != 0 && !g_need_wait_return)
             {
-                nvim_fileio_set_keep_msg(msg_p);
+                nvim_fileio_set_keep_msg(msg_p, 0);
             }
             g_msg_scrolled_ign = false;
         }
@@ -2136,8 +2149,8 @@ pub unsafe extern "C" fn rs_readfile(
         } else {
             nvim_fileio_curwin_set_cursor_lnum(from + 1);
         }
-        nvim_fileio_check_cursor_lnum();
-        nvim_fileio_beginline();
+        nvim_fileio_check_cursor_lnum(g_curwin);
+        nvim_fileio_beginline(5); // BL_WHITE | BL_FIX
 
         if (nvim_get_cmdmod_cmod_flags() & 0x0800) == 0 {
             {
@@ -2220,7 +2233,7 @@ pub unsafe extern "C" fn rs_readfile(
         if g_msg_scrolled == n {
             g_msg_scroll = m;
         }
-        if nvim_fileio_aborting() != 0 {
+        if nvim_fileio_aborting() {
             // Note: C code uses `return FAIL` here without going to theend
             nvim_fileio_curbuf_mfp_set_dirty_yes();
             nvim_fileio_xfree(sha_ctx as *mut c_void);
