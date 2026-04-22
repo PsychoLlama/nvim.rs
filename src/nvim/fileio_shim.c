@@ -133,11 +133,6 @@ int nvim_fileio_store_fileinfo_for_newfile(const char *fname) {
 // file permission / type checks
 // =============================================================================
 
-int nvim_fileio_os_file_is_writable(const char *fname) { return os_file_is_writable(fname) ? 1 : 0; }
-int nvim_fileio_os_open_rdonly(const char *fname) { return os_open(fname, O_RDONLY, 0); }
-int nvim_fileio_after_pathsep(const char *b, const char *p) { return after_pathsep(b, p) ? 1 : 0; }
-int nvim_fileio_bt_dontwrite(void) { return bt_dontwrite(curbuf) ? 1 : 0; }
-int nvim_fileio_dir_of_file_exists(const char *fname) { return dir_of_file_exists(fname) ? 1 : 0; }
 int nvim_fileio_is_s_isreg(int perm) { return S_ISREG(perm) ? 1 : 0; }
 int nvim_fileio_is_s_isfifo(int perm) { return S_ISFIFO(perm) ? 1 : 0; }
 int nvim_fileio_is_s_issock(int perm) { return S_ISSOCK(perm) ? 1 : 0; }
@@ -193,36 +188,14 @@ int nvim_fileio_apply_autocmds(int event, const char *pat, const char *fname,
 // =============================================================================
 int nvim_fileio_aborting(void) { return aborting() ? 1 : 0; }
 
-// =============================================================================
-// memline accessors
-// =============================================================================
-
-const char *nvim_fileio_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
-int nvim_fileio_ml_append(int lnum, const char *line, int len, int newfile) {
-  return ml_append((linenr_T)lnum, (char *)line, (colnr_T)len, newfile != 0);
-}
-int nvim_fileio_ml_delete(int lnum) {
-  return ml_delete((linenr_T)lnum);
-}
-
 // vim_lseek wrapper
 int64_t nvim_fileio_vim_lseek(int fd, int64_t offset, int whence) {
   return (int64_t)vim_lseek(fd, (off_T)offset, whence);
 }
 
 // =============================================================================
-// Memory helpers
-// =============================================================================
-
-void *nvim_fileio_verbose_try_malloc(size_t size) { return verbose_try_malloc(size); }
-void *nvim_fileio_xcalloc(size_t nmemb, size_t size) { return xcalloc(nmemb, size); }
-
-// =============================================================================
 // file options / encoding setup
 // =============================================================================
-
-char *nvim_fileio_enc_canonize(const char *enc) { return enc_canonize((char *)enc); }
-void nvim_fileio_save_file_ff(void) { save_file_ff(curbuf); }
 void nvim_fileio_set_fileformat(int ff) { set_fileformat((int)ff, OPT_LOCAL); }
 void nvim_fileio_set_option_direct_fenc(const char *fenc) {
   set_option_direct(kOptFileencoding, CSTR_AS_OPTVAL((char *)fenc), OPT_LOCAL, 0);
@@ -262,16 +235,8 @@ char *nvim_fileio_get_IObuff(void) { return IObuff; }
 int nvim_fileio_strlen_IObuff(void) { return (int)strlen(IObuff); }
 
 // =============================================================================
-// vim_strchr wrapper
-// =============================================================================
-
-int nvim_fileio_vim_strchr(const char *s, int c) { return vim_strchr(s, c) != NULL ? 1 : 0; }
-
-// =============================================================================
 // Undo helpers
 // =============================================================================
-
-void nvim_fileio_u_clearline(void) { u_clearline(curbuf); }
 void nvim_fileio_sha256_update(void *ctx, const uint8_t *data, size_t len) {
   sha256_update((context_sha256_T *)ctx, data, len);
 }
