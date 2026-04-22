@@ -2705,6 +2705,26 @@ unsafe fn fcs_get_u32(wp: WinHandle, field_off: usize) -> u32 {
     base.add(field_off).cast::<u32>().read_unaligned()
 }
 
+/// Read `wp->w_p_fcs_chars.eob` (at offset 68 within fcs_chars_T).
+///
+/// # Safety
+/// `wp` must be valid.
+#[must_use]
+#[inline]
+pub unsafe fn win_fcs_eob(wp: WinHandle) -> u32 {
+    fcs_get_u32(wp, 68)
+}
+
+/// Read `wp->w_p_fcs_chars.lastline` (at offset 72 within fcs_chars_T).
+///
+/// # Safety
+/// `wp` must be valid.
+#[must_use]
+#[inline]
+pub unsafe fn win_fcs_lastline(wp: WinHandle) -> u32 {
+    fcs_get_u32(wp, 72)
+}
+
 /// Read a field from `_w_grid_alloc` at given byte offset.
 ///
 /// # Safety
@@ -2939,6 +2959,22 @@ pub unsafe extern "C" fn win_set_grid_blending(wp: WinHandle, val: bool) {
 #[export_name = "nvim_win_get_grid_alloc"]
 pub unsafe extern "C" fn win_get_grid_alloc(wp: WinHandle) -> *mut c_void {
     win_mut(wp)._w_grid_alloc.as_mut_ptr().cast()
+}
+
+/// Check if `wp->w_grid_alloc.chars` is non-NULL.
+///
+/// `chars` is at offset 8 within `ScreenGrid` (after `handle_T` at 0 + 4 bytes padding).
+///
+/// # Safety
+/// `wp` must be a valid, non-null `win_T *`.
+#[must_use]
+#[inline]
+pub unsafe fn win_grid_alloc_has_chars(wp: WinHandle) -> bool {
+    let ptr = grid_alloc_ptr(win_ref(wp))
+        .add(8)
+        .cast::<*const c_void>()
+        .read_unaligned();
+    !ptr.is_null()
 }
 
 #[must_use]

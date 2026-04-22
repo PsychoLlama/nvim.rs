@@ -279,16 +279,6 @@ void *nvim_get_screen_search_hl_ptr(void)
   return &screen_search_hl;
 }
 
-/// Update curwin w_cline_row/height/folded after drawing the cursor line.
-/// Called by rs_win_line_eol_fill when in_curline is true.
-void nvim_curwin_update_cline(int startrow, int row, bool has_fold)
-{
-  curwin->w_cline_row = startrow;
-  curwin->w_cline_height = row - startrow;
-  curwin->w_cline_folded = has_fold;
-  curwin->w_valid |= VALID_CHEIGHT | VALID_CROW;
-}
-
 /// Invalidate the first column of the next row after a wrapped line.
 /// Called by rs_win_line_end_check after wlv_put_linebuf with SLF_WRAP.
 /// @param grid  GridView pointer (wp->w_grid)
@@ -322,8 +312,6 @@ void *nvim_virt_lines_get_line(void *virt_lines, int idx)
 // =============================================================================
 
 /// Return true if wp->w_grid_alloc.chars is non-NULL.
-bool nvim_win_get_grid_alloc_chars(win_T *wp) { return wp->w_grid_alloc.chars != NULL; }
-
 /// Call grid_draw_border for wp->w_grid_alloc using wp's config fields.
 /// Bundles the struct-heavy call for Rust FFI.
 void nvim_win_draw_border(win_T *wp)
@@ -341,12 +329,6 @@ void nvim_win_grid_alloc_invalidate(win_T *wp)
 // =============================================================================
 // Phase 2: nvim_win_visual_region_impl accessors
 // =============================================================================
-
-/// Return wp->w_lines[idx].wl_size.
-int nvim_win_wlines_get_size(win_T *wp, int idx)
-{
-  return wp->w_lines[idx].wl_size;
-}
 
 /// Return curwin->w_p_lbr.
 int nvim_curwin_get_w_p_lbr(void) { return curwin->w_p_lbr; }
@@ -475,30 +457,6 @@ linenr_T nvim_buf_get_syn_sync_linebreaks(buf_T *buf)
   return buf->b_s.b_syn_sync_linebreaks;
 }
 
-/// Get wp->w_lines[idx].wl_lnum.
-linenr_T nvim_win_get_wlines_lnum(win_T *wp, int idx)
-{
-  return wp->w_lines[idx].wl_lnum;
-}
-
-/// Get wp->w_lines[idx].wl_lastlnum.
-linenr_T nvim_win_get_wlines_lastlnum(win_T *wp, int idx)
-{
-  return wp->w_lines[idx].wl_lastlnum;
-}
-
-/// Get wp->w_lines[idx].wl_valid.
-bool nvim_win_get_wlines_valid(win_T *wp, int idx)
-{
-  return wp->w_lines[idx].wl_valid;
-}
-
-/// Get wp->w_lines[idx].wl_size.
-int nvim_win_get_wlines_size(win_T *wp, int idx)
-{
-  return (int)wp->w_lines[idx].wl_size;
-}
-
 /// Wrap hasFolding(wp, lnum, lo, hi). lo and hi are linenr_T pointers (may be NULL).
 /// Returns true if lnum is in a fold.
 bool nvim_hasFolding_win(win_T *wp, linenr_T lnum, linenr_T *lo, linenr_T *hi)
@@ -520,10 +478,6 @@ int nvim_number_width(win_T *wp)
 
 /// Return true if *wp->w_p_fdt == NUL.
 bool nvim_win_get_w_p_fdt_nul(win_T *wp) { return *wp->w_p_fdt == NUL; }
-
-/// Return raw pointer to wp->w_lines array (unchecked).
-/// The caller must bounds-check using w_lines_size/w_view_height.
-wline_T *nvim_win_get_wlines_ptr(win_T *wp) { return wp->w_lines; }
 
 /// Send win_extmarks if needed (kv_size/kv_A loop + ui_call_win_extmark).
 void nvim_win_send_extmarks(win_T *wp)
@@ -614,12 +568,6 @@ void nvim_set_empty_rows_win(win_T *wp, int srow)
 /// Call hl_combine_attr(a, b).
 
 /// Call win_bg_attr(wp).
-
-/// Return wp->w_p_fcs_chars.lastline (as schar_T / uint32_t).
-uint32_t nvim_win_get_fcs_lastline(win_T *wp) { return (uint32_t)wp->w_p_fcs_chars.lastline; }
-
-/// Return wp->w_p_fcs_chars.eob (as schar_T / uint32_t).
-uint32_t nvim_win_get_fcs_eob(win_T *wp) { return (uint32_t)wp->w_p_fcs_chars.eob; }
 
 /// Return dy_flags (as int/unsigned - uses existing nvim_get_dy_flags in window_shim.c).
 /// nvim_get_dy_flags() is already defined in window_shim.c

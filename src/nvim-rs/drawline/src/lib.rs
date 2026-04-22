@@ -4522,8 +4522,6 @@ const K_VL_SCROLL: c_int = 2;
 extern "C" {
     /// Get pointer to global screen_search_hl (match_T*).
     fn nvim_get_screen_search_hl_ptr() -> *mut c_void;
-    /// Update curwin->w_cline_{row,height,folded} and w_valid.
-    fn nvim_curwin_update_cline(startrow: c_int, row: c_int, has_fold: bool);
     /// Invalidate first column of next row in grid after a line wrap.
     fn nvim_grid_invalidate_next_row(grid: *mut c_void, row: c_int);
     /// wp->w_grid.target->cols
@@ -4784,7 +4782,14 @@ pub unsafe extern "C" fn rs_win_line_eol_fill(
     (*wlv).row += 1;
 
     if in_curline {
-        nvim_curwin_update_cline(startrow, (*wlv).row, has_fold);
+        {
+            // VALID_CHEIGHT = 0x08, VALID_CROW = 0x10
+            let curwin = nvim_get_curwin();
+            win_mut(curwin).w_cline_row = startrow;
+            win_mut(curwin).w_cline_height = (*wlv).row - startrow;
+            win_mut(curwin).w_cline_folded = has_fold;
+            win_mut(curwin).w_valid |= 0x08 | 0x10;
+        }
     }
 
     true // caller should break

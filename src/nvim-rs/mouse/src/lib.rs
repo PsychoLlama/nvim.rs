@@ -1095,9 +1095,6 @@ extern "C" {
     /// `get_win_by_grid_handle(handle)` — find window by grid handle.
     fn nvim_get_win_by_grid_handle(handle: c_int) -> WinHandle;
 
-    /// Return true if `wp->w_grid_alloc.chars != NULL`.
-    fn nvim_win_get_grid_alloc_chars(wp: WinHandle) -> bool;
-
     /// Return true if `wp->w_config.mouse`.
     fn nvim_win_config_get_mouse(wp: WinHandle) -> bool;
 
@@ -1164,7 +1161,9 @@ unsafe fn rs_mouse_find_grid_win(
         // Specific grid handle: find the owning window.
         let wp = nvim_get_win_by_grid_handle(*gridp);
         if !wp.is_null()
-            && nvim_win_get_grid_alloc_chars(wp)
+            && nvim_window::win_struct::win_grid_alloc_has_chars(nvim_window::WinHandle::from_ptr(
+                wp,
+            ))
             && (!win_ref(wp).w_floating || nvim_win_config_get_mouse(wp))
         {
             let view_height = win_ref(wp).w_view_height;
