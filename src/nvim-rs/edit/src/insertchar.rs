@@ -80,7 +80,7 @@ extern "C" {
     // -- input / char --
     fn vpeekc() -> c_int;
     fn vgetc() -> c_int;
-    fn nvim_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
+    static utf8len_tab: [u8; 256];
     #[link_name = "byte2cells"]
     fn nvim_byte2cells(c: c_int) -> c_int;
     fn do_digraph(c: c_int) -> c_int;
@@ -99,7 +99,8 @@ extern "C" {
     fn rs_redo_literal(c: c_int);
 
     // -- events --
-    fn nvim_has_event_insertcharpre() -> c_int;
+    #[link_name = "has_event"]
+    fn nvim_has_event_insertcharpre_raw(event: c_int) -> bool;
 
     // -- cindent --
     fn cindent_on() -> bool;
@@ -141,6 +142,9 @@ const FO_INS_LONG: c_int = b'l' as c_int;
 const INPUT_BUFLEN: usize = 100;
 /// `MB_MAXCHAR` — max bytes in a multibyte character
 const MB_MAXCHAR: usize = 21;
+
+/// `EVENT_INSERTCHARPRE` from `auevents_enum.generated.h`
+const EVENT_INSERTCHARPRE: c_int = 72;
 
 // ============================================================================
 // insertchar
@@ -219,7 +223,7 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
     // `InsertCharPre` autocommand could change the input buffer.
     if !is_special(c)
         && utf_char2len(c) == 1
-        && nvim_has_event_insertcharpre() == 0
+        && !nvim_has_event_insertcharpre_raw(EVENT_INSERTCHARPRE)
         && !nvim_test_disable_char_avail
         && vpeekc() != 0 // != NUL
         && State & REPLACE_FLAG == 0
@@ -249,7 +253,12 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
             if is_special(nc) {
                 break;
             }
-            if nvim_MB_BYTE2LEN_CHECK(nc) != 1 {
+            let nc_byte2len = if (0..=255).contains(&nc) {
+                c_int::from(utf8len_tab[nc as usize])
+            } else {
+                1
+            };
+            if nc_byte2len != 1 {
                 break;
             }
             if i >= INPUT_BUFLEN {

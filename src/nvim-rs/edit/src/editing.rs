@@ -58,7 +58,8 @@ extern "C" {
     fn AppendCharToRedobuff(c: c_int);
 
     // -- do_insert_char_pre dependencies --
-    fn nvim_has_event_insertcharpre() -> c_int;
+    #[link_name = "has_event"]
+    fn nvim_has_event_insertcharpre_raw(event: c_int) -> bool;
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
     fn nvim_set_vim_var_char(buf: *const c_char, len: isize);
@@ -69,6 +70,7 @@ extern "C" {
 
     // -- insert_special dependencies --
     static mut mod_mask: c_int;
+    #[link_name = "get_special_key_name"]
     fn nvim_get_special_key_name(c: c_int, modifiers: c_int) -> *mut c_char;
     #[link_name = "ins_str"]
     fn nvim_ins_str(p: *const c_char, len: usize);
@@ -78,13 +80,13 @@ extern "C" {
 
     // -- get_literal dependencies --
     fn plain_vgetc() -> c_int;
-    fn nvim_merge_modifiers(c: c_int) -> c_int;
+    #[link_name = "merge_modifiers"]
+    fn nvim_merge_modifiers(c: c_int, mod_mask_ptr: *const c_int) -> c_int;
     fn add_to_showcmd(c: c_int) -> bool;
-    fn nvim_MB_BYTE2LEN_CHECK(c: c_int) -> c_int;
+    static utf8len_tab: [u8; 256];
     fn vungetc(c: c_int);
     fn nvim_digraph_inc_no_mapping();
     fn nvim_digraph_dec_no_mapping();
-    fn nvim_get_K_ZERO() -> c_int;
     fn rs_clear_showcmd();
 
     // -- ins_eol dependencies (Phase 2 migration) --
@@ -138,6 +140,12 @@ const CTRL_RSB: c_int = 29;
 
 /// `MB_MAXBYTES` from `mbyte_defs.h`
 const MB_MAXBYTES: usize = 21;
+
+/// `K_ZERO` from `keycodes.h`: `TERMCAP2KEY(KS_ZERO, KE_FILLER)` = `-(255 + (88 << 8))` = -22783
+const K_ZERO: c_int = -22783;
+
+/// `EVENT_INSERTCHARPRE` from `auevents_enum.generated.h`
+const EVENT_INSERTCHARPRE: c_int = 72;
 
 /// `MOD_MASK_CMD` from `keycodes.h`
 const MOD_MASK_CMD: c_int = 0x80;
@@ -489,7 +497,7 @@ unsafe fn do_insert_char_pre_impl(c: c_int) -> *mut c_char {
     }
 
     // Return quickly when there is nothing to do.
-    if nvim_has_event_insertcharpre() == 0 {
+    if !nvim_has_event_insertcharpre_raw(EVENT_INSERTCHARPRE) {
         return std::ptr::null_mut();
     }
 
@@ -637,7 +645,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     loop {
         nc = plain_vgetc();
         if no_simplify == 0 {
-            nc = nvim_merge_modifiers(nc);
+            nc = nvim_merge_modifiers(nc, &raw const mod_mask);
         }
         let mm = mod_mask;
         if (mm & !MOD_MASK_SHIFT) != 0 {
@@ -646,7 +654,12 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
             break;
         }
         let state = State;
-        if (state & MODE_CMDLINE) == 0 && nvim_MB_BYTE2LEN_CHECK(nc) == 1 {
+        let nc_byte2len = if (0..=255).contains(&nc) {
+            c_int::from(utf8len_tab[nc as usize])
+        } else {
+            1
+        };
+        if (state & MODE_CMDLINE) == 0 && nc_byte2len == 1 {
             add_to_showcmd(nc);
         }
         if nc == c_int::from(b'x') || nc == c_int::from(b'X') {
@@ -699,8 +712,7 @@ unsafe fn get_literal_impl(no_simplify: c_int) -> c_int {
     }
     if i == 0 {
         // no number entered
-        let k_zero = nvim_get_K_ZERO();
-        if nc == k_zero {
+        if nc == K_ZERO {
             // NUL is stored as NL
             cc = c_int::from(b'\n');
         } else {

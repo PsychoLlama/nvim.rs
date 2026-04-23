@@ -1044,6 +1044,7 @@ unsafe extern "C" {
     fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+    #[link_name = "get_special_key_name"]
     fn nvim_get_special_key_name(c: c_int, modifiers: c_int) -> *const c_char;
     fn vim_iswordc(c: c_int) -> bool;
     fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> bool;

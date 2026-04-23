@@ -10,7 +10,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_char, c_int, c_uint};
+use std::ffi::{c_char, c_int, c_uint, c_void};
 use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
 
 // ============================================================================
@@ -64,17 +64,20 @@ extern "C" {
     fn nvim_curwin_set_wcol(val: c_int);
     /// grid_line_start(&curwin->w_grid, row) (`edit_shim.c`).
     fn nvim_edit_grid_line_start(row: c_int);
-    /// `grid_line_getchar(col`, `attr_out`) -> `uint32_t` (`edit_shim.c`).
+    /// `grid_line_getchar(col`, `attr_out`) -> `schar_T` (`grid.h`).
+    #[link_name = "grid_line_getchar"]
     fn nvim_edit_grid_line_getchar(col: c_int, attr_out: *mut c_int) -> c_uint;
-    /// `grid_line_put_schar(col`, schar, attr) (`edit_shim.c`).
+    /// `grid_line_put_schar(col`, schar, attr) (`grid.h`).
+    #[link_name = "grid_line_put_schar"]
     fn nvim_edit_grid_line_put_schar(col: c_int, schar: c_uint, attr: c_int);
-    /// `grid_line_puts(col`, buf, len, attr) (`edit_shim.c`).
+    /// `grid_line_puts(col`, buf, len, attr) (`grid.h`).
+    #[link_name = "grid_line_puts"]
     fn nvim_edit_grid_line_puts(col: c_int, buf: *const c_char, len: c_int, attr: c_int) -> c_int;
-    /// `grid_line_flush()` (`edit_shim.c`).
+    /// `grid_line_flush()` (grid.h).
     #[link_name = "grid_line_flush"]
     fn nvim_edit_grid_line_flush();
-    /// `schar_from_ascii`(' ') as `uint32_t` (`edit_shim.c`).
-    fn nvim_schar_space() -> c_uint;
+    /// `nvim_schar_from_ascii(' ')` (message.h).
+    fn nvim_schar_from_ascii(c: c_int) -> c_uint;
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
     /// redrawWinline(curwin, curwin->w_cursor.lnum) (`edit_shim.c`).
     fn nvim_redrawwinline_cursor();
@@ -110,7 +113,7 @@ unsafe fn edit_putchar_impl(c: c_int, highlight: bool) {
         PC_COL.store(col, Ordering::Relaxed);
         if nvim_edit_grid_line_getchar(col, std::ptr::null_mut()) == 0 {
             // NUL means right half of double-wide char
-            let space = nvim_schar_space();
+            let space = nvim_schar_from_ascii(c_int::from(b' '));
             nvim_edit_grid_line_put_schar(col - 1, space, attr);
             let wcol = nvim_curwin_get_wcol();
             nvim_curwin_set_wcol(wcol - 1);
@@ -217,8 +220,9 @@ extern "C" {
     fn nvim_curwin_set_cursor_col(col: c_int);
     /// `utf_head_off(cursor_line`, `cursor_line+col`) (`edit_shim.c`).
     fn nvim_edit_utf_head_off_cursor_col(col: c_int) -> c_int;
-    /// `curs_columns(curwin`, false) (`edit_shim.c`).
-    fn nvim_curs_columns_curwin_no_scroll();
+    /// `curs_columns(curwin`, false) (`move.h`).
+    fn curs_columns(wp: *mut c_void, may_scroll: c_int);
+    fn nvim_get_curwin() -> *mut c_void;
     /// curwin->w_virtcol (edit.c).
     fn nvim_curwin_get_w_virtcol() -> c_int;
     /// `dollar_vcol` setter (edit.c).
@@ -245,7 +249,7 @@ unsafe fn display_dollar_impl(col_arg: c_int) {
     let adjusted_col = col - head_off;
     nvim_curwin_set_cursor_col(adjusted_col);
 
-    nvim_curs_columns_curwin_no_scroll(); // Recompute w_wrow and w_wcol
+    curs_columns(nvim_get_curwin(), 0); // Recompute w_wrow and w_wcol
 
     if nvim_curwin_get_wcol() < nvim_curwin_get_view_width() {
         edit_putchar_impl(c_int::from(b'$'), false);

@@ -69,6 +69,7 @@ extern "C" {
     fn nvim_check_cursor_col_insert_mode();
 
     // Buffer
+    static mut curbuf: *mut c_void;
     fn nvim_get_curbuf_ml_line_count() -> LinenrT;
     fn nvim_get_curbuf_b_p_iminsert() -> c_int;
 
@@ -95,7 +96,7 @@ extern "C" {
     static mut ins_at_eol: bool;
     fn nvim_get_o_lnum() -> LinenrT;
     fn nvim_set_o_lnum(val: LinenrT);
-    fn nvim_set_need_start_insertmode(val: c_int);
+    static mut need_start_insertmode: bool;
     fn nvim_set_ins_need_undo(val: c_int);
     fn nvim_get_can_cindent() -> c_int;
     fn nvim_set_can_cindent(val: c_int);
@@ -105,7 +106,7 @@ extern "C" {
     fn nvim_set_old_indent(val: c_int);
     fn nvim_set_new_insert_skip(val: c_int);
     fn nvim_get_p_ri() -> c_int;
-    fn nvim_get_need_highlight_changed() -> c_int;
+    static need_highlight_changed: bool;
     static mut did_cursorhold: bool;
 
     // AutocmdS
@@ -129,7 +130,8 @@ extern "C" {
     // Utilities
     fn msg_check_for_delay(check_msg_scroll: std::ffi::c_int);
     fn showmode() -> c_int;
-    fn nvim_change_warning_col(col: c_int);
+    #[link_name = "change_warning"]
+    fn nvim_change_warning_col(buf: *mut c_void, col: c_int);
     fn pum_check_clear();
     #[link_name = "state_enter"]
     fn nvim_state_enter(state: *mut c_void);
@@ -189,7 +191,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
         nvim_ins_apply_insertenter();
 
         // Check for changed highlighting, e.g. for ModeMsg.
-        if nvim_get_need_highlight_changed() != 0 {
+        if need_highlight_changed {
             highlight_changed();
         }
 
@@ -285,7 +287,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     handle_restart_edit_cursor_impl();
 
     // We are in insert mode now, don't need to start it anymore
-    nvim_set_need_start_insertmode(0);
+    need_start_insertmode = false;
 
     // Need to save the line for undo before inserting the first char.
     nvim_set_ins_need_undo(1);
@@ -309,7 +311,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     (*s).i = show_i;
 
     if nvim_get_did_restart_edit() == 0 {
-        nvim_change_warning_col(if show_i == 0 { 0 } else { show_i + 1 });
+        nvim_change_warning_col(curbuf, if show_i == 0 { 0 } else { show_i + 1 });
     }
 
     // nvim calls ui_cursor_shape() and do_digraph(-1) via C helpers not yet wrapped;
@@ -460,7 +462,7 @@ extern "C" {
     fn nvim_curwin_set_cursor_lnum(lnum: LinenrT);
     fn nvim_curwin_set_cursor_lnum_to_line_count();
     fn nvim_coladvance(col: ColnrT);
-    fn nvim_inserted_bytes_prompt(lnum: LinenrT, new_col: ColnrT);
+    fn inserted_bytes(lnum: LinenrT, start_col: ColnrT, old_col: c_int, new_col: c_int);
     fn nvim_get_Insstart_orig_lnum() -> LinenrT;
     fn nvim_get_Insstart_orig_col() -> ColnrT;
     fn nvim_set_Insstart(lnum: LinenrT, col: ColnrT);
@@ -531,7 +533,7 @@ unsafe fn init_prompt_impl(cmdchar_todo: c_int) {
         nvim_curwin_set_cursor_lnum_to_line_count();
         nvim_coladvance(MAXCOL);
         let new_line_count = nvim_get_curbuf_ml_line_count();
-        nvim_inserted_bytes_prompt(new_line_count, prompt_len);
+        inserted_bytes(new_line_count, 0, 0, prompt_len);
     }
 
     // Update Insstart / Insstart_orig if needed.

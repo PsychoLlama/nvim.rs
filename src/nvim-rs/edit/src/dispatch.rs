@@ -174,8 +174,20 @@ extern "C" {
     #[link_name = "check_compl_option"]
     fn check_compl_option_dispatch(allow_always: bool) -> c_int;
     fn ins_ctrl_x();
-    fn nvim_do_cmdline_getcmdkeycmd();
-    fn nvim_map_execute_lua_false();
+    fn do_cmdline(
+        cmdline: *mut c_char,
+        fgetline: unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char,
+        cookie: *mut c_void,
+        flags: c_int,
+    ) -> c_int;
+    fn getcmdkeycmd(
+        promptc: c_int,
+        cookie: *mut c_void,
+        indent: c_int,
+        do_concat: bool,
+    ) -> *mut c_char;
+    #[link_name = "map_execute_lua"]
+    fn nvim_map_execute_lua_direct(may_repeat: bool, discard: bool) -> bool;
     fn paste_repeat(count: c_int);
     fn state_handle_k_event();
     fn nvim_get_curwin() -> nvim_window::WinHandle;
@@ -187,8 +199,8 @@ extern "C" {
     fn char_before_cursor() -> c_int;
     fn char_avail() -> bool;
     fn nvim_inindent_zero() -> bool;
-    fn nvim_auto_format_ins(force_format: c_int);
-    fn nvim_in_cinkeys_int(c: c_int, r#type: c_int, line_is_white: c_int) -> c_int;
+    fn auto_format(trailblank: bool, prev_line: bool);
+    fn in_cinkeys(keytyped: c_int, when: c_char, line_is_empty: bool) -> bool;
     fn do_c_expr_indent();
     fn ins_reg();
     fn ins_try_si(c: c_int);
@@ -442,9 +454,7 @@ pub unsafe extern "C" fn rs_insert_do_complete(s: *mut InsertState) {
 /// Accesses C globals via accessor functions.
 #[unsafe(export_name = "insert_do_cindent")]
 pub unsafe extern "C" fn rs_insert_do_cindent(s: *mut InsertState) {
-    if nvim_in_cinkeys_int((*s).c, c_int::from(b' '), c_int::from((*s).line_is_white)) != 0
-        && stop_arrow() == OK
-    {
+    if in_cinkeys((*s).c, b' ' as c_char, (*s).line_is_white) && stop_arrow() == OK {
         do_c_expr_indent();
     }
 }
@@ -645,7 +655,7 @@ unsafe fn handle_normalchar(s: *mut InsertState) {
         nvim_set_revins_chars(nvim_get_revins_chars() + 1);
     }
 
-    nvim_auto_format_ins(1); // prev_line=true
+    auto_format(false, true); // prev_line=true
 
     rs_foldOpenCursor();
 
@@ -738,7 +748,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 return SwitchAction::Continue;
             }
             ins_reg();
-            nvim_auto_format_ins(1);
+            auto_format(false, true);
             (*s).inserted_space = 0;
             SwitchAction::Continue
         }
@@ -768,7 +778,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             }
             // FALLTHROUGH to CTRL_T
             ins_shift((*s).c, (*s).lastc);
-            nvim_auto_format_ins(1);
+            auto_format(false, true);
             (*s).inserted_space = 0;
             SwitchAction::Continue
         }
@@ -781,20 +791,20 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 return SwitchAction::Continue;
             }
             ins_shift((*s).c, (*s).lastc);
-            nvim_auto_format_ins(1);
+            auto_format(false, true);
             (*s).inserted_space = 0;
             SwitchAction::Continue
         }
 
         K_DEL | K_KDEL => {
             ins_del();
-            nvim_auto_format_ins(1);
+            auto_format(false, true);
             SwitchAction::Continue
         }
 
         K_BS | CTRL_H => {
             (*s).did_backspace = ins_bs((*s).c, BACKSPACE_CHAR, &raw mut (*s).inserted_space);
-            nvim_auto_format_ins(1);
+            auto_format(false, true);
             if (*s).did_backspace && may_trigger_autocomplete(s) {
                 return SwitchAction::Continue;
             }
@@ -810,7 +820,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 return SwitchAction::Exit(0);
             }
             (*s).did_backspace = ins_bs((*s).c, BACKSPACE_WORD, &raw mut (*s).inserted_space);
-            nvim_auto_format_ins(1);
+            auto_format(false, true);
             if (*s).did_backspace && may_trigger_autocomplete(s) {
                 return SwitchAction::Continue;
             }
@@ -822,7 +832,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
                 rs_insert_do_complete(s);
             } else {
                 (*s).did_backspace = ins_bs((*s).c, BACKSPACE_LINE, &raw mut (*s).inserted_space);
-                nvim_auto_format_ins(1);
+                auto_format(false, true);
                 (*s).inserted_space = 0;
                 if (*s).did_backspace && may_trigger_autocomplete(s) {
                     return SwitchAction::Continue;
@@ -873,12 +883,12 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
         }
 
         K_COMMAND => {
-            nvim_do_cmdline_getcmdkeycmd();
+            do_cmdline(std::ptr::null_mut(), getcmdkeycmd, std::ptr::null_mut(), 0);
             SwitchAction::CheckPum
         }
 
         K_LUA => {
-            nvim_map_execute_lua_false();
+            nvim_map_execute_lua_direct(false, false);
             SwitchAction::CheckPum
         }
 
@@ -1064,7 +1074,7 @@ unsafe fn handle_tab(s: *mut InsertState) -> SwitchAction {
     if ins_tab() {
         return SwitchAction::NormalChar; // insert TAB as normal char
     }
-    nvim_auto_format_ins(1);
+    auto_format(false, true);
     SwitchAction::Continue
 }
 
@@ -1095,7 +1105,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
     if !ins_eol((*s).c) {
         return SwitchAction::Exit(0); // out of memory
     }
-    nvim_auto_format_ins(0);
+    auto_format(false, false);
     (*s).inserted_space = 0;
     SwitchAction::Continue
 }

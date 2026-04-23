@@ -6357,8 +6357,7 @@ extern "C" {
     fn nvim_set_spell_redraw_lnum(lnum: LinenrT);
     /// State global.
     static mut State: c_int;
-    /// ascii_iswhite: return true if char is whitespace (space/tab).
-    fn nvim_ascii_iswhite(c: c_char) -> bool;
+    // nvim_ascii_iswhite replaced by inline Rust: c == ' ' as c_char || c == '\t' as c_char
     /// noplainbuffer spelloptions flag check.
     fn nvim_spell_win_noplainbuffer(wp: WinHandle) -> bool;
     /// Get curwin as WinHandle.
@@ -6774,7 +6773,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
                 c_int::from(b' ')
             });
             (*wlv).sc_final = 0; // NUL
-            if mb_c < 128 && nvim_ascii_iswhite(mb_c as c_char) {
+            if mb_c == c_int::from(b' ') || mb_c == c_int::from(b'\t') {
                 if mb_c == c_int::from(b'\t') {
                     // Tab alignment.
                     fix_for_boguscols_impl(wlv);

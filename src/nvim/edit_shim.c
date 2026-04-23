@@ -68,7 +68,6 @@ extern void nvim_set_revins_legal(int val);
 bool nvim_p_cpo_has_backspace(void) { return vim_strchr(p_cpo, CPO_BACKSPACE) != NULL; }
 bool nvim_p_cpo_has_replcnt(void) { return vim_strchr(p_cpo, CPO_REPLCNT) != NULL; }
 bool nvim_cmod_keepjumps(void) { return (cmdmod.cmod_flags & CMOD_KEEPJUMPS) != 0; }
-void nvim_do_cmdline_getcmdkeycmd(void) { do_cmdline(NULL, getcmdkeycmd, NULL, 0); }
 void nvim_ins_insert(int replaceState)
 {
   set_vim_var_string(VV_INSERTMODE, ((State & REPLACE_FLAG)
@@ -223,35 +222,19 @@ void nvim_handle_end_comment_pending(int c)
 extern int rs_ins_compl_col(void);
 extern void start_arrow_with_change(pos_T *end_insert_pos, bool end_change);
 extern void nvim_set_o_lnum(linenr_T val);
-int nvim_merge_modifiers(int c) { return merge_modifiers(c, &mod_mask); }
-int nvim_MB_BYTE2LEN_CHECK(int c) { return MB_BYTE2LEN_CHECK(c); }
-int nvim_get_K_ZERO(void) { return K_ZERO; }
-char *nvim_get_special_key_name(int c, int modifiers) { return get_special_key_name(c, modifiers); }
-int nvim_mb_get_class_cursor(void) { return mb_get_class(get_cursor_pos_ptr()); }
 int nvim_cursor_has_composing(void) { if (!p_deco) { return 0; } char *p0 = get_cursor_pos_ptr(); return utf_composinglike(p0, p0 + utf_ptr2len(p0), NULL) ? 1 : 0; }
 void *nvim_get_yank_register_paste(int regname) { return get_yank_register(regname, YREG_PASTE); }
-int nvim_insert_reg(int regname, int literally) { return insert_reg(regname, NULL, literally != 0); }
-bool nvim_is_literal_register(int regname) { return is_literal_register(regname); }
 size_t nvim_reg_y_size(void *reg) { return ((yankreg_T *)reg)->y_size; }
 int nvim_curbuf_meta_total_inline(void) { return buf_meta_total(curbuf, kMTMetaInline); }
 int nvim_get_p_ch_zero_no_ui_messages(void) { return (p_ch == 0 && !ui_has(kUIMessages)) ? 1 : 0; }
-int nvim_has_event_insertcharpre(void) { return has_event(EVENT_INSERTCHARPRE) ? 1 : 0; }
-int nvim_pagescroll_backward(void) { return pagescroll(BACKWARD, 1, false); }
-int nvim_pagescroll_forward(void) { return pagescroll(FORWARD, 1, false); }
-void nvim_map_execute_lua_false(void) { map_execute_lua(false, false); }
-void nvim_auto_format_ins(int force_format) { auto_format(false, force_format != 0); }
-int nvim_get_need_highlight_changed(void) { return need_highlight_changed ? 1 : 0; }
-void nvim_set_need_start_insertmode(int val) { need_start_insertmode = (val != 0); }
 int nvim_ww_allows(int ch) { return vim_strchr(p_ww, (char)ch) != NULL ? 1 : 0; }
 int nvim_vv_char_is_empty(void) { return (*get_vim_var_str(VV_CHAR) == NUL) ? 1 : 0; }
 int nvim_cursor_on_tab_or_inline(void) { return (gchar_cursor() == TAB || buf_meta_total(curbuf, kMTMetaInline) > 0) ? 1 : 0; }
 void nvim_set_vv_insertmode(int cmdchar) { const char *ptr = cmdchar == 'R' ? "r" : cmdchar == 'V' ? "v" : "i"; set_vim_var_string(VV_INSERTMODE, ptr, 1); }
 int nvim_cursor_col_ge_compl_col(void) { return curwin->w_cursor.col >= rs_ins_compl_col() ? 1 : 0; }
-void nvim_change_warning_col(int col) { change_warning(curbuf, col); }
 void nvim_check_cursor_col_insert_mode(void) { int save_state = State; State = MODE_INSERT; check_cursor_col(curwin); State = save_state; }
 void nvim_coladvance_insstart(void) { coladvance(curwin, getvcol_nolist(&Insstart)); }
 int nvim_cursor_equals_saved(linenr_T lnum, colnr_T col, colnr_T coladd) { pos_T saved = { .lnum = lnum, .col = col, .coladd = coladd }; return equalpos(curwin->w_cursor, saved) ? 1 : 0; }
-int nvim_in_cinkeys_int(int c, int type, int line_is_white) { return in_cinkeys(c, (char)type, line_is_white != 0) ? 1 : 0; }
 int nvim_insstart_col_gt_orig(void) { return Insstart.col > Insstart_orig.col ? 1 : 0; }
 colnr_T nvim_linetabsize_cursor_line(void) { return linetabsize_str(get_cursor_line_ptr()); }
 void nvim_restore_cursor_pos(linenr_T lnum, colnr_T col, colnr_T coladd) { curwin->w_cursor.lnum = lnum; curwin->w_cursor.col = col; curwin->w_cursor.coladd = coladd; }
@@ -347,10 +330,6 @@ int nvim_edit_ins_ctrl_ey(int tc)
   }
   return c;
 }
-
-/// Toggle p_ri (reverse insert) and return the new value.
-void nvim_toggle_p_ri(void) { p_ri = !p_ri; }
-
 
 /// Compute the target columns for softtabstop backspace.
 ///
@@ -508,27 +487,6 @@ void nvim_ins_redraw_screen_update(void)
 /// Start a grid line for curwin->w_grid at the given row.
 void nvim_edit_grid_line_start(int row) { grid_line_start(&curwin->w_grid, row); }
 
-/// Get character at column from the current grid line.
-/// Returns the schar_T value (uint32_t). attr_out may be NULL.
-uint32_t nvim_edit_grid_line_getchar(int col, int *attr_out)
-{
-  return (uint32_t)grid_line_getchar(col, attr_out);
-}
-
-/// Put an schar_T character at column with attr.
-void nvim_edit_grid_line_put_schar(int col, uint32_t schar, int attr)
-{
-  grid_line_put_schar(col, (schar_T)schar, attr);
-}
-
-/// Put a string at column with attr, returns number of columns written.
-int nvim_edit_grid_line_puts(int col, const char *buf, int len, int attr)
-{
-  return grid_line_puts(col, buf, len, attr);
-}
-
-/// Flush the current grid line.
-
 /// True when curwin->w_grid_alloc.chars is non-NULL.
 bool nvim_curwin_grid_alloc_has_chars(void) { return curwin->w_grid_alloc.chars != NULL; }
 
@@ -540,9 +498,6 @@ int nvim_hl_attr_8(void) { return HL_ATTR(HLF_8); }
 
 /// redrawWinline(curwin, curwin->w_cursor.lnum).
 void nvim_redrawwinline_cursor(void) { redrawWinline(curwin, curwin->w_cursor.lnum); }
-
-/// schar_from_ascii(' ') -- space character as schar_T.
-uint32_t nvim_schar_space(void) { return (uint32_t)schar_from_ascii(' '); }
 
 // ---- Phase 2 accessors: display_dollar, nvim_trim_eol_space, restart_edit ----
 
@@ -571,16 +526,10 @@ int nvim_edit_utf_head_off_cursor_col(int col)
   return utf_head_off(p, p + col);
 }
 
-/// Call curs_columns(curwin, false) -- recompute w_wrow and w_wcol.
-void nvim_curs_columns_curwin_no_scroll(void) { curs_columns(curwin, false); }
-
 // ---- Phase 4 accessors: nvim_edit_edit_entry ----
 
 /// True when curbuf->terminal is non-NULL.
 bool nvim_curbuf_has_terminal(void) { return curbuf->terminal != NULL; }
-
-/// expr_map_locked() wrapper.
-int nvim_expr_map_locked(void) { return expr_map_locked() ? 1 : 0; }
 
 // ---- Phase 4 accessors: nvim_edit_ins_tab_replace_spaces ----
 
@@ -632,9 +581,6 @@ char *nvim_edit_tab_strnsave_cursor_line(void)
 
 /// Get pointer to cursor position in current line (for non-vreplace).
 char *nvim_edit_tab_get_cursor_pos_ptr(void) { return get_cursor_pos_ptr(); }
-
-/// ascii_iswhite(c) check.
-bool nvim_ascii_iswhite(char c) { return ascii_iswhite(c); }
 
 /// getvcol(curwin, &fpos, &vcol, NULL, NULL) for computing virtual column.
 colnr_T nvim_edit_tab_getvcol(linenr_T lnum, colnr_T col)
@@ -716,8 +662,3 @@ void nvim_curwin_set_cursor_lnum_to_line_count(void)
   curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
 }
 
-/// Call inserted_bytes(lnum, 0, 0, new_col) for prompt text insertion.
-void nvim_inserted_bytes_prompt(linenr_T lnum, colnr_T new_col)
-{
-  inserted_bytes(lnum, 0, 0, new_col);
-}

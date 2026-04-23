@@ -30,7 +30,8 @@ extern "C" {
     fn nvim_emsg_sandbox();
     fn nvim_get_textlock() -> c_int;
     fn nvim_get_compl_busy() -> c_int;
-    fn nvim_expr_map_locked() -> c_int;
+    #[link_name = "expr_map_locked"]
+    fn nvim_expr_map_locked() -> bool;
     fn nvim_emsg_textlock();
     fn nvim_set_restart_edit(val: c_int);
     fn nvim_set_force_restart_edit(val: c_int);
@@ -179,7 +180,7 @@ pub unsafe extern "C" fn rs_edit(cmdchar: c_int, startln: bool, count: c_int) ->
         || rs_ins_compl_active() != 0
         || nvim_get_compl_busy() != 0
         || pum_visible()
-        || nvim_expr_map_locked() != 0
+        || nvim_expr_map_locked()
     {
         nvim_emsg_textlock();
         return false;

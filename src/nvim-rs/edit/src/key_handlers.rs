@@ -33,7 +33,7 @@ extern "C" {
     fn nvim_get_revins_chars() -> c_int;
     fn nvim_set_revins_chars(val: c_int);
     fn nvim_set_can_cindent(val: c_int);
-    fn nvim_get_p_ri() -> c_int;
+    // nvim_get_p_ri removed - p_ri accessed directly as extern static
 
     // Cursor
     fn nvim_curwin_get_cursor_col() -> ColnrT;
@@ -77,8 +77,7 @@ extern "C" {
     fn rs_foldOpenCursor();
 
     // Scrolling / tab pages
-    fn nvim_pagescroll_backward() -> c_int;
-    fn nvim_pagescroll_forward() -> c_int;
+    fn pagescroll(dir: c_int, count: c_int, half: c_int) -> c_int;
     fn nvim_get_first_tabpage() -> nvim_window::TabpageHandle;
     fn goto_tabpage(n: c_int);
 
@@ -102,7 +101,7 @@ extern "C" {
 
     // -- ins_ctrl_ dependencies (Phase 3 migration) --
     fn nvim_get_revins_on() -> c_int;
-    fn nvim_toggle_p_ri();
+    static mut p_ri: c_int;
     fn nvim_edit_set_revins_on(val: c_int);
     fn nvim_set_revins_scol(val: c_int);
     fn showmode() -> c_int;
@@ -130,6 +129,12 @@ extern "C" {
 
 /// `OK` from `vim_defs.h`
 const OK: c_int = 1;
+
+/// `FORWARD` from `vim_defs.h`
+const FORWARD: c_int = 1;
+
+/// `BACKWARD` from `vim_defs.h`
+const BACKWARD: c_int = -1;
 
 /// `kFalse` from `types_defs.h` — `TriState`
 const K_FALSE: c_int = 0;
@@ -508,7 +513,7 @@ unsafe fn ins_pageup_impl() {
     }
 
     nvim_edit_save_cursor(0);
-    if nvim_pagescroll_backward() == OK {
+    if pagescroll(BACKWARD, 1, 0) == OK {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {
@@ -540,7 +545,7 @@ unsafe fn ins_pagedown_impl() {
     }
 
     nvim_edit_save_cursor(0);
-    if nvim_pagescroll_forward() == OK {
+    if pagescroll(FORWARD, 1, 0) == OK {
         nvim_edit_start_arrow_from_slot(0);
         nvim_set_can_cindent(1);
     } else {
@@ -598,9 +603,9 @@ unsafe fn ins_ctrl__impl() {
         nvim_set_revins_chars(rc);
     }
 
-    nvim_toggle_p_ri();
+    p_ri = i32::from(p_ri == 0);
 
-    let new_revins_on = nvim_get_p_ri() != 0 && State == MODE_INSERT;
+    let new_revins_on = p_ri != 0 && State == MODE_INSERT;
     nvim_edit_set_revins_on(c_int::from(new_revins_on));
 
     if new_revins_on {

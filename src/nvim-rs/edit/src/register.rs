@@ -27,6 +27,9 @@ const PUT_FIXINDENT: c_int = 0x08;
 
 const FAIL: c_int = 0;
 
+/// `YREG_PASTE` from `register_defs.h` (first enum value = 0).
+const YREG_PASTE: c_int = 0;
+
 /// `kOptBoFlagRegister` from `option_defs.h`.
 const K_OPT_BO_FLAG_REGISTER: c_int = 0x40;
 
@@ -56,9 +59,11 @@ extern "C" {
     fn nvim_ins_reg_restore_cursor();
     fn valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn vim_beep(val: c_uint);
-    fn nvim_get_yank_register_paste(regname: c_int) -> *mut std::ffi::c_void;
+    #[link_name = "get_yank_register"]
+    fn nvim_get_yank_register_paste(regname: c_int, mode: c_int) -> *mut std::ffi::c_void;
     fn nvim_reg_y_size(reg: *const std::ffi::c_void) -> usize;
-    fn nvim_is_literal_register(regname: c_int) -> bool;
+    #[link_name = "rs_is_literal_register"]
+    fn nvim_is_literal_register(regname: c_int) -> c_int;
     fn AppendCharToRedobuff(c: c_int);
     #[link_name = "do_put"]
     fn nvim_put_do_put(
@@ -68,7 +73,7 @@ extern "C" {
         count: c_int,
         flags: c_int,
     );
-    fn nvim_insert_reg(regname: c_int, literally: c_int) -> c_int;
+    fn insert_reg(regname: c_int, reg: *mut std::ffi::c_void, literally_arg: bool) -> c_int;
     fn nvim_get_stop_insert_mode() -> c_int;
     fn stuff_empty() -> bool;
     fn nvim_VIsual_active() -> c_int;
@@ -125,7 +130,7 @@ pub unsafe extern "C" fn rs_ins_reg() {
         vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);
         need_redraw = true;
     } else {
-        let reg = nvim_get_yank_register_paste(regname);
+        let reg = nvim_get_yank_register_paste(regname, YREG_PASTE);
 
         if literally == CTRL_O || literally == CTRL_P {
             // Append the command to the redo buffer.
@@ -143,11 +148,11 @@ pub unsafe extern "C" fn rs_ins_reg() {
                     PUT_CURSEND
                 },
             );
-        } else if nvim_reg_y_size(reg) > 1 && nvim_is_literal_register(regname) {
+        } else if nvim_reg_y_size(reg) > 1 && nvim_is_literal_register(regname) != 0 {
             AppendCharToRedobuff(CTRL_R);
             AppendCharToRedobuff(regname);
             nvim_put_do_put(regname, std::ptr::null_mut(), BACKWARD, 1, PUT_CURSEND);
-        } else if nvim_insert_reg(regname, literally) == FAIL {
+        } else if insert_reg(regname, std::ptr::null_mut(), literally != 0) == FAIL {
             vim_beep(K_OPT_BO_FLAG_REGISTER as c_uint);
             need_redraw = true;
         } else if nvim_get_stop_insert_mode() != 0 {

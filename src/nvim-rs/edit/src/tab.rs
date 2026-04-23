@@ -92,7 +92,7 @@ extern "C" {
     fn nvim_edit_tab_is_replace() -> bool;
     fn nvim_edit_tab_strnsave_cursor_line() -> *mut c_char;
     fn nvim_edit_tab_get_cursor_pos_ptr() -> *mut c_char;
-    fn nvim_ascii_iswhite(c: c_char) -> bool;
+    // nvim_ascii_iswhite replaced by inline Rust: c == b' ' as c_char || c == b'\t' as c_char
     fn nvim_edit_tab_getvcol(lnum: LinenrT, col: ColnrT) -> ColnrT;
     fn nvim_edit_tab_charsize_tab(vcol: ColnrT) -> c_int;
     fn nvim_edit_tab_charsize_space(vcol: ColnrT, ptr: *const c_char) -> c_int;
@@ -180,7 +180,8 @@ unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
     let fpos_lnum: LinenrT = cursor_lnum;
     let mut fpos_col: ColnrT = cursor_col;
 
-    while fpos_col > 0 && nvim_ascii_iswhite(*ptr.offset(-1)) {
+    while fpos_col > 0 && (*ptr.offset(-1) == b' ' as c_char || *ptr.offset(-1) == b'\t' as c_char)
+    {
         fpos_col -= 1;
         ptr = ptr.offset(-1);
     }
@@ -201,7 +202,7 @@ unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
     let mut vcol = vcol_start;
 
     // Replace spaces with TABs where they fit.
-    while nvim_ascii_iswhite(*ptr) {
+    while *ptr == b' ' as c_char || *ptr == b'\t' as c_char {
         let tab_width = nvim_edit_tab_charsize_tab(vcol);
         if vcol + tab_width > vcol_want {
             break;

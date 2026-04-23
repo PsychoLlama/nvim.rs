@@ -164,7 +164,7 @@ extern "C" {
     fn insert_handle_key(s: *mut InsertState) -> c_int;
     fn ins_ctrl_v();
     fn cindent_on() -> bool;
-    fn in_cinkeys(c: c_int, ty: std::ffi::c_char, line_is_white: bool) -> c_int;
+    fn in_cinkeys(c: c_int, ty: std::ffi::c_char, line_is_white: bool) -> bool;
     fn do_c_expr_indent();
     fn inindent(n: c_int) -> c_int;
     fn ins_start_select(c: c_int) -> c_int;
@@ -506,7 +506,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
         let line_is_white = unsafe { (*s).line_is_white };
         let c = unsafe { (*s).c };
         // '!' prefix: not to be inserted
-        if unsafe { in_cinkeys(c, b'!' as std::ffi::c_char, line_is_white) } != 0
+        if unsafe { in_cinkeys(c, b'!' as std::ffi::c_char, line_is_white) }
             && unsafe { stop_arrow() } == OK
         {
             unsafe { do_c_expr_indent() };
@@ -514,7 +514,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
         }
         // '*' prefix: indent before inserting
         if unsafe { nvim_get_can_cindent() } != 0
-            && unsafe { in_cinkeys(c, b'*' as std::ffi::c_char, line_is_white) } != 0
+            && unsafe { in_cinkeys(c, b'*' as std::ffi::c_char, line_is_white) }
             && unsafe { stop_arrow() } == OK
         {
             unsafe { do_c_expr_indent() };
