@@ -7,7 +7,7 @@
 //! All C functions replaced by this module are one-liners that simply read
 //! or write a global variable.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_uint};
 
 use crate::{win_struct::win_ref, BufHandle, TabpageHandle, WinHandle};
 
@@ -70,6 +70,21 @@ extern "C" {
     static mut p_cpo: *mut c_char; // cpoptions
     static mut p_sbr: *mut c_char; // showbreak
     static mut p_wbr: *const c_char; // winbar
+
+    // Additional globals for Phase 1 elimination
+    static mut RedrawingDisabled: c_int;
+    static mut p_acd: c_int; // 'autochdir'
+    static mut p_tpm: i64; // 'tabpagemax' (OptInt = i64)
+    static mut p_confirm: c_int; // 'confirm'
+    static mut p_write: c_int; // 'write'
+    static mut starting: c_int; // NO_SCREEN / JUST_STARTED / ...
+    static mut spell_redraw_lnum: i32; // linenr_T
+    static mut dy_flags: c_uint; // 'display' option flags
+    static mut empty_string_option: c_char; // char[] empty_string_option
+    static mut au_pending_free_win: WinHandle;
+    static mut postponed_split_tab: c_int;
+    static mut last_chdir_reason: *mut c_char;
+    static mut cmdline_win: WinHandle;
 }
 
 // -------------------------------------------------------------------------
@@ -682,4 +697,288 @@ pub unsafe extern "C" fn get_p_sbr() -> *mut c_char {
 #[export_name = "nvim_get_p_wbr_empty"]
 pub unsafe extern "C" fn get_p_wbr_empty() -> c_int {
     c_int::from(p_wbr.is_null() || *p_wbr == 0)
+}
+
+// -------------------------------------------------------------------------
+// Phase 1: Global variable accessors (replacing C one-liners)
+// -------------------------------------------------------------------------
+
+/// Get RedrawingDisabled.
+///
+/// # Safety
+/// Accesses C global RedrawingDisabled.
+#[must_use]
+#[export_name = "nvim_get_RedrawingDisabled"]
+pub unsafe extern "C" fn get_redrawing_disabled() -> c_int {
+    RedrawingDisabled
+}
+
+/// Set RedrawingDisabled.
+///
+/// # Safety
+/// Accesses C global RedrawingDisabled.
+#[export_name = "nvim_set_RedrawingDisabled"]
+pub unsafe extern "C" fn set_redrawing_disabled(val: c_int) {
+    RedrawingDisabled = val;
+}
+
+/// Increment RedrawingDisabled.
+///
+/// # Safety
+/// Accesses C global RedrawingDisabled.
+#[export_name = "nvim_inc_RedrawingDisabled"]
+pub unsafe extern "C" fn inc_redrawing_disabled() {
+    RedrawingDisabled += 1;
+}
+
+/// Decrement RedrawingDisabled.
+///
+/// # Safety
+/// Accesses C global RedrawingDisabled.
+#[export_name = "nvim_dec_RedrawingDisabled"]
+pub unsafe extern "C" fn dec_redrawing_disabled() {
+    RedrawingDisabled -= 1;
+}
+
+/// Get p_acd ('autochdir') as c_int (1 if true, 0 if false).
+///
+/// # Safety
+/// Accesses C global p_acd.
+#[must_use]
+#[export_name = "nvim_get_p_acd"]
+pub unsafe extern "C" fn get_p_acd() -> c_int {
+    c_int::from(p_acd != 0)
+}
+
+/// Get p_tpm ('tabpagemax').
+///
+/// # Safety
+/// Accesses C global p_tpm.
+#[must_use]
+#[export_name = "nvim_get_p_tpm"]
+pub unsafe extern "C" fn get_p_tpm() -> i64 {
+    p_tpm
+}
+
+/// Get p_confirm ('confirm') as c_int (1 if true, 0 if false).
+///
+/// # Safety
+/// Accesses C global p_confirm.
+#[must_use]
+#[export_name = "nvim_get_p_confirm"]
+pub unsafe extern "C" fn get_p_confirm() -> c_int {
+    c_int::from(p_confirm != 0)
+}
+
+/// Get p_write ('write') as c_int (1 if true, 0 if false).
+///
+/// # Safety
+/// Accesses C global p_write.
+#[must_use]
+#[export_name = "nvim_get_p_write"]
+pub unsafe extern "C" fn get_p_write() -> c_int {
+    c_int::from(p_write != 0)
+}
+
+/// Get starting.
+///
+/// # Safety
+/// Accesses C global starting.
+#[must_use]
+#[export_name = "nvim_get_starting"]
+pub unsafe extern "C" fn get_starting() -> c_int {
+    starting
+}
+
+/// Get spell_redraw_lnum.
+///
+/// # Safety
+/// Accesses C global spell_redraw_lnum.
+#[must_use]
+#[export_name = "nvim_get_spell_redraw_lnum"]
+pub unsafe extern "C" fn get_spell_redraw_lnum() -> i32 {
+    spell_redraw_lnum
+}
+
+/// Set spell_redraw_lnum.
+///
+/// # Safety
+/// Accesses C global spell_redraw_lnum.
+#[export_name = "nvim_set_spell_redraw_lnum"]
+pub unsafe extern "C" fn set_spell_redraw_lnum(val: i32) {
+    spell_redraw_lnum = val;
+}
+
+/// Get dy_flags ('display' option flags).
+///
+/// # Safety
+/// Accesses C global dy_flags.
+#[must_use]
+#[export_name = "nvim_get_dy_flags"]
+pub unsafe extern "C" fn get_dy_flags() -> c_int {
+    #[allow(clippy::cast_possible_wrap)]
+    {
+        dy_flags as c_int
+    }
+}
+
+/// Get empty_string_option pointer.
+///
+/// # Safety
+/// Accesses C global empty_string_option.
+#[must_use]
+#[export_name = "nvim_get_empty_string_option"]
+pub unsafe extern "C" fn get_empty_string_option() -> *mut c_char {
+    &raw mut empty_string_option
+}
+
+/// Get au_pending_free_win.
+///
+/// # Safety
+/// Accesses C global au_pending_free_win.
+#[must_use]
+#[export_name = "nvim_get_au_pending_free_win"]
+pub unsafe extern "C" fn get_au_pending_free_win() -> WinHandle {
+    au_pending_free_win
+}
+
+/// Set au_pending_free_win.
+///
+/// # Safety
+/// Accesses C global au_pending_free_win.
+#[export_name = "nvim_set_au_pending_free_win"]
+pub unsafe extern "C" fn set_au_pending_free_win(wp: WinHandle) {
+    au_pending_free_win = wp;
+}
+
+/// Get postponed_split_tab.
+///
+/// # Safety
+/// Accesses C global postponed_split_tab.
+#[must_use]
+#[export_name = "nvim_get_postponed_split_tab"]
+pub unsafe extern "C" fn get_postponed_split_tab() -> c_int {
+    postponed_split_tab
+}
+
+/// Set postponed_split_tab.
+///
+/// # Safety
+/// Accesses C global postponed_split_tab.
+#[export_name = "nvim_set_postponed_split_tab"]
+pub unsafe extern "C" fn set_postponed_split_tab(val: c_int) {
+    postponed_split_tab = val;
+}
+
+/// Set firstwin = NULL.
+///
+/// # Safety
+/// Accesses C global firstwin.
+#[export_name = "nvim_set_firstwin_null"]
+pub unsafe extern "C" fn set_firstwin_null() {
+    firstwin = WinHandle::null();
+}
+
+/// Set lastwin = NULL.
+///
+/// # Safety
+/// Accesses C global lastwin.
+#[export_name = "nvim_set_lastwin_null"]
+pub unsafe extern "C" fn set_lastwin_null() {
+    lastwin = WinHandle::null();
+}
+
+/// Set lastused_tabpage from Rust (alias for nvim_set_lastused_tabpage).
+///
+/// # Safety
+/// `tp` must be a valid tabpage pointer or null.
+#[export_name = "nvim_set_lastused_tabpage_from_rust"]
+pub unsafe extern "C" fn set_lastused_tabpage_from_rust(tp: TabpageHandle) {
+    lastused_tabpage = tp;
+}
+
+/// Get curwin as raw pointer (alias for nvim_get_curwin).
+///
+/// # Safety
+/// Accesses C global curwin.
+#[must_use]
+#[export_name = "nvim_get_curwin_ptr"]
+pub unsafe extern "C" fn get_curwin_ptr() -> WinHandle {
+    curwin
+}
+
+/// Set curwin from raw pointer (alias for nvim_set_curwin).
+///
+/// # Safety
+/// `wp` must be a valid window pointer or null.
+#[export_name = "nvim_set_curwin_ptr"]
+pub unsafe extern "C" fn set_curwin_ptr(wp: WinHandle) {
+    curwin = wp;
+}
+
+/// Get firstwin as raw pointer (alias for nvim_get_firstwin).
+///
+/// # Safety
+/// Accesses C global firstwin.
+#[must_use]
+#[export_name = "nvim_get_firstwin_ptr"]
+pub unsafe extern "C" fn get_firstwin_ptr() -> WinHandle {
+    firstwin
+}
+
+/// Get curbuf as raw pointer (alias for nvim_get_curbuf).
+///
+/// # Safety
+/// Accesses C global curbuf.
+#[must_use]
+#[export_name = "nvim_get_curbuf_ptr"]
+pub unsafe extern "C" fn get_curbuf_ptr() -> BufHandle {
+    curbuf
+}
+
+/// Set last_chdir_reason = NULL.
+///
+/// # Safety
+/// Accesses C global last_chdir_reason.
+#[export_name = "nvim_set_last_chdir_reason_null"]
+pub unsafe extern "C" fn set_last_chdir_reason_null() {
+    last_chdir_reason = std::ptr::null_mut();
+}
+
+/// Set cmdline_win = NULL.
+///
+/// # Safety
+/// Accesses C global cmdline_win.
+#[export_name = "nvim_set_cmdline_win_null"]
+pub unsafe extern "C" fn set_cmdline_win_null() {
+    cmdline_win = WinHandle::null();
+}
+
+/// Get Rows (screen height).
+///
+/// # Safety
+/// Accesses C global Rows.
+#[must_use]
+#[export_name = "nvim_get_Rows"]
+pub unsafe extern "C" fn get_rows() -> c_int {
+    Rows
+}
+
+/// Get Columns (screen width).
+///
+/// # Safety
+/// Accesses C global Columns.
+#[must_use]
+#[export_name = "nvim_get_Columns"]
+pub unsafe extern "C" fn get_columns() -> c_int {
+    Columns
+}
+
+/// Set p_ch (cmdheight). Alias for existing set_p_ch functionality.
+///
+/// # Safety
+/// Accesses C global p_ch.
+#[export_name = "nvim_set_p_ch"]
+pub unsafe extern "C" fn set_p_ch_alias(val: i64) {
+    p_ch = val;
 }
