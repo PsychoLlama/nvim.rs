@@ -419,88 +419,11 @@ static void add_nr_var(dict_T *dp, dictitem_T *v, char *name, varnumber_T nr)
 // nvim_free_funccal_impl inlined into rs_free_funccal (Rust, Phase 13)
 
 
-/// Phase 7: C implementation shim for free_funccal_contents (called from Rust).
-void nvim_free_funccal_contents_impl(funccall_T *fc)
-{
-  // Free all l: variables.
-  vars_clear(&fc->fc_l_vars.dv_hashtab);
+// nvim_free_funccal_contents_impl migrated to Rust (funccal.rs Phase 31).
+// rs_free_funccal_contents now implements the logic directly.
 
-  // Free all a: variables.
-  vars_clear(&fc->fc_l_avars.dv_hashtab);
-
-  // Free the a:000 variables.
-  TV_LIST_ITER(&fc->fc_l_varlist, li, {
-    tv_clear(TV_LIST_ITEM_TV(li));
-  });
-
-  rs_free_funccal(fc);
-}
-
-/// Phase 7: C implementation shim for cleanup_function_call (called from Rust).
-void nvim_cleanup_function_call_impl(funccall_T *fc)
-{
-  bool may_free_fc = fc->fc_refcount <= 0;
-  bool free_fc = true;
-
-  current_funccal = fc->fc_caller;
-
-  // Free all l: variables if not referred.
-  if (may_free_fc && fc->fc_l_vars.dv_refcount == DO_NOT_FREE_CNT) {
-    vars_clear(&fc->fc_l_vars.dv_hashtab);
-  } else {
-    free_fc = false;
-  }
-
-  // If the a:000 list and the l: and a: dicts are not referenced and
-  // there is no closure using it, we can free the funccall_T and what's
-  // in it.
-  if (may_free_fc && fc->fc_l_avars.dv_refcount == DO_NOT_FREE_CNT) {
-    vars_clear_ext(&fc->fc_l_avars.dv_hashtab, false);
-  } else {
-    free_fc = false;
-
-    // Make a copy of the a: variables, since we didn't do that above.
-    TV_DICT_ITER(&fc->fc_l_avars, di, {
-      tv_copy(&di->di_tv, &di->di_tv);
-    });
-  }
-
-  if (may_free_fc && fc->fc_l_varlist.lv_refcount   // NOLINT(runtime/deprecated)
-      == DO_NOT_FREE_CNT) {
-    fc->fc_l_varlist.lv_first = NULL;  // NOLINT(runtime/deprecated)
-  } else {
-    free_fc = false;
-
-    // Make a copy of the a:000 items, since we didn't do that above.
-    TV_LIST_ITER(&fc->fc_l_varlist, li, {
-      tv_copy(TV_LIST_ITEM_TV(li), TV_LIST_ITEM_TV(li));
-    });
-  }
-
-  if (free_fc) {
-    rs_free_funccal(fc);
-  } else {
-    static int made_copy = 0;
-
-    // "fc" is still in use.  This can happen when returning "a:000",
-    // assigning "l:" to a global variable or defining a closure.
-    // Link "fc" in the list for garbage collection later.
-    fc->fc_caller = previous_funccal;
-    previous_funccal = fc;
-
-    if (want_garbage_collect) {
-      // If garbage collector is ready, clear count.
-      made_copy = 0;
-    } else if (++made_copy >= (int)((4096 * 1024) / sizeof(*fc))) {
-      // We have made a lot of copies, worth 4 Mbyte.  This can happen
-      // when repetitively calling a function that creates a reference to
-      // itself somehow.  Call the garbage collector soon to avoid using
-      // too much memory.
-      made_copy = 0;
-      want_garbage_collect = true;
-    }
-  }
-}
+// nvim_cleanup_function_call_impl migrated to Rust (funccal.rs Phase 31).
+// rs_cleanup_function_call now implements the logic directly.
 
 
 // nvim_funccal_unref_impl migrated to Rust (funccal.rs Phase 27).
@@ -2131,39 +2054,8 @@ extern int ex_call_inner(exarg_T *eap, char *name, char **arg, char *startarg,
 // rs_ex_defer_inner now implements the logic directly.
 
 
-/// Return true if currently inside a function call.
-/// Give an error message and return false when not.
-/// Phase 3: C implementation shim for handle_defer_one (called from Rust).
-void nvim_handle_defer_one_impl(funccall_T *funccal)
-{
-  for (int idx = funccal->fc_defer.ga_len - 1; idx >= 0; idx--) {
-    defer_T *dr = ((defer_T *)funccal->fc_defer.ga_data) + idx;
-
-    if (dr->dr_name == NULL) {
-      // already being called, can happen if function does ":qa"
-      continue;
-    }
-
-    funcexe_T funcexe = { .fe_evaluate = true };
-    typval_T rettv;
-    rettv.v_type = VAR_UNKNOWN;
-    char *name = dr->dr_name;
-    dr->dr_name = NULL;
-
-    exception_state_T estate;
-    exception_state_save(&estate);
-    exception_state_clear();
-    call_func(name, -1, &rettv, dr->dr_argcount, dr->dr_argvars, &funcexe);
-    exception_state_restore(&estate);
-
-    tv_clear(&rettv);
-    xfree(name);
-    for (int i = dr->dr_argcount - 1; i >= 0; i--) {
-      tv_clear(&dr->dr_argvars[i]);
-    }
-  }
-  ga_clear(&funccal->fc_defer);
-}
+// nvim_handle_defer_one_impl migrated to Rust (defer.rs Phase 30).
+// rs_handle_defer_one now implements the logic directly.
 
 
 /// ":1,25call func(arg1, arg2)" function call.
@@ -2706,8 +2598,7 @@ void nvim_list_functions_matching_pat(const char *pat, bool ic)
   }
 }
 
-// exarg_T field accessors: nvim_eap_get_arg, nvim_eap_get_skip, nvim_eap_get_forceit,
-// nvim_eap_set_nextcmd already defined in ex_docmd.c and indent_ffi.c.
+// exarg_T field accessors: see Phase 28 accessors at the bottom of this file.
 
 // Translated error messages for Rust (emsg wrappers with _(...)  gettext)
 void nvim_emsg_function_list_modified(void) { emsg(_(e_function_list_was_modified)); }
@@ -2986,3 +2877,110 @@ int nvim_eap_get_skip(const exarg_T *eap) { return eap ? eap->skip : 0; }
 void nvim_eap_set_nextcmd(exarg_T *eap, char *val) { if (eap) { eap->nextcmd = val; } }
 char *nvim_eap_get_nextcmd(const exarg_T *eap) { return eap ? eap->nextcmd : NULL; }
 void nvim_emsg_return_not_in_func(void) { emsg(_("E133: :return not inside a function")); }
+
+// Phase 30: accessors for nvim_handle_defer_one_impl migration (defer.rs)
+int nvim_fc_defer_ga_len(const funccall_T *fc) { return fc ? fc->fc_defer.ga_len : 0; }
+/// Takes dr_name from slot idx (returns it, sets to NULL).
+char *nvim_fc_defer_item_take_name(funccall_T *fc, int idx)
+{
+  if (!fc) {
+    return NULL;
+  }
+  defer_T *dr = ((defer_T *)fc->fc_defer.ga_data) + idx;
+  char *name = dr->dr_name;
+  dr->dr_name = NULL;
+  return name;
+}
+int nvim_fc_defer_item_argcount(const funccall_T *fc, int idx)
+{
+  if (!fc) {
+    return 0;
+  }
+  return ((const defer_T *)fc->fc_defer.ga_data)[idx].dr_argcount;
+}
+typval_T *nvim_fc_defer_item_argvars(funccall_T *fc, int idx)
+{
+  if (!fc) {
+    return NULL;
+  }
+  return ((defer_T *)fc->fc_defer.ga_data)[idx].dr_argvars;
+}
+void nvim_fc_defer_ga_clear(funccall_T *fc)
+{
+  if (fc) {
+    ga_clear(&fc->fc_defer);
+  }
+}
+
+// Phase 31: accessors for nvim_free_funccal_contents_impl and nvim_cleanup_function_call_impl (funccal.rs)
+void nvim_fc_l_vars_ht_clear(funccall_T *fc)
+{
+  if (fc) {
+    vars_clear(&fc->fc_l_vars.dv_hashtab);
+  }
+}
+void nvim_fc_l_avars_ht_clear(funccall_T *fc)
+{
+  if (fc) {
+    vars_clear(&fc->fc_l_avars.dv_hashtab);
+  }
+}
+void nvim_fc_l_varlist_tv_clear_all(funccall_T *fc)
+{
+  if (fc) {
+    TV_LIST_ITER(&fc->fc_l_varlist, li, {
+      tv_clear(TV_LIST_ITEM_TV(li));
+    });
+  }
+}
+void nvim_fc_pop_current_funccal(funccall_T *fc)
+{
+  if (fc) {
+    current_funccal = fc->fc_caller;
+  }
+}
+void nvim_fc_l_avars_ht_clear_ext_false(funccall_T *fc)
+{
+  if (fc) {
+    vars_clear_ext(&fc->fc_l_avars.dv_hashtab, false);
+  }
+}
+void nvim_fc_l_avars_tv_copy_all(funccall_T *fc)
+{
+  if (fc) {
+    TV_DICT_ITER(&fc->fc_l_avars, di, {
+      tv_copy(&di->di_tv, &di->di_tv);
+    });
+  }
+}
+void nvim_fc_l_varlist_set_lv_first_null(funccall_T *fc)
+{
+  if (fc) {
+    fc->fc_l_varlist.lv_first = NULL;  // NOLINT(runtime/deprecated)
+  }
+}
+void nvim_fc_l_varlist_tv_copy_all(funccall_T *fc)
+{
+  if (fc) {
+    TV_LIST_ITER(&fc->fc_l_varlist, li, {
+      tv_copy(TV_LIST_ITEM_TV(li), TV_LIST_ITEM_TV(li));
+    });
+  }
+}
+/// Called when fc cannot be freed immediately.
+/// Links fc into the previous_funccal list and handles the GC threshold logic.
+void nvim_cleanup_function_call_put_in_prev_list(funccall_T *fc)
+{
+  if (!fc) {
+    return;
+  }
+  static int made_copy = 0;
+  fc->fc_caller = previous_funccal;
+  previous_funccal = fc;
+  if (want_garbage_collect) {
+    made_copy = 0;
+  } else if (++made_copy >= (int)((4096 * 1024) / sizeof(*fc))) {
+    made_copy = 0;
+    want_garbage_collect = true;
+  }
+}

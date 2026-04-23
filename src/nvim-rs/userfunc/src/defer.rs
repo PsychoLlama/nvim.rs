@@ -18,8 +18,19 @@ extern "C" {
         argcount: c_int,
         argvars: *mut c_void,
     );
-    fn nvim_handle_defer_one_impl(fc: *mut c_void);
     fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn xfree(ptr: *mut c_void);
+
+    // Phase 30: for rs_handle_defer_one migration
+    fn nvim_fc_defer_ga_len(fc: *const c_void) -> c_int;
+    fn nvim_fc_defer_item_take_name(fc: *mut c_void, idx: c_int) -> *mut c_char;
+    fn nvim_fc_defer_item_argcount(fc: *const c_void, idx: c_int) -> c_int;
+    fn nvim_fc_defer_item_argvars(fc: *mut c_void, idx: c_int) -> *mut c_void;
+    fn nvim_fc_defer_ga_clear(fc: *mut c_void);
+    fn exception_state_save(estate: *mut c_void);
+    fn exception_state_restore(estate: *mut c_void);
+    fn exception_state_clear();
+    fn nvim_tv_set_unknown(tv: *mut c_void);
     fn nvim_emsg_defer_not_in_function();
 
     // Phase 24: for rs_ex_defer_inner migration
@@ -81,13 +92,75 @@ pub unsafe extern "C" fn rs_add_defer(name: *mut c_char, argcount: c_int, argvar
 // handle_defer_one
 // =============================================================================
 
+// Size of funcexe_T in bytes (must match C's sizeof(funcexe_T) = 64).
+const SIZEOF_FUNCEXE: usize = 64;
+// Offset of fe_evaluate (bool) within funcexe_T.
+const FE_EVALUATE_OFFSET: usize = 24;
+// Size of typval_T in bytes (must match C's sizeof(typval_T) = 16).
+const SIZEOF_TYPVAL_DEFER: usize = 16;
+// Size of exception_state_T in bytes (must match C's sizeof(exception_state_T) = 24).
+const SIZEOF_EXCEPTION_STATE: usize = 24;
+
 /// Invoke deferred functions for one funccal.
+///
+/// Phase 30: inlined from rs_handle_defer_one.
 ///
 /// # Safety
 /// `funccal` must be a valid `funccall_T` pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_handle_defer_one(funccal: *mut c_void) {
-    unsafe { nvim_handle_defer_one_impl(funccal) };
+    let len = unsafe { nvim_fc_defer_ga_len(funccal) };
+    let mut idx = len - 1;
+    while idx >= 0 {
+        let name = unsafe { nvim_fc_defer_item_take_name(funccal, idx) };
+        if name.is_null() {
+            // already being called, can happen if function does ":qa"
+            idx -= 1;
+            continue;
+        }
+        let argcount = unsafe { nvim_fc_defer_item_argcount(funccal, idx) };
+        let argvars = unsafe { nvim_fc_defer_item_argvars(funccal, idx) };
+
+        // funcexe_T funcexe = { .fe_evaluate = true }
+        let mut funcexe = [0u8; SIZEOF_FUNCEXE];
+        funcexe[FE_EVALUATE_OFFSET] = 1u8;
+        let funcexe_ptr = funcexe.as_mut_ptr().cast::<c_void>();
+
+        // typval_T rettv; rettv.v_type = VAR_UNKNOWN
+        let mut rettv = [0u8; SIZEOF_TYPVAL_DEFER];
+        let rettv_ptr = rettv.as_mut_ptr().cast::<c_void>();
+        unsafe { nvim_tv_set_unknown(rettv_ptr) };
+
+        // exception_state_T estate; exception_state_save(&estate); exception_state_clear();
+        let mut estate = [0u8; SIZEOF_EXCEPTION_STATE];
+        let estate_ptr = estate.as_mut_ptr().cast::<c_void>();
+        unsafe { exception_state_save(estate_ptr) };
+        unsafe { exception_state_clear() };
+
+        unsafe {
+            crate::funccal::rs_call_func(name, -1, rettv_ptr, argcount, argvars, funcexe_ptr)
+        };
+
+        unsafe { exception_state_restore(estate_ptr) };
+
+        unsafe { tv_clear(rettv_ptr) };
+        unsafe { xfree(name.cast::<c_void>()) };
+
+        let mut i = argcount - 1;
+        while i >= 0 {
+            let slot = unsafe {
+                argvars
+                    .cast::<u8>()
+                    .add(i as usize * SIZEOF_TYPVAL_DEFER)
+                    .cast::<c_void>()
+            };
+            unsafe { tv_clear(slot) };
+            i -= 1;
+        }
+
+        idx -= 1;
+    }
+    unsafe { nvim_fc_defer_ga_clear(funccal) };
 }
 
 // =============================================================================
@@ -100,7 +173,7 @@ pub unsafe extern "C" fn rs_invoke_all_defer() {
     // Walk current_funccal chain
     let mut fc = unsafe { get_current_funccal() };
     while !fc.is_null() {
-        unsafe { nvim_handle_defer_one_impl(fc) };
+        unsafe { rs_handle_defer_one(fc) };
         fc = unsafe { nvim_fc_get_caller(fc) };
     }
 
@@ -109,7 +182,7 @@ pub unsafe extern "C" fn rs_invoke_all_defer() {
     while !fce.is_null() {
         let mut fc2 = unsafe { nvim_funccal_entry_top(fce) };
         while !fc2.is_null() {
-            unsafe { nvim_handle_defer_one_impl(fc2) };
+            unsafe { rs_handle_defer_one(fc2) };
             fc2 = unsafe { nvim_fc_get_caller(fc2) };
         }
         fce = unsafe { nvim_funccal_entry_next(fce) };

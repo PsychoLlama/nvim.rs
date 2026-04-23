@@ -9,8 +9,6 @@
 use std::ffi::{c_char, c_int, c_void};
 
 extern "C" {
-    fn nvim_free_funccal_contents_impl(fc: *mut c_void);
-    fn nvim_cleanup_function_call_impl(fc: *mut c_void);
     fn nvim_ex_delfunction_impl(eap: *mut c_void);
 
     // Phase 27: for rs_funccal_unref inlining
@@ -208,6 +206,21 @@ extern "C" {
     fn do_return(eap: *mut c_void, reanimate: c_int, is_cmd: c_int, rettv: *mut c_void) -> c_int;
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
     fn clear_evalarg(evalarg: *mut c_void, eap: *mut c_void);
+
+    // Phase 31: for nvim_free_funccal_contents_impl and nvim_cleanup_function_call_impl migration
+    fn nvim_fc_l_vars_ht_clear(fc: *mut c_void);
+    fn nvim_fc_l_avars_ht_clear(fc: *mut c_void);
+    fn nvim_fc_l_varlist_tv_clear_all(fc: *mut c_void);
+    fn nvim_fc_pop_current_funccal(fc: *mut c_void);
+    fn nvim_fc_l_avars_ht_clear_ext_false(fc: *mut c_void);
+    fn nvim_fc_l_avars_tv_copy_all(fc: *mut c_void);
+    fn nvim_fc_l_varlist_set_lv_first_null(fc: *mut c_void);
+    fn nvim_fc_l_varlist_tv_copy_all(fc: *mut c_void);
+    fn nvim_cleanup_function_call_put_in_prev_list(fc: *mut c_void);
+    fn nvim_fc_l_vars_dv_refcount(fc: *const c_void) -> c_int;
+    fn nvim_fc_l_avars_dv_refcount(fc: *const c_void) -> c_int;
+    fn nvim_fc_varlist_lv_refcount(fc: *const c_void) -> c_int;
+    fn nvim_get_fc_refcount(fc: *const c_void) -> c_int;
 }
 
 // =============================================================================
@@ -251,19 +264,68 @@ pub unsafe extern "C" fn rs_free_funccal(fc: *mut c_void) {
 // =============================================================================
 // free_funccal_contents
 // =============================================================================
+//
+// Phase 31: inlined from nvim_free_funccal_contents_impl.
 
 #[no_mangle]
 pub unsafe extern "C" fn rs_free_funccal_contents(fc: *mut c_void) {
-    unsafe { nvim_free_funccal_contents_impl(fc) };
+    // Free all l: variables.
+    unsafe { nvim_fc_l_vars_ht_clear(fc) };
+    // Free all a: variables.
+    unsafe { nvim_fc_l_avars_ht_clear(fc) };
+    // Free the a:000 variables.
+    unsafe { nvim_fc_l_varlist_tv_clear_all(fc) };
+    unsafe { rs_free_funccal(fc) };
 }
 
 // =============================================================================
 // cleanup_function_call
 // =============================================================================
+//
+// Phase 31: inlined from nvim_cleanup_function_call_impl.
+
+// DO_NOT_FREE_CNT must match C's DO_NOT_FREE_CNT (INT_MAX / 2).
+const DO_NOT_FREE_CNT: c_int = c_int::MAX / 2;
 
 #[no_mangle]
 pub unsafe extern "C" fn rs_cleanup_function_call(fc: *mut c_void) {
-    unsafe { nvim_cleanup_function_call_impl(fc) };
+    let may_free_fc = unsafe { nvim_get_fc_refcount(fc) } <= 0;
+    let mut free_fc = true;
+
+    // current_funccal = fc->fc_caller
+    unsafe { nvim_fc_pop_current_funccal(fc) };
+
+    // Free all l: variables if not referred.
+    if may_free_fc && unsafe { nvim_fc_l_vars_dv_refcount(fc) } == DO_NOT_FREE_CNT {
+        unsafe { nvim_fc_l_vars_ht_clear(fc) };
+    } else {
+        free_fc = false;
+    }
+
+    // If the a:000 list and the l: and a: dicts are not referenced and
+    // there is no closure using it, we can free the funccall_T and what's in it.
+    if may_free_fc && unsafe { nvim_fc_l_avars_dv_refcount(fc) } == DO_NOT_FREE_CNT {
+        unsafe { nvim_fc_l_avars_ht_clear_ext_false(fc) };
+    } else {
+        free_fc = false;
+        // Make a copy of the a: variables, since we didn't do that above.
+        unsafe { nvim_fc_l_avars_tv_copy_all(fc) };
+    }
+
+    if may_free_fc && unsafe { nvim_fc_varlist_lv_refcount(fc) } == DO_NOT_FREE_CNT {
+        unsafe { nvim_fc_l_varlist_set_lv_first_null(fc) };
+    } else {
+        free_fc = false;
+        // Make a copy of the a:000 items, since we didn't do that above.
+        unsafe { nvim_fc_l_varlist_tv_copy_all(fc) };
+    }
+
+    if free_fc {
+        unsafe { rs_free_funccal(fc) };
+    } else {
+        // "fc" is still in use. Link into previous_funccal list for GC.
+        unsafe { nvim_cleanup_function_call_put_in_prev_list(fc) };
+    }
 }
 
 // =============================================================================
