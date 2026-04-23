@@ -362,9 +362,6 @@ void nvim_terminal_find_size(void *term, uint16_t *out_width, uint16_t *out_heig
 }
 void nvim_set_got_int(int v) { got_int = (bool)v; }
 int nvim_must_redraw(void) { return (int)must_redraw; }
-int nvim_clear_cmdline(void) { return (int)clear_cmdline; }
-int nvim_redraw_cmdline(void) { return (int)redraw_cmdline; }
-int nvim_redraw_mode(void) { return (int)redraw_mode; }
 extern void rs_set_terminal_winopts(void *s);
 extern void rs_unset_terminal_winopts(void *s);
 void nvim_win_set_p_culopt(win_T *wp, char *s) { wp->w_p_culopt = s; }
