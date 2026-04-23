@@ -23,6 +23,11 @@ type LinenrT = i32;
 extern "C" {
     static mut State: c_int;
     static mut p_sta: c_int;
+    static mut curwin: nvim_window::WinHandle;
+    // Insstart (pos_T = lnum, col, coladd)
+    static mut Insstart: nvim_window::win_struct::PosT;
+    // p_cpo for CPO_LISTWM check
+    static p_cpo: *const c_char;
 }
 
 extern "C" {
@@ -83,21 +88,11 @@ extern "C" {
     fn replace_push_nul();
 
     // --- Space-to-TAB replacement helpers ---
-    fn nvim_edit_tab_save_list() -> c_int;
-    fn nvim_edit_tab_restore_list(save_list: c_int);
-    fn nvim_edit_tab_cursor_col(lnum_out: *mut LinenrT) -> ColnrT;
-    fn nvim_edit_tab_set_cursor_col(col: ColnrT);
-    fn nvim_edit_tab_get_cursor(lnum: *mut LinenrT, col: *mut ColnrT);
-    fn nvim_edit_tab_is_vreplace() -> bool;
-    fn nvim_edit_tab_is_replace() -> bool;
-    fn nvim_edit_tab_strnsave_cursor_line() -> *mut c_char;
+    #[link_name = "get_cursor_pos_ptr"]
     fn nvim_edit_tab_get_cursor_pos_ptr() -> *mut c_char;
     // nvim_ascii_iswhite replaced by inline Rust: c == b' ' as c_char || c == b'\t' as c_char
-    fn nvim_edit_tab_getvcol(lnum: LinenrT, col: ColnrT) -> ColnrT;
     fn nvim_edit_tab_charsize_tab(vcol: ColnrT) -> c_int;
     fn nvim_edit_tab_charsize_space(vcol: ColnrT, ptr: *const c_char) -> c_int;
-    fn nvim_edit_tab_get_Insstart(lnum: *mut LinenrT, col: *mut ColnrT);
-    fn nvim_edit_tab_set_Insstart_col(col: ColnrT);
     fn nvim_edit_tab_rewrite_line(
         ptr: *mut c_char,
         i: c_int,
@@ -106,13 +101,27 @@ extern "C" {
         fpos_col: ColnrT,
         fpos_lnum: LinenrT,
     );
-    fn nvim_edit_tab_strmove(ptr: *mut c_char, i: c_int);
+    #[link_name = "vim_strchr"]
+    fn nvim_vim_strchr(src: *const c_char, c: c_int) -> *const c_char;
+    #[link_name = "getvcol"]
+    fn nvim_getvcol(
+        wp: *mut std::ffi::c_void,
+        pos: *const std::ffi::c_void,
+        start: *mut ColnrT,
+        cursor: *mut ColnrT,
+        end: *mut ColnrT,
+    );
+    fn xstrnsave(src: *const c_char, len: usize) -> *mut c_char;
+    #[allow(clashing_extern_declarations)]
+    fn get_cursor_line_ptr() -> *const c_char;
+    fn get_cursor_line_len() -> c_int;
     #[link_name = "backspace_until_column"]
     fn nvim_edit_tab_backspace_until_column(col: ColnrT);
     #[link_name = "ins_bytes_len"]
     fn nvim_edit_tab_ins_bytes_len(s: *const c_char, len: usize);
     #[link_name = "replace_join"]
     fn nvim_edit_tab_replace_join(off: c_int);
+    fn strlen(s: *const c_char) -> usize;
     fn xfree(ptr: *mut std::ffi::c_void);
 }
 
@@ -155,26 +164,30 @@ const VREPLACE_FLAG: c_int = 0x200;
 /// Accesses global Neovim state via C helpers.
 #[allow(clippy::too_many_lines)]
 unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
-    let vreplace = nvim_edit_tab_is_vreplace();
-    let replace_mode = nvim_edit_tab_is_replace();
+    let vreplace = State & VREPLACE_FLAG != 0;
+    let replace_mode = State & REPLACE_FLAG != 0;
 
     // Obtain a pointer to the region to scan.
     // For VREPLACE we save the line first and work on the copy;
     // otherwise we work directly in the line buffer.
-    let mut cursor_lnum: LinenrT = 0;
-    let mut cursor_col: ColnrT = 0;
-    nvim_edit_tab_get_cursor(&raw mut cursor_lnum, &raw mut cursor_col);
+    let cursor_lnum: LinenrT = nvim_window::win_struct::win_ref(curwin).w_cursor.lnum;
+    let cursor_col: ColnrT = nvim_window::win_struct::win_ref(curwin).w_cursor.col;
 
     let (saved_line, mut ptr) = if vreplace {
-        let sl = nvim_edit_tab_strnsave_cursor_line();
+        let line = get_cursor_line_ptr();
+        let len = get_cursor_line_len() as usize;
+        let sl = xstrnsave(line, len);
         let p = sl.add(cursor_col as usize);
         (sl, p)
     } else {
         (std::ptr::null_mut(), nvim_edit_tab_get_cursor_pos_ptr())
     };
 
-    // Save and optionally clear 'list' (CPO_LISTWM check is inside the shim).
-    let save_list = nvim_edit_tab_save_list();
+    // Save and optionally clear 'list' (CPO_LISTWM = 'L').
+    let save_list = nvim_window::win_struct::win_ref(curwin).w_p_list();
+    if nvim_vim_strchr(p_cpo, c_int::from(b'L')).is_null() {
+        nvim_window::win_struct::win_mut(curwin).set_w_p_list(0);
+    }
 
     // Build fpos = curwin->w_cursor; then walk back over whitespace.
     let fpos_lnum: LinenrT = cursor_lnum;
@@ -187,16 +200,45 @@ unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
     }
 
     // In REPLACE mode, don't back up past Insstart.col.
-    let mut insstart_lnum: LinenrT = 0;
-    let mut insstart_col: ColnrT = 0;
-    nvim_edit_tab_get_Insstart(&raw mut insstart_lnum, &raw mut insstart_col);
+    let insstart_lnum: LinenrT = Insstart.lnum;
+    let insstart_col: ColnrT = Insstart.col;
     if replace_mode && fpos_lnum == insstart_lnum && fpos_col < insstart_col {
         ptr = ptr.add((insstart_col - fpos_col) as usize);
         fpos_col = insstart_col;
     }
 
-    let vcol_start = nvim_edit_tab_getvcol(fpos_lnum, fpos_col);
-    let vcol_want = nvim_edit_tab_getvcol(cursor_lnum, cursor_col);
+    let vcol_start = {
+        let pos = nvim_window::win_struct::PosT {
+            lnum: fpos_lnum,
+            col: fpos_col,
+            coladd: 0,
+        };
+        let mut vcol = 0i32;
+        nvim_getvcol(
+            curwin.as_ptr(),
+            (&raw const pos).cast(),
+            &raw mut vcol,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        vcol
+    };
+    let vcol_want = {
+        let pos = nvim_window::win_struct::PosT {
+            lnum: cursor_lnum,
+            col: cursor_col,
+            coladd: 0,
+        };
+        let mut vcol = 0i32;
+        nvim_getvcol(
+            curwin.as_ptr(),
+            (&raw const pos).cast(),
+            &raw mut vcol,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        vcol
+    };
 
     let mut change_col: c_int = -1;
     let mut vcol = vcol_start;
@@ -212,7 +254,7 @@ unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
             if change_col < 0 {
                 change_col = fpos_col as c_int;
                 if fpos_lnum == insstart_lnum && fpos_col < insstart_col {
-                    nvim_edit_tab_set_Insstart_col(fpos_col);
+                    Insstart.col = fpos_col;
                 }
             }
         }
@@ -239,7 +281,10 @@ unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
         let i: c_int = cursor_col - fpos_col;
         if i > 0 {
             if vreplace {
-                nvim_edit_tab_strmove(ptr, i);
+                // STRMOVE(ptr, ptr + i) = memmove(ptr, ptr+i, strlen(ptr+i)+1)
+                let src = ptr.add(i as usize);
+                let len = strlen(src) + 1;
+                std::ptr::copy(src, ptr, len);
             } else {
                 // Raw memline rewrite (xmalloc/memmove/xfree) – done in C shim.
                 nvim_edit_tab_rewrite_line(
@@ -260,10 +305,10 @@ unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
                 }
             }
         }
-        nvim_edit_tab_set_cursor_col(cursor_col - i as ColnrT);
+        nvim_window::win_struct::win_mut(curwin).w_cursor.col = cursor_col - i as ColnrT;
 
         if vreplace {
-            let new_col = nvim_edit_tab_cursor_col(std::ptr::null_mut());
+            let new_col = nvim_window::win_struct::win_ref(curwin).w_cursor.col;
             nvim_edit_tab_backspace_until_column(change_col as ColnrT);
             nvim_edit_tab_ins_bytes_len(
                 saved_line.add(change_col as usize),
@@ -275,7 +320,7 @@ unsafe fn ins_tab_replace_spaces_impl(_p_sta_val: bool, _ind: bool) {
     if vreplace {
         xfree(saved_line.cast::<std::ffi::c_void>());
     }
-    nvim_edit_tab_restore_list(save_list);
+    nvim_window::win_struct::win_mut(curwin).set_w_p_list(save_list);
 }
 
 // ============================================================================
