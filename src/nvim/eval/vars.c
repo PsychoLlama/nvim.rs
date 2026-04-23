@@ -115,6 +115,12 @@ extern void rs_set_vim_var_list(VimVarIndex idx, list_T *val);
 extern void rs_set_vim_var_dict(VimVarIndex idx, dict_T *val);
 extern void rs_set_vim_var_partial(VimVarIndex idx, partial_T *val);
 
+// Phase 1 (new): option conversion and set_cmdarg migrated to Rust
+extern OptVal rs_tv_to_optval(typval_T *tv, OptIndex opt_idx, const char *option, bool *error);
+extern void rs_optval_as_tv(OptVal value, bool numbool, typval_T *rettv);
+extern void rs_set_option_from_tv(const char *varname, typval_T *varp);
+extern char *rs_set_cmdarg(exarg_T *eap, char *oldarg);
+
 // Phase 5: helper and utility functions migrated to Rust
 extern void rs_set_reg_var(int c);
 extern char *rs_v_exception(char *oldval);
@@ -1795,116 +1801,7 @@ char *v_exception(char *oldval) { return rs_v_exception(oldval); }
 /// Must always be called in pairs!
 char *set_cmdarg(exarg_T *eap, char *oldarg)
 {
-  typval_T *tv = get_vim_var_tv(VV_CMDARG);
-  char *oldval = tv->vval.v_string;
-  if (eap == NULL) {
-    goto error;
-  }
-
-  size_t len = 0;
-  if (eap->force_bin == FORCE_BIN) {
-    len += 6;  // " ++bin"
-  } else if (eap->force_bin == FORCE_NOBIN) {
-    len += 8;  // " ++nobin"
-  }
-
-  if (eap->read_edit) {
-    len += 7;  // " ++edit"
-  }
-
-  if (eap->force_ff != 0) {
-    len += 10;  // " ++ff=unix"
-  }
-  if (eap->force_enc != 0) {
-    len += strlen(eap->cmd + eap->force_enc) + 7;
-  }
-  if (eap->bad_char != 0) {
-    len += 7 + 4;  // " ++bad=" + "keep" or "drop"
-  }
-  if (eap->mkdir_p != 0) {
-    len += 4;  // " ++p"
-  }
-
-  const size_t newval_len = len + 1;
-  char *newval = xmalloc(newval_len);
-  size_t xlen = 0;
-  int rc = 0;
-
-  if (eap->force_bin == FORCE_BIN) {
-    rc = snprintf(newval, newval_len, " ++bin");
-  } else if (eap->force_bin == FORCE_NOBIN) {
-    rc = snprintf(newval, newval_len, " ++nobin");
-  } else {
-    *newval = NUL;
-  }
-  if (rc < 0) {
-    goto error;
-  }
-  xlen += (size_t)rc;
-
-  if (eap->read_edit) {
-    rc = snprintf(newval + xlen, newval_len - xlen, " ++edit");
-    if (rc < 0) {
-      goto error;
-    }
-    xlen += (size_t)rc;
-  }
-
-  if (eap->force_ff != 0) {
-    rc = snprintf(newval + xlen,
-                  newval_len - xlen,
-                  " ++ff=%s",
-                  eap->force_ff == 'u' ? "unix"
-                                       : eap->force_ff == 'd' ? "dos" : "mac");
-    if (rc < 0) {
-      goto error;
-    }
-    xlen += (size_t)rc;
-  }
-  if (eap->force_enc != 0) {
-    rc = snprintf(newval + (xlen), newval_len - xlen, " ++enc=%s", eap->cmd + eap->force_enc);
-    if (rc < 0) {
-      goto error;
-    }
-    xlen += (size_t)rc;
-  }
-
-  if (eap->bad_char == BAD_KEEP) {
-    rc = snprintf(newval + xlen, newval_len - xlen, " ++bad=keep");
-    if (rc < 0) {
-      goto error;
-    }
-    xlen += (size_t)rc;
-  } else if (eap->bad_char == BAD_DROP) {
-    rc = snprintf(newval + xlen, newval_len - xlen, " ++bad=drop");
-    if (rc < 0) {
-      goto error;
-    }
-    xlen += (size_t)rc;
-  } else if (eap->bad_char != 0) {
-    rc = snprintf(newval + xlen, newval_len - xlen, " ++bad=%c", eap->bad_char);
-    if (rc < 0) {
-      goto error;
-    }
-    xlen += (size_t)rc;
-  }
-
-  if (eap->mkdir_p != 0) {
-    rc = snprintf(newval + xlen, newval_len - xlen, " ++p");
-    if (rc < 0) {
-      goto error;
-    }
-    xlen += (size_t)rc;
-  }
-  assert(xlen <= newval_len);
-
-  tv->vval.v_string = newval;
-  return oldval;
-
-error:
-  xfree(oldval);
-  tv->vval.v_string = oldarg;
-  return NULL;
+  return rs_set_cmdarg(eap, oldarg);
 }
 
 char *v_throwpoint(char *oldval) { return rs_v_throwpoint(oldval); }
@@ -2631,54 +2528,7 @@ static void getwinvar(typval_T *argvars, typval_T *rettv, int off)
 ///          Returns NIL_OPTVAL for invalid option name.
 static OptVal tv_to_optval(typval_T *tv, OptIndex opt_idx, const char *option, bool *error)
 {
-  OptVal value = NIL_OPTVAL;
-  char nbuf[NUMBUFLEN];
-  bool err = false;
-  const bool is_tty_opt = rs_is_tty_option(option);
-  const bool option_has_bool = !is_tty_opt && option_has_type(opt_idx, kOptValTypeBoolean);
-  const bool option_has_num = !is_tty_opt && option_has_type(opt_idx, kOptValTypeNumber);
-  const bool option_has_str = is_tty_opt || option_has_type(opt_idx, kOptValTypeString);
-
-  if (!is_tty_opt && (get_option(opt_idx)->flags & kOptFlagFunc) && tv_is_func(*tv)) {
-    // If the option can be set to a function reference or a lambda
-    // and the passed value is a function reference, then convert it to
-    // the name (string) of the function reference.
-    char *strval = encode_tv2string(tv, NULL);
-    err = strval == NULL;
-    value = CSTR_AS_OPTVAL(strval);
-  } else if (option_has_bool || option_has_num) {
-    varnumber_T n = option_has_num ? tv_get_number_chk(tv, &err) : tv_get_bool_chk(tv, &err);
-    // This could be either "0" or a string that's not a number.
-    // So we need to check if it's actually a number.
-    if (!err && tv->v_type == VAR_STRING && n == 0) {
-      unsigned idx;
-      for (idx = 0; tv->vval.v_string[idx] == '0'; idx++) {}
-      if (tv->vval.v_string[idx] != NUL || idx == 0) {
-        // There's another character after zeros or the string is empty.
-        // In both cases, we are trying to set a num option using a string.
-        err = true;
-        semsg(_("E521: Number required: &%s = '%s'"), option, tv->vval.v_string);
-      }
-    }
-    value = option_has_num ? NUMBER_OPTVAL((OptInt)n) : BOOLEAN_OPTVAL(TRISTATE_FROM_INT(n));
-  } else if (option_has_str) {
-    // Avoid setting string option to a boolean or a special value.
-    if (tv->v_type != VAR_BOOL && tv->v_type != VAR_SPECIAL) {
-      const char *strval = tv_get_string_buf_chk(tv, nbuf);
-      err = strval == NULL;
-      value = CSTR_TO_OPTVAL(strval);
-    } else if (!is_tty_opt) {
-      err = true;
-      emsg(_(e_string_required));
-    }
-  } else {
-    abort();  // This should never happen.
-  }
-
-  if (error != NULL) {
-    *error = err;
-  }
-  return value;
+  return rs_tv_to_optval(tv, opt_idx, option, error);
 }
 
 /// Convert an option value to typval.
@@ -2690,53 +2540,15 @@ static OptVal tv_to_optval(typval_T *tv, OptIndex opt_idx, const char *option, b
 /// @return  OptVal converted to typval.
 typval_T optval_as_tv(OptVal value, bool numbool)
 {
-  typval_T rettv = { .v_type = VAR_SPECIAL, .vval = { .v_special = kSpecialVarNull } };
-
-  switch (value.type) {
-  case kOptValTypeNil:
-    break;
-  case kOptValTypeBoolean:
-    if (numbool) {
-      rettv.v_type = VAR_NUMBER;
-      rettv.vval.v_number = value.data.boolean;
-    } else if (value.data.boolean != kNone) {
-      rettv.v_type = VAR_BOOL;
-      rettv.vval.v_bool = value.data.boolean == kTrue;
-    }
-    break;  // return v:null for None boolean value.
-  case kOptValTypeNumber:
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = value.data.number;
-    break;
-  case kOptValTypeString:
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = value.data.string.data;
-    break;
-  }
-
+  typval_T rettv;
+  rs_optval_as_tv(value, numbool, &rettv);
   return rettv;
 }
 
 /// Set option "varname" to the value of "varp" for the current buffer/window.
 static void set_option_from_tv(const char *varname, typval_T *varp)
 {
-  OptIndex opt_idx = find_option(varname);
-  if (opt_idx == kOptInvalid) {
-    semsg(_(e_unknown_option2), varname);
-    return;
-  }
-
-  bool error = false;
-  OptVal value = tv_to_optval(varp, opt_idx, varname, &error);
-
-  if (!error) {
-    const char *errmsg = set_option_value_handle_tty(varname, opt_idx, value, OPT_LOCAL);
-
-    if (errmsg) {
-      emsg(errmsg);
-    }
-  }
-  rs_optval_free(value);
+  rs_set_option_from_tv(varname, varp);
 }
 
 /// "setwinvar()" and "settabwinvar()" functions
