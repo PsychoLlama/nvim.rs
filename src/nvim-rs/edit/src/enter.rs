@@ -61,12 +61,12 @@ extern "C" {
     // Cursor
     fn nvim_curwin_get_cursor_lnum() -> LinenrT;
     fn nvim_curwin_get_cursor_col() -> ColnrT;
-    fn nvim_save_cursor_pos(lnum_out: *mut LinenrT, col_out: *mut ColnrT, coladd_out: *mut ColnrT);
-    fn nvim_restore_cursor_pos(lnum: LinenrT, col: ColnrT, coladd: ColnrT);
-    fn nvim_cursor_equals_saved(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> c_int;
-    fn nvim_cursor_on_tab_or_inline() -> c_int;
     fn nvim_get_curwin() -> nvim_window::WinHandle;
-    fn nvim_check_cursor_col_insert_mode();
+    static mut curwin: nvim_window::WinHandle;
+    #[link_name = "check_cursor_col"]
+    fn nvim_check_cursor_col(wp: nvim_window::WinHandle);
+    fn nvim_buf_meta_total(buf: *mut c_void, meta: c_int) -> c_int;
+    fn gchar_cursor() -> c_int;
 
     // Buffer
     static mut curbuf: *mut c_void;
@@ -90,10 +90,10 @@ extern "C" {
     // Flags
     fn nvim_get_stop_insert_mode() -> c_int;
     fn nvim_set_stop_insert_mode(val: c_int);
-    fn nvim_clear_where_paste_started();
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
     static mut ins_at_eol: bool;
+    static mut where_paste_started: nvim_window::win_struct::PosT;
     fn nvim_get_o_lnum() -> LinenrT;
     fn nvim_set_o_lnum(val: LinenrT);
     static mut need_start_insertmode: bool;
@@ -125,7 +125,6 @@ extern "C" {
     // Mode state machinery
     fn may_trigger_modechanged();
     fn setmouse();
-    fn gchar_cursor() -> c_int;
 
     // Utilities
     fn msg_check_for_delay(check_msg_scroll: std::ffi::c_int);
@@ -137,7 +136,6 @@ extern "C" {
     fn nvim_state_enter(state: *mut c_void);
     fn ins_esc(count: *mut c_int, cmdchar: c_int, nomove: c_int) -> c_int;
     fn nvim_get_inserted_size() -> c_int;
-    fn nvim_update_o_lnum_if_at_eol();
     fn nvim_curbuf_sync_changedtick_after_insert();
 
     // Rust fold FFI (already defined in Rust)
@@ -181,10 +179,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // Trigger InsertEnter autocommands. Do not do this for "r<CR>" or "grx".
     let cmdchar = (*s).cmdchar;
     if cmdchar != c_int::from(b'r') && cmdchar != c_int::from(b'v') {
-        let mut save_lnum: LinenrT = 0;
-        let mut save_col: ColnrT = 0;
-        let mut save_coladd: ColnrT = 0;
-        nvim_save_cursor_pos(&raw mut save_lnum, &raw mut save_col, &raw mut save_coladd);
+        let saved_cursor = nvim_window::win_struct::win_ref(curwin).w_cursor;
 
         nvim_set_vv_insertmode(cmdchar);
         nvim_textfmt_clear_vv_char();
@@ -197,12 +192,18 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
         // Make sure the cursor didn't move. Do call check_cursor_col() in
         // case the text was modified.
-        if nvim_cursor_equals_saved(save_lnum, save_col, save_coladd) == 0
+        let cur = nvim_window::win_struct::win_ref(curwin).w_cursor;
+        if (cur.lnum != saved_cursor.lnum
+            || cur.col != saved_cursor.col
+            || cur.coladd != saved_cursor.coladd)
             && nvim_vv_char_is_empty() != 0
-            && save_lnum <= nvim_get_curbuf_ml_line_count()
+            && saved_cursor.lnum <= nvim_get_curbuf_ml_line_count()
         {
-            nvim_restore_cursor_pos(save_lnum, save_col, save_coladd);
-            nvim_check_cursor_col_insert_mode();
+            nvim_window::win_struct::win_mut(curwin).w_cursor = saved_cursor;
+            let save_state = State;
+            State = MODE_INSERT;
+            nvim_check_cursor_col(curwin);
+            State = save_state;
         }
     }
 
@@ -257,7 +258,10 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // Need to position cursor again when on a TAB and
     // when on a char with inline virtual text
-    if nvim_cursor_on_tab_or_inline() != 0 {
+    // kMTMetaInline = 0
+    if gchar_cursor() == c_int::from(b'\t')
+        || nvim_buf_meta_total(curbuf, 0 /* kMTMetaInline */) > 0
+    {
         {
             // VALID_WROW = 0x01, VALID_WCOL = 0x02, VALID_VIRTCOL = 0x04
             nvim_window::win_struct::win_mut(nvim_get_curwin()).w_valid &= !(0x01 | 0x02 | 0x04);
@@ -292,7 +296,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     // Need to save the line for undo before inserting the first char.
     nvim_set_ins_need_undo(1);
 
-    nvim_clear_where_paste_started();
+    where_paste_started.lnum = 0;
     nvim_set_can_cindent(1);
 
     // The cursor line is not in a closed fold, unless restarting.
@@ -316,7 +320,8 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // nvim calls ui_cursor_shape() and do_digraph(-1) via C helpers not yet wrapped;
     // call them via the wrappers available in the dispatch module.
-    nvim_ui_cursor_shape_and_clear_digraph();
+    ui_cursor_shape();
+    do_digraph(-1);
 
     // Get the current length of the redo buffer.
     let insert_skip = nvim_get_inserted_size();
@@ -335,7 +340,9 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 
     // Always update o_lnum, so that a "CTRL-O ." that adds a line
     // still puts the cursor back after the inserted text.
-    nvim_update_o_lnum_if_at_eol();
+    if ins_at_eol {
+        nvim_set_o_lnum(nvim_window::win_struct::win_ref(curwin).w_cursor.lnum);
+    }
 
     pum_check_clear();
 
@@ -360,7 +367,8 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
 // ============================================================================
 
 extern "C" {
-    fn nvim_ui_cursor_shape_and_clear_digraph();
+    fn ui_cursor_shape();
+    fn do_digraph(c: c_int) -> c_int;
 }
 
 // ============================================================================
@@ -371,11 +379,9 @@ extern "C" {
     // These are needed for handle_restart_edit_cursor
     #[link_name = "stuff_empty"]
     fn stuff_empty_enter() -> bool;
-    fn nvim_get_where_paste_started_lnum() -> LinenrT;
     fn nvim_validate_virtcol_curwin();
     #[link_name = "update_curswant"]
     fn nvim_update_curswant();
-    fn nvim_get_ins_at_eol() -> bool;
     fn nvim_curwin_get_w_virtcol() -> ColnrT;
     fn nvim_get_cursor_line_ptr() -> *const std::ffi::c_char;
     fn nvim_utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
@@ -391,7 +397,7 @@ extern "C" {
 /// Accesses multiple global variables via C accessor functions.
 unsafe fn handle_restart_edit_cursor_impl() -> c_int {
     if restart_edit != 0 && stuff_empty_enter() {
-        let paste_lnum = nvim_get_where_paste_started_lnum();
+        let paste_lnum = where_paste_started.lnum;
         nvim_set_arrow_used(c_int::from(paste_lnum == 0));
         restart_edit = 0;
 
@@ -400,7 +406,7 @@ unsafe fn handle_restart_edit_cursor_impl() -> c_int {
 
         let cursor_lnum = nvim_curwin_get_cursor_lnum();
         let cursor_col = nvim_curwin_get_cursor_col();
-        let cur_ins_at_eol = nvim_get_ins_at_eol();
+        let cur_ins_at_eol = ins_at_eol;
         let o_lnum = nvim_get_o_lnum();
         let curswant = nvim_window::win_struct::win_ref(nvim_get_curwin()).w_curswant;
         let virtcol = nvim_curwin_get_w_virtcol();
@@ -460,7 +466,6 @@ extern "C" {
     fn nvim_curbuf_get_b_prompt_start_lnum() -> LinenrT;
     fn nvim_curbuf_inc_prompt_start_lnum();
     fn nvim_curwin_set_cursor_lnum(lnum: LinenrT);
-    fn nvim_curwin_set_cursor_lnum_to_line_count();
     fn nvim_coladvance(col: ColnrT);
     fn inserted_bytes(lnum: LinenrT, start_col: ColnrT, old_col: c_int, new_col: c_int);
     fn nvim_get_Insstart_orig_lnum() -> LinenrT;
@@ -530,7 +535,7 @@ unsafe fn init_prompt_impl(cmdchar_todo: c_int) {
             nvim_ml_append(line_count, prompt, 0, false);
             nvim_curbuf_inc_prompt_start_lnum();
         }
-        nvim_curwin_set_cursor_lnum_to_line_count();
+        nvim_window::win_struct::win_mut(curwin).w_cursor.lnum = nvim_get_curbuf_ml_line_count();
         nvim_coladvance(MAXCOL);
         let new_line_count = nvim_get_curbuf_ml_line_count();
         inserted_bytes(new_line_count, 0, 0, prompt_len);

@@ -23,7 +23,7 @@ extern "C" {
     fn nvim_edit_init_prompt_impl(cmdchar_todo: c_int);
 
     // --- edit() entry point dependencies ---
-    fn nvim_curbuf_has_terminal() -> bool;
+    static mut curbuf: nvim_buffer::BufHandle;
     static ex_normal_busy: c_int;
     fn rs_terminal_enter() -> bool;
     fn nvim_get_sandbox() -> c_int;
@@ -157,7 +157,7 @@ const CTRL_O: c_int = 15;
 #[unsafe(export_name = "edit")]
 pub unsafe extern "C" fn rs_edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
     // Terminal buffer: delegate to terminal_enter() or queue restart_edit.
-    if nvim_curbuf_has_terminal() {
+    if !nvim_buffer::buf_struct::buf_ref(curbuf).terminal.is_null() {
         if ex_normal_busy != 0 {
             // Do not enter terminal mode from ex_normal() -- it would cause
             // havoc (terminal-mode recursiveness). Set restart_edit instead.

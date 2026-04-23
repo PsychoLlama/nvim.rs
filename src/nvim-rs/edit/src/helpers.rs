@@ -427,8 +427,7 @@ extern "C" {
     fn nvim_curbuf_get_cursor_line_mut() -> *mut c_char;
     /// `get_cursor_line_len()` (`normal_shim.c`).
     fn nvim_get_cursor_line_len() -> c_int;
-    /// curbuf->b_ml.ml_line_len-- (`edit_shim.c`).
-    fn nvim_curbuf_dec_ml_line_len();
+    static mut curbuf: nvim_buffer::BufHandle;
 }
 
 /// Trim the last character of the current line if it is a space (`FO_WHITE_PAR` helper).
@@ -443,7 +442,7 @@ unsafe fn nvim_trim_eol_space_impl() {
         let last = ptr.add((len - 1) as usize);
         if *last == b' ' as c_char {
             *last = 0; // NUL-terminate (trims space)
-            nvim_curbuf_dec_ml_line_len();
+            nvim_buffer::buf_struct::buf_mut(curbuf).ml_line_len -= 1;
         }
     }
 }

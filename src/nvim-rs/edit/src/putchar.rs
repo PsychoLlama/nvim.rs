@@ -42,8 +42,6 @@ static PC_COL: AtomicI32 = AtomicI32::new(0);
 // ============================================================================
 
 extern "C" {
-    /// True when curwin->w_grid_alloc.chars is non-NULL (`edit_shim.c`).
-    fn nvim_curwin_grid_alloc_has_chars() -> bool;
     /// True when `default_grid.chars` is non-NULL (`drawscreen_shim.c`).
     fn nvim_default_grid_has_chars() -> bool;
     /// `update_topline(curwin)` (`eval_shim.c`).
@@ -54,8 +52,6 @@ extern "C" {
     fn nvim_hl_attr_8() -> c_int;
     /// curwin->w_wrow (`normal_shim.c`).
     fn nvim_curwin_get_wrow() -> c_int;
-    /// curwin->w_p_rl (`edit_shim.c`).
-    fn nvim_curwin_get_p_rl() -> c_int;
     /// curwin->w_view_width (`ex_cmds_shim.c`).
     fn nvim_curwin_get_view_width() -> c_int;
     /// curwin->w_wcol (`normal_shim.c`).
@@ -79,8 +75,11 @@ extern "C" {
     /// `nvim_schar_from_ascii(' ')` (message.h).
     fn nvim_schar_from_ascii(c: c_int) -> c_uint;
     fn utf_char2bytes(c: c_int, buf: *mut u8) -> c_int;
-    /// redrawWinline(curwin, curwin->w_cursor.lnum) (`edit_shim.c`).
-    fn nvim_redrawwinline_cursor();
+    /// redrawWinline(curwin, curwin->w_cursor.lnum).
+    #[link_name = "redrawWinline"]
+    fn redraw_winline(wp: *mut c_void, lnum: c_int);
+    /// curwin global.
+    static mut curwin: nvim_window::WinHandle;
 }
 
 // ============================================================================
@@ -93,7 +92,8 @@ extern "C" {
 /// # Safety
 /// Calls C functions that access global `curwin/default_grid` state.
 unsafe fn edit_putchar_impl(c: c_int, highlight: bool) {
-    if !nvim_curwin_grid_alloc_has_chars() && !nvim_default_grid_has_chars() {
+    if !nvim_window::win_struct::win_grid_alloc_has_chars(curwin) && !nvim_default_grid_has_chars()
+    {
         return;
     }
 
@@ -108,7 +108,7 @@ unsafe fn edit_putchar_impl(c: c_int, highlight: bool) {
 
     nvim_edit_grid_line_start(row);
 
-    if nvim_curwin_get_p_rl() != 0 {
+    if nvim_window::win_struct::win_ref(curwin).w_p_rl() != 0 {
         let col = nvim_curwin_get_view_width() - 1 - nvim_curwin_get_wcol();
         PC_COL.store(col, Ordering::Relaxed);
         if nvim_edit_grid_line_getchar(col, std::ptr::null_mut()) == 0 {
@@ -173,7 +173,10 @@ unsafe fn edit_unputchar_impl() {
     }
 
     if status == PC_STATUS_RIGHT || status == PC_STATUS_LEFT {
-        nvim_redrawwinline_cursor();
+        redraw_winline(
+            curwin.as_ptr(),
+            nvim_window::win_struct::win_ref(curwin).w_cursor.lnum,
+        );
     } else {
         // PC_STATUS_SET: restore the saved character
         let row = PC_ROW.load(Ordering::Relaxed);
