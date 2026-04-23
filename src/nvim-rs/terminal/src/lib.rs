@@ -1487,22 +1487,39 @@ extern "C" {
     fn nvim_redraw_statuslines();
     #[link_name = "ui_flush"]
     fn nvim_ui_flush();
-    fn nvim_apply_termenter_autocmd();
-    fn nvim_apply_termleave_autocmd();
-    fn nvim_apply_textchangedt_autocmd();
+    // apply_autocmds(event, fname, fname_io, force, buf)
+    fn apply_autocmds(
+        event: c_int,
+        fname: *mut i8,
+        fname_io: *mut i8,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
+    // has_event(event) -> int
+    fn has_event(event: c_int) -> c_int;
     fn may_trigger_modechanged();
     #[link_name = "may_trigger_win_scrolled_resized"]
     fn nvim_may_trigger_win_scrolled_resized();
-    fn nvim_has_event_textchangedt() -> c_int;
     fn nvim_term_buf_get_changedtick(buf: *const c_void) -> i64;
     #[link_name = "state_enter"]
     fn nvim_state_enter_c(state: *mut c_void);
     #[link_name = "merge_modifiers"]
     fn nvim_merge_modifiers_c(key: c_int, tmp_mod_mask: *mut c_int) -> c_int;
-    fn nvim_paste_repeat_c();
+    #[link_name = "paste_repeat"]
+    fn nvim_paste_repeat_c(count: c_int);
     fn state_handle_k_event();
-    fn nvim_do_cmdline_key_cmd();
-    fn nvim_map_execute_lua_c();
+    // do_cmdline(cmdline, fgetline, cookie, flags)
+    fn do_cmdline(
+        cmdline: *mut i8,
+        fgetline: Option<unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut i8>,
+        cookie: *mut c_void,
+        flags: c_int,
+    );
+    fn getcmdkeycmd(promptc: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool)
+        -> *mut i8;
+    // map_execute_lua(may_repeat, discard) -> bool
+    #[link_name = "map_execute_lua"]
+    fn nvim_map_execute_lua_c(may_repeat: bool, discard: bool) -> bool;
     #[link_name = "rs_set_terminal_winopts"]
     fn nvim_terminal_set_winopts(s: *mut c_void);
     #[link_name = "rs_unset_terminal_winopts"]
@@ -1517,11 +1534,15 @@ extern "C" {
     #[link_name = "win_col_off"]
     fn nvim_win_col_off(wp: *mut c_void) -> c_int;
     fn nvim_get_vgetc_char() -> c_int;
-    fn nvim_ins_char_typebuf_c(c: c_int, mod_mask_val: c_int) -> c_int;
+    #[link_name = "ins_char_typebuf"]
+    fn nvim_ins_char_typebuf_c(c: c_int, mod_mask_val: c_int, on_key_ignore: bool) -> c_int;
     #[link_name = "ungetchars"]
     fn nvim_ungetchars(len: c_int);
     fn nvim_do_mousescroll_c(term: *mut c_void, mouse_win: *mut c_void, c: c_int) -> c_int;
-    fn nvim_do_buffer_wipe(buf_handle: c_int);
+    // do_buffer_ext(action, start, dir, count, flags)
+    // DOBUF_WIPE=4, DOBUF_FIRST=1, FORWARD=1, DOBUF_FORCEIT=1
+    #[link_name = "do_buffer_ext"]
+    fn nvim_do_buffer_wipe(action: c_int, start: c_int, dir: c_int, count: c_int, flags: c_int);
     // Phase 13: terminal_close helpers
     #[link_name = "block_autocmds"]
     fn c_block_autocmds();
@@ -2749,7 +2770,7 @@ pub unsafe extern "C" fn rs_send_mouse_event(term: TerminalHandle, c: c_int) -> 
 
     let vgetc_char = unsafe { nvim_get_vgetc_char() };
     let vgetc_mod = unsafe { c_vgetc_mod_mask };
-    let len = unsafe { nvim_ins_char_typebuf_c(vgetc_char, vgetc_mod) };
+    let len = unsafe { nvim_ins_char_typebuf_c(vgetc_char, vgetc_mod, true) };
     if unsafe { c_key_typed } {
         unsafe { nvim_ungetchars(len) };
     }
@@ -3182,7 +3203,7 @@ extern "C" {
     fn nvim_term_treqbuf_printf_osc(term: *mut c_void, command: c_int);
     fn nvim_term_treqbuf_printf_dcs(term: *mut c_void, command: *const i8, cmdlen: c_int);
     fn nvim_term_treqbuf_printf_apc(term: *mut c_void);
-    fn nvim_terminal_has_termrequest_event() -> c_int;
+    // has_event is declared globally above
     fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
     // Phase 16: term_selection_set / term_clipboard_set migration
     fn nvim_terminal_clipboard_queue(mask: c_long, data: *mut i8);
@@ -3288,7 +3309,12 @@ extern "C" {
     #[link_name = "multiqueue_free"]
     fn nvim_multiqueue_free(q: *mut c_void);
     // Phase 4 (terminal_shim cleanup): fetch_cell/fetch_row migration
-    fn nvim_vterm_screen_get_cell_c(vts: *mut c_void, row: c_int, col: c_int, cell: *mut c_void);
+    // vterm_screen_get_cell(screen, pos, cell) - pos is VTermPos by value
+    fn vterm_screen_get_cell(
+        vts: *mut c_void,
+        pos: nvim_vterm::VTermPos,
+        cell: *mut c_void,
+    ) -> c_int;
     fn rs_vterm_state_convert_color_to_rgb(state: *mut c_void, col: *mut nvim_vterm::VTermColor);
     fn schar_get_adv(buf_out: *mut *mut i8, sc: nvim_vterm::SChar) -> usize;
     fn hl_get_term_attr(attrs: *const HlAttrsLocal) -> c_int;
@@ -3335,7 +3361,7 @@ pub unsafe extern "C" fn rs_fetch_cell(
             return 0;
         }
     } else {
-        unsafe { nvim_vterm_screen_get_cell_c(t.vts, row, col, cell) };
+        unsafe { vterm_screen_get_cell(t.vts, nvim_vterm::VTermPos::new(row, col), cell) };
     }
     1
 }
@@ -3871,7 +3897,7 @@ pub unsafe extern "C" fn rs_on_osc(
     if str_ptr.is_null() || len == 0 {
         return 0;
     }
-    if command != 8 && unsafe { nvim_terminal_has_termrequest_event() } == 0 {
+    if command != 8 && unsafe { has_event(119) } == 0 {
         return 1;
     }
     let term = unsafe { TerminalHandle::from_ptr(user) };
@@ -3888,7 +3914,7 @@ pub unsafe extern "C" fn rs_on_osc(
     unsafe { sb_concat_len(treq_buf, str_ptr, len) };
 
     if is_final != 0 {
-        if unsafe { nvim_terminal_has_termrequest_event() } != 0 {
+        if unsafe { has_event(119) } != 0 {
             unsafe { rs_schedule_termrequest(user) };
         }
         if command == 8 {
@@ -3923,7 +3949,7 @@ pub unsafe extern "C" fn rs_on_dcs(
     if command.is_null() || str_ptr.is_null() {
         return 0;
     }
-    if unsafe { nvim_terminal_has_termrequest_event() } == 0 {
+    if unsafe { has_event(119) } == 0 {
         return 1;
     }
     let term = unsafe { TerminalHandle::from_ptr(user) };
@@ -3964,7 +3990,7 @@ pub unsafe extern "C" fn rs_on_apc(
     if str_ptr.is_null() || len == 0 {
         return 0;
     }
-    if unsafe { nvim_terminal_has_termrequest_event() } == 0 {
+    if unsafe { has_event(119) } == 0 {
         return 1;
     }
     let term = unsafe { TerminalHandle::from_ptr(user) };
@@ -4797,7 +4823,7 @@ pub unsafe extern "C" fn rs_terminal_execute(state: *mut c_void, key: c_int) -> 
     }
 
     if mod_key == K_PASTE_START {
-        unsafe { nvim_paste_repeat_c() };
+        unsafe { nvim_paste_repeat_c(1) };
         return 1;
     }
 
@@ -4815,12 +4841,19 @@ pub unsafe extern "C" fn rs_terminal_execute(state: *mut c_void, key: c_int) -> 
     }
 
     if mod_key == K_COMMAND {
-        unsafe { nvim_do_cmdline_key_cmd() };
+        unsafe {
+            do_cmdline(
+                std::ptr::null_mut(),
+                Some(getcmdkeycmd),
+                std::ptr::null_mut(),
+                0,
+            );
+        };
         return 1;
     }
 
     if mod_key == K_LUA {
-        unsafe { nvim_map_execute_lua_c() };
+        unsafe { nvim_map_execute_lua_c(false, false) };
         return 1;
     }
 
@@ -4889,11 +4922,20 @@ pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
     let term = unsafe { TerminalHandle::from_ptr(s.term) };
     unsafe { term.as_mut().refcount += 1 };
 
-    if unsafe { nvim_has_event_textchangedt() } != 0 {
+    if unsafe { has_event(124) } != 0 {
         let buf_ref = unsafe { bref_raw(curbuf) };
         let cur_tick = unsafe { nvim_term_buf_get_changedtick(curbuf.cast()) };
         if buf_ref.b_last_changedtick_i != cur_tick {
-            unsafe { nvim_apply_textchangedt_autocmd() };
+            // EVENT_TEXTCHANGEDT = 124
+            unsafe {
+                apply_autocmds(
+                    124,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    false,
+                    curbuf,
+                )
+            };
             unsafe { (*curbuf.cast::<BufStruct>()).b_last_changedtick_i = cur_tick };
         }
     }
@@ -4962,6 +5004,7 @@ fn rs_terminal_check_focus_impl(s: &mut TerminalStateRust) -> bool {
 ///
 /// Replaces `terminal_enter` in `terminal_shim.c`.
 #[no_mangle]
+#[allow(clippy::too_many_lines)]
 pub extern "C" fn rs_terminal_enter() -> bool {
     let cur_terminal = unsafe { bref_raw(curbuf).terminal };
     if cur_terminal.is_null() {
@@ -5019,7 +5062,16 @@ pub extern "C" fn rs_terminal_enter() -> bool {
             nvim_term_buf_get_changedtick(curbuf.cast());
     };
 
-    unsafe { nvim_apply_termenter_autocmd() };
+    // EVENT_TERMENTER = 116
+    unsafe {
+        apply_autocmds(
+            116,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf,
+        )
+    };
     unsafe { may_trigger_modechanged() };
 
     // Run the state machine.
@@ -5068,7 +5120,16 @@ pub extern "C" fn rs_terminal_enter() -> bool {
         let term = unsafe { TerminalHandle::from_ptr(s.term) };
         unsafe { term.as_mut().refcount += 1 };
     }
-    unsafe { nvim_apply_termleave_autocmd() };
+    // EVENT_TERMLEAVE = 117
+    unsafe {
+        apply_autocmds(
+            117,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf,
+        )
+    };
     if s.close {
         let term = unsafe { TerminalHandle::from_ptr(s.term) };
         unsafe { term.as_mut().refcount -= 1 };
@@ -5081,7 +5142,8 @@ pub extern "C" fn rs_terminal_enter() -> bool {
             unsafe { close_cb(t.opts.data) };
         }
         if buf_handle != 0 {
-            unsafe { nvim_do_buffer_wipe(buf_handle) };
+            // do_buffer_ext(DOBUF_WIPE=4, DOBUF_FIRST=1, FORWARD=1, count, DOBUF_FORCEIT=1)
+            unsafe { nvim_do_buffer_wipe(4, 1, 1, buf_handle, 1) };
         }
     }
 
@@ -5114,7 +5176,7 @@ extern "C" {
     fn nvim_set_option_value_buftype_terminal();
     fn nvim_aucmd_prepbuf_alloc(buf: *mut c_void) -> *mut c_void;
     fn nvim_aucmd_restbuf_free(aco: *mut c_void);
-    fn nvim_apply_autocmds_termopen(buf: *mut c_void);
+    // apply_autocmds declared above; EVENT_TERMOPEN = 118
     fn nvim_reset_binding_curwin();
 
     fn nvim_multiqueue_new_standalone() -> *mut c_void;
@@ -5233,7 +5295,8 @@ pub unsafe extern "C" fn rs_terminal_open(
         }
     };
     term.sb_buffer = std::ptr::null_mut(); // check if TermOpen autocmd allocates it
-    unsafe { nvim_apply_autocmds_termopen(buf) };
+                                           // EVENT_TERMOPEN = 118
+    unsafe { apply_autocmds(118, std::ptr::null_mut(), std::ptr::null_mut(), false, buf) };
     unsafe { nvim_aucmd_restbuf_free(aco) };
 
     // Check if terminal was already destroyed during TermOpen autocmd.
