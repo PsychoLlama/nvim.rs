@@ -86,6 +86,28 @@ extern "C" {
         error: *mut c_int,
     ) -> *mut c_char;
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    // Phase 21: For call_user_func_check migration
+    fn nvim_ufunc_get_luaref(fp: *mut c_void) -> c_int;
+    fn typval_exec_lua_callable(
+        lua_cb: c_int,
+        argcount: c_int,
+        argvars: *mut c_void,
+        rettv: *mut c_void,
+    ) -> c_int;
+    fn call_user_func(
+        fp: *mut c_void,
+        argcount: c_int,
+        argvars: *mut c_void,
+        rettv: *mut c_void,
+        firstline: i32,
+        lastline: i32,
+        selfdict: *mut c_void,
+    );
+    fn check_user_func_argcount(fp: *mut c_void, argcount: c_int) -> c_int;
+    fn nvim_funcexe_get_doesrange(fe: *mut c_void) -> *mut bool;
+    fn nvim_funcexe_get_firstline(fe: *mut c_void) -> i32;
+    fn nvim_funcexe_get_lastline(fe: *mut c_void) -> i32;
 }
 
 // =============================================================================
@@ -96,7 +118,11 @@ const OK: c_int = 1;
 const FAIL: c_int = 0;
 const NOTDONE: c_int = 2;
 const FCERR_NONE: c_int = 5;
+const FCERR_UNKNOWN_OK: c_int = 0; // FCERR_UNKNOWN: "no error" return from check_user_func_argcount
 const FC_DELETED_FLAG: c_int = 0x10;
+const FC_LUAREF: c_int = 0x800;
+const FC_RANGE: c_int = 0x02;
+const FC_DICT: c_int = 0x04;
 const FLEN_FIXED: usize = 40;
 
 // =============================================================================
@@ -426,4 +452,76 @@ pub unsafe extern "C" fn rs_call_simple_func(
     unsafe { xfree(tofree.cast::<c_void>()) };
     unsafe { xfree(name.cast::<c_void>()) };
     ret
+}
+
+// =============================================================================
+// call_user_func_check
+// =============================================================================
+//
+// Phase 21: migrated from userfunc.c static function.
+
+/// Call a user function after checking the arguments.
+///
+/// Returns FCERR_NONE (5) on success, or an FCERR_* error code on failure.
+///
+/// # Safety
+/// `fp`, `argvars`, `rettv`, `funcexe` must be valid non-null pointers.
+/// `selfdict` may be null.
+#[unsafe(export_name = "call_user_func_check")]
+pub unsafe extern "C" fn rs_call_user_func_check(
+    fp: *mut c_void,
+    argcount: c_int,
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    funcexe: *mut c_void,
+    selfdict: *mut c_void,
+) -> c_int {
+    let flags = unsafe { nvim_ufunc_get_flags(fp) };
+
+    // Lua function: delegate directly to Lua callable
+    if flags & FC_LUAREF != 0 {
+        let lua_ref = unsafe { nvim_ufunc_get_luaref(fp) };
+        return unsafe { typval_exec_lua_callable(lua_ref, argcount, argvars, rettv) };
+    }
+
+    // If function takes a range and caller wants to know, mark it
+    if flags & FC_RANGE != 0 {
+        let doesrange = unsafe { nvim_funcexe_get_doesrange(funcexe) };
+        if !doesrange.is_null() {
+            unsafe { *doesrange = true };
+        }
+    }
+
+    // Validate argument count
+    let error = unsafe { check_user_func_argcount(fp, argcount) };
+    if error != FCERR_UNKNOWN_OK {
+        return error;
+    }
+
+    // Dict function requires selfdict
+    if flags & FC_DICT != 0 && selfdict.is_null() {
+        return FCERR_DICT;
+    }
+
+    // Call the user function
+    let firstline = unsafe { nvim_funcexe_get_firstline(funcexe) };
+    let lastline = unsafe { nvim_funcexe_get_lastline(funcexe) };
+    let effective_selfdict = if flags & FC_DICT != 0 {
+        selfdict
+    } else {
+        std::ptr::null_mut()
+    };
+    unsafe {
+        call_user_func(
+            fp,
+            argcount,
+            argvars,
+            rettv,
+            firstline,
+            lastline,
+            effective_selfdict,
+        );
+    };
+
+    FCERR_NONE
 }

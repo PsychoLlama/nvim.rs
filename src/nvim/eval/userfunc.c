@@ -996,31 +996,9 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
 extern int check_user_func_argcount(ufunc_T *fp, int argcount);
 
 /// Call a user function after checking the arguments.
-static int call_user_func_check(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rettv,
-                                funcexe_T *funcexe, dict_T *selfdict)
-  FUNC_ATTR_NONNULL_ARG(1, 3, 4, 5)
-{
-  if (fp->uf_flags & FC_LUAREF) {
-    return typval_exec_lua_callable(fp->uf_luaref, argcount, argvars, rettv);
-  }
-
-  if ((fp->uf_flags & FC_RANGE) && funcexe->fe_doesrange != NULL) {
-    *funcexe->fe_doesrange = true;
-  }
-  int error = check_user_func_argcount(fp, argcount);
-  if (error != FCERR_UNKNOWN) {
-    return error;
-  }
-  if ((fp->uf_flags & FC_DICT) && selfdict == NULL) {
-    error = FCERR_DICT;
-  } else {
-    // Call the user function.
-    call_user_func(fp, argcount, argvars, rettv, funcexe->fe_firstline, funcexe->fe_lastline,
-                   (fp->uf_flags & FC_DICT) ? selfdict : NULL);
-    error = FCERR_NONE;
-  }
-  return error;
-}
+// call_user_func_check migrated to Rust (funccal.rs Phase 21)
+extern int call_user_func_check(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rettv,
+                                funcexe_T *funcexe, dict_T *selfdict);
 
 static funccal_entry_T *funccal_stack = NULL;
 
@@ -3349,3 +3327,9 @@ void nvim_semsg_no_white_before_comma(const char *p)
   semsg(_(e_no_white_space_allowed_before_str_str), ",", p);
 }
 // nvim_semsg_invarg2 already exists in nvim-match Rust crate -- reuse directly
+
+// Phase 21: accessors for call_user_func_check migration (funccal.rs)
+// nvim_ufunc_get_luaref already exists in mapping.c
+bool *nvim_funcexe_get_doesrange(funcexe_T *fe) { return fe ? fe->fe_doesrange : NULL; }
+linenr_T nvim_funcexe_get_firstline(const funcexe_T *fe) { return fe ? fe->fe_firstline : 0; }
+linenr_T nvim_funcexe_get_lastline(const funcexe_T *fe) { return fe ? fe->fe_lastline : 0; }
