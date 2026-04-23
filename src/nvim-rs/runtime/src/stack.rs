@@ -106,9 +106,12 @@ extern "C" {
     fn nvim_estack_get_def_script_name(entry: EstackHandle) -> *mut c_char;
 
     // Typval operations for stacktrace
-    fn nvim_rt_dict_alloc_lock() -> DictHandle;
-    fn nvim_rt_list_alloc(count: c_int) -> ListHandle;
-    fn nvim_rt_dict_add_func(d: DictHandle, fp: UfuncHandle);
+    #[link_name = "tv_dict_alloc_lock"]
+    fn tv_dict_alloc_lock_c(lock: c_int) -> DictHandle;
+    #[link_name = "tv_list_alloc"]
+    fn tv_list_alloc_c(count: isize) -> ListHandle;
+    #[link_name = "tv_dict_add_func"]
+    fn tv_dict_add_func_c(d: DictHandle, key: *const c_char, keylen: usize, fp: UfuncHandle);
     fn nvim_rt_dict_add_event(d: DictHandle, event: *const c_char);
     fn nvim_rt_dict_add_lnum(d: DictHandle, lnum: LinenrT);
     fn nvim_rt_dict_add_filepath(d: DictHandle, filepath: *const c_char);
@@ -385,10 +388,11 @@ unsafe fn stacktrace_push_item(
     lnum: LinenrT,
     filepath: *const c_char,
 ) {
-    let d = nvim_rt_dict_alloc_lock();
+    // VAR_FIXED = 2
+    let d = tv_dict_alloc_lock_c(2);
 
     if !fp.is_null() {
-        nvim_rt_dict_add_func(d, fp);
+        tv_dict_add_func_c(d, b"funcref\0".as_ptr().cast(), 7, fp);
     }
     if !event.is_null() {
         nvim_rt_dict_add_event(d, event);
@@ -405,7 +409,7 @@ unsafe fn stacktrace_push_item(
 #[export_name = "stacktrace_create"]
 pub unsafe extern "C" fn rs_stacktrace_create() -> ListHandle {
     let len = nvim_get_exestack_len();
-    let l = nvim_rt_list_alloc(len);
+    let l = tv_list_alloc_c(len as isize);
 
     for i in 0..len {
         let entry = globals::exestack_get_entry(i);

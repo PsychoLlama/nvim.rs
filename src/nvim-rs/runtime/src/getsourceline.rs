@@ -34,11 +34,14 @@ extern "C" {
     #[link_name = "skipwhite_len"]
     fn nvim_rt_skipwhite_len(p: *const c_char, len: usize) -> *const c_char;
     fn nvim_rt_get_p_cpo() -> *const c_char;
+    #[link_name = "vim_strchr"]
     fn nvim_rt_vim_strchr(buf: *const c_char, c: c_int) -> *mut c_char;
 
     // Debugger
-    fn nvim_rt_dbg_find_breakpoint(file: bool, fname: *const c_char, after: c_int) -> c_int;
-    fn nvim_rt_dbg_breakpoint(fname: *const c_char, lnum: c_int);
+    #[link_name = "dbg_find_breakpoint"]
+    fn nvim_rt_dbg_find_breakpoint(file: bool, fname: *mut c_char, after: c_int) -> c_int;
+    #[link_name = "dbg_breakpoint"]
+    fn nvim_rt_dbg_breakpoint(fname: *mut c_char, lnum: c_int);
 
     // Profiling
     #[link_name = "script_line_start"]
@@ -73,6 +76,7 @@ extern "C" {
     fn nvim_rt_line_breakcheck();
 
     // Encoding conversion
+    #[link_name = "string_convert"]
     fn nvim_rt_string_convert(vcp: *mut c_void, s: *mut c_char, len: *mut usize) -> *mut c_char;
     fn nvim_rt_conv_get_type(vcp: *const c_void) -> c_int;
 
@@ -257,7 +261,7 @@ pub unsafe extern "C" fn rs_getsourceline(
     if nvim_rt_cookie_get_dbg_tick(cookie) < globals::debug_tick
         && !nvim_rt_cookie_get_src_from_buf_or_str(cookie)
     {
-        let fname = nvim_rt_cookie_get_fname(cookie);
+        let fname = nvim_rt_cookie_get_fname(cookie).cast_mut();
         let new_bp = nvim_rt_dbg_find_breakpoint(true, fname, nvim_rt_get_sourcing_lnum());
         nvim_rt_cookie_set_breakpoint(cookie, new_bp);
         nvim_rt_cookie_set_dbg_tick(cookie, globals::debug_tick);
@@ -347,7 +351,7 @@ pub unsafe extern "C" fn rs_getsourceline(
     if !nvim_rt_cookie_get_src_from_buf_or_str(cookie) {
         let bp = nvim_rt_cookie_get_breakpoint(cookie);
         if bp != 0 && bp <= nvim_rt_get_sourcing_lnum() {
-            let fname = nvim_rt_cookie_get_fname(cookie);
+            let fname = nvim_rt_cookie_get_fname(cookie).cast_mut();
             nvim_rt_dbg_breakpoint(fname, nvim_rt_get_sourcing_lnum());
             // Find next breakpoint.
             let new_bp = nvim_rt_dbg_find_breakpoint(true, fname, nvim_rt_get_sourcing_lnum());

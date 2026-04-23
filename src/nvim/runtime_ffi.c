@@ -213,14 +213,9 @@ char *nvim_estack_get_def_script_name(estack_T *entry)
   return NULL;
 }
 
-/// Allocate a locked dict.
-dict_T *nvim_rt_dict_alloc_lock(void) { return tv_dict_alloc_lock(VAR_FIXED); }
-
-/// Allocate a list with a known length.
-list_T *nvim_rt_list_alloc(int count) { return tv_list_alloc(count); }
-
-/// Add a funcref to a dict.
-void nvim_rt_dict_add_func(dict_T *d, ufunc_T *fp) { tv_dict_add_func(d, S_LEN("funcref"), fp); }
+// Deleted: nvim_rt_dict_alloc_lock — Rust uses tv_dict_alloc_lock(VAR_FIXED=2) directly via link_name.
+// Deleted: nvim_rt_list_alloc — Rust uses tv_list_alloc directly via link_name.
+// Deleted: nvim_rt_dict_add_func — Rust uses tv_dict_add_func with hardcoded "funcref" key via link_name.
 
 /// Add an "event" string to a dict.
 void nvim_rt_dict_add_event(dict_T *d, const char *event) { tv_dict_add_str(d, S_LEN("event"), event); }
@@ -299,10 +294,7 @@ void nvim_rt_exarg_set_arg(void *eap, char *arg) { ((exarg_T *)eap)->arg = arg; 
 
 bool nvim_exarg_arg_is_nul(void *eap) { return *((exarg_T *)eap)->arg == NUL; }
 
-/// Call expand_env.
-
-/// Call do_exedit.
-void nvim_rt_do_exedit(void *eap) { do_exedit((exarg_T *)eap, NULL); }
+// Deleted: nvim_rt_do_exedit — Rust calls do_exedit(eap, NULL) directly via link_name.
 
 void nvim_rt_emsg_invarg(void) { emsg(_(e_invarg)); }
 
@@ -387,16 +379,9 @@ void nvim_rt_vim_regfree(void *regmatch)
   }
 }
 
-/// Allocate a dict.
-dict_T *nvim_rt_p2_dict_alloc(void) { return tv_dict_alloc(); }
-
-/// Add a string to a dict.
-void nvim_rt_dict_add_str(dict_T *d, const char *key, size_t keylen,
-                          const char *val) { tv_dict_add_str(d, key, keylen, val); }
-
-/// Add a number to a dict.
-void nvim_rt_dict_add_nr(dict_T *d, const char *key, size_t keylen,
-                         int64_t nr) { tv_dict_add_nr(d, key, keylen, (varnumber_T)nr); }
+// Deleted: nvim_rt_p2_dict_alloc — Rust uses tv_dict_alloc directly via link_name.
+// Deleted: nvim_rt_dict_add_str — Rust uses tv_dict_add_str directly via link_name.
+// Deleted: nvim_rt_dict_add_nr — Rust uses tv_dict_add_nr directly via link_name.
 
 /// Add a bool to a dict.
 void nvim_rt_dict_add_bool(dict_T *d, const char *key, size_t keylen,
@@ -413,13 +398,8 @@ dict_T *nvim_rt_copy_script_vars(int sid)
   return tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, rs_get_copyID());
 }
 
-/// Add a dict to a dict.
-void nvim_rt_dict_add_dict(dict_T *d, const char *key, size_t keylen,
-                           dict_T *val) { tv_dict_add_dict(d, key, keylen, val); }
-
-/// Add a list to a dict.
-void nvim_rt_dict_add_list(dict_T *d, const char *key, size_t keylen,
-                           list_T *val) { tv_dict_add_list(d, key, keylen, val); }
+// Deleted: nvim_rt_dict_add_dict — Rust uses tv_dict_add_dict directly via link_name.
+// Deleted: nvim_rt_dict_add_list — Rust uses tv_dict_add_list directly via link_name.
 
 #if defined(BACKSLASH_IN_FILENAME)
 /// Adjust slashes in a filename (Windows only).
@@ -459,11 +439,7 @@ char *nvim_rt_stdpaths_get_xdg_var(int type) { return stdpaths_get_xdg_var((XDGV
 const char *nvim_rt_get_default_lib_dir(void) { return default_lib_dir; }
 
 
-/// Append path component.
-int nvim_rt_append_path(char *path, const char *to_append, size_t max_len)
-{
-  return append_path(path, to_append, max_len);
-}
+// Deleted: nvim_rt_append_path — Rust uses append_path directly via link_name.
 
 _Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
 _Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
@@ -516,8 +492,7 @@ bool nvim_rt_getline_is_sourcing(void *fgetline, void *cookie) { return getline_
 /// Get source_cookie from fgetline/cookie pair.
 void *nvim_rt_getline_get_source_cookie(void *fgetline, void *cookie) { return getline_cookie((LineGetter)(uintptr_t)fgetline, cookie); }
 
-/// Canonicalize an encoding name.
-char *nvim_rt_enc_canonize(char *enc) { return enc_canonize(enc); }
+// Deleted: nvim_rt_enc_canonize — Rust uses enc_canonize directly via link_name.
 
 /// Setup encoding conversion.
 
@@ -549,17 +524,10 @@ void nvim_rt_emsg_finish_outside(void) { emsg(_("E168: :finish used outside of a
 // Phase 4: Accessors for do_source_ext and related functions
 // =============================================================================
 
-/// expand_env_save: expand environment variables and return allocated copy.
-char *nvim_rt_expand_env_save(const char *fname) { return expand_env_save((char *)fname); }
+// Deleted: nvim_rt_expand_env_save — Rust uses expand_env_save directly via link_name.
+// Deleted: nvim_rt_src_path_tail — Rust uses path_tail directly via link_name.
 
-/// path_tail wrapper.
-char *nvim_rt_src_path_tail(char *fname) { return path_tail(fname); }
-
-/// apply_autocmds wrapper for source events.
-bool nvim_rt_apply_autocmds(int event, const char *fname_exp, const char *fname, bool force, void *buf)
-{
-  return apply_autocmds((event_T)event, (char *)fname_exp, (char *)fname, force, (buf_T *)buf);
-}
+// Deleted: nvim_rt_apply_autocmds — Rust uses apply_autocmds directly via link_name.
 
 /// Get EVENT_SOURCECMD value.
 int nvim_rt_EVENT_SOURCECMD(void) { return EVENT_SOURCECMD; }
@@ -626,9 +594,8 @@ void nvim_rt_restore_funccal(void *entry) { restore_funccal(); xfree(entry); }
 
 /// profile_init wrapper.
 
-/// profile_start/zero wrappers.
-uint64_t nvim_rt_profile_start(void) { return (uint64_t)profile_start(); }
-uint64_t nvim_rt_profile_zero(void) { return (uint64_t)profile_zero(); }
+// Deleted: nvim_rt_profile_start — Rust uses profile_start directly via link_name.
+// Deleted: nvim_rt_profile_zero — Rust uses profile_zero directly via link_name.
 
 /// Set si profiling fields after source.
 void nvim_rt_si_update_profile(void *si, uint64_t wait_start)
@@ -671,16 +638,9 @@ const char *nvim_rt_curbuf_get_ft(void) { return curbuf ? curbuf->b_p_ft : NULL;
 /// IObuff accessor.
 char *nvim_rt_src_get_iobuff(void) { return IObuff; }
 
-/// nlua_exec_file wrapper.
+// Deleted: nvim_rt_nlua_exec_ga — Rust uses nlua_exec_ga directly via link_name.
 
-/// nlua_exec_ga wrapper (executes buflines from a garray_T*).
-void nvim_rt_nlua_exec_ga(void *ga, const char *fname)
-{
-  nlua_exec_ga((garray_T *)ga, (char *)fname);
-}
-
-/// string_convert wrapper.
-char *nvim_rt_string_convert(void *vcp, char *s, size_t *len) { return string_convert((vimconv_T *)vcp, s, len); }
+// Deleted: nvim_rt_string_convert — Rust uses string_convert directly via link_name.
 
 /// Check BOM: firstline[0..2] == {0xef, 0xbb, 0xbf}.
 bool nvim_rt_check_utf8_bom(const uint8_t *line, size_t len)
@@ -806,29 +766,15 @@ void nvim_rt_smsg_searching_rtp(const char *name)
   smsg(0, _("Searching for \"%s\" in runtime path"), name);
 }
 
-/// copy_option_part wrapper.
-void nvim_rt_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep_chars)
-{
-  copy_option_part(option, buf, maxlen, sep_chars);
-}
+// Deleted: nvim_rt_copy_option_part — Rust uses copy_option_part directly via link_name.
 
-/// vim_strchr wrapper.
-char *nvim_rt_vim_strchr(const char *buf, int c) { return vim_strchr(buf, c); }
+// Deleted: nvim_rt_vim_strchr — Rust uses vim_strchr directly via link_name.
 
 /// p_cpo accessor.
 const char *nvim_rt_get_p_cpo(void) { return p_cpo; }
 
-/// dbg_breakpoint wrapper.
-void nvim_rt_dbg_breakpoint(const char *fname, int lnum)
-{
-  dbg_breakpoint((char *)fname, (linenr_T)lnum);
-}
-
-/// dbg_find_breakpoint wrapper.
-int nvim_rt_dbg_find_breakpoint(bool file, const char *fname, int after)
-{
-  return (int)dbg_find_breakpoint(file, (char *)fname, (linenr_T)after);
-}
+// Deleted: nvim_rt_dbg_breakpoint — Rust uses dbg_breakpoint directly via link_name.
+// Deleted: nvim_rt_dbg_find_breakpoint — Rust uses dbg_find_breakpoint directly via link_name.
 
 /// script_line_start wrapper.
 

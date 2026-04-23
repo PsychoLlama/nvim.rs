@@ -52,6 +52,7 @@ extern "C" {
     fn nvim_rt_smsg_searching_rtp(name: *const c_char);
 
     // copy_option_part: advance pointer through comma-separated value
+    #[link_name = "copy_option_part"]
     fn nvim_rt_copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,

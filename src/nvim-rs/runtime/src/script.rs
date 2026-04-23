@@ -41,7 +41,8 @@ extern "C" {
     fn nvim_exarg_arg_is_nul(eap: *mut c_void) -> bool;
     #[link_name = "expand_env"]
     fn nvim_rt_expand_env(src: *mut c_char, dst: *mut c_char, dstlen: c_int);
-    fn nvim_rt_do_exedit(eap: *mut c_void);
+    #[link_name = "do_exedit"]
+    fn do_exedit_c(eap: *mut c_void, old_curwin: *mut c_void);
     fn nvim_rt_emsg_invarg();
     fn nvim_rt_get_namebuff() -> *mut c_char;
     fn nvim_rt_get_iobuff() -> *mut c_char;
@@ -75,14 +76,19 @@ extern "C" {
     fn nvim_rt_vim_regcomp(pat: *const c_char) -> *mut c_void;
     fn nvim_rt_vim_regexec(regmatch: *mut c_void, str: *const c_char) -> bool;
     fn nvim_rt_vim_regfree(regmatch: *mut c_void);
+    #[link_name = "tv_dict_alloc"]
     fn nvim_rt_p2_dict_alloc() -> *mut c_void;
+    #[link_name = "tv_dict_add_str"]
     fn nvim_rt_dict_add_str(d: *mut c_void, key: *const c_char, keylen: usize, val: *const c_char);
+    #[link_name = "tv_dict_add_nr"]
     fn nvim_rt_dict_add_nr(d: *mut c_void, key: *const c_char, keylen: usize, nr: i64);
     fn nvim_rt_dict_add_bool(d: *mut c_void, key: *const c_char, keylen: usize, val: bool);
     #[link_name = "tv_list_append_dict"]
     fn nvim_rt_p2_tv_list_append_dict(l: *mut c_void, d: *mut c_void);
     fn nvim_rt_copy_script_vars(sid: c_int) -> *mut c_void;
+    #[link_name = "tv_dict_add_dict"]
     fn nvim_rt_dict_add_dict(d: *mut c_void, key: *const c_char, keylen: usize, val: *mut c_void);
+    #[link_name = "tv_dict_add_list"]
     fn nvim_rt_dict_add_list(d: *mut c_void, key: *const c_char, keylen: usize, val: *mut c_void);
 
     // xfree
@@ -311,7 +317,7 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
             nvim_rt_expand_env(arg, namebuff, MAXPATHL as c_int);
             nvim_rt_exarg_set_arg(eap, namebuff);
         }
-        nvim_rt_do_exedit(eap);
+        do_exedit_c(eap, std::ptr::null_mut());
         return;
     }
 

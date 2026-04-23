@@ -28,6 +28,7 @@ extern "C" {
     fn nvim_rt_exarg_get_cstack(eap: *mut c_void) -> *mut c_void;
 
     // Encoding functions
+    #[link_name = "enc_canonize"]
     fn nvim_rt_enc_canonize(enc: *mut c_char) -> *mut c_char;
     #[link_name = "convert_setup"]
     fn nvim_rt_convert_setup(vcp: *mut c_void, from: *mut c_char, to: *const c_char) -> c_int;

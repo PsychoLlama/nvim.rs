@@ -50,12 +50,14 @@ extern "C" {
     fn xfree(p: *mut c_void);
 
     // Path utilities
+    #[link_name = "expand_env_save"]
     fn nvim_rt_expand_env_save(fname: *const c_char) -> *mut c_char;
     #[link_name = "fix_fname"]
     fn nvim_rt_fix_fname(fname: *const c_char) -> *mut c_char;
     #[link_name = "os_isdir"]
     fn nvim_rt_src_os_isdir(fname: *const c_char) -> bool;
-    fn nvim_rt_src_path_tail(fname: *mut c_char) -> *mut c_char;
+    #[link_name = "path_tail"]
+    fn nvim_rt_src_path_tail(fname: *const c_char) -> *mut c_char;
     fn nvim_rt_STRICMP(a: *const c_char, b: *const c_char) -> c_int;
     fn path_with_extension(path: *const c_char, ext: *const c_char) -> bool;
 
@@ -63,6 +65,7 @@ extern "C" {
 
     // Autocmds
     fn rs_has_autocmd(event: c_int, sfname: *const c_char, buf_fnum: c_int) -> bool;
+    #[link_name = "apply_autocmds"]
     fn nvim_rt_apply_autocmds(
         event: c_int,
         fname_exp: *const c_char,
@@ -126,7 +129,9 @@ extern "C" {
     fn nvim_rt_has_profiling(file: bool, name: *const c_char, forceit: *mut bool) -> bool;
     #[link_name = "profile_init"]
     fn nvim_rt_profile_init(si: *mut c_void);
+    #[link_name = "profile_start"]
     fn nvim_rt_profile_start() -> u64;
+    #[link_name = "profile_zero"]
     fn nvim_rt_profile_zero() -> u64;
     fn nvim_rt_si_set_pr_start(si: *mut c_void, tm: u64);
     fn nvim_rt_si_update_profile(si: *mut c_void, wait_start: u64);
@@ -139,6 +144,7 @@ extern "C" {
     ) -> c_int;
     #[link_name = "nlua_exec_file"]
     fn nvim_rt_nlua_exec_file(fname: *const c_char);
+    #[link_name = "nlua_exec_ga"]
     fn nvim_rt_nlua_exec_ga(ga: *mut c_void, fname: *const c_char);
 
     // Cookie accessors (source_cookie_T, defined in runtime.c)
@@ -168,6 +174,7 @@ extern "C" {
     // Encoding
     #[link_name = "convert_setup"]
     fn nvim_rt_convert_setup(vcp: *mut c_void, from: *mut c_char, to: *const c_char) -> c_int;
+    #[link_name = "string_convert"]
     fn nvim_rt_string_convert(vcp: *mut c_void, s: *mut c_char, len: *mut usize) -> *mut c_char;
     fn nvim_rt_get_p_enc() -> *const c_char;
 

@@ -75,6 +75,7 @@ extern "C" {
     fn nvim_rt_get_default_lib_dir() -> *const c_char;
     #[link_name = "vim_get_prefix_from_exepath"]
     fn nvim_rt_vim_get_prefix_from_exepath(buf: *mut c_char);
+    #[link_name = "append_path"]
     fn nvim_rt_append_path(path: *mut c_char, to_append: *const c_char, max_len: usize) -> c_int;
     #[link_name = "vim_ispathsep"]
     fn nvim_rt_vim_ispathsep(c: c_int) -> bool;
