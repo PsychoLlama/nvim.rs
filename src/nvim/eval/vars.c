@@ -1943,45 +1943,6 @@ bool valid_varname(const char *varname)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 { return rs_valid_varname(varname); }
 
-/// Implements the logic to retrieve local variable and option values.
-/// Used by "getwinvar()" "gettabvar()" "gettabwinvar()" "getbufvar()".
-///
-/// @param deftv   default value if not found
-/// @param htname  't'ab, 'w'indow or 'b'uffer local
-/// @param tp      can be NULL
-/// @param buf     ignored if htname is not 'b'
-static void get_var_from(const char *varname, typval_T *rettv, typval_T *deftv, int htname,
-                         tabpage_T *tp, win_T *win, buf_T *buf)
-{
-  rs_get_var_from(varname, rettv, deftv, htname, tp, win, buf);
-}
-
-/// getwinvar() and gettabwinvar()
-///
-/// @param off  1 for gettabwinvar()
-static void getwinvar(typval_T *argvars, typval_T *rettv, int off)
-{
-  if (off == 1) {
-    rs_f_gettabwinvar(argvars, rettv);
-  } else {
-    rs_f_getwinvar(argvars, rettv);
-  }
-}
-
-/// Convert typval to option value for a particular option.
-///
-/// @param[in]   tv      typval to convert.
-/// @param[in]   option  Option name.
-/// @param[in]   flags   Option flags.
-/// @param[out]  error   Whether an error occurred.
-///
-/// @return  Typval converted to OptVal. Must be freed by caller.
-///          Returns NIL_OPTVAL for invalid option name.
-static OptVal tv_to_optval(typval_T *tv, OptIndex opt_idx, const char *option, bool *error)
-{
-  return rs_tv_to_optval(tv, opt_idx, option, error);
-}
-
 /// Convert an option value to typval.
 ///
 /// @param[in]  value    Option value to convert.
@@ -1994,22 +1955,6 @@ typval_T optval_as_tv(OptVal value, bool numbool)
   typval_T rettv;
   rs_optval_as_tv(value, numbool, &rettv);
   return rettv;
-}
-
-/// Set option "varname" to the value of "varp" for the current buffer/window.
-static void set_option_from_tv(const char *varname, typval_T *varp)
-{
-  rs_set_option_from_tv(varname, varp);
-}
-
-/// "setwinvar()" and "settabwinvar()" functions
-static void setwinvar(typval_T *argvars, int off)
-{
-  if (off == 1) {
-    rs_f_settabwinvar(argvars);
-  } else {
-    rs_f_setwinvar(argvars);
-  }
 }
 
 void reset_v_option_vars(void) { rs_reset_v_option_vars(); }
@@ -2058,10 +2003,10 @@ void f_gettabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 { rs_f_gettabvar(argvars, rettv); }
 
 /// "gettabwinvar()" function
-void f_gettabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getwinvar(argvars, rettv, 1); }
+void f_gettabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_gettabwinvar(argvars, rettv); }
 
 /// "getwinvar()" function
-void f_getwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getwinvar(argvars, rettv, 0); }
+void f_getwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_getwinvar(argvars, rettv); }
 
 /// "getbufvar()" function
 void f_getbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
@@ -2072,10 +2017,10 @@ void f_settabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 { rs_f_settabvar(argvars); }
 
 /// "settabwinvar()" function
-void f_settabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { setwinvar(argvars, 1); }
+void f_settabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_settabwinvar(argvars); }
 
 /// "setwinvar()" function
-void f_setwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { setwinvar(argvars, 0); }
+void f_setwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { rs_f_setwinvar(argvars); }
 
 /// "setbufvar()" function
 void f_setbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
