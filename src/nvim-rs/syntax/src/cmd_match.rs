@@ -23,6 +23,7 @@ extern "C" {
 
     // Pattern initialization
     fn rs_init_syn_patterns();
+    #[link_name = "vim_regcomp_had_eol"]
     fn nvim_syn_vim_regcomp_had_eol() -> c_int;
 
     // Option parsing (Rust)

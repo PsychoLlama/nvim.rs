@@ -582,11 +582,6 @@ Proc *nvim_chan_get_proc_ptr(Channel *chan)
   return &chan->stream.proc;
 }
 
-/// proc_spawn wrapper.
-int nvim_proc_spawn(Proc *proc, bool has_in, bool has_out, bool has_err)
-{
-  return proc_spawn(proc, has_in, has_out, has_err);
-}
 
 /// Set the proc exit callback to channel_proc_exit_cb.
 void nvim_chan_proc_set_exit_cb(Channel *chan)

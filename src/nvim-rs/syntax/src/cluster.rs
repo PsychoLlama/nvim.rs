@@ -801,6 +801,7 @@ pub unsafe extern "C" fn rs_syn_cmd_cluster(eap: *mut c_void, syncing: c_int) {
 // =============================================================================
 
 extern "C" {
+    #[link_name = "vim_strsave_up"]
     fn nvim_syn_vim_strsave_up(s: *const c_char) -> *mut c_char;
     // Phase 11: inner accessor for cluster_append (handles GA_APPEND_VIA_PTR)
     fn nvim_synblock_cluster_append_inner() -> c_int;

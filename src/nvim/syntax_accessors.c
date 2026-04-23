@@ -273,8 +273,6 @@ int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
-reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em) { return ref_extmatch(em); }
-void nvim_syn_unref_extmatch(reg_extmatch_T *em) { unref_extmatch(em); }
 void *nvim_syn_get_syn_block(void) { return syn_block; }
 void nvim_syn_set_syn_block(void *block) { syn_block = (synblock_T *)block; }
 void nvim_syn_set_syn_win(void *win) { syn_win = (win_T *)win; }
@@ -343,12 +341,10 @@ char *nvim_syn_vim_strnsave_up(const char *str, int len) { return vim_strnsave_u
 void nvim_syn_set_nextcmd(exarg_T *eap, char *rest) { eap->nextcmd = check_nextcmd(rest); }
 char *nvim_syn_get_eap_arg(const exarg_T *eap) { return eap->arg; }
 int nvim_syn_get_eap_skip(const exarg_T *eap) { return eap->skip; }
-char *nvim_syn_skip_regexp(char *arg, int delim, int magic) { return skip_regexp(arg, delim, magic); }
 int nvim_syn_getdigits_int(char **pp, int strict, int def) { return getdigits_int(pp, (bool)strict, def); }
 char *nvim_syn_get_p_cpo(void) { return p_cpo; }
 void nvim_syn_set_p_cpo(char *val) { p_cpo = val; }
 char *nvim_syn_get_empty_string_option(void) { return empty_string_option; }
-int nvim_syn_vim_regcomp_had_eol(void) { return vim_regcomp_had_eol(); }
 synpat_T *nvim_synblock_ga_append_pattern(void) { return GA_APPEND_VIA_PTR(synpat_T, &curwin->w_s->b_syn_patterns); }
 synpat_T *nvim_syn_xcalloc_synpat(void) { return xcalloc(1, sizeof(synpat_T)); }
 void nvim_syn_free_synpat(synpat_T *pat) { if (pat != NULL) { vim_regfree(pat->sp_prog); xfree(pat->sp_pattern); xfree(pat); } }
@@ -399,7 +395,6 @@ int nvim_syn_include_source(exarg_T *eap, int use_source)
 }
 
 void nvim_syn_init_highlight(int reset, int init) { init_highlight((bool)reset, (bool)init); }
-void nvim_syn_do_cmdline_cmd(const char *cmd) { do_cmdline_cmd(cmd); }
 void nvim_syn_redraw_later_curwin(void) { redraw_later(curwin, UPD_NOT_VALID); }
 void nvim_syn_set_cmdlinep_from_eap(exarg_T *eap) { syn_cmdlinep = eap->cmdlinep; }
 void nvim_syn_do_unlet(const char *name, int len) { do_unlet(name, (size_t)len, true); }
@@ -438,12 +433,9 @@ void nvim_syn_iskeyword_set(synblock_T *block, const char *arg)
 }
 
 void nvim_syn_msg_outtrans(const char *s) { msg_outtrans(s, 0, false); }
-char *nvim_syn_get_var_value(const char *name) { return get_var_value(name); }
 void nvim_syn_apply_autocmds_syntax(const char *arg) { apply_autocmds(EVENT_SYNTAX, arg, curbuf->b_fname, true, curbuf); }
-void nvim_syn_set_internal_string_var(const char *name, const char *val) { set_internal_string_var(name, val); }
 void nvim_syn_do_unlet_b_current_syntax(void) { do_unlet(S_LEN("b:current_syntax"), true); }
 void nvim_win_release_synblock(win_T *wp) { if (wp->w_s != &wp->w_buffer->b_s) { syntax_clear(wp->w_s); xfree(wp->w_s); wp->w_s = &wp->w_buffer->b_s; } }
-char *nvim_syn_vim_strsave_up(const char *s) { return vim_strsave_up(s); }
 void nvim_synblock_ga_init_patterns(void) { curwin->w_s->b_syn_patterns.ga_itemsize = sizeof(synpat_T); ga_set_growsize(&curwin->w_s->b_syn_patterns, 10); }
 synstate_T *nvim_syn_xcalloc_synstate_array(int len) { if (len <= 0) return NULL; return xcalloc((size_t)len, sizeof(synstate_T)); }
 void nvim_syn_free_sst_array(synstate_T *ptr) { xfree(ptr); }
@@ -509,10 +501,7 @@ char *nvim_ke_get_hikey(keyentry_T *kp) { return kp ? KE2HIKEY(kp) : NULL; }
 void nvim_ht_set_hikey_at(hashtab_T *ht, size_t idx, char *key) { if (!ht || idx >= (ht->ht_mask + 1)) return; ht->ht_array[idx].hi_key = key; }
 keyentry_T *nvim_ht_find_ke(hashtab_T *ht, char *keyword) { if (!ht || !keyword) return NULL; hashitem_T *hi = hash_find(ht, keyword); if (HASHITEM_EMPTY(hi)) return NULL; return HI2KE(hi); }
 hashtab_T *nvim_curwin_get_keywtab(int use_ic) { return use_ic ? &curwin->w_s->b_keywtab_ic : &curwin->w_s->b_keywtab; }
-hash_T nvim_hash_hash(const char *key) { return hash_hash(key); }
-hashitem_T *nvim_hash_lookup(hashtab_T *ht, const char *key, size_t len, hash_T hash) { return hash_lookup(ht, key, len, hash); }
 int nvim_hashitem_is_empty(const hashitem_T *hi) { return HASHITEM_EMPTY(hi) ? 1 : 0; }
-void nvim_hash_add_item(hashtab_T *ht, hashitem_T *hi, char *key, hash_T hash) { hash_add_item(ht, hi, key, hash); }
 keyentry_T *nvim_hikey2ke(const hashitem_T *hi) { return hi ? HI2KE(hi) : NULL; }
 char *nvim_ke2hikey(keyentry_T *kp) { return kp ? KE2HIKEY(kp) : NULL; }
 void nvim_curwin_set_containedin(void) { curwin->w_s->b_syn_containedin = true; }

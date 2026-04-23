@@ -60,6 +60,7 @@ extern "C" {
     fn emsg(msg: *const c_char);
 
     // Skip regexp
+    #[link_name = "skip_regexp"]
     fn nvim_syn_skip_regexp(arg: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 }
 

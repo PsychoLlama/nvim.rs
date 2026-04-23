@@ -46,6 +46,7 @@ extern "C" {
     // (nvim_syn_save_chartab/restore_chartab deleted: call Rust directly)
 
     // Extmatch management
+    #[link_name = "unref_extmatch"]
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
     fn nvim_syn_take_re_extmatch_out() -> ExtMatchHandle;
     fn nvim_syn_clear_re_extmatch_out();

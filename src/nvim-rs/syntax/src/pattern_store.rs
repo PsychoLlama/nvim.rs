@@ -28,6 +28,7 @@ extern "C" {
     fn nvim_syn_xcalloc_synpat() -> SynPatHandle;
     fn nvim_syn_free_synpat(pat: SynPatHandle);
     fn nvim_syn_set_reg_do_extmatch(val: c_int);
+    #[link_name = "vim_regcomp_had_eol"]
     fn nvim_syn_vim_regcomp_had_eol() -> c_int;
 
     // (synpat_T setters removed -- use direct repr(C) field access)

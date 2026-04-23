@@ -658,7 +658,6 @@ int nvim_get_status_height_const(void) { return STATUS_HEIGHT; }
 // mouse_find_win_inner wrapper for winfloat (unique name to avoid conflict with terminal_shim.c)
 // (forward-declared here since mouse.h not included in window_shim.c)
 extern win_T *mouse_find_win_inner(int *gridp, int *rowp, int *colp);
-win_T *nvim_wf_mouse_find_win_inner(int *gridp, int *rowp, int *colp) { return mouse_find_win_inner(gridp, rowp, colp); }
 // nvim_ui_has_multigrid: already exported from Rust (window crate, wrappers.rs)
 // set_must_redraw and redraw_later wrappers
 // grid_adjust wrapper (takes w_grid of win_T)
@@ -734,12 +733,6 @@ void nvim_win_free(win_T *wp) { if (wp) { win_free(wp, NULL); } }
 
 // block/unblock autocmds
 
-// nvim_create_buf wrapper
-Buffer nvim_create_buf_wrapper(bool listed, bool scratch, Error *err)
-{ return nvim_create_buf(listed, scratch, err); }
-
-// find_buffer_by_handle wrapper
-buf_T *nvim_find_buffer_by_handle(Buffer b, Error *err) { return find_buffer_by_handle(b, err); }
 
 // set_option_direct_for for bufhidden=wipe
 void nvim_buf_set_bufhidden_wipe(buf_T *buf) { if (buf) { set_option_direct_for(kOptBufhidden, STATIC_CSTR_AS_OPTVAL("wipe"), OPT_LOCAL, 0, kOptScopeBuf, buf); } }
@@ -765,7 +758,6 @@ void nvim_error_free(Error *err) { if (err) { api_clear_error(err); xfree(err); 
 // win_set_buf
 // already exists in window_shim.c as win_set_buf(win, buf, err)
 // find_window_by_handle with explicit error (not safe version)
-win_T *nvim_find_window_by_handle_ex(int handle, Error *err) { return find_window_by_handle((int)handle, err); }
 // nvim_wconfig_get_window_handle
 int nvim_wconfig_get_window_val(WinConfig *cfg) { return cfg ? (int)cfg->window : 0; }
 

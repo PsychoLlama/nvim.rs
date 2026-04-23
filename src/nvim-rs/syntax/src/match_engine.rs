@@ -44,7 +44,9 @@ extern "C" {
     fn line_breakcheck();
 
     // Extmatch management
+    #[link_name = "ref_extmatch"]
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
+    #[link_name = "unref_extmatch"]
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
 
     // Update state item attribute

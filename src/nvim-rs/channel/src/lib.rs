@@ -404,7 +404,8 @@ extern "C" {
     fn nvim_chan_get_proc_ptr(chan: *mut c_void) -> *mut c_void;
     /// proc_get_exepath(proc). Defined in eval_shim.c.
     fn nvim_proc_get_exepath(proc_ptr: *mut c_void) -> *const std::ffi::c_char;
-    /// proc_spawn(proc, has_in, has_out, has_err). Defined in eval_shim.c.
+    /// proc_spawn(proc, has_in, has_out, has_err).
+    #[link_name = "proc_spawn"]
     fn nvim_proc_spawn(proc_ptr: *mut c_void, has_in: bool, has_out: bool, has_err: bool) -> c_int;
     /// Set proc exit callback to channel_proc_exit_cb. Defined in eval_shim.c.
     fn nvim_chan_proc_set_exit_cb(chan: *mut c_void);

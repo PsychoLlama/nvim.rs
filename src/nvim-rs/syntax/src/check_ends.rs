@@ -29,6 +29,7 @@ extern "C" {
     fn nvim_syn_update_si_attr(idx: c_int);
 
     // Extmatch
+    #[link_name = "ref_extmatch"]
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
 
     // (syn_id2attr: use crate::highlight::syn_id2attr directly)

@@ -921,6 +921,7 @@ extern "C" {
     // did_syntax_onoff flag getter/setter (Phase 11)
 
     // Run a cmdline command string (Phase 11)
+    #[link_name = "do_cmdline_cmd"]
     fn nvim_syn_do_cmdline_cmd(cmd: *const c_char);
 }
 
@@ -1245,6 +1246,7 @@ extern "C" {
     fn nvim_curwin_set_synblock(block: SynBlockHandle);
 
     /// Get a Vim variable value.
+    #[link_name = "get_var_value"]
     fn nvim_syn_get_var_value(name: *const c_char) -> *mut c_char;
 
     /// Duplicate a C string.
@@ -1254,6 +1256,7 @@ extern "C" {
     fn nvim_syn_apply_autocmds_syntax(arg: *const c_char);
 
     /// set_internal_string_var wrapper.
+    #[link_name = "set_internal_string_var"]
     fn nvim_syn_set_internal_string_var(name: *const c_char, val: *const c_char);
 
     /// Unlet b:current_syntax.

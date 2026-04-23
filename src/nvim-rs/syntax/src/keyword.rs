@@ -34,9 +34,12 @@ extern "C" {
     fn nvim_ht_get_used(ht: *const c_void) -> usize;
     fn nvim_ht_find_ke(ht: *mut c_void, keyword: *mut c_char) -> KeyEntryHandle;
     fn nvim_curwin_get_keywtab(use_ic: c_int) -> *mut c_void;
+    #[link_name = "hash_hash"]
     fn nvim_hash_hash(key: *const c_char) -> u64;
+    #[link_name = "hash_lookup"]
     fn nvim_hash_lookup(ht: *mut c_void, key: *const c_char, len: usize, hash: u64) -> *mut c_void;
     fn nvim_hashitem_is_empty(hi: *const c_void) -> c_int;
+    #[link_name = "hash_add_item"]
     fn nvim_hash_add_item(ht: *mut c_void, hi: *mut c_void, key: *mut c_char, hash: u64);
     fn nvim_hikey2ke(hi: *const c_void) -> KeyEntryHandle;
     fn nvim_ke2hikey(kp: KeyEntryHandle) -> *mut c_char;

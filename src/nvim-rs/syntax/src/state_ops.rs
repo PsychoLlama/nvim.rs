@@ -27,7 +27,9 @@ extern "C" {
     // Stateitem access
 
     // Extmatch reference management
+    #[link_name = "unref_extmatch"]
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
+    #[link_name = "ref_extmatch"]
     fn nvim_syn_ref_extmatch(em: ExtMatchHandle) -> ExtMatchHandle;
 
     // next_match_idx

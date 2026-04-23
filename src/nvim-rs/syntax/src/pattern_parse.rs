@@ -20,6 +20,7 @@ static SPO_NAME_TAB: [&[u8; 4]; 7] = [
 
 extern "C" {
     // Pattern parsing
+    #[link_name = "skip_regexp"]
     fn nvim_syn_skip_regexp(arg: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
     fn nvim_syn_getdigits_int(pp: *mut *mut c_char, strict: c_int, def: c_int) -> c_int;
 

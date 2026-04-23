@@ -45,6 +45,7 @@ extern "C" {
 
     // clear_syn_state accessors (Phase 11)
     fn nvim_synstate_ga_clear(state: SynStateHandle);
+    #[link_name = "unref_extmatch"]
     fn nvim_syn_unref_extmatch(em: ExtMatchHandle);
 
     // Already-Rust functions called from syn_update_ends / syn_start_line

@@ -1529,8 +1529,7 @@ extern "C" {
     static mouse_row: c_int;
     static mouse_col: c_int;
     static mouse_grid: c_int;
-    // nvim_wf_mouse_find_win_inner is the same function in window_shim.c
-    #[link_name = "nvim_wf_mouse_find_win_inner"]
+    #[link_name = "mouse_find_win_inner"]
     fn nvim_mouse_find_win_inner(grid: *mut c_int, row: *mut c_int, col: *mut c_int)
         -> *mut c_void;
     #[link_name = "win_col_off"]

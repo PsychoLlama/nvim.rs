@@ -533,6 +533,7 @@ extern "C" {
     static mouse_row: c_int;
     static mouse_col: c_int;
     static mouse_grid: c_int;
+    #[link_name = "mouse_find_win_inner"]
     fn nvim_wf_mouse_find_win_inner(
         gridp: *mut c_int,
         rowp: *mut c_int,
@@ -1321,7 +1322,9 @@ extern "C" {
     fn nvim_block_autocmds();
     #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
+    #[link_name = "nvim_create_buf"]
     fn nvim_create_buf_wrapper(listed: bool, scratch: bool, err: *mut c_void) -> c_int;
+    #[link_name = "find_buffer_by_handle"]
     fn nvim_find_buffer_by_handle(b: c_int, err: *mut c_void) -> *mut c_void;
     fn nvim_buf_set_bufhidden_wipe(buf: *mut c_void);
     fn win_set_buf(wp: WinHandle, buf: *mut c_void, err: *mut c_void);
@@ -1337,6 +1340,7 @@ extern "C" {
     fn nvim_wconfig_set_noautocmd(cfg: *mut c_void, val: c_int);
     fn nvim_wconfig_set_hide(cfg: *mut c_void, val: c_int);
     fn nvim_wconfig_set_style_minimal(cfg: *mut c_void);
+    #[link_name = "find_window_by_handle"]
     fn nvim_find_window_by_handle_ex(handle: c_int, err: *mut c_void) -> WinHandle;
     fn nvim_wconfig_get_window_val(cfg: *mut c_void) -> c_int;
     fn win_enter(wp: WinHandle, undo_sync: bool);
