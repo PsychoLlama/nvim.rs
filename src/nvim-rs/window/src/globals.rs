@@ -89,6 +89,10 @@ extern "C" {
     static mut cmdline_win: WinHandle;
     static mut cmdwin_win: WinHandle; // window of cmdline window or NULL
     static mut cmdwin_old_curwin: WinHandle; // curwin before opening cmdline window
+    static mut cmdwin_type: c_int; // type of cmdline window or 0
+    static mut cmdwin_level: c_int; // cmdline recursion level
+    static mut cmdwin_buf: BufHandle; // buffer of cmdline window or NULL
+    static mut cmdwin_result: c_int; // result of cmdline window or 0
 
     // Phase 3 globals
     static mut got_int: bool; // interrupt flag
@@ -1179,6 +1183,51 @@ pub unsafe extern "C" fn set_cmdwin_win(wp: WinHandle) {
 #[export_name = "nvim_set_cmdwin_old_curwin"]
 pub unsafe extern "C" fn set_cmdwin_old_curwin(wp: WinHandle) {
     cmdwin_old_curwin = wp;
+}
+
+/// Set cmdwin_type.
+///
+/// Replaces the C shim `nvim_set_cmdwin_type()` in cmdwin_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_type.
+#[export_name = "nvim_set_cmdwin_type"]
+pub unsafe extern "C" fn set_cmdwin_type(val: c_int) {
+    cmdwin_type = val;
+}
+
+/// Set cmdwin_level.
+///
+/// Replaces the C shim `nvim_set_cmdwin_level()` in cmdwin_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_level.
+#[export_name = "nvim_set_cmdwin_level"]
+pub unsafe extern "C" fn set_cmdwin_level(val: c_int) {
+    cmdwin_level = val;
+}
+
+/// Set cmdwin_buf.
+///
+/// Replaces the C shim `nvim_set_cmdwin_buf()` in cmdwin_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_buf.
+#[export_name = "nvim_set_cmdwin_buf"]
+pub unsafe extern "C" fn set_cmdwin_buf(buf: BufHandle) {
+    cmdwin_buf = buf;
+}
+
+/// Get cmdwin_result.
+///
+/// Replaces the C shim `nvim_get_cmdwin_result()` in cmdwin_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_result.
+#[must_use]
+#[export_name = "nvim_get_cmdwin_result"]
+pub unsafe extern "C" fn get_cmdwin_result() -> c_int {
+    cmdwin_result
 }
 
 /// Check if wp is the cmdline window (== cmdline_win).
