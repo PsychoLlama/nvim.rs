@@ -2436,60 +2436,9 @@ extern int current_func_returned(void);
 // nvim_list_func_vars_impl inlined into rs_list_func_vars (Rust, Phase 13)
 // nvim_get_current_funccal_dict_impl inlined into rs_get_current_funccal_dict (Rust, Phase 13)
 
-hashitem_T *nvim_find_hi_in_scoped_ht_impl(const char *name, hashtab_T **pht)
-{
-  if (current_funccal == NULL || current_funccal->fc_func->uf_scoped == NULL) {
-    return NULL;
-  }
-  funccall_T *old_current_funccal = current_funccal;
-  hashitem_T *hi = NULL;
-  const size_t namelen = strlen(name);
-  const char *varname;
-  current_funccal = current_funccal->fc_func->uf_scoped;
-  while (current_funccal != NULL) {
-    hashtab_T *ht = find_var_ht(name, namelen, &varname);
-    if (ht != NULL && *varname != NUL) {
-      hi = hash_find_len(ht, varname, namelen - (size_t)(varname - name));
-      if (!HASHITEM_EMPTY(hi)) {
-        *pht = ht;
-        break;
-      }
-    }
-    if (current_funccal == current_funccal->fc_func->uf_scoped) {
-      break;
-    }
-    current_funccal = current_funccal->fc_func->uf_scoped;
-  }
-  current_funccal = old_current_funccal;
-  return hi;
-}
+// nvim_find_hi_in_scoped_ht_impl inlined into rs_find_hi_in_scoped_ht (Rust, Phase 29)
 
-dictitem_T *nvim_find_var_in_scoped_ht_impl(const char *name, const size_t namelen,
-                                             int no_autoload)
-{
-  if (current_funccal == NULL || current_funccal->fc_func->uf_scoped == NULL) {
-    return NULL;
-  }
-  dictitem_T *v = NULL;
-  funccall_T *old_current_funccal = current_funccal;
-  const char *varname;
-  current_funccal = current_funccal->fc_func->uf_scoped;
-  while (current_funccal) {
-    hashtab_T *ht = find_var_ht(name, namelen, &varname);
-    if (ht != NULL && *varname != NUL) {
-      v = find_var_in_ht(ht, *name, varname, namelen - (size_t)(varname - name), no_autoload);
-      if (v != NULL) {
-        break;
-      }
-    }
-    if (current_funccal == current_funccal->fc_func->uf_scoped) {
-      break;
-    }
-    current_funccal = current_funccal->fc_func->uf_scoped;
-  }
-  current_funccal = old_current_funccal;
-  return v;
-}
+// nvim_find_var_in_scoped_ht_impl inlined into rs_find_var_in_scoped_ht (Rust, Phase 29)
 
 // nvim_set_ref_in_previous_funccal_impl inlined into rs_set_ref_in_previous_funccal (Rust, Phase 12)
 

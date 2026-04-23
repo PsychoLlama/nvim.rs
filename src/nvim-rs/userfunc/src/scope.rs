@@ -9,12 +9,8 @@ use std::ffi::{c_char, c_int, c_void};
 
 extern "C" {
     // Phase 13: still calling C for complex shims
-    fn nvim_find_hi_in_scoped_ht_impl(name: *const c_char, pht: *mut *mut c_void) -> *mut c_void;
-    fn nvim_find_var_in_scoped_ht_impl(
-        name: *const c_char,
-        namelen: usize,
-        no_autoload: c_int,
-    ) -> *mut c_void;
+    // nvim_find_hi_in_scoped_ht_impl inlined into Rust (Phase 29)
+    // nvim_find_var_in_scoped_ht_impl inlined into Rust (Phase 29)
     // nvim_ex_return_impl moved to Rust (funccal.rs Phase 28)
     fn nvim_do_return_impl(
         eap: *mut c_void,
@@ -37,6 +33,25 @@ extern "C" {
     fn nvim_fc_l_vars_ht(fc: *mut c_void) -> *mut c_void;
     fn nvim_fc_l_avars_ht(fc: *mut c_void) -> *mut c_void;
     fn nvim_list_hashtable_vars(ht: *mut c_void, prefix: *const c_char, first: *mut c_int);
+
+    // Phase 29: for inlining nvim_find_hi_in_scoped_ht_impl and nvim_find_var_in_scoped_ht_impl
+    fn nvim_set_current_funccal(fc: *mut c_void);
+    fn nvim_fc_get_func(fc: *mut c_void) -> *mut c_void;
+    fn nvim_ufunc_get_scoped(fp: *mut c_void) -> *mut c_void;
+    fn find_var_ht(
+        name: *const c_char,
+        name_len: usize,
+        varname: *mut *const c_char,
+    ) -> *mut c_void;
+    fn hash_find_len(ht: *mut c_void, key: *const c_char, len: usize) -> *mut c_void;
+    fn nvim_hashitem_empty(hi: *mut c_void) -> c_int;
+    fn find_var_in_ht(
+        ht: *mut c_void,
+        htname: c_int,
+        varname: *const c_char,
+        varname_len: usize,
+        no_autoload: c_int,
+    ) -> *mut c_void;
 }
 
 // =============================================================================
@@ -197,21 +212,72 @@ pub unsafe extern "C" fn rs_get_current_funccal_dict(ht: *mut c_void) -> *mut c_
 // find_hi_in_scoped_ht
 // =============================================================================
 //
-// Cannot inline: requires HASHITEM_EMPTY macro and modifies current_funccal.
+// Phase 29: inlined from nvim_find_hi_in_scoped_ht_impl.
+// Temporarily sets current_funccal to search scoped funccals.
+
+/// Returns strlen of a NUL-terminated C string.
+///
+/// # Safety
+/// `s` must be a valid NUL-terminated C string.
+unsafe fn c_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    while unsafe { *s.add(len) } != 0 {
+        len += 1;
+    }
+    len
+}
 
 #[unsafe(export_name = "find_hi_in_scoped_ht")]
 pub unsafe extern "C" fn rs_find_hi_in_scoped_ht(
     name: *const c_char,
     pht: *mut *mut c_void,
 ) -> *mut c_void {
-    unsafe { nvim_find_hi_in_scoped_ht_impl(name, pht) }
+    let current = unsafe { nvim_get_current_funccal() };
+    if current.is_null() {
+        return std::ptr::null_mut();
+    }
+    let scoped = unsafe { nvim_ufunc_get_scoped(nvim_fc_get_func(current)) };
+    if scoped.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let old_current = current;
+    let namelen = unsafe { c_strlen(name) };
+    let mut hi: *mut c_void = std::ptr::null_mut();
+
+    unsafe { nvim_set_current_funccal(scoped) };
+    loop {
+        let cur2 = unsafe { nvim_get_current_funccal() };
+        if cur2.is_null() {
+            break;
+        }
+        let mut varname: *const c_char = std::ptr::null();
+        let ht = unsafe { find_var_ht(name, namelen, std::ptr::addr_of_mut!(varname)) };
+        if !ht.is_null() && unsafe { *varname } != 0 {
+            let varname_len = namelen - (varname as usize - name as usize);
+            let found_hi = unsafe { hash_find_len(ht, varname, varname_len) };
+            if unsafe { nvim_hashitem_empty(found_hi) } == 0 {
+                unsafe { *pht = ht };
+                hi = found_hi;
+                break;
+            }
+        }
+        let next = unsafe { nvim_ufunc_get_scoped(nvim_fc_get_func(cur2)) };
+        if cur2 == next {
+            break;
+        }
+        unsafe { nvim_set_current_funccal(next) };
+    }
+    unsafe { nvim_set_current_funccal(old_current) };
+    hi
 }
 
 // =============================================================================
 // find_var_in_scoped_ht
 // =============================================================================
 //
-// Cannot inline: requires modifying current_funccal and calls find_var_ht.
+// Phase 29: inlined from nvim_find_var_in_scoped_ht_impl.
+// Temporarily sets current_funccal to search scoped funccals.
 
 #[unsafe(export_name = "find_var_in_scoped_ht")]
 pub unsafe extern "C" fn rs_find_var_in_scoped_ht(
@@ -219,7 +285,44 @@ pub unsafe extern "C" fn rs_find_var_in_scoped_ht(
     namelen: usize,
     no_autoload: c_int,
 ) -> *mut c_void {
-    unsafe { nvim_find_var_in_scoped_ht_impl(name, namelen, no_autoload) }
+    let current = unsafe { nvim_get_current_funccal() };
+    if current.is_null() {
+        return std::ptr::null_mut();
+    }
+    let scoped = unsafe { nvim_ufunc_get_scoped(nvim_fc_get_func(current)) };
+    if scoped.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let old_current = current;
+    let mut v: *mut c_void = std::ptr::null_mut();
+
+    unsafe { nvim_set_current_funccal(scoped) };
+    loop {
+        let cur2 = unsafe { nvim_get_current_funccal() };
+        if cur2.is_null() {
+            break;
+        }
+        let mut varname: *const c_char = std::ptr::null();
+        let ht = unsafe { find_var_ht(name, namelen, std::ptr::addr_of_mut!(varname)) };
+        if !ht.is_null() && unsafe { *varname } != 0 {
+            let varname_len = namelen - (varname as usize - name as usize);
+            // htname = *name (first byte of name, used as char key in C)
+            let htname = c_int::from(unsafe { *name.cast::<u8>() });
+            let found = unsafe { find_var_in_ht(ht, htname, varname, varname_len, no_autoload) };
+            if !found.is_null() {
+                v = found;
+                break;
+            }
+        }
+        let next = unsafe { nvim_ufunc_get_scoped(nvim_fc_get_func(cur2)) };
+        if cur2 == next {
+            break;
+        }
+        unsafe { nvim_set_current_funccal(next) };
+    }
+    unsafe { nvim_set_current_funccal(old_current) };
+    v
 }
 
 // =============================================================================
