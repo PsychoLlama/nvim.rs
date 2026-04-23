@@ -1367,8 +1367,6 @@ extern "C" {
     fn enter_buffer(buf: BufHandle);
     fn check_colorcolumn(cc: *const c_char, win: *mut c_void) -> *const c_char;
     fn nvim_buf_terminal_check_size(buf: BufHandle) -> c_int;
-    fn nvim_curwin_buffer_is_null() -> c_int;
-    fn nvim_curwin_buffer_is_buf(buf: BufHandle) -> c_int;
     fn aborting() -> c_int;
     fn rs_win_valid(win: *mut c_void) -> c_int;
     fn rs_get_last_winid() -> c_int;
@@ -1435,7 +1433,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         && bufref_valid(&raw mut newbufref)
         && aborting() == 0)
     {
-        if nvim_curwin_buffer_is_buf(prevbuf) != 0 {
+        if win_ref_raw(nvim_get_curwin()).w_buffer == prevbuf.0 {
             reset_synblock(nvim_get_curwin());
         }
         // Close windows if unloading or if alt-bufhidden triggers it.
@@ -1453,7 +1451,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
             {
                 nvim_u_sync(false);
             }
-            let close_win = if nvim_curwin_buffer_is_buf(prevbuf) != 0 {
+            let close_win = if win_ref_raw(nvim_get_curwin()).w_buffer == prevbuf.0 {
                 nvim_get_curwin()
             } else {
                 std::ptr::null_mut()
@@ -1474,7 +1472,9 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
     }
 
     let valid = crate::rs_buf_valid(buf) != 0;
-    if (valid && buf != nvim_get_curbuf() && aborting() == 0) || nvim_curwin_buffer_is_null() != 0 {
+    if (valid && buf != nvim_get_curbuf() && aborting() == 0)
+        || win_ref_raw(nvim_get_curwin()).w_buffer.is_null()
+    {
         let cur = nvim_get_curbuf();
         if !cur.is_null() && prevbuf != cur {
             buf_mut(cur).b_nwindows -= 1;
@@ -1717,7 +1717,6 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
 // =============================================================================
 
 extern "C" {
-    fn nvim_curwin_set_buffer2(buf: BufHandle);
     fn nvim_set_curbuf_ptr(buf: BufHandle);
     fn buf_copy_options(buf: BufHandle, flags: c_int);
     fn get_winopts(buf: BufHandle);
@@ -1820,7 +1819,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     }
 
     // Get the buffer in the current window.
-    nvim_curwin_set_buffer2(buf);
+    win_mut_raw(nvim_get_curwin()).w_buffer = buf.0;
     nvim_set_curbuf_ptr(buf);
     let nwindows = buf_ref(buf).b_nwindows;
     buf_mut(buf).b_nwindows = nwindows + 1;

@@ -467,7 +467,8 @@ extern "C" {
     fn nvim_set_Insstart_orig(lnum: LinenrT, col: ColnrT);
     fn nvim_set_Insstart_textlen(val: ColnrT);
     fn nvim_set_Insstart_blank_vcol(val: ColnrT);
-    fn nvim_check_cursor_curwin();
+    #[link_name = "check_cursor"]
+    fn nvim_check_cursor_curwin(win: nvim_window::WinHandle);
 }
 
 /// Maximum column value (from `pos_defs.h`).
@@ -557,7 +558,7 @@ unsafe fn init_prompt_impl(cmdchar_todo: c_int) {
         nvim_curwin_set_cursor_col(new_col);
     }
 
-    nvim_check_cursor_curwin();
+    nvim_check_cursor_curwin(nvim_get_curwin());
 }
 
 /// Exported as `nvim_edit_init_prompt_impl` (replaces C function).

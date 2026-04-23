@@ -4,6 +4,7 @@
 //! the internal `move_lines` helper.
 
 use crate::{bref_void, buf_mut_void};
+use nvim_window::win_struct::WinStruct;
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
@@ -52,7 +53,6 @@ extern "C" {
     // --- curbuf / curwin manipulation ---
     fn nvim_get_curbuf() -> *mut c_void;
     fn nvim_set_curbuf(buf: *mut c_void);
-    fn nvim_curwin_set_buffer2(buf: *mut c_void);
 
     // --- p_ur ---
     fn nvim_get_p_ur() -> c_int;
@@ -90,7 +90,8 @@ extern "C" {
     fn nvim_curwin_set_topline_clamped(topline: c_int);
     fn nvim_curwin_get_cursor(lnum: *mut c_int, col: *mut c_int);
     fn nvim_curwin_set_cursor(lnum: c_int, col: c_int);
-    fn nvim_check_cursor_curwin();
+    #[link_name = "check_cursor"]
+    fn nvim_check_cursor_curwin(win: *mut c_void);
     fn nvim_update_topline_curwin();
 
     // --- fold helpers (from fold crate) ---
@@ -247,10 +248,10 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
             // Open the memline for savebuf.
             let prev_curbuf = nvim_get_curbuf();
             nvim_set_curbuf(savebuf);
-            nvim_curwin_set_buffer2(savebuf);
+            (*nvim_get_curwin().cast::<WinStruct>()).w_buffer = savebuf;
             let ml_ok = nvim_ml_open_buf(savebuf);
             nvim_set_curbuf(prev_curbuf);
-            nvim_curwin_set_buffer2(prev_curbuf);
+            (*nvim_get_curwin().cast::<WinStruct>()).w_buffer = prev_curbuf;
             if ml_ok == FAIL {
                 saved = FAIL;
             }
@@ -316,7 +317,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     // Restore topline and cursor.
     nvim_curwin_set_topline_clamped(old_topline);
     nvim_curwin_set_cursor(old_cursor_lnum, old_cursor_col);
-    nvim_check_cursor_curwin();
+    nvim_check_cursor_curwin(nvim_get_curwin());
     nvim_update_topline_curwin();
     buf_mut_void(curbuf).b_keep_filetype = 0;
 

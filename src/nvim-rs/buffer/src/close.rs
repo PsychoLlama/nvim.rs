@@ -8,6 +8,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(dead_code)]
 
+use nvim_window::win_struct::WinStruct;
 use std::ffi::{c_char, c_int, c_void};
 
 use crate::{
@@ -121,7 +122,6 @@ extern "C" {
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_entered_free_all_mem() -> c_int;
     fn end_visual_mode();
-    fn nvim_win_set_buffer_null(win: *mut c_void);
     fn nvim_mark_forget_file_all_tabs(fnum: c_int);
     fn nvim_buf_wipe_free(buf: BufHandle);
     fn nvim_buf_free_stuff_del(buf: BufHandle);
@@ -444,7 +444,7 @@ pub unsafe extern "C" fn rs_close_buffer(
     // Remove the buffer from the list.
     if wipe_buf {
         if clear_w_buf {
-            nvim_win_set_buffer_null(win);
+            (*win.cast::<WinStruct>()).w_buffer = std::ptr::null_mut();
         }
         // Do not wipe out the buffer if it is used in a window.
         if buf_ref(buf).b_nwindows > 0 {
@@ -466,7 +466,7 @@ pub unsafe extern "C" fn rs_close_buffer(
         }
         crate::state::rs_buf_clear_file(buf);
         if clear_w_buf {
-            nvim_win_set_buffer_null(win);
+            (*win.cast::<WinStruct>()).w_buffer = std::ptr::null_mut();
         }
         if del_buf {
             crate::buf_struct::buf_mut(buf).b_p_bl = 0;

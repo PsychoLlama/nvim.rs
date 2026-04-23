@@ -662,9 +662,7 @@ extern "C" {
 
     // window cursor/line options
     fn nvim_win_get_w_p_cul(wp: WinHandle) -> c_int;
-    fn nvim_win_set_w_p_cul(wp: WinHandle, val: bool);
     fn nvim_win_get_w_p_cuc(wp: WinHandle) -> c_int;
-    fn nvim_win_set_w_p_cuc(wp: WinHandle, val: bool);
 
     // update_topline
     fn update_topline(wp: WinHandle);
@@ -858,8 +856,8 @@ unsafe fn cmdpreview_prepare_impl() -> *mut c_void {
         win_info.push(win_saved);
 
         // Disable 'cursorline'/'cursorcolumn' so they don't mess up highlights
-        nvim_win_set_w_p_cul(wp, false);
-        nvim_win_set_w_p_cuc(wp, false);
+        (*wp.cast::<nvim_window::win_struct::WinStruct>()).set_w_p_cul(0);
+        (*wp.cast::<nvim_window::win_struct::WinStruct>()).set_w_p_cuc(0);
 
         wp = nvim_win_next(wp);
     }
@@ -963,8 +961,10 @@ unsafe fn cmdpreview_restore_state_impl(state: *mut c_void) {
         cw.save_viewstate.restore_to_window(win);
 
         // Restore 'cursorline' and 'cursorcolumn'.
-        nvim_win_set_w_p_cul(win, cw.save_w_p_cul != 0);
-        nvim_win_set_w_p_cuc(win, cw.save_w_p_cuc != 0);
+        (*win.cast::<nvim_window::win_struct::WinStruct>())
+            .set_w_p_cul(c_int::from(cw.save_w_p_cul != 0));
+        (*win.cast::<nvim_window::win_struct::WinStruct>())
+            .set_w_p_cuc(c_int::from(cw.save_w_p_cuc != 0));
 
         update_topline(win);
     }

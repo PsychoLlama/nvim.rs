@@ -407,8 +407,6 @@ int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
                   (exarg_T *)ea_void, READ_NEW | READ_DUMMY, false); }
 int nvim_buf_terminal_check_size(buf_T *buf)
 { if (buf && buf->terminal) { terminal_check_size(buf->terminal); return 1; } return 0; }
-int nvim_curwin_buffer_is_null(void) { return curwin->w_buffer == NULL ? 1 : 0; }
-int nvim_curwin_buffer_is_buf(buf_T *buf) { return curwin->w_buffer == buf ? 1 : 0; }
 int nvim_buf_aucmd_open_buffer(buf_T *buf)
 { aco_save_T aco; aucmd_prepbuf(&aco, buf); int status = open_buffer(false, NULL, 0);
   aucmd_restbuf(&aco); return (status != FAIL) ? 1 : 0; }
@@ -432,7 +430,6 @@ int nvim_get_entered_free_all_mem(void)
   return 0;
 #endif
 }
-void nvim_win_set_buffer_null(win_T *win) { win->w_buffer = NULL; }
 void nvim_mark_forget_file_all_tabs(int fnum)
 { FOR_ALL_TAB_WINDOWS(tp, wp) { mark_forget_file(wp, fnum); } }
 void nvim_buf_wipe_free(buf_T *buf)
@@ -514,9 +511,7 @@ void nvim_curwin_set_cursor(linenr_T lnum, colnr_T col) {
   curwin->w_cursor.col = col;
   curwin->w_cursor.coladd = 0;
 }
-void nvim_check_cursor_curwin(void) { check_cursor(curwin); }
 // Note: nvim_update_topline_curwin is defined in eval_shim.c
-void nvim_curwin_set_buffer2(buf_T *buf) { curwin->w_buffer = buf; }
 // Note: nvim_get_curbuf_ptr is defined in window_shim.c
 void nvim_set_curbuf_ptr(buf_T *buf) { curbuf = buf; }
 // ml_delete wrapper for move_lines: takes buf as context
@@ -837,12 +832,6 @@ void nvim_free_buffer_c_parts(buf_T *buf)
 }
 
 // nvim_buf_get_changedtick is defined in api/buffer.c (nvim API).
-
-/// Set win->w_p_cul (cursorline option).
-void nvim_win_set_w_p_cul(win_T *win, bool val) { win->w_p_cul = val; }
-
-/// Set win->w_p_cuc (cursorcolumn option).
-void nvim_win_set_w_p_cuc(win_T *win, bool val) { win->w_p_cuc = val; }
 
 // =============================================================================
 // free_buf_options shim (Phase 2: migrate free_buf_options to Rust)
