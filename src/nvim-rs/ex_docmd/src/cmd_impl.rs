@@ -946,7 +946,7 @@ extern "C" {
     fn nvim_docmd_set_eventignore_all();
     fn nvim_docmd_set_eventignore_str(s: *mut c_char);
     static mut msg_silent: c_int;
-    fn nvim_inc_msg_silent();
+    // nvim_inc_msg_silent removed: use msg_silent += 1 directly
     fn nvim_get_p_verbose() -> c_int;
     fn nvim_set_p_verbose(val: c_int);
     fn nvim_get_p_ei() -> *const c_char;
@@ -1918,7 +1918,7 @@ pub unsafe extern "C" fn rs_apply_cmdmod_impl(cmod: CmodHandle) {
         nvim_cmod_capture_msg_scroll(cmod);
     }
     if (flags & CMOD_SILENT) != 0 {
-        nvim_inc_msg_silent();
+        msg_silent += 1;
     }
     if (flags & CMOD_UNSILENT) != 0 {
         msg_silent = 0;

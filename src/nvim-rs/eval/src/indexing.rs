@@ -288,7 +288,8 @@ extern "C" {
 
     // Window validation (Phase 3)
     fn nvim_update_topline_curwin();
-    fn nvim_validate_botline_curwin();
+    #[link_name = "validate_botline"]
+    fn validate_botline_eval(wp: *mut c_void);
     // nvim_check_cursor_moved_curwin inlined: check_cursor_moved(curwin)
     #[link_name = "check_cursor_moved"]
     fn nvim_check_cursor_moved_impl(wp: *mut c_void);
@@ -480,7 +481,7 @@ pub unsafe extern "C" fn rs_var2fpos(
             return true;
         } else if name[1] == b'$' {
             // "w$": last visible line
-            nvim_validate_botline_curwin();
+            validate_botline_eval(CURWIN_EVAL);
             // Re-read state after update (botline may have changed).
             nvim_read_cursor_visual_state(&raw mut cvs);
             // In silent Ex mode botline is zero, return zero then.

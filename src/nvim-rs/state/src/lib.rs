@@ -267,16 +267,27 @@ extern "C" {
     fn nvim_state_get_ve_flags(wp: WinHandle) -> c_uint;
     /// Get `typebuf.tb_len`.
     fn nvim_get_typebuf_len() -> c_int;
-    /// Check if stuff is empty.
-    fn nvim_stuff_empty() -> c_int;
-    /// Check if using a script.
-    fn nvim_using_script() -> c_int;
+    /// Check if stuff is empty (direct linkage).
+    #[link_name = "stuff_empty"]
+    fn stuff_empty() -> bool;
+    /// Check if using a script (direct linkage).
+    #[link_name = "using_script"]
+    fn using_script() -> c_int;
     /// Get `global_busy`.
     fn nvim_get_global_busy() -> bool;
-    /// Get `debug_mode`.
-    fn nvim_is_debug_mode() -> c_int;
-    /// Apply `SafeState` autocommand.
-    fn nvim_apply_autocmds_safestate();
+    /// `debug_mode` global (direct linkage).
+    static mut debug_mode: bool;
+    /// `curbuf` global pointer (for autocmd calls).
+    static mut curbuf: *mut c_void;
+    /// Apply autocmd event (direct linkage).
+    #[link_name = "apply_autocmds"]
+    fn apply_autocmds(
+        event: c_int,
+        fname: *mut c_void,
+        fname_io: *mut c_void,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
     // Log message (DLOG macro equivalent -- ignored in Rust for now).
     // (no-op in Rust migration)
 }
@@ -291,11 +302,11 @@ static WAS_SAFE: AtomicBool = AtomicBool::new(false);
 /// # Safety
 /// Calls C accessor functions.
 unsafe fn is_safe_now() -> bool {
-    nvim_stuff_empty() != 0
+    stuff_empty()
         && nvim_get_typebuf_len() == 0
-        && nvim_using_script() == 0
+        && using_script() == 0
         && !nvim_get_global_busy()
-        && nvim_is_debug_mode() == 0
+        && !debug_mode
 }
 
 /// Return true if in the current mode we need to use virtual editing.
@@ -331,7 +342,13 @@ pub unsafe extern "C" fn rs_may_trigger_safestate(safe: bool) {
     let is_safe = safe && is_safe_now();
     // (DLOG for state changes omitted -- Rust migration)
     if is_safe {
-        nvim_apply_autocmds_safestate();
+        apply_autocmds(
+            94,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            false,
+            curbuf,
+        );
     }
     WAS_SAFE.store(is_safe, Ordering::Relaxed);
 }
@@ -394,13 +411,15 @@ extern "C" {
     fn rs_ins_compl_active() -> c_int;
     /// Returns non-zero if ctrl-x mode not defined yet.
     fn rs_ctrl_x_mode_not_defined_yet() -> c_int;
-    /// Returns cmdline overstrike flag.
-    fn nvim_cmdline_overstrike() -> c_int;
+    /// Returns cmdline overstrike flag (direct linkage).
+    #[link_name = "cmdline_overstrike"]
+    fn cmdline_overstrike() -> bool;
     /// Returns `ccline.one_key`.
     fn nvim_get_ccline_one_key() -> c_int;
     // got_int is declared in the second extern block below
-    /// Returns true if `EVENT_MODECHANGED` has any autocmds.
-    fn nvim_has_event_modechanged() -> c_int;
+    /// Returns true if event has any autocmds (direct linkage).
+    #[link_name = "has_event"]
+    fn has_event(event: c_int) -> c_int;
     /// `get_v_event` opaque accessor.
     fn get_v_event(save: *mut u8) -> *mut c_void;
     /// `restore_v_event` opaque accessor.
@@ -411,8 +430,6 @@ extern "C" {
         new_mode: *const c_char,
         old_mode: *const c_char,
     );
-    /// Apply `ModeChanged` autocommand.
-    fn nvim_apply_autocmds_modechanged(pattern_buf: *const c_char);
     /// Get `last_mode` global (pointer to static array).
     fn nvim_get_last_mode() -> *const c_char;
     /// Set `last_mode` global (copy `src` to static array).
@@ -485,7 +502,7 @@ pub unsafe extern "C" fn rs_get_mode(buf: *mut c_char) {
             buf[i] = b'v';
             i += 1;
         }
-        if (state & MODE_CMDLINE) != 0 && nvim_cmdline_overstrike() != 0 {
+        if (state & MODE_CMDLINE) != 0 && cmdline_overstrike() {
             buf[i] = b'r';
             i += 1;
         }
@@ -541,7 +558,7 @@ pub unsafe extern "C" fn rs_get_mode(buf: *mut c_char) {
 #[unsafe(export_name = "may_trigger_modechanged")]
 pub unsafe extern "C" fn rs_may_trigger_modechanged() {
     // Skip this when got_int is set, the autocommand will not be executed.
-    if nvim_has_event_modechanged() == 0 || c_int::from(got_int) != 0 {
+    if has_event(83) == 0 || c_int::from(got_int) != 0 {
         return;
     }
 
@@ -579,7 +596,13 @@ pub unsafe extern "C" fn rs_may_trigger_modechanged() {
 
     nvim_state_fill_v_event_modechanged(v_event, curr_mode.as_ptr().cast(), last);
 
-    nvim_apply_autocmds_modechanged(pattern_buf.as_ptr().cast());
+    apply_autocmds(
+        83,
+        pattern_buf.as_ptr().cast_mut().cast(),
+        std::ptr::null_mut(),
+        false,
+        curbuf,
+    );
     nvim_set_last_mode(curr_mode.as_ptr().cast());
 
     restore_v_event(v_event, save_buf.as_mut_ptr().cast::<u8>());

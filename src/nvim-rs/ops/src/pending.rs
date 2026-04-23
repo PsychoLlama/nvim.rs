@@ -117,8 +117,9 @@ extern "C" {
     fn nvim_curwin_reset_lbr();
     fn nvim_curwin_restore_lbr(saved: c_int);
 
-    // validate_virtcol
-    fn nvim_dpo_validate_virtcol();
+    // validate_virtcol (direct linkage)
+    #[link_name = "validate_virtcol"]
+    fn validate_virtcol(wp: *mut c_void);
     fn nvim_get_curwin_w_virtcol() -> c_int;
     fn nvim_get_curswant() -> c_int;
     fn nvim_set_curswant(val: c_int);
@@ -505,7 +506,7 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
         if rv_vcol == MAXCOL || rv_mode == c_int::from(b'v') {
             if rv_mode == c_int::from(b'v') {
                 if rv_line_count <= 1 {
-                    nvim_dpo_validate_virtcol();
+                    validate_virtcol(nvim_dpo_get_curwin());
                     let new_curswant = nvim_get_curwin_w_virtcol() + rv_vcol - 1;
                     nvim_set_curswant(new_curswant);
                 } else {

@@ -111,7 +111,6 @@ fmark_T *nvim_get_jumplist(int count1) { return get_jumplist(curwin, count1); }
 void nvim_put_free_register(void *savereg) { if (savereg != NULL) { free_register((yankreg_T *)savereg); xfree(savereg); } }
 int nvim_get_b_prompt_start_lnum_put(void) { return curbuf->b_prompt_start.mark.lnum; }
 void nvim_set_cursor_col_to_prompt_text_len(void) { curwin->w_cursor.col = (int)strlen(prompt_text()); }
-void nvim_inc_msg_silent(void) { msg_silent++; }
 bool nvim_curbuf_ml_empty(void) { return (curbuf->b_ml.ml_flags & ML_EMPTY) != 0; }
 void nvim_inc_b_visual_vi_end(void) { inc(&curbuf->b_visual.vi_end); }
 void nvim_ml_delete_last_line(void) { ml_delete_flags(curbuf->b_ml.ml_line_count, ML_DEL_MESSAGE); deleted_lines(curbuf->b_ml.ml_line_count + 1, 1); }
@@ -128,7 +127,6 @@ void nvim_clear_b_syn_slow_all_windows(void) {
     wp->w_s->b_syn_slow = false;
   }
 }
-void nvim_syn_stack_free_all_curwin(void) { syn_stack_free_all(curwin->w_s); }
 bool nvim_get_mode_displayed(void) { return mode_displayed; }
 void nvim_set_mode_displayed(bool val) { mode_displayed = val; }
 void nvim_set_clear_cmdline(bool val) { clear_cmdline = val; }
@@ -161,7 +159,6 @@ int nvim_get_curwin_w_p_fdl(void) { return (int)curwin->w_p_fdl; }
 void nvim_set_curwin_w_p_fdl(int val) { curwin->w_p_fdl = val; }
 int nvim_get_curwin_w_view_width(void) { return curwin->w_view_width; }
 int nvim_get_curwin_w_leftcol(void) { return curwin->w_leftcol; }
-void nvim_validate_botline_curwin(void) { validate_botline(curwin); }
 bool nvim_hasFolding_curwin(int lnum) { return hasFolding(curwin, lnum, NULL, NULL); }
 void nvim_getvcol_curwin_cursor(int *vcol) { getvcol(curwin, &curwin->w_cursor, vcol, NULL, NULL); }
 void nvim_getvcol_curwin_cursor_end(int *vcol) { getvcol(curwin, &curwin->w_cursor, NULL, NULL, vcol); }
@@ -280,7 +277,6 @@ char *nvim_normal_showcmd_buf_ptr(void) { return showcmd_buf; }
 // Phase 4 (check_timestamps) accessors
 int nvim_get_no_check_timestamps(void) { return no_check_timestamps; }
 bool nvim_get_did_check_timestamps(void) { return did_check_timestamps; }
-int nvim_stuff_empty(void) { return stuff_empty() ? 1 : 0; }
 int nvim_get_allbuf_lock(void) { return allbuf_lock; }
 int nvim_get_curbuf_b_ro_locked(void) { return curbuf->b_ro_locked; }
 int nvim_get_no_wait_return(void) { return no_wait_return; }
@@ -371,7 +367,6 @@ bool nvim_dpo_get_p_sol(void) { return p_sol; }
 int nvim_curwin_get_p_lbr(void) { return curwin->w_p_lbr; }
 void nvim_curwin_reset_lbr(void) { if (curwin->w_p_lbr) { curwin->w_p_lbr = false; curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL); } }
 void nvim_curwin_restore_lbr(int saved) { if (!curwin->w_p_lbr && saved) { curwin->w_p_lbr = true; curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL); } }
-void nvim_dpo_validate_virtcol(void) { validate_virtcol(curwin); }
 void nvim_oap_set_start_from_cursor(oparg_T *oap) { if (oap) { oap->start = curwin->w_cursor; } }
 void nvim_oap_set_end_from_cursor(oparg_T *oap) { if (oap) { oap->end = curwin->w_cursor; } }
 void nvim_oap_set_start_from_VIsual(oparg_T *oap) { if (oap) { oap->start = VIsual; } }
@@ -527,19 +522,6 @@ const char *nvim_get_p_fp(void) { return p_fp; }
 // State crate accessors (Phase 1)
 // =============================================================================
 
-/// Return whether currently using a script (for SafeState check).
-int nvim_using_script(void) { return using_script() ? 1 : 0; }
-
-/// Return whether debug_mode is set.
-int nvim_is_debug_mode(void) { return debug_mode ? 1 : 0; }
-
-
-/// Apply SafeState autocommand.
-void nvim_apply_autocmds_safestate(void)
-{
-  apply_autocmds(EVENT_SAFESTATE, NULL, NULL, false, curbuf);
-}
-
 // =============================================================================
 // State crate accessors (Phase 2)
 // =============================================================================
@@ -549,18 +531,6 @@ int nvim_get_motion_force(void) { return motion_force; }
 
 /// Return restart_VIsual_select global.
 int nvim_get_restart_VIsual_select(void) { return restart_VIsual_select; }
-
-/// Return whether cmdline overstrike mode is active.
-int nvim_cmdline_overstrike(void) { return cmdline_overstrike() ? 1 : 0; }
-
-/// Return whether EVENT_MODECHANGED has any autocommands.
-int nvim_has_event_modechanged(void) { return has_event(EVENT_MODECHANGED) ? 1 : 0; }
-
-/// Apply ModeChanged autocommand with pattern "old:new".
-void nvim_apply_autocmds_modechanged(const char *pattern_buf)
-{
-  apply_autocmds(EVENT_MODECHANGED, (char *)pattern_buf, NULL, false, curbuf);
-}
 
 /// Get last_mode global (returns pointer to static array of MODE_MAX_LENGTH bytes).
 const char *nvim_get_last_mode(void) { return last_mode; }

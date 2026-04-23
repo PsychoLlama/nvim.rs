@@ -1342,7 +1342,7 @@ extern "C" {
     fn nvim_get_b_prompt_start_lnum_put() -> c_int;
     fn nvim_set_cursor_col_to_prompt_text_len();
 
-    fn nvim_inc_msg_silent();
+    // nvim_inc_msg_silent removed: use msg_silent += 1 directly
     fn nvim_inc_b_visual_vi_end();
 
     fn nvim_ml_delete_last_line();
@@ -2104,7 +2104,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
                 NUL_CHAR
             };
             (*oap).regname = underscore;
-            nvim_inc_msg_silent();
+            msg_silent += 1;
             rs_nv_operator(cap);
             do_pending_operator(cap, 0, false);
             empty = buf_ref(nvim_get_curbuf()).ml_is_empty();
@@ -2250,7 +2250,8 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
 extern "C" {
     // Phase 1 accessor functions
     // nvim_nv_clear_impl migrated to Rust rs_nv_clear_impl (Phase 6)
-    fn nvim_syn_stack_free_all_curwin();
+    #[link_name = "syn_stack_free_all"]
+    fn syn_stack_free_all(block: *mut c_void);
     fn nvim_clear_b_syn_slow_all_windows();
     fn buflist_getfile(n: c_int, lnum: c_int, flags: c_int, setpm: c_int);
     // Phase 4 accessors
@@ -2273,7 +2274,7 @@ extern "C" {
 /// Calls C functions to free syntax state and mark for redraw.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_clear_impl() {
-    nvim_syn_stack_free_all_curwin();
+    syn_stack_free_all(win_ref(nvim_get_curwin()).w_s);
     nvim_clear_b_syn_slow_all_windows();
     redraw_later(nvim_get_curwin(), UPD_CLEAR);
 }

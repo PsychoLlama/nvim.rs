@@ -483,8 +483,9 @@ extern "C" {
     static mut did_check_timestamps: bool;
     /// Sets `need_check_timestamps`.
     fn nvim_set_need_check_timestamps(val: c_int);
-    /// Returns non-zero if the stuff buffer is empty.
-    fn nvim_stuff_empty() -> c_int;
+    /// Returns whether the stuff buffer is empty (direct linkage).
+    #[link_name = "stuff_empty"]
+    fn stuff_empty_sync() -> bool;
     /// Returns the `global_busy` flag.
     fn nvim_get_global_busy() -> bool;
     /// Returns non-zero if the typebuf has been typed.
@@ -542,7 +543,7 @@ pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
 
     let mut didit: c_int = 0;
 
-    if nvim_stuff_empty() == 0
+    if !stuff_empty_sync()
         || nvim_get_global_busy()
         || nvim_typebuf_typed() == 0
         || nvim_get_autocmd_busy()

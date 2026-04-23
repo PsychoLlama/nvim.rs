@@ -367,7 +367,8 @@ extern "C" {
 
 extern "C" {
     // These are needed for handle_restart_edit_cursor
-    fn nvim_stuff_empty() -> c_int;
+    #[link_name = "stuff_empty"]
+    fn stuff_empty_enter() -> bool;
     fn nvim_get_where_paste_started_lnum() -> LinenrT;
     fn nvim_validate_virtcol_curwin();
     #[link_name = "update_curswant"]
@@ -387,7 +388,7 @@ extern "C" {
 /// # Safety
 /// Accesses multiple global variables via C accessor functions.
 unsafe fn handle_restart_edit_cursor_impl() -> c_int {
-    if restart_edit != 0 && nvim_stuff_empty() != 0 {
+    if restart_edit != 0 && stuff_empty_enter() {
         let paste_lnum = nvim_get_where_paste_started_lnum();
         nvim_set_arrow_used(c_int::from(paste_lnum == 0));
         restart_edit = 0;
