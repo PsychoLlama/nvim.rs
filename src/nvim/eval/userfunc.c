@@ -2193,57 +2193,9 @@ void nvim_ex_return_impl(exarg_T *eap)
 
 /// ":return [expr]"
 /// Lower level implementation of "call".  Only called when not skipping.
-static int ex_call_inner(exarg_T *eap, char *name, char **arg, char *startarg,
-                         const funcexe_T *const funcexe_init, evalarg_T *const evalarg)
-{
-  bool doesrange;
-  bool failed = false;
-
-  for (linenr_T lnum = eap->line1; lnum <= eap->line2; lnum++) {
-    if (eap->addr_count > 0) {
-      if (lnum > curbuf->b_ml.ml_line_count) {
-        // If the function deleted lines or switched to another buffer
-        // the line number may become invalid.
-        emsg(_(e_invrange));
-        break;
-      }
-      curwin->w_cursor.lnum = lnum;
-      curwin->w_cursor.col = 0;
-      curwin->w_cursor.coladd = 0;
-    }
-    *arg = startarg;
-
-    funcexe_T funcexe = *funcexe_init;
-    funcexe.fe_doesrange = &doesrange;
-    typval_T rettv;
-    rettv.v_type = VAR_UNKNOWN;  // tv_clear() uses this
-    if (get_func_tv(name, -1, &rettv, arg, evalarg, &funcexe) == FAIL) {
-      failed = true;
-      break;
-    }
-
-    // Handle a function returning a Funcref, Dict or List.
-    if (handle_subscript((const char **)arg, &rettv, &EVALARG_EVALUATE, true) == FAIL) {
-      failed = true;
-      break;
-    }
-
-    tv_clear(&rettv);
-    if (doesrange) {
-      break;
-    }
-
-    // Stop when immediately aborting on error, or when an interrupt
-    // occurred or an exception was thrown but not caught.
-    // get_func_tv() returned OK, so that the check for trailing
-    // characters below is executed.
-    if (aborting()) {
-      break;
-    }
-  }
-
-  return failed;
-}
+// ex_call_inner migrated to Rust (funccal.rs Phase 25).
+extern int ex_call_inner(exarg_T *eap, char *name, char **arg, char *startarg,
+                         const funcexe_T *funcexe_init, evalarg_T *evalarg);
 
 // nvim_ex_defer_inner_impl migrated to Rust (defer.rs Phase 24).
 // rs_ex_defer_inner now implements the logic directly.
@@ -3127,4 +3079,26 @@ int nvim_check_defer_builtin(const char *name, int argcount)
     return -1;
   }
   return check_internal_func(fdef, argcount);
+}
+
+// Phase 25: accessors for ex_call_inner migration (funccal.rs)
+linenr_T nvim_eap_get_line1(const exarg_T *eap) { return eap ? eap->line1 : 0; }
+linenr_T nvim_eap_get_line2(const exarg_T *eap) { return eap ? eap->line2 : 0; }
+int nvim_eap_get_addr_count(const exarg_T *eap) { return eap ? eap->addr_count : 0; }
+/// Check lnum vs curbuf line count. If valid, advance cursor (lnum, col=0, coladd=0).
+/// Returns 1 if lnum is beyond line count (break loop), 0 otherwise.
+int nvim_ex_call_check_advance_cursor(linenr_T lnum)
+{
+  if (lnum > curbuf->b_ml.ml_line_count) {
+    return 1;
+  }
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = 0;
+  curwin->w_cursor.coladd = 0;
+  return 0;
+}
+/// Call handle_subscript with &EVALARG_EVALUATE.
+int nvim_handle_subscript_eval_evaluate(char **arg, typval_T *rettv)
+{
+  return handle_subscript((const char **)arg, rettv, &EVALARG_EVALUATE, true);
 }

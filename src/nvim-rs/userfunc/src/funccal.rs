@@ -180,6 +180,15 @@ extern "C" {
         argcount: *mut c_int,
     ) -> c_int;
     fn skipwhite(p: *const c_char) -> *mut c_char;
+
+    // Phase 25: for ex_call_inner migration
+    fn nvim_eap_get_line1(eap: *const c_void) -> i32;
+    fn nvim_eap_get_line2(eap: *const c_void) -> i32;
+    fn nvim_eap_get_addr_count(eap: *const c_void) -> c_int;
+    fn nvim_ex_call_check_advance_cursor(lnum: i32) -> c_int;
+    fn nvim_handle_subscript_eval_evaluate(arg: *mut *mut c_char, rettv: *mut c_void) -> c_int;
+    fn nvim_emsg_invrange();
+    // get_func_tv is Rust (funccal.rs), linked by name -- already declared above
 }
 
 // =============================================================================
@@ -961,4 +970,103 @@ pub unsafe extern "C" fn rs_get_func_tv(
 
     unsafe { *arg = skipwhite(argp) };
     ret
+}
+
+// =============================================================================
+// ex_call_inner  (Phase 25)
+// =============================================================================
+
+/// Size of funcexe_T in bytes (must match C's sizeof(funcexe_T)).
+const SIZEOF_FUNCEXE: usize = 64;
+/// Byte offset of fe_doesrange in funcexe_T.
+const FUNCEXE_DOESRANGE_OFFSET: usize = 16;
+
+/// Inner loop for `:call func(args)` with optional range.
+///
+/// Phase 25: migrated from static C `ex_call_inner`.
+///
+/// # Safety
+/// All pointers must be valid.
+#[unsafe(export_name = "ex_call_inner")]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_ex_call_inner(
+    eap: *const c_void,
+    name: *const c_char,
+    arg: *mut *mut c_char,
+    startarg: *mut c_char,
+    funcexe_init: *const c_void,
+    evalarg: *mut c_void,
+) -> c_int {
+    let mut doesrange: bool = false;
+    let mut failed = false;
+
+    let line1 = unsafe { nvim_eap_get_line1(eap) };
+    let line2 = unsafe { nvim_eap_get_line2(eap) };
+    let addr_count = unsafe { nvim_eap_get_addr_count(eap) };
+
+    let mut lnum = line1;
+    while lnum <= line2 {
+        if addr_count > 0 {
+            // Check line count; advance cursor if valid.
+            if unsafe { nvim_ex_call_check_advance_cursor(lnum) } != 0 {
+                // lnum > line count: function deleted lines or switched buffer
+                unsafe { nvim_emsg_invrange() };
+                failed = true;
+                break;
+            }
+        }
+        unsafe { *arg = startarg };
+
+        // Build a local copy of funcexe with fe_doesrange = &doesrange.
+        let mut funcexe = [0u8; SIZEOF_FUNCEXE];
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                funcexe_init.cast::<u8>(),
+                funcexe.as_mut_ptr(),
+                SIZEOF_FUNCEXE,
+            );
+        };
+        let doesrange_ptr: *mut bool = &raw mut doesrange;
+        // Write the pointer into the byte array at the correct offset.
+        // Use write_unaligned to avoid alignment UB (byte array is u8-aligned).
+        #[allow(clippy::cast_ptr_alignment)]
+        unsafe {
+            let slot = funcexe
+                .as_mut_ptr()
+                .add(FUNCEXE_DOESRANGE_OFFSET)
+                .cast::<*mut bool>();
+            std::ptr::write_unaligned(slot, doesrange_ptr);
+        };
+        let funcexe_ptr = funcexe.as_mut_ptr().cast::<c_void>();
+
+        // Allocate rettv on the stack (typval_T = 16 bytes).
+        let mut rettv = [0u8; SIZEOF_TYPVAL];
+        let rettv_ptr = rettv.as_mut_ptr().cast::<c_void>();
+        unsafe { nvim_tv_set_unknown(rettv_ptr) }; // v_type = VAR_UNKNOWN
+
+        if unsafe { rs_get_func_tv(name, -1, rettv_ptr, arg, evalarg, funcexe_ptr) } == FAIL {
+            failed = true;
+            break;
+        }
+
+        // Handle function returning a Funcref, Dict, or List.
+        if unsafe { nvim_handle_subscript_eval_evaluate(arg, rettv_ptr) } == FAIL {
+            failed = true;
+            break;
+        }
+
+        unsafe { tv_clear(rettv_ptr) };
+        if doesrange {
+            break;
+        }
+
+        // Stop on abort/interrupt/exception.
+        if unsafe { aborting() } {
+            break;
+        }
+
+        lnum += 1;
+    }
+
+    c_int::from(failed)
 }
