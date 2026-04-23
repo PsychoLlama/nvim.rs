@@ -9,6 +9,8 @@ bitflags = "2"
 libc = "0.2"
 nvim-profile = { path = "../profile" }
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }
+nvim-buffer = { path = "../buffer" }
+nvim-window = { path = "../window" }
 
 [lib]
 crate-type = ["rlib"]

@@ -23,9 +23,10 @@ use std::ffi::{c_char, c_int};
 use crate::range::{LineNr, LineRange};
 use crate::ExArgHandle;
 // Phase 1: ExArg field accessors
+// Phase 2: curbuf/curwin field accessors
 use crate::{
     nvim_exarg_get_cmd, nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2,
-    nvim_excmds_get_arg_mut,
+    nvim_excmds_curwin_cursor_lnum, nvim_excmds_curwin_set_col_zero, nvim_excmds_get_arg_mut,
 };
 
 extern crate libc;
@@ -65,8 +66,7 @@ extern "C" {
     fn line_breakcheck();
     fn nvim_excmds_emsg_by_id(id: c_int);
     fn nvim_excmds_emsg_with_arg(id: c_int, arg: *const c_char);
-    fn nvim_excmds_curwin_cursor_lnum() -> c_int;
-    fn nvim_excmds_curwin_set_col_zero();
+    // nvim_excmds_curwin_cursor_lnum, nvim_excmds_curwin_set_col_zero moved to Phase 2 inline Rust
     fn rs_check_regexp_delim(c: c_int) -> c_int;
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
 }

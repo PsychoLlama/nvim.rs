@@ -26,9 +26,12 @@ use crate::range::{LineNr, LineRange};
 use crate::{BufHandle, ExArgHandle, WinHandle};
 // Phase 1: ExArg field accessors (inline Rust in lib.rs)
 use crate::{
-    nvim_exarg_cmdidx_is_saveas, nvim_exarg_get_cmd_byte1, nvim_exarg_get_cmdidx,
-    nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_get_usefilter,
-    nvim_exarg_set_line1, nvim_exarg_set_line2, nvim_excmds_eap_get_append,
+    nvim_ecmd_buf_has_memfile, nvim_exarg_cmdidx_is_saveas, nvim_exarg_get_cmd_byte1,
+    nvim_exarg_get_cmdidx, nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2,
+    nvim_exarg_get_usefilter, nvim_exarg_set_line1, nvim_exarg_set_line2,
+    nvim_excmds_curbuf_ffname_not_null, nvim_excmds_curbuf_get_b_fnum,
+    nvim_excmds_curbuf_get_b_nwindows, nvim_excmds_curbuf_get_ffname, nvim_excmds_curbuf_get_fname,
+    nvim_excmds_curbuf_get_sfname, nvim_excmds_curwin_get_w_arg_idx, nvim_excmds_eap_get_append,
     nvim_excmds_eap_get_mkdir_p, nvim_excmds_get_arg_mut, nvim_excmds_set_forceit,
 };
 
@@ -420,8 +423,7 @@ extern "C" {
     fn curbuf_locked() -> bool;
     fn rs_fname_expand(buf: *mut BufHandle, ffname: *mut *mut c_char, sfname: *mut *mut c_char);
     fn nvim_get_curbuf() -> *mut BufHandle;
-    fn nvim_excmds_curbuf_get_b_fnum() -> c_int;
-    fn nvim_excmds_curbuf_get_b_nwindows() -> c_int;
+    // nvim_excmds_curbuf_get_b_fnum, _b_nwindows moved to Phase 2 inline Rust
     fn rs_buf_hide(buf: *mut BufHandle) -> bool;
     fn autowrite(buf: *mut BufHandle, forceit: bool) -> c_int;
     fn dialog_changed(buf: *mut BufHandle, checkall: bool);
@@ -828,15 +830,12 @@ extern "C" {
         lnum: c_int,
     ) -> *mut BufHandle;
     fn rs_buflist_findname(ffname: *mut c_char) -> *mut BufHandle;
-    fn nvim_ecmd_buf_has_memfile(buf: *mut BufHandle) -> c_int;
     fn nvim_excmds_emsg_e_bufloaded();
     fn rs_bt_dontwrite_msg(buf: *mut BufHandle) -> bool;
     fn check_fname() -> c_int;
     fn nvim_excmds_curbuf_check_writable() -> c_int;
     fn nvim_excmds_dialog_write_partial() -> c_int;
-    fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
-    fn nvim_excmds_curbuf_get_sfname() -> *mut c_char;
-    fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
+    // nvim_excmds_curbuf_get_ffname/sfname/fname moved to Phase 2 inline Rust
 
     fn nvim_excmds_buf_write_do_write(
         ffname: *const c_char,
@@ -1107,12 +1106,12 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_curbuf_ffname_not_null() -> c_int;
+    // nvim_excmds_curbuf_ffname_not_null, nvim_excmds_curwin_get_w_arg_idx
+    // moved to Phase 2 inline Rust
     fn nvim_excmds_os_path_exists_curbuf_ffname() -> c_int;
-
-    // ExArg accessors moved to crate inline Rust
+    // nvim_curbuf_get_b_ml_ml_line_count replaced by nvim_curbuf_get_b_ml_ml_line_count
+    // (kept as C shim since ml_mfp offset isn't directly accessible)
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
-    fn nvim_excmds_curwin_get_w_arg_idx() -> c_int;
     fn do_argfile(eap: *mut ExArgHandle, i: c_int);
 }
 

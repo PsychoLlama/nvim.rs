@@ -6,7 +6,22 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{nvim_ecmd_eap_get_do_ecmd_cmd, BufHandle, ExArgHandle, WinHandle};
+use crate::{
+    nvim_ecmd_buf_dec_locked, nvim_ecmd_buf_get_locked_split, nvim_ecmd_buf_has_memfile,
+    nvim_ecmd_buf_inc_locked, nvim_ecmd_buf_inc_nwindows, nvim_ecmd_buf_is_curbuf,
+    nvim_ecmd_curbuf_clear_flags, nvim_ecmd_curbuf_clear_op_marks, nvim_ecmd_curbuf_get_b_flags,
+    nvim_ecmd_curbuf_get_help, nvim_ecmd_curbuf_get_kmap_state, nvim_ecmd_curbuf_get_terminal,
+    nvim_ecmd_curbuf_set_did_filetype, nvim_ecmd_curbuf_set_flags, nvim_ecmd_curbuf_set_last_used,
+    nvim_ecmd_curwin_buf_is_null, nvim_ecmd_curwin_get_alt_fnum, nvim_ecmd_curwin_get_cursor_col,
+    nvim_ecmd_curwin_get_topline, nvim_ecmd_curwin_set_coladd_curswant,
+    nvim_ecmd_curwin_set_pcmark, nvim_ecmd_curwin_set_ws_to_buf, nvim_ecmd_curwin_ws_is_own_buf,
+    nvim_ecmd_dec_curwin_buf_nwindows_safe, nvim_ecmd_eap_get_do_ecmd_cmd,
+    nvim_ecmd_win_buf_is_null, nvim_ecmd_win_restore_buffer, nvim_ecmd_win_set_locked,
+    nvim_excmds_curbuf_get_b_fnum, nvim_excmds_curbuf_get_b_nwindows,
+    nvim_excmds_curbuf_get_ffname, nvim_excmds_curbuf_get_fname, nvim_excmds_curbuf_ml_line_count,
+    nvim_excmds_curwin_cursor_lnum, nvim_excmds_set_curwin_alt_fnum, BufHandle, ExArgHandle,
+    WinHandle,
+};
 
 use libc::atol as c_atol;
 
@@ -70,33 +85,12 @@ const SHM_FILEINFO: c_int = b'F' as c_int; // 'F': no file info messages
 // =============================================================================
 
 extern "C" {
-    // curbuf field accessors
-    fn nvim_excmds_curbuf_get_b_fnum() -> c_int;
-    fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
-    fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
-    fn nvim_excmds_curbuf_get_b_nwindows() -> c_int;
-    fn nvim_ecmd_curbuf_get_b_flags() -> c_int;
-    fn nvim_ecmd_curbuf_get_terminal() -> c_int;
-    fn nvim_ecmd_curbuf_set_did_filetype(val: c_int);
-    fn nvim_ecmd_curbuf_clear_flags(mask: c_int);
-    fn nvim_ecmd_curbuf_set_flags(mask: c_int);
-    fn nvim_ecmd_curbuf_set_last_used();
-    fn nvim_ecmd_curbuf_get_kmap_state() -> c_int;
-    fn nvim_ecmd_curbuf_get_help() -> c_int;
-    fn nvim_excmds_curbuf_ml_line_count() -> c_int;
-    fn nvim_ecmd_curbuf_clear_op_marks();
+    // (curbuf/curwin field accessors moved to Phase 2 inline Rust via use crate::{})
 
-    // curwin field accessors
+    // curwin accessors still in C
     fn nvim_curwin_get_cursor_lnum() -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curwin_set_cursor_col(col: c_int);
-    fn nvim_ecmd_curwin_get_cursor_col() -> c_int;
-    fn nvim_excmds_curwin_cursor_lnum() -> c_int;
-    fn nvim_ecmd_curwin_set_coladd_curswant();
-    fn nvim_ecmd_curwin_get_topline() -> c_int;
-    fn nvim_ecmd_curwin_get_alt_fnum() -> c_int;
-    fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
-    fn nvim_ecmd_curwin_set_pcmark(lnum: c_int, col: c_int);
     fn nvim_ecmd_curwin_get_effective_p_so() -> c_int;
     fn nvim_ecmd_curwin_set_effective_p_so(val: c_int);
     fn nvim_ecmd_curwin_diff_spell_state(
@@ -105,25 +99,11 @@ extern "C" {
         spl_empty_out: *mut c_int,
     );
     fn nvim_ecmd_curwin_set_scbind_pos_from_topline();
-    fn nvim_ecmd_curwin_buf_is_null() -> c_int;
-    fn nvim_ecmd_curwin_ws_is_own_buf() -> c_int;
-    fn nvim_ecmd_curwin_set_ws_to_buf(buf: *mut BufHandle);
 
     // buf_T opaque handle accessors
     fn nvim_excmds_buf_get_b_fnum(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_buf_get_b_fname(buf: *const BufHandle) -> *const c_char;
-    fn nvim_ecmd_buf_has_memfile(buf: *mut BufHandle) -> c_int;
-    fn nvim_ecmd_buf_get_locked_split(buf: *mut BufHandle) -> c_int;
-    fn nvim_ecmd_buf_inc_nwindows(buf: *mut BufHandle);
-    fn nvim_ecmd_buf_inc_locked(buf: *mut BufHandle);
-    fn nvim_ecmd_buf_dec_locked(buf: *mut BufHandle);
-    fn nvim_ecmd_buf_is_curbuf(buf: *mut BufHandle) -> c_int;
     fn nvim_ecmd_set_curbuf(buf: *mut BufHandle);
-
-    // win_T opaque handle accessors
-    fn nvim_ecmd_win_buf_is_null(win: *mut WinHandle) -> c_int;
-    fn nvim_ecmd_win_restore_buffer(win: *mut WinHandle, buf: *mut BufHandle);
-    fn nvim_ecmd_win_set_locked(win: *mut WinHandle, val: c_int);
 
     // bufref_T heap handle accessors (exposed as void*)
     fn nvim_ecmd_new_bufref() -> *mut std::ffi::c_void;
@@ -261,7 +241,7 @@ extern "C" {
     fn nvim_ecmd_emsg_closing_buffer();
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_ecmd_should_dec_nwindows_on_locked(oldwin: *mut WinHandle) -> c_int;
-    fn nvim_ecmd_dec_curwin_buf_nwindows_safe();
+    // nvim_ecmd_dec_curwin_buf_nwindows_safe moved to Phase 2 inline Rust
 
     // From existing accessors
     fn nvim_get_curwin() -> *mut WinHandle;

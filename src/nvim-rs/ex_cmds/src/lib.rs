@@ -456,15 +456,8 @@ extern "C" {
     /// Get cursor line number from window (1-based)
     pub fn nvim_win_get_cursor_lnum(win: *const WinHandle) -> c_int;
 
-    // Cursor/window option accessors
-    /// Get curwin->w_p_rl (right-to-left flag)
-    pub fn nvim_curwin_get_w_p_rl() -> c_int;
-    /// Get curbuf->b_p_tw (textwidth)
-    pub fn nvim_curbuf_get_b_p_tw() -> c_int;
-    /// Get curbuf->b_p_wm (wrapmargin)
-    pub fn nvim_curbuf_get_b_p_wm() -> c_int;
-    /// Get curwin->w_view_width
-    pub fn nvim_curwin_get_view_width() -> c_int;
+    // Cursor/window option accessors (nvim_curwin_get_w_p_rl, nvim_curbuf_get_b_p_tw,
+    // nvim_curbuf_get_b_p_wm, nvim_curwin_get_view_width moved to Phase 2 inline Rust)
     /// Get curwin->w_cursor.lnum
     pub fn nvim_curwin_get_cursor_lnum() -> c_int;
     /// Set curwin->w_cursor.lnum
@@ -628,10 +621,7 @@ extern "C" {
     // ex_z accessors
     /// Check if there is only one window (ONE_WINDOW macro)
     pub fn nvim_is_one_window() -> c_int;
-    /// Get curwin->w_p_scr (scroll option, OptInt = i64)
-    pub fn nvim_curwin_get_p_scr() -> i64;
-    /// Get curwin->w_view_height
-    pub fn nvim_curwin_get_view_height() -> c_int;
+    // nvim_curwin_get_p_scr, nvim_curwin_get_view_height moved to Phase 2 inline Rust
     /// Set ex_no_reprint flag
     pub fn nvim_set_ex_no_reprint(val: c_int);
     /// Get curbuf->b_ml.ml_line_count
@@ -644,8 +634,7 @@ extern "C" {
     pub fn msg_putchar(c: c_int);
 
     // print_line accessors
-    /// Get curwin->w_p_nu
-    pub fn nvim_curwin_get_w_p_nu() -> c_int;
+    // nvim_curwin_get_w_p_nu moved to Phase 2 inline Rust
     /// Get number_width(curwin)
     pub fn number_width(wp: *mut WinHandle) -> c_int;
     /// silent_mode global (bool in C)
@@ -953,8 +942,7 @@ extern "C" {
     pub fn nvim_excmds_emsg_e134();
 
     // ex_change accessors and functions
-    /// Get curbuf->b_p_ai (autoindent)
-    pub fn nvim_curbuf_get_b_p_ai() -> c_int;
+    // nvim_curbuf_get_b_p_ai moved to Phase 2 inline Rust
     // nvim_exarg_set_line2 moved to inline Rust
     /// Call check_cursor_lnum(curwin)
     pub fn nvim_check_cursor_lnum_call();
@@ -968,10 +956,7 @@ extern "C" {
     pub fn deleted_lines_mark(lnum: c_int, count: c_int);
 
     // --- ex_append FFI functions ---
-    /// Toggle curbuf->b_p_ai (autoindent)
-    pub fn nvim_excmds_toggle_b_p_ai();
-    /// Get curbuf->b_p_iminsert
-    pub fn nvim_excmds_get_b_p_iminsert() -> c_int;
+    // nvim_excmds_toggle_b_p_ai, nvim_excmds_get_b_p_iminsert moved to Phase 2 inline Rust
     /// Get eap->cstack->cs_looplevel (cstack_T is complex, keep as C shim)
     pub fn nvim_excmds_get_cstack_looplevel(eap: *mut ExArgHandle) -> c_int;
     // (Other ExArg accessors moved to inline Rust)
@@ -1180,6 +1165,312 @@ pub unsafe fn nvim_ecmd_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *const c_c
         return std::ptr::null();
     }
     (*eap_as_exarg(eap)).do_ecmd_cmd
+}
+
+// =============================================================================
+// Phase 2: curbuf/curwin field accessors (replaces C shims in ex_cmds_shim.c)
+// =============================================================================
+
+use nvim_buffer::buf_struct::BufStruct;
+use nvim_window::win_struct::WinStruct;
+
+extern "C" {
+    static mut curbuf: *mut BufStruct;
+    static mut curwin: *mut WinStruct;
+}
+
+// Helper: get a ref to curbuf BufStruct
+#[inline]
+unsafe fn curbuf_ref() -> &'static BufStruct {
+    &*curbuf
+}
+// Helper: get a mutable ref to curbuf BufStruct
+#[inline]
+unsafe fn curbuf_mut() -> &'static mut BufStruct {
+    &mut *curbuf
+}
+// Helper: get a ref to curwin WinStruct
+#[inline]
+unsafe fn curwin_ref() -> &'static WinStruct {
+    &*curwin
+}
+// Helper: get a mutable ref to curwin WinStruct
+#[inline]
+unsafe fn curwin_mut() -> &'static mut WinStruct {
+    &mut *curwin
+}
+// Helper: cast *mut c_void to &BufStruct
+#[inline]
+unsafe fn buf_ref_raw<'a>(buf: *mut std::ffi::c_void) -> &'a BufStruct {
+    &*(buf as *const BufStruct)
+}
+// Helper: cast *mut c_void to &mut BufStruct
+#[inline]
+unsafe fn buf_mut_raw<'a>(buf: *mut std::ffi::c_void) -> &'a mut BufStruct {
+    &mut *(buf as *mut BufStruct)
+}
+// Helper: cast *mut c_void to &WinStruct
+#[allow(dead_code)]
+#[inline]
+unsafe fn win_ref_raw<'a>(win: *mut std::ffi::c_void) -> &'a WinStruct {
+    &*(win as *const WinStruct)
+}
+// Helper: cast *mut c_void to &mut WinStruct
+#[inline]
+unsafe fn win_mut_raw<'a>(win: *mut std::ffi::c_void) -> &'a mut WinStruct {
+    &mut *(win as *mut WinStruct)
+}
+
+// --- curbuf field accessors ---
+pub unsafe fn nvim_curbuf_get_b_p_tw() -> c_int {
+    curbuf_ref().b_p_tw as c_int
+}
+pub unsafe fn nvim_curbuf_get_b_p_wm() -> c_int {
+    curbuf_ref().b_p_wm as c_int
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_curbuf_get_b_p_ai() -> c_int {
+    curbuf_ref().b_p_ai
+}
+pub unsafe fn nvim_excmds_toggle_b_p_ai() {
+    curbuf_mut().b_p_ai = if curbuf_ref().b_p_ai != 0 { 0 } else { 1 };
+}
+pub unsafe fn nvim_excmds_get_b_p_iminsert() -> c_int {
+    curbuf_ref().b_p_iminsert as c_int
+}
+pub unsafe fn nvim_excmds_curbuf_get_ffname() -> *mut c_char {
+    curbuf_ref().b_ffname as *mut c_char
+}
+pub unsafe fn nvim_excmds_curbuf_get_sfname() -> *mut c_char {
+    curbuf_ref().b_sfname as *mut c_char
+}
+pub unsafe fn nvim_excmds_curbuf_get_fname() -> *mut c_char {
+    curbuf_ref().b_fname as *mut c_char
+}
+pub unsafe fn nvim_excmds_curbuf_set_ffname(p: *mut c_char) {
+    curbuf_mut().b_ffname = p;
+}
+pub unsafe fn nvim_excmds_curbuf_set_sfname(p: *mut c_char) {
+    curbuf_mut().b_sfname = p;
+}
+pub unsafe fn nvim_excmds_curbuf_clear_filenames() {
+    curbuf_mut().b_ffname = std::ptr::null_mut();
+    curbuf_mut().b_sfname = std::ptr::null_mut();
+}
+pub unsafe fn nvim_excmds_curbuf_set_bf_notedited() {
+    const BF_NOTEDITED: c_int = 0x08;
+    curbuf_mut().b_flags |= BF_NOTEDITED;
+}
+pub unsafe fn nvim_excmds_curbuf_ffname_not_null() -> c_int {
+    c_int::from(!curbuf_ref().b_ffname.is_null())
+}
+pub unsafe fn nvim_excmds_curbuf_op_start_lnum() -> c_int {
+    curbuf_ref().b_op_start.lnum
+}
+pub unsafe fn nvim_excmds_curbuf_op_end_lnum() -> c_int {
+    curbuf_ref().b_op_end.lnum
+}
+pub unsafe fn nvim_excmds_curbuf_set_op_start_lnum(lnum: c_int) {
+    curbuf_mut().b_op_start.lnum = lnum;
+}
+pub unsafe fn nvim_excmds_curbuf_set_op_end_lnum(lnum: c_int) {
+    curbuf_mut().b_op_end.lnum = lnum;
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_excmds_curbuf_ml_line_count() -> c_int {
+    curbuf_ref().ml_line_count
+}
+pub unsafe fn nvim_excmds_curbuf_get_b_fnum() -> c_int {
+    curbuf_ref().handle
+}
+pub unsafe fn nvim_excmds_curbuf_get_b_nwindows() -> c_int {
+    curbuf_ref().b_nwindows
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void {
+    curbuf as *mut std::ffi::c_void
+}
+pub unsafe fn nvim_excmds_curbuf_is(ptr: *mut std::ffi::c_void) -> c_int {
+    c_int::from(curbuf as *mut std::ffi::c_void == ptr)
+}
+pub unsafe fn nvim_ecmd_curbuf_get_b_flags() -> c_int {
+    curbuf_ref().b_flags
+}
+pub unsafe fn nvim_ecmd_curbuf_get_terminal() -> c_int {
+    c_int::from(!curbuf_ref().terminal.is_null())
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_ecmd_curbuf_set_did_filetype(val: c_int) {
+    curbuf_mut().b_did_filetype = val as u8;
+}
+pub unsafe fn nvim_ecmd_curbuf_clear_flags(mask: c_int) {
+    curbuf_mut().b_flags &= !mask;
+}
+pub unsafe fn nvim_ecmd_curbuf_set_flags(mask: c_int) {
+    curbuf_mut().b_flags |= mask;
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_ecmd_curbuf_set_last_used() {
+    curbuf_mut().b_last_used = unsafe { libc::time(std::ptr::null_mut()) };
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_ecmd_curbuf_get_kmap_state() -> c_int {
+    curbuf_ref().b_kmap_state as c_int
+}
+pub unsafe fn nvim_ecmd_curbuf_get_help() -> c_int {
+    curbuf_ref().b_help as c_int
+}
+pub unsafe fn nvim_ecmd_curbuf_clear_op_marks() {
+    curbuf_mut().b_op_start.lnum = 0;
+    curbuf_mut().b_op_end.lnum = 0;
+}
+
+// --- curwin field accessors ---
+#[no_mangle]
+pub unsafe extern "C" fn nvim_curwin_get_w_p_rl() -> c_int {
+    curwin_ref().w_p_rl()
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_curwin_get_view_width() -> c_int {
+    curwin_ref().w_view_width
+}
+pub unsafe fn nvim_curwin_get_p_scr() -> i64 {
+    curwin_ref().w_p_so()
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_curwin_get_view_height() -> c_int {
+    curwin_ref().w_view_height
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_curwin_get_w_p_nu() -> c_int {
+    curwin_ref().w_p_nu()
+}
+pub unsafe fn nvim_curwin_get_w_botline() -> c_int {
+    curwin_ref().w_botline
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_curwin_get_w_p_crb() -> c_int {
+    curwin_ref().w_p_crb()
+}
+pub unsafe fn nvim_curwin_get_w_p_fen() -> c_int {
+    curwin_ref().w_p_fen()
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_curwin_set_w_p_fen(val: c_int) {
+    curwin_mut().set_w_p_fen(val);
+}
+pub unsafe fn nvim_excmds_curwin_get_pvw() -> c_int {
+    curwin_ref().w_p_pvw()
+}
+pub unsafe fn nvim_excmds_curwin_set_pvw(val: c_int) {
+    curwin_mut().set_w_p_pvw(val);
+}
+pub unsafe fn nvim_excmds_curwin_set_wfh(val: c_int) {
+    // w_p_wfh is at absolute offset 964 (no set_w_p_wfh method yet)
+    let ptr = (curwin as *mut u8).add(964).cast::<c_int>();
+    ptr.write_unaligned(val);
+}
+pub unsafe fn nvim_excmds_curwin_set_diff(val: c_int) {
+    curwin_mut().set_w_p_diff(val);
+}
+pub unsafe fn nvim_excmds_curwin_cursor_lnum() -> c_int {
+    curwin_ref().w_cursor.lnum
+}
+pub unsafe fn nvim_excmds_curwin_set_col_zero() {
+    curwin_mut().w_cursor.col = 0;
+}
+pub unsafe fn nvim_excmds_curwin_cursor_save() -> u64 {
+    let cur = &curwin_ref().w_cursor;
+    ((cur.lnum as u64) << 32) | (cur.col as u32 as u64)
+}
+pub unsafe fn nvim_excmds_curwin_cursor_restore(saved: u64) {
+    let cur = &mut curwin_mut().w_cursor;
+    cur.lnum = (saved >> 32) as i32;
+    cur.col = saved as u32 as i32;
+}
+pub unsafe fn nvim_excmds_curwin_get_w_arg_idx() -> c_int {
+    curwin_ref().w_arg_idx
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int) {
+    curwin_mut().w_alt_fnum = fnum;
+}
+pub unsafe fn nvim_ecmd_curwin_get_cursor_col() -> c_int {
+    curwin_ref().w_cursor.col
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_ecmd_curwin_set_coladd_curswant() {
+    curwin_mut().w_cursor.coladd = 0;
+    curwin_mut().w_set_curswant = 1;
+}
+pub unsafe fn nvim_ecmd_curwin_get_topline() -> c_int {
+    curwin_ref().w_topline
+}
+pub unsafe fn nvim_ecmd_curwin_get_alt_fnum() -> c_int {
+    curwin_ref().w_alt_fnum
+}
+pub unsafe fn nvim_ecmd_curwin_set_pcmark(lnum: c_int, col: c_int) {
+    curwin_mut().w_pcmark.lnum = lnum;
+    curwin_mut().w_pcmark.col = col;
+}
+pub unsafe fn nvim_ecmd_curwin_buf_is_null() -> c_int {
+    c_int::from(curwin_ref().w_buffer.is_null())
+}
+pub unsafe fn nvim_ecmd_curwin_ws_is_own_buf() -> c_int {
+    // curwin->w_s == &curwin->w_buffer->b_s
+    // b_s is at absolute offset 11240 in BufStruct (synblock_T, opaque)
+    const B_S_OFFSET: usize = 11240;
+    let ws = curwin_ref().w_s;
+    let buf_bs = if curwin_ref().w_buffer.is_null() {
+        std::ptr::null_mut()
+    } else {
+        (curwin_ref().w_buffer as *mut u8).add(B_S_OFFSET) as *mut std::ffi::c_void
+    };
+    c_int::from(ws == buf_bs)
+}
+pub unsafe fn nvim_ecmd_dec_curwin_buf_nwindows_safe() {
+    if !curwin_ref().w_buffer.is_null() {
+        let buf = &mut *(curwin_ref().w_buffer as *mut BufStruct);
+        if buf.b_nwindows > 1 {
+            buf.b_nwindows -= 1;
+        }
+    }
+}
+
+// --- buf param accessors (Phase 2: functions taking *mut BufHandle or *mut c_void) ---
+pub unsafe fn nvim_ecmd_buf_has_memfile(buf: *mut BufHandle) -> c_int {
+    let b = buf_ref_raw(buf as *mut std::ffi::c_void);
+    c_int::from(!b.ml_mfp_is_null())
+}
+pub unsafe fn nvim_ecmd_buf_get_locked_split(buf: *mut BufHandle) -> c_int {
+    buf_ref_raw(buf as *mut std::ffi::c_void).b_locked_split
+}
+pub unsafe fn nvim_ecmd_buf_inc_nwindows(buf: *mut BufHandle) {
+    buf_mut_raw(buf as *mut std::ffi::c_void).b_nwindows += 1;
+}
+pub unsafe fn nvim_ecmd_buf_inc_locked(buf: *mut BufHandle) {
+    buf_mut_raw(buf as *mut std::ffi::c_void).b_locked += 1;
+}
+pub unsafe fn nvim_ecmd_buf_dec_locked(buf: *mut BufHandle) {
+    buf_mut_raw(buf as *mut std::ffi::c_void).b_locked -= 1;
+}
+pub unsafe fn nvim_ecmd_buf_is_curbuf(buf: *mut BufHandle) -> c_int {
+    c_int::from(buf as *mut std::ffi::c_void == curbuf as *mut std::ffi::c_void)
+}
+pub unsafe fn nvim_ecmd_win_buf_is_null(win: *mut WinHandle) -> c_int {
+    win_ref_raw(win as *mut std::ffi::c_void).w_buffer.is_null() as c_int
+}
+pub unsafe fn nvim_ecmd_win_restore_buffer(win: *mut WinHandle, buf: *mut BufHandle) {
+    win_mut_raw(win as *mut std::ffi::c_void).w_buffer = buf as *mut std::ffi::c_void;
+}
+pub unsafe fn nvim_ecmd_win_set_locked(win: *mut WinHandle, val: c_int) {
+    win_mut_raw(win as *mut std::ffi::c_void).w_locked = val != 0;
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_ecmd_curwin_set_ws_to_buf(buf: *mut BufHandle) {
+    // b_s is at absolute offset 11240 in BufStruct (synblock_T, opaque)
+    const B_S_OFFSET: usize = 11240;
+    curwin_mut().w_s = (buf as *mut u8).add(B_S_OFFSET) as *mut std::ffi::c_void;
 }
 
 // =============================================================================

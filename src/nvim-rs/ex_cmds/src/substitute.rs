@@ -35,9 +35,11 @@ use crate::ExArgHandle;
 use crate::SubIgnoreType;
 // ExArg field accessors (Phase 1: inline Rust, was C shims)
 use crate::{
-    nvim_exarg_get_arg, nvim_exarg_get_cmd, nvim_exarg_get_cmdidx, nvim_exarg_get_line1,
-    nvim_exarg_get_line2, nvim_exarg_get_skip, nvim_exarg_set_flags, nvim_exarg_set_line2,
-    nvim_exarg_set_nextcmd, nvim_excmds_arg_has_valid_delim, nvim_excmds_eap_arg_restore,
+    nvim_curwin_get_w_botline, nvim_curwin_get_w_p_crb, nvim_curwin_get_w_p_fen,
+    nvim_curwin_get_w_p_nu, nvim_curwin_set_w_p_fen, nvim_exarg_get_arg, nvim_exarg_get_cmd,
+    nvim_exarg_get_cmdidx, nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_get_skip,
+    nvim_exarg_set_flags, nvim_exarg_set_line2, nvim_exarg_set_nextcmd,
+    nvim_excmds_arg_has_valid_delim, nvim_excmds_eap_arg_restore,
 };
 
 // =============================================================================
@@ -1173,10 +1175,7 @@ extern "C" {
     static mut p_ch: i64;
     static p_cpo: *const c_char;
     fn nvim_curwin_get_w_curswant() -> c_int;
-    fn nvim_curwin_get_w_botline() -> c_int;
-    fn nvim_curwin_get_w_p_crb() -> c_int;
-    fn nvim_curwin_get_w_p_fen() -> c_int;
-    fn nvim_curwin_set_w_p_fen(val: c_int);
+    // nvim_curwin_get_w_botline, _w_p_crb, _w_p_fen, nvim_curwin_set_w_p_fen moved to Phase 2 inline Rust
     fn nvim_curbuf_get_b_p_ma() -> c_int;
     fn nvim_curbuf_set_b_p_ma(val: c_int);
     fn nvim_curbuf_set_deleted_bytes2(val: c_int);
@@ -2428,13 +2427,7 @@ unsafe fn libc_free(p: *mut c_char) {
     xfree(p as *mut std::ffi::c_void);
 }
 
-/// Helper: get w_p_nu from curwin.
-unsafe fn nvim_curwin_get_w_p_nu() -> c_int {
-    extern "C" {
-        fn nvim_curwin_get_w_p_nu() -> c_int;
-    }
-    nvim_curwin_get_w_p_nu()
-}
+// nvim_curwin_get_w_p_nu is available from crate (Phase 2 inline Rust)
 
 /// Do the actual substitution for one match. This is the "step 3" logic
 /// from do_sub. Returns (cur_end_lnum, cur_end_col) via out params.

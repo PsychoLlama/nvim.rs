@@ -4,6 +4,10 @@
 
 use crate::{
     nvim_exarg_get_addr_count, nvim_exarg_get_arg, nvim_exarg_get_forceit, nvim_exarg_get_line2,
+    nvim_excmds_curbuf_clear_filenames, nvim_excmds_curbuf_get_ffname,
+    nvim_excmds_curbuf_get_fname, nvim_excmds_curbuf_get_sfname, nvim_excmds_curbuf_is,
+    nvim_excmds_curbuf_set_bf_notedited, nvim_excmds_curbuf_set_ffname,
+    nvim_excmds_curbuf_set_sfname, nvim_excmds_curwin_cursor_lnum, nvim_excmds_set_curwin_alt_fnum,
     ExArgHandle,
 };
 use std::ffi::{c_char, c_int};
@@ -354,21 +358,16 @@ extern "C" {
         force: bool,
         buf: *mut std::ffi::c_void,
     ) -> bool;
-    fn nvim_excmds_curbuf_is(ptr: *mut std::ffi::c_void) -> c_int;
+    // nvim_excmds_curbuf_is, _get_ffname/sfname/fname, _set_ffname/sfname, _clear_filenames
+    // moved to Phase 2 inline Rust
     fn aborting() -> c_int;
-    fn nvim_excmds_curbuf_get_ffname() -> *mut c_char;
-    fn nvim_excmds_curbuf_get_sfname() -> *mut c_char;
-    fn nvim_excmds_curbuf_get_fname() -> *mut c_char;
-    fn nvim_excmds_curbuf_set_ffname(p: *mut c_char);
-    fn nvim_excmds_curbuf_set_sfname(p: *mut c_char);
-    fn nvim_excmds_curbuf_clear_filenames();
     fn setfname(
         buf: *mut crate::BufHandle,
         ffname: *const c_char,
         sfname: *const c_char,
         message: bool,
     ) -> c_int;
-    fn nvim_excmds_curbuf_set_bf_notedited();
+    // nvim_excmds_curbuf_set_bf_notedited moved to Phase 2 inline Rust
     fn buflist_new(
         ffname_arg: *mut c_char,
         sfname_arg: *mut c_char,
@@ -377,9 +376,8 @@ extern "C" {
     ) -> *mut crate::BufHandle;
     fn nvim_excmds_buf_get_b_fnum(buf: *const crate::BufHandle) -> c_int;
     fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
-    fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
+    // nvim_excmds_set_curwin_alt_fnum, nvim_excmds_curwin_cursor_lnum moved to Phase 2 inline Rust
     fn do_autochdir();
-    fn nvim_excmds_curwin_cursor_lnum() -> c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
 
     // ex_file FFI

@@ -2,6 +2,10 @@
 //!
 //! This module implements Ex commands for window management.
 
+use crate::{
+    nvim_excmds_curwin_get_pvw, nvim_excmds_curwin_set_diff, nvim_excmds_curwin_set_pvw,
+    nvim_excmds_curwin_set_wfh,
+};
 use std::ffi::c_int;
 
 /// C FAIL constant (0)
@@ -359,10 +363,7 @@ pub extern "C" fn rs_min_window_width() -> c_int {
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_curwin_get_pvw() -> c_int;
-    fn nvim_excmds_curwin_set_pvw(val: c_int);
-    fn nvim_excmds_curwin_set_wfh(val: c_int);
-    fn nvim_excmds_curwin_set_diff(val: c_int);
+    // nvim_excmds_curwin_get_pvw, set_pvw, set_wfh, set_diff moved to Phase 2 inline Rust
     fn nvim_excmds_find_preview_win() -> *mut std::ffi::c_void;
     fn win_enter(wp: *mut crate::WinHandle, undo_sync: bool);
     fn win_split(size: c_int, flags: c_int) -> c_int;
