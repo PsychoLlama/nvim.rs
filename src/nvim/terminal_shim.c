@@ -334,12 +334,6 @@ void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
                false, false, NULL, &err);
   api_clear_error(&err); status_redraw_buf((buf_T *)buf); }
 void *nvim_term_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
-int nvim_vterm_value_boolean(const void *val) { return ((const VTermValue *)val)->boolean; }
-int nvim_vterm_value_number(const void *val) { return ((const VTermValue *)val)->number; }
-const char *nvim_vterm_frag_str(const void *val) { return ((const VTermValue *)val)->string.str; }
-size_t nvim_vterm_frag_len(const void *val) { return ((const VTermValue *)val)->string.len; }
-int nvim_vterm_frag_initial(const void *val) { return (int)((const VTermValue *)val)->string.initial; }
-int nvim_vterm_frag_final(const void *val) { return (int)((const VTermValue *)val)->string.final; }
 void *nvim_terminal_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
 int nvim_ml_append_buf_term(void *buf, int lnum, char *line, bool newfile) { return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile); }
 int nvim_ml_replace_buf_term(void *buf, int lnum, char *line, bool copy) { return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false); }

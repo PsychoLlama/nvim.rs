@@ -14,7 +14,7 @@ use std::ffi::{c_int, c_long, c_uint};
 use std::os::raw::c_void;
 
 use nvim_buffer::buf_struct::BufStruct;
-use nvim_vterm::VTermScreenCellAttrs;
+use nvim_vterm::{VTermScreenCellAttrs, VTermStringFragment, VTermValue};
 use nvim_window::win_struct::WinStruct;
 
 // =============================================================================
@@ -3168,12 +3168,6 @@ extern "C" {
     fn nvim_terminal_timer_start();
     fn nvim_terminal_buf_set_title(buf: *mut c_void, title: *const i8, len: usize);
     fn nvim_term_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-    fn nvim_vterm_value_boolean(val: *const c_void) -> c_int;
-    fn nvim_vterm_value_number(val: *const c_void) -> c_int;
-    fn nvim_vterm_frag_str(val: *const c_void) -> *const i8;
-    fn nvim_vterm_frag_len(val: *const c_void) -> usize;
-    fn nvim_vterm_frag_initial(val: *const c_void) -> c_int;
-    fn nvim_vterm_frag_final(val: *const c_void) -> c_int;
     // Phase 6: termrequest / OSC / DCS / APC
     fn nvim_term_treqbuf_printf_osc(term: *mut c_void, command: c_int);
     fn nvim_term_treqbuf_printf_dcs(term: *mut c_void, command: *const i8, cmdlen: c_int);
@@ -3754,20 +3748,22 @@ pub unsafe extern "C" fn rs_term_settermprop(
     }
     let t = unsafe { term.as_mut() };
 
+    let prop_val = unsafe { &*val.cast::<VTermValue>() };
     match prop {
         VTERM_PROP_ALTSCREEN => {} // no-op
 
         VTERM_PROP_CURSORVISIBLE => {
-            t.cursor.visible = unsafe { nvim_vterm_value_boolean(val) } != 0;
+            t.cursor.visible = unsafe { prop_val.boolean } != 0;
             unsafe { rs_invalidate_terminal(term, -1, -1) };
         }
 
         VTERM_PROP_TITLE => {
             let buf = unsafe { nvim_terminal_get_buffer(t.buf_handle) };
-            let frag_str = unsafe { nvim_vterm_frag_str(val) };
-            let frag_len = unsafe { nvim_vterm_frag_len(val) };
-            let is_initial = unsafe { nvim_vterm_frag_initial(val) } != 0;
-            let is_final = unsafe { nvim_vterm_frag_final(val) } != 0;
+            let frag: &VTermStringFragment = unsafe { &prop_val.string };
+            let frag_str = frag.str_ptr;
+            let frag_len = frag.len();
+            let is_initial = frag.is_initial();
+            let is_final = frag.is_final();
 
             if is_initial && is_final {
                 if !buf.is_null() {
@@ -3805,23 +3801,23 @@ pub unsafe extern "C" fn rs_term_settermprop(
         }
 
         VTERM_PROP_MOUSE => {
-            t.forward_mouse = unsafe { nvim_vterm_value_number(val) } != 0;
+            t.forward_mouse = unsafe { prop_val.number } != 0;
         }
 
         VTERM_PROP_CURSORBLINK => {
-            t.cursor.blink = unsafe { nvim_vterm_value_boolean(val) } != 0;
+            t.cursor.blink = unsafe { prop_val.boolean } != 0;
             t.pending.cursor = true;
             unsafe { rs_invalidate_terminal(term, -1, -1) };
         }
 
         VTERM_PROP_CURSORSHAPE => {
-            t.cursor.shape = unsafe { nvim_vterm_value_number(val) };
+            t.cursor.shape = unsafe { prop_val.number };
             t.pending.cursor = true;
             unsafe { rs_invalidate_terminal(term, -1, -1) };
         }
 
         VTERM_PROP_THEMEUPDATES => {
-            t.theme_updates = unsafe { nvim_vterm_value_boolean(val) } != 0;
+            t.theme_updates = unsafe { prop_val.boolean } != 0;
         }
 
         _ => return 0,
