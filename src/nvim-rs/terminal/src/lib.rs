@@ -3176,7 +3176,6 @@ extern "C" {
     fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
     // Phase 16: term_selection_set / term_clipboard_set migration
     fn nvim_terminal_clipboard_queue(mask: c_long, data: *mut i8);
-    fn nvim_terminal_selection_dupz(term: *mut c_void, out_len: *mut usize) -> *mut i8;
     fn rs_eval_call_provider(
         provider: *const i8,
         method: *const i8,
@@ -3218,6 +3217,7 @@ extern "C" {
         sb_deleted: isize,
     );
     fn xmemdup(src: *const c_void, len: usize) -> *mut c_void;
+    fn xmemdupz(src: *const c_void, len: usize) -> *mut c_void;
     // Phase 7: refresh pipeline
     fn rs_buf_valid(buf: *mut c_void) -> c_int;
     fn nvim_terminal_get_buffer(buf_handle: c_int) -> *mut c_void;
@@ -4034,8 +4034,9 @@ pub unsafe extern "C" fn rs_term_selection_set(
     }
 
     if is_final != 0 {
-        let mut data_len: usize = 0;
-        let data = unsafe { nvim_terminal_selection_dupz(user, &raw mut data_len) };
+        // Equivalent to: kv_size(t->selection) + xmemdupz(t->selection.items, len)
+        let data_len = t.selection.size;
+        let data = unsafe { xmemdupz(t.selection.items.cast::<c_void>(), data_len).cast::<i8>() };
         unsafe { nvim_terminal_clipboard_queue(c_long::from(mask), data) };
     }
 

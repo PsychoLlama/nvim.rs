@@ -410,7 +410,6 @@ void nvim_win_set_p_culopt(win_T *wp, char *s) { wp->w_p_culopt = s; }
 void nvim_terminal_check_cursor_c(void) { terminal_check_cursor(); }
 void nvim_do_buffer_wipe(int buf_handle) { do_buffer_ext(DOBUF_WIPE, DOBUF_FIRST, FORWARD, (handle_T)buf_handle, DOBUF_FORCEIT); }
 void nvim_terminal_clipboard_queue(long mask, char *data) { multiqueue_put(loop_get_events(&main_loop), rs_term_clipboard_set, (void *)mask, data); }
-char *nvim_terminal_selection_dupz(void *term, size_t *out_len) { Terminal *t = (Terminal *)term; *out_len = kv_size(t->selection); return xmemdupz(t->selection.items, *out_len); }
 void nvim_terminal_set_vim_var_termrequest(const char *seq, size_t seqlen) { set_vim_var_string(VV_TERMREQUEST, seq, (ptrdiff_t)seqlen); }
 void nvim_terminal_apply_termrequest_autocmd(void *buf, int64_t row, int64_t col,
                                              const char *seq, size_t seqlen)
