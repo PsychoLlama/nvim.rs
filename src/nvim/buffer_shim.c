@@ -532,53 +532,6 @@ exarg_T *nvim_exarg_alloc_clear(void) {
 // =============================================================================
 
 
-/// Read the file into curbuf for open_buffer.
-/// Handles UNIX fifo detection and binary-mode save/restore.
-/// @param eap  exarg pointer (may be NULL)
-/// @param flags  read flags (e.g. READ_NOFILE)
-/// @param silent  shortmess result
-/// @param read_fifo_out  set to 1 if fifo/socket detected (UNIX only)
-/// @return  readfile() result (OK or FAIL), or OK if no file
-int nvim_open_buffer_read_file(void *eap, int flags, int silent, int *read_fifo_out)
-{
-  *read_fifo_out = 0;
-  if (curbuf->b_ffname == NULL) {
-    return 1;  // OK, no file to read
-  }
-
-#ifdef UNIX
-  int save_bin = curbuf->b_p_bin;
-  int perm = os_getperm(curbuf->b_ffname);
-  bool is_fifo = perm >= 0 && (S_ISFIFO(perm) || S_ISSOCK(perm)
-#ifdef OPEN_CHR_FILES
-                               || (S_ISCHR(perm) && rs_is_dev_fd_file(curbuf->b_ffname))
-#endif
-                               );
-  if (is_fifo) {
-    *read_fifo_out = 1;
-    curbuf->b_p_bin = true;
-  }
-#endif
-
-  int retval = readfile(curbuf->b_ffname, curbuf->b_fname,
-                        0, 0, (linenr_T)MAXLNUM, (exarg_T *)eap,
-                        flags | READ_NEW | (*read_fifo_out ? READ_FIFO : 0), silent != 0);
-
-#ifdef UNIX
-  if (*read_fifo_out) {
-    curbuf->b_p_bin = save_bin;
-    if (retval == OK) {
-      retval = rs_read_buffer(false, eap, flags);
-    }
-  }
-#endif
-
-  if (bt_help(curbuf)) {
-    get_local_additions();
-  }
-  return retval;
-}
-
 
 /// Execute the post-BUFENTER section of open_buffer:
 /// - validates old_curbuf is still alive with memfile

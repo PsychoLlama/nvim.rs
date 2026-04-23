@@ -2238,12 +2238,6 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_open_buffer_read_file(
-        eap: *mut ExArg,
-        flags: c_int,
-        silent: c_int,
-        read_fifo_out: *mut c_int,
-    ) -> c_int;
     fn nvim_open_buffer_post_autocmd(
         old_curbuf: *mut crate::misc::BufRef,
         flags: c_int,
@@ -2294,6 +2288,13 @@ extern "C" {
     fn vim_strchr(str_: *const c_char, c: c_int) -> *const c_char;
     /// 'cpo' option string.
     static p_cpo: *const c_char;
+    /// Get file permissions (returns -1 on failure).
+    #[link_name = "os_getperm"]
+    fn nvim_os_getperm(name: *const c_char) -> i32;
+    /// Check if chr-device file (`OPEN_CHR_FILES` / BSD only, always 0 elsewhere).
+    fn nvim_fileio_is_chr_dev(perm: c_int, fname: *const c_char) -> c_int;
+    /// Get local spell additions for help files.
+    fn get_local_additions();
 }
 
 extern "C" {
@@ -2321,6 +2322,8 @@ const READ_NEW: c_int = 0x01;
 const READ_STDIN: c_int = 0x04;
 /// `MAXLNUM`: maximum line number.
 const MAXLNUM: c_int = 0x7fff_ffff;
+/// `READ_FIFO`: reading from fifo/socket.
+const READ_FIFO: c_int = 0x40;
 
 /// Open memfile for the current buffer, handling the fallback path on failure.
 ///
@@ -2405,7 +2408,6 @@ pub unsafe extern "C" fn rs_open_buffer(
     let mut flags = flags_arg;
     let mut retval = OK;
     let silent = shortmess(SHM_FILEINFO);
-    let silent_int: c_int = c_int::from(silent);
 
     // Save old text-width before ml_open attempt (needed for fallback path).
     let old_tw = buf_ref(nvim_get_curbuf()).b_p_tw;
@@ -2445,7 +2447,54 @@ pub unsafe extern "C" fn rs_open_buffer(
     // Read the file or stdin.
     let mut read_fifo: c_int = 0;
     if !buf_ref(nvim_get_curbuf()).b_ffname.is_null() {
-        retval = nvim_open_buffer_read_file(eap, flags, silent_int, &raw mut read_fifo);
+        // Read file: on Unix, detect fifo/socket and do binary pre-read.
+        let curbuf = nvim_get_curbuf();
+        let full_fname = buf_ref(curbuf).b_ffname;
+        let short_fname = buf_ref(curbuf).b_fname;
+        let save_bin = buf_ref(curbuf).b_p_bin;
+        #[cfg(unix)]
+        {
+            let perm = nvim_os_getperm(full_fname);
+            // S_ISFIFO: (m & 0xF000) == 0x1000, S_ISSOCK: (m & 0xF000) == 0xC000
+            let mode = perm as u32;
+            let is_fifo = perm >= 0
+                && ((mode & 0xF000 == 0x1000)
+                    || (mode & 0xF000 == 0xC000)
+                    || nvim_fileio_is_chr_dev(perm as c_int, full_fname) != 0);
+            if is_fifo {
+                read_fifo = 1;
+                buf_mut(curbuf).b_p_bin = 1;
+            }
+        }
+        let rf = readfile(
+            full_fname,
+            short_fname,
+            0,
+            0,
+            MAXLNUM,
+            eap.cast::<c_void>(),
+            flags | READ_NEW | (if read_fifo != 0 { READ_FIFO } else { 0 }),
+            silent,
+        );
+        #[cfg(unix)]
+        if read_fifo != 0 {
+            buf_mut(curbuf).b_p_bin = save_bin;
+            retval = if rf != 0 {
+                crate::misc::rs_read_buffer(false, eap.cast(), flags)
+            } else {
+                rf
+            };
+        } else {
+            retval = rf;
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = save_bin;
+            retval = rf;
+        }
+        if crate::rs_bt_help(curbuf) {
+            get_local_additions();
+        }
     } else if read_stdin {
         // Read from stdin: binary pre-read, then rs_read_buffer for encoding retry.
         let curbuf = nvim_get_curbuf();
