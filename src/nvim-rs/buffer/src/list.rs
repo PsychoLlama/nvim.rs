@@ -31,7 +31,7 @@ const SWB_FLAG_SPLIT: c_uint = 0x04;
 
 extern "C" {
     fn nvim_get_firstbuf() -> BufHandle;
-    fn nvim_get_lastbuf() -> BufHandle;
+    static mut lastbuf: *mut std::ffi::c_void;
     fn nvim_get_curbuf() -> BufHandle;
     // Phase 2 accessors
     fn nvim_curwin_get_alt_fnum() -> c_int;
@@ -158,7 +158,7 @@ pub unsafe fn get_first_buf() -> BufHandle {
 /// Calls external C function.
 #[must_use]
 pub unsafe fn get_last_buf() -> BufHandle {
-    nvim_get_lastbuf()
+    BufHandle::from_ptr(lastbuf)
 }
 
 /// Get the current buffer.
@@ -365,7 +365,7 @@ pub unsafe fn get_buf_list_info(target: BufHandle) -> BufListInfo {
     }
 
     let first = nvim_get_firstbuf();
-    let last = nvim_get_lastbuf();
+    let last = BufHandle::from_ptr(lastbuf);
     let cur = nvim_get_curbuf();
 
     let mut info = BufListInfo {
@@ -415,7 +415,7 @@ pub unsafe fn navigate_buf_wrap(buf: BufHandle, dir: Direction) -> BufHandle {
     // Wrap around
     match dir {
         Direction::Forward => nvim_get_firstbuf(),
-        Direction::Backward => nvim_get_lastbuf(),
+        Direction::Backward => BufHandle::from_ptr(lastbuf),
     }
 }
 
@@ -557,7 +557,7 @@ unsafe fn buflist_findname_file_id_impl(
     file_id: *const u8,
     file_id_valid: bool,
 ) -> BufHandle {
-    let mut buf = nvim_get_lastbuf();
+    let mut buf = BufHandle::from_ptr(lastbuf);
     while !buf.is_null() {
         if (buf_ref(buf).b_flags & BF_DUMMY) == 0
             && !nvim_otherfile_buf(buf, ffname, file_id, file_id_valid)
@@ -988,7 +988,7 @@ pub unsafe fn buflist_findpat_impl(
             let regex_handle = nvim_blfp_regex_compile(pat_start, magic);
 
             // Walk buffers backwards
-            let mut buf = nvim_get_lastbuf();
+            let mut buf = BufHandle::from_ptr(lastbuf);
             while !buf.is_null() {
                 if nvim_bufname_regex_valid(regex_handle) == 0 {
                     // Regex engine switched — abort

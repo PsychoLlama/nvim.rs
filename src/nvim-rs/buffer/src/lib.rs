@@ -99,8 +99,8 @@ const EVENT_BUFDELETE: c_int = 2;
 // C accessor functions for buffer fields.
 // These are defined in buffer.c and provide safe access to buf_T fields.
 extern "C" {
-    /// Get the last buffer in the buffer list (`lastbuf` global).
-    fn nvim_get_lastbuf() -> BufHandle;
+    /// The last buffer in the buffer list (`lastbuf` global).
+    static mut lastbuf: *mut std::ffi::c_void;
 
     /// Global `p_hid` option (hidden buffers).
     static p_hid: c_int;
@@ -149,8 +149,8 @@ extern "C" {
     /// Get the quickfix stack buffer number.
     fn qf_stack_get_bufnr() -> c_int;
 
-    /// Get the `cmdwin_buf` global.
-    fn nvim_get_cmdwin_buf() -> BufHandle;
+    /// The `cmdwin_buf` global.
+    static mut cmdwin_buf: *mut std::ffi::c_void;
 
     /// Get `ARGCOUNT` value.
     fn nvim_get_argcount() -> c_int;
@@ -195,8 +195,8 @@ fn buf_valid_impl(buf: BufHandle) -> bool {
     }
 
     // Iterate backwards through the buffer list
-    // SAFETY: nvim_get_lastbuf returns a valid buf_T* (or null).
-    let mut bp = unsafe { nvim_get_lastbuf() };
+    // SAFETY: lastbuf is a valid buf_T* (or null).
+    let mut bp = unsafe { BufHandle::from_ptr(lastbuf) };
     while !bp.is_null() {
         if bp == buf {
             return true;
@@ -637,7 +637,7 @@ pub unsafe extern "C" fn rs_buf_spname(buf: BufHandle) -> *mut c_char {
         if !fname.is_null() {
             return fname.cast_mut();
         }
-        if buf == nvim_get_cmdwin_buf() {
+        if buf == BufHandle::from_ptr(cmdwin_buf) {
             return messages::msg_command_line().cast_mut();
         }
         if bt_prompt_impl(buf) {

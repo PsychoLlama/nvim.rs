@@ -497,8 +497,6 @@ extern "C" {
     fn nvim_get_curbuf_b_ro_locked() -> c_int;
     /// Returns `allbuf_lock`.
     static mut allbuf_lock: c_int;
-    /// Sets `allbuf_lock`.
-    fn nvim_set_allbuf_lock(val: c_int);
     /// `no_wait_return` global.
     static mut no_wait_return: c_int;
     /// Returns `need_wait_return`.
@@ -630,8 +628,8 @@ const UNDO_HASH_SIZE: usize = 32;
 extern "C" {
     /// Returns non-zero if buf has type 'normal'.
     fn nvim_bt_normal(buf: *const c_void) -> c_int;
-    /// Returns global p_ar (autoread option).
-    fn nvim_get_p_ar() -> i64;
+    /// Global p_ar (autoread option).
+    static p_ar: i64;
     // Note: rs_buf_store_file_info is defined in this file, not an extern.
     /// os_fileinfo wrapper: fills metadata, returns 1 on success.
     fn nvim_os_fileinfo(
@@ -673,7 +671,7 @@ extern "C" {
     #[link_name = "msg_end"]
     fn nvim_msg_end_wrap();
     /// Returns emsg_silent global.
-    fn nvim_get_emsg_silent() -> c_int;
+    static emsg_silent: c_int;
     /// Returns in_assert_fails global.
     static in_assert_fails: bool;
     /// Returns 1 if UI has messages capability.
@@ -682,12 +680,8 @@ extern "C" {
     fn nvim_os_delay(ms: c_int, ignoreinput: c_int);
     /// Sets redraw_cmdline. (defined in window/src/globals.rs, takes bool)
     fn nvim_set_redraw_cmdline(val: bool);
-    /// Returns State global.
-    fn nvim_get_State() -> c_int;
-    /// Returns MODE_NORMAL_BUSY constant.
-    fn nvim_get_MODE_NORMAL_BUSY() -> c_int;
-    /// Returns MODE_CMDLINE constant.
-    fn nvim_get_MODE_CMDLINE() -> c_int;
+    /// State global.
+    static mut State: c_int;
     /// home_replace_save: returns newly allocated string (caller must xfree).
     fn nvim_home_replace_save(buf: *const c_void, fname: *const c_char) -> *mut c_char;
     /// xmalloc.
@@ -739,6 +733,10 @@ const FAT_TOLERANCE: c_int = 0;
 // (from auevents_enum.generated.h in the build directory)
 const EVENT_FILECHANGEDSHELL: c_int = 20;
 const EVENT_FILECHANGEDSHELLPOST: c_int = 21;
+
+// Mode constants from state_defs.h
+const MODE_NORMAL_BUSY: c_int = 0x1001;
+const MODE_CMDLINE: c_int = 0x08;
 
 /// Re-entrancy guard for `rs_buf_check_timestamp`.
 static BUF_CHECK_BUSY: AtomicBool = AtomicBool::new(false);
@@ -852,7 +850,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 // Don't do anything for a directory.
             } else if (bref_void(buf as *const c_void).b_p_ar >= 0
                 && bref_void(buf as *const c_void).b_p_ar != 0
-                || bref_void(buf as *const c_void).b_p_ar < 0 && nvim_get_p_ar() != 0)
+                || bref_void(buf as *const c_void).b_p_ar < 0 && p_ar != 0)
                 && nvim_buf_is_changed(buf) == 0
                 && file_info_ok
             {
@@ -882,9 +880,9 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 nvim_set_vim_var_fcs_reason(reason);
                 nvim_set_vim_var_fcs_choice_empty();
                 let old_allbuf_lock = allbuf_lock;
-                nvim_set_allbuf_lock(old_allbuf_lock + 1);
+                allbuf_lock = old_allbuf_lock + 1;
                 let n = apply_autocmds(EVENT_FILECHANGEDSHELL, b_fname, b_fname, false, buf);
-                nvim_set_allbuf_lock(old_allbuf_lock);
+                allbuf_lock = old_allbuf_lock;
                 // show_mesg tracks whether to show the user a warning message.
                 // It mirrors the C idiom: `bool n = apply_autocmds(); if (n) { ...; if (ask) n=false; else return 2; } if (!n) { show message; }`
                 let mut show_mesg = !n;
@@ -978,11 +976,9 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 _ => {}
             }
         } else {
-            let state = nvim_get_State();
-            let mode_normal_busy = nvim_get_MODE_NORMAL_BUSY();
-            let mode_cmdline = nvim_get_MODE_CMDLINE();
-            if state > mode_normal_busy
-                || (state & mode_cmdline) != 0
+            let state = State;
+            if state > MODE_NORMAL_BUSY
+                || (state & MODE_CMDLINE) != 0
                 || ALREADY_WARNED.load(Ordering::Relaxed)
             {
                 if *mesg2 != 0 {
@@ -999,7 +995,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 }
                 msg_clr_eos();
                 nvim_msg_end_wrap();
-                if nvim_get_emsg_silent() == 0 && !in_assert_fails && nvim_ui_has_messages() == 0 {
+                if emsg_silent == 0 && !in_assert_fails && nvim_ui_has_messages() == 0 {
                     ui_flush();
                     nvim_os_delay(1004, 1);
                     nvim_set_redraw_cmdline(false);

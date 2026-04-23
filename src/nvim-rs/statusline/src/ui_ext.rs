@@ -41,8 +41,8 @@ extern "C" {
     // Buffer name
     fn get_trans_bufname(buf: BufHandle);
 
-    // Global NameBuff access (MAXPATHL buffer for names)
-    fn nvim_get_namebuff() -> *mut c_char;
+    // Global NameBuff (MAXPATHL buffer for names)
+    static mut NameBuff: [c_char; 4096];
 
     // Standard C library
     fn strlen(s: *const c_char) -> usize;
@@ -121,7 +121,7 @@ fn count_listed_buffers() -> usize {
 /// Relies on C's get_trans_bufname() and NameBuff global.
 unsafe fn get_buffer_display_name(buf: BufHandle) -> String {
     get_trans_bufname(buf);
-    let name_ptr = nvim_get_namebuff();
+    let name_ptr = (&raw const NameBuff).cast::<c_char>();
     if name_ptr.is_null() {
         return String::new();
     }
@@ -278,7 +278,7 @@ pub unsafe extern "C" fn rs_tab_iter_next(
     // Get buffer name
     let buf = nvim_win_get_buffer(cwp);
     get_trans_bufname(buf);
-    let name_ptr = nvim_get_namebuff();
+    let name_ptr = (&raw const NameBuff).cast::<c_char>();
 
     // Copy handle
     if !handle.is_null() {
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn rs_tab_iter_next(
     }
 
     // Copy name
-    if !name_buf.is_null() && name_buf_len > 0 && !name_ptr.is_null() {
+    if !name_buf.is_null() && name_buf_len > 0 {
         let name_len = strlen(name_ptr);
         let copy_len = name_len.min(name_buf_len - 1);
         std::ptr::copy_nonoverlapping(name_ptr, name_buf, copy_len);
@@ -355,7 +355,7 @@ pub unsafe extern "C" fn rs_buf_iter_next(
 
         // Get buffer name
         get_trans_bufname(buf);
-        let name_ptr = nvim_get_namebuff();
+        let name_ptr = (&raw const NameBuff).cast::<c_char>();
 
         // Copy handle
         if !handle.is_null() {
@@ -363,7 +363,7 @@ pub unsafe extern "C" fn rs_buf_iter_next(
         }
 
         // Copy name
-        if !name_buf.is_null() && name_buf_len > 0 && !name_ptr.is_null() {
+        if !name_buf.is_null() && name_buf_len > 0 {
             let name_len = strlen(name_ptr);
             let copy_len = name_len.min(name_buf_len - 1);
             std::ptr::copy_nonoverlapping(name_ptr, name_buf, copy_len);

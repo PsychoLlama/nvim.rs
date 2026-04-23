@@ -250,7 +250,7 @@ extern "C" {
 
     fn nvim_get_argcount() -> c_int;
 
-    fn nvim_get_lastbuf() -> *mut c_void;
+    static mut lastbuf: *mut c_void;
 
     // Quickfix accessors (directly exported)
     fn qf_get_cur_idx(eap: ExArgHandle) -> usize;
@@ -446,7 +446,7 @@ pub unsafe extern "C" fn rs_set_cmd_dflall_range(eap: ExArgHandle) {
         }
         x if x == ADDR_BUFFERS => {
             (*eap).line1 = bref_raw(nvim_get_firstbuf()).handle;
-            (*eap).line2 = bref_raw(nvim_get_lastbuf()).handle;
+            (*eap).line2 = bref_raw(lastbuf).handle;
         }
         x if x == ADDR_WINDOWS => {
             (*eap).line2 = nvim_docmd_last_win_nr() as i32;
@@ -919,7 +919,7 @@ pub unsafe fn get_address_impl(
                         lnum = nvim_docmd_last_loaded_buf_fnum() as i32;
                     }
                     ADDR_BUFFERS => {
-                        lnum = bref_raw(nvim_get_lastbuf()).handle as i32;
+                        lnum = bref_raw(lastbuf).handle as i32;
                     }
                     ADDR_TABS => {
                         lnum = nvim_docmd_last_tab_nr() as i32;
@@ -1307,7 +1307,7 @@ pub unsafe extern "C" fn rs_parse_cmd_address(
                     }
                     ADDR_BUFFERS => {
                         (*eap).line1 = bref_raw(nvim_get_firstbuf()).handle as i32;
-                        (*eap).line2 = bref_raw(nvim_get_lastbuf()).handle as i32;
+                        (*eap).line2 = bref_raw(lastbuf).handle as i32;
                     }
                     ADDR_WINDOWS | ADDR_TABS => {
                         if (*eap).cmdidx < 0 {

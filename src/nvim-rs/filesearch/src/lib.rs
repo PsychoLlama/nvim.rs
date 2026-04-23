@@ -164,8 +164,8 @@ extern "C" {
     // Localized gettext
     fn gettext(msgid: *const c_char) -> *const c_char;
 
-    // NameBuff global buffer accessor
-    fn nvim_get_namebuff() -> *const c_char;
+    // NameBuff global buffer
+    static mut NameBuff: [c_char; 4096];
 
     // Visual mode and cursor functions
     static VIsual_active: bool;
@@ -2014,7 +2014,7 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
         // Copy file name into NameBuff, expanding environment variables
         let save_char = *ptr.add(len);
         *ptr.add(len) = 0;
-        let namebuff = nvim_get_namebuff().cast_mut();
+        let namebuff = (&raw mut NameBuff).cast::<c_char>();
         FF_PATH_FILE_LEN = expand_env_esc(ptr, namebuff, MAXPATHL, false, true, ptr::null());
         *ptr.add(len) = save_char;
 
@@ -2072,7 +2072,7 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
             };
 
             // Try with file directory first, then current directory
-            let namebuff = nvim_get_namebuff().cast_mut();
+            let namebuff = (&raw mut NameBuff).cast::<c_char>();
             for run in 1..=2 {
                 let mut l = FF_PATH_FILE_LEN;
 

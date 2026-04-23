@@ -303,7 +303,7 @@ extern "C" {
     fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
 
     // NameBuff (MAXPATHL global buffer)
-    fn nvim_get_namebuff() -> *mut c_char;
+    static mut NameBuff: [c_char; 4096];
 
     // strlen from libc
     fn strlen(s: *const c_char) -> usize;
@@ -1278,7 +1278,7 @@ pub unsafe fn build_stl_str_hl(
             STL_FILEPATH | STL_FULLPATH | STL_FILENAME => {
                 fillable = false;
                 let name = nvim_stl_buf_spname(buf);
-                let namebuff = nvim_get_namebuff();
+                let namebuff = (&raw mut NameBuff).cast::<c_char>();
                 if !name.is_null() {
                     // xstrlcpy(NameBuff, name, MAXPATHL)
                     let name_len = strlen(name);

@@ -38,7 +38,7 @@ extern "C" {
 
     // Buffer traversal (for first/last loaded buf fnum)
     fn nvim_get_firstbuf() -> *mut c_void;
-    fn nvim_get_lastbuf() -> *mut c_void;
+    static mut lastbuf: *mut c_void;
 
     // Error messages
 }
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn rs_nvim_docmd_first_loaded_fnum_or_fail() -> c_int {
 /// Matches C `nvim_docmd_last_loaded_fnum_or_fail()`.
 #[export_name = "nvim_docmd_last_loaded_fnum_or_fail"]
 pub unsafe extern "C" fn rs_nvim_docmd_last_loaded_fnum_or_fail() -> c_int {
-    let mut buf = nvim_get_lastbuf();
+    let mut buf = lastbuf;
     loop {
         if !bref_raw(buf).ml_mfp_is_null() {
             return bref_raw(buf).handle;

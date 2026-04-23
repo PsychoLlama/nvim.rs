@@ -1050,8 +1050,8 @@ extern "C" {
     fn os_dirname(buf: *mut c_char, len: usize) -> c_int;
     /// Trigger redraw of all status lines.
     fn status_redraw_all();
-    /// Set redraw_tabline global.
-    fn nvim_set_redraw_tabline(val: c_int);
+    /// redraw_tabline global.
+    static mut redraw_tabline: bool;
     /// Get firstbuf pointer.
     fn nvim_get_firstbuf() -> *mut c_void;
 }
@@ -1120,7 +1120,7 @@ pub unsafe extern "C" fn rs_shorten_fnames(force: c_int) {
     }
 
     unsafe { status_redraw_all() };
-    unsafe { nvim_set_redraw_tabline(1) };
+    unsafe { redraw_tabline = true };
 }
 
 #[cfg(test)]

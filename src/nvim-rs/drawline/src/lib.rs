@@ -6355,8 +6355,8 @@ extern "C" {
     fn nvim_get_dy_flags() -> c_int;
     /// Set spell_redraw_lnum global.
     fn nvim_set_spell_redraw_lnum(lnum: LinenrT);
-    /// Get State global.
-    fn nvim_get_State() -> c_int;
+    /// State global.
+    static mut State: c_int;
     /// ascii_iswhite: return true if char is whitespace (space/tab).
     fn nvim_ascii_iswhite(c: c_char) -> bool;
     /// noplainbuffer spelloptions flag check.
@@ -6669,7 +6669,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
                 let word_end_new = v1_adj + tmplen as c_int;
                 (*wls).word_end = word_end_new;
 
-                let state_val = nvim_get_State();
+                let state_val = State;
                 if spell_hlf != hlf_count
                     && (state_val & MODE_INSERT) != 0
                     && win_ref(wp).w_cursor.lnum == lnum

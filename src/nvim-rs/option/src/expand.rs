@@ -794,7 +794,7 @@ extern "C" {
     fn vim_strsave_escaped(s: *const c_char, esc: *const c_char) -> *mut c_char;
     static escape_chars: *const c_char;
     fn find_option(name: *const c_char) -> OptIndex;
-    fn nvim_get_namebuff() -> *mut c_char;
+    static mut NameBuff: [c_char; 4096];
     fn nvim_option_has_expand_cb(opt_idx: OptIndex) -> c_int;
     fn nvim_option_invoke_expand_cb(
         opt_idx: OptIndex,
@@ -859,7 +859,7 @@ pub unsafe extern "C" fn rs_expand_old_setting(
     } else {
         // Put string of option value in NameBuff.
         rs_option_value2string(expand_option_idx as c_int, expand_option_flags);
-        nvim_get_namebuff()
+        (&raw const NameBuff).cast::<c_char>()
     };
 
     let buf = rs_escape_option_str_cmdline(var);

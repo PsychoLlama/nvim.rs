@@ -65,7 +65,7 @@ extern "C" {
         sep_chars: *const c_char,
     ) -> usize;
     fn nvim_get_maxpathl() -> usize;
-    fn nvim_get_namebuff() -> *mut c_char;
+    static mut NameBuff: [c_char; 4096];
 
     // Quickfix entry addition
     fn rs_qf_add_entry(
@@ -240,7 +240,7 @@ pub unsafe extern "C" fn rs_hgr_search_in_rtp(
     lang: *const c_char,
 ) {
     let maxpathl = nvim_get_maxpathl();
-    let name_buff = nvim_get_namebuff();
+    let name_buff = (&raw mut NameBuff).cast::<c_char>();
 
     // Go through all directories in 'runtimepath'
     let mut p = p_rtp;

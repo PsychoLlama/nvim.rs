@@ -5137,8 +5137,8 @@ extern "C" {
     fn repeat_message();
     /// Call maketitle.
     fn maketitle();
-    /// Check if kUICmdline is active; returns redraw_cmdline value.
-    fn nvim_get_redraw_cmdline() -> c_int;
+    /// redraw_cmdline global.
+    static mut redraw_cmdline: bool;
     /// Set screen valid/invalid for compositing.
     fn ui_comp_set_screen_valid(valid: bool) -> bool;
     /// Clear a region of the default grid.
@@ -5278,7 +5278,7 @@ pub unsafe extern "C" fn rs_update_screen() -> c_int {
         maketitle();
     }
 
-    if clear_cmdline || nvim_get_redraw_cmdline() != 0 || redraw_mode != 0 {
+    if clear_cmdline || redraw_cmdline || redraw_mode != 0 {
         rs_showmode();
     }
 

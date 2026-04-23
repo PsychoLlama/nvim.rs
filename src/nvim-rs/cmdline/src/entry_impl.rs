@@ -110,8 +110,8 @@ unsafe extern "C" {
     fn nvim_get_curwin_p_rl() -> c_int;
     fn nvim_get_curwin_p_rlc_has_s() -> c_int;
 
-    // State accessor
-    fn nvim_get_State() -> c_int;
+    // State global
+    static mut State: c_int;
 
     // Phase 3 cleanup — direct C functions
     fn cmdline_pum_active() -> c_int;
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
 
     // Save msg_scroll and State for teardown
     let save_msg_scroll = nvim_get_msg_scroll();
-    let save_state = nvim_get_State();
+    let save_state = unsafe { State };
 
     // Initialize CommandLineState on the stack (Rust-owned)
     let mut state = unsafe { CommandLineState::zeroed() };

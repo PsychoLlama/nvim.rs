@@ -119,7 +119,7 @@ extern "C" {
     fn nvim_stl_get_trans_bufname(buf: BufHandle);
     #[link_name = "shorten_dir"]
     fn nvim_stl_shorten_dir(s: *mut c_char);
-    fn nvim_get_namebuff() -> *mut c_char;
+    static mut NameBuff: [c_char; 4096];
 
     // String (direct link to Rust/C implementations)
     #[link_name = "vim_strsize"]
@@ -226,7 +226,7 @@ unsafe fn collect_tab_data() -> Vec<TabData> {
         let mut name_buf = [0u8; MAXPATHL];
         if !buf.is_null() {
             nvim_stl_get_trans_bufname(buf);
-            let namebuff = nvim_get_namebuff();
+            let namebuff = (&raw mut NameBuff).cast::<c_char>();
             nvim_stl_shorten_dir(namebuff);
             // Copy NameBuff into our local buffer
             let namebuff_slice = std::ffi::CStr::from_ptr(namebuff);

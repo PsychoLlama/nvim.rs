@@ -470,8 +470,8 @@ extern "C" {
     // Note: do_autocmd_uienter is already declared above in Phase 3 FFI
 
     // Phase 2 FFI declarations
-    /// Get emsg_silent global
-    fn nvim_get_emsg_silent() -> c_int;
+    /// emsg_silent global
+    static emsg_silent: c_int;
     /// Global: in_assert_fails
     static in_assert_fails: bool;
     /// Get bo_flags global (bitmask of 'belloff' flags)
@@ -891,7 +891,7 @@ static BEEP_MSG: &[u8] = b"Beep!\0";
 pub unsafe extern "C" fn vim_beep(val: u32) {
     nvim_set_called_vim_beep(1);
 
-    if nvim_get_emsg_silent() != 0 || in_assert_fails {
+    if emsg_silent != 0 || in_assert_fails {
         return;
     }
 

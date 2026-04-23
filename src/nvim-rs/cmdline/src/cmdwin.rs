@@ -493,7 +493,7 @@ unsafe extern "C" {
     static mut cmdwin_result: c_int;
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_set_restart_edit(val: c_int);
-    fn nvim_get_State() -> c_int;
+    static mut State: c_int;
     fn nvim_set_State(val: c_int);
     fn nvim_get_exmode_active() -> c_int;
     fn nvim_set_exmode_active(val: c_int);
@@ -670,7 +670,7 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
 
     // Save state that we restore later.
     let save_restart_edit = nvim_get_restart_edit();
-    let save_state = nvim_get_State();
+    let save_state = State;
     let save_exmode = nvim_get_exmode_active();
     let save_cmdmsg_rl = nvim_get_cmdmsg_rl();
 

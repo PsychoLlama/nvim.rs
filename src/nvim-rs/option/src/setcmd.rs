@@ -1213,7 +1213,7 @@ extern "C" {
     fn vim_strsize(s: *const c_char) -> c_int;
     fn os_breakcheck();
     static mut msg_col: c_int;
-    fn nvim_get_namebuff() -> *mut c_char;
+    static mut NameBuff: [c_char; 4096];
     fn curbufIsChanged() -> bool;
     fn nvim_varp_is_curbuf_b_changed(varp: *const std::ffi::c_void) -> c_int;
     fn nvim_get_varp_by_idx(opt_idx: c_int) -> *mut std::ffi::c_void;
@@ -1290,7 +1290,7 @@ pub unsafe extern "C" fn rs_showoneopt(opt_idx: c_int, opt_flags: c_int) {
         msg_putchar(c_int::from(b'='));
         // put value string in NameBuff
         rs_option_value2string(opt_idx, opt_flags);
-        let namebuff = nvim_get_namebuff();
+        let namebuff = (&raw mut NameBuff).cast::<c_char>();
         msg_outtrans(namebuff, 0, false);
     }
 
@@ -1372,7 +1372,7 @@ pub unsafe extern "C" fn rs_showoptions(all: c_int, opt_flags: c_int) {
                 len = 1; // a toggle option fits always
             } else {
                 rs_option_value2string(opt_idx, opt_flags);
-                let namebuff = nvim_get_namebuff();
+                let namebuff = (&raw mut NameBuff).cast::<c_char>();
                 len = strlen(fullname) as c_int + vim_strsize(namebuff) + 1;
             }
 

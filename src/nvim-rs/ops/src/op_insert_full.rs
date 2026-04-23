@@ -163,8 +163,8 @@ extern "C" {
     fn nvim_get_Insstart_lnum() -> c_int;
     fn nvim_get_Insstart_col() -> c_int;
 
-    // State global accessors
-    fn nvim_get_State() -> c_int;
+    // State global
+    static mut State: c_int;
     fn nvim_set_State(val: c_int);
 
     // curwin global (direct linkage)
@@ -193,7 +193,7 @@ unsafe fn block_insert(
     let start_lnum = (*oap_t).start.lnum;
     let end_lnum = (*oap_t).end.lnum;
 
-    let oldstate = nvim_get_State();
+    let oldstate = State;
     nvim_set_State(MODE_INSERT); // don't want MODE_REPLACE for State
 
     let mut lnum = start_lnum + 1;

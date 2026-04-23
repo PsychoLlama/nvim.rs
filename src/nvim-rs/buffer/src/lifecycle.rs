@@ -32,7 +32,7 @@ extern "C" {
 
 extern "C" {
     fn nvim_get_firstbuf() -> BufHandle;
-    fn nvim_get_lastbuf() -> BufHandle;
+    static mut lastbuf: *mut std::ffi::c_void;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> *mut c_void;
     // Jump list accessors (implemented in mark.c)
@@ -669,7 +669,7 @@ unsafe fn nav_step(buf: BufHandle, dir: c_int) -> BufHandle {
     } else {
         let prev = BufHandle::from_ptr(buf_ref(buf).b_prev);
         if prev.is_null() {
-            nvim_get_lastbuf()
+            BufHandle::from_ptr(lastbuf)
         } else {
             prev
         }
@@ -704,7 +704,7 @@ unsafe fn find_and_validate_buffer(
     // Determine starting buffer.
     let mut buf: BufHandle = match start {
         DOBUF_FIRST => nvim_get_firstbuf(),
-        DOBUF_LAST => nvim_get_lastbuf(),
+        DOBUF_LAST => BufHandle::from_ptr(lastbuf),
         _ => nvim_get_curbuf(),
     };
     let curbuf = nvim_get_curbuf();
@@ -1359,9 +1359,9 @@ extern "C" {
     // Phase 3: set_curbuf helpers
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
     fn nvim_excmds_set_curwin_alt_fnum(fnum: c_int);
-    fn nvim_set_visual_reselect(val: c_int);
+    static mut VIsual_reselect: c_int;
     fn reset_synblock(win: *mut c_void);
-    fn nvim_get_state_mode() -> c_int;
+    static mut State: c_int;
     fn nvim_u_sync(force: bool);
     fn bufIsChanged(buf: BufHandle) -> bool;
     fn enter_buffer(buf: BufHandle);
@@ -1410,7 +1410,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
     }
     crate::rs_buflist_altfpos(crate::WinHandle(nvim_get_curwin()));
 
-    nvim_set_visual_reselect(0);
+    VIsual_reselect = 0;
 
     let prevbuf = nvim_get_curbuf();
     let mut prevbufref = crate::misc::BufRef {
@@ -1451,8 +1451,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
 
             // Do not sync when in Insert mode and buffer is open in another window.
             if prevbuf == nvim_get_curbuf()
-                && ((nvim_get_state_mode() & MODE_INSERT) == 0
-                    || buf_ref(nvim_get_curbuf()).b_nwindows <= 1)
+                && ((State & MODE_INSERT) == 0 || buf_ref(nvim_get_curbuf()).b_nwindows <= 1)
             {
                 nvim_u_sync(false);
             }
@@ -1481,7 +1480,11 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         if !nvim_get_curbuf().is_null() && prevbuf != nvim_get_curbuf() {
             nvim_curbuf_dec_nwindows();
         }
-        enter_buffer(if valid { buf } else { nvim_get_lastbuf() });
+        enter_buffer(if valid {
+            buf
+        } else {
+            BufHandle::from_ptr(lastbuf)
+        });
         if old_tw != nvim_curbuf_get_p_tw() {
             check_colorcolumn(std::ptr::null(), nvim_get_curwin());
         }

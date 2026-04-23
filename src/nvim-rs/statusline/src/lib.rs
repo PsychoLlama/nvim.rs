@@ -2162,7 +2162,7 @@ extern "C" {
     fn lib_buf_spname(buf: BufHandle) -> *const c_char;
     fn home_replace(buf: BufHandle, src: *const c_char, dst: *mut c_char, dstlen: c_int, one: bool);
     fn trans_characters(buf: *mut c_char, bufsize: c_int);
-    fn nvim_get_namebuff() -> *mut c_char;
+    static mut NameBuff: [c_char; 4096];
     #[link_name = "rs_win_redr_custom"]
     fn nvim_stl_win_redr_custom_direct(
         wp: WinHandle,
@@ -2197,7 +2197,7 @@ const MAXPATHL: usize = 4096;
 /// `buf` must be a valid buffer handle.
 #[export_name = "get_trans_bufname"]
 pub unsafe extern "C" fn rs_get_trans_bufname(buf: BufHandle) {
-    let namebuff = nvim_get_namebuff();
+    let namebuff = (&raw mut NameBuff).cast::<c_char>();
     let spname = lib_buf_spname(buf);
     if spname.is_null() {
         let bfname = bref(buf).b_fname;

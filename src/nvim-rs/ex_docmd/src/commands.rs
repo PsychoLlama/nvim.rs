@@ -270,7 +270,7 @@ extern "C" {
     fn nvim_post_chdir(scope: c_int, dir_differs: bool);
     #[link_name = "pathcmp"]
     fn nvim_pathcmp_unlen(a: *const c_char, b: *const c_char, maxlen: c_int) -> c_int;
-    fn nvim_get_namebuff() -> *mut c_char;
+    static mut NameBuff: [c_char; 4096];
     fn xstrdup(str: *const c_char) -> *mut c_char;
 
     // Phase 5: ex_fold / ex_foldopen / ex_digraphs helpers
@@ -1307,7 +1307,7 @@ pub unsafe extern "C" fn rs_changedir_func(new_dir: *mut c_char, scope: c_int) -
 
     // Get current directory into pdir (OS_DIRNAME returns 1 (OK) on success).
     let pdir = if nvim_os_dirname_namebuff() == 1 {
-        xstrdup(nvim_get_namebuff() as *const c_char)
+        xstrdup((&raw const NameBuff).cast::<c_char>())
     } else {
         std::ptr::null_mut()
     };
@@ -1316,7 +1316,7 @@ pub unsafe extern "C" fn rs_changedir_func(new_dir: *mut c_char, scope: c_int) -
     // On other systems too if 'cdhome' is set.
     if *new_dir == 0 && nvim_get_p_cdh() != 0 {
         nvim_expand_env_home_namebuff();
-        new_dir = nvim_get_namebuff();
+        new_dir = (&raw mut NameBuff).cast::<c_char>();
     }
 
     let dir_differs = pdir.is_null() || nvim_pathcmp_unlen(pdir, new_dir, -1) != 0;
@@ -1601,7 +1601,7 @@ pub unsafe extern "C" fn rs_expand_filename(
             let arg = (*eap).arg;
             if nvim_has_dollar_or_tilde(arg as *const c_char) {
                 nvim_expand_env_esc_namebuff_notilde(arg as *const c_char);
-                let nb = nvim_get_namebuff();
+                let nb = (&raw mut NameBuff).cast::<c_char>();
                 has_wildcards = nvim_path_has_wildcard(nb as *const c_char);
                 let arglen = strlen(arg as *const c_char);
                 rs_repl_cmdline(eap, arg, arglen, nb, cmdlinep);
@@ -2275,7 +2275,7 @@ pub unsafe extern "C" fn rs_ex_print(eap: ExArgHandle) {
 /// Internal helper: print working directory.
 unsafe fn do_ex_pwd() {
     if nvim_os_dirname_namebuff() == 1 {
-        let namebuff = nvim_get_namebuff();
+        let namebuff = (&raw mut NameBuff).cast::<c_char>();
         if p_verbose > 0 {
             let context: *const c_char = if !last_chdir_reason.is_null() {
                 last_chdir_reason

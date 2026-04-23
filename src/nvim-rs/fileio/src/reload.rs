@@ -40,7 +40,6 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> *mut c_void;
-    fn nvim_BLN_DUMMY() -> c_int;
     fn nvim_wipe_buffer(buf: *mut c_void);
 
     // --- bufref ---
@@ -114,9 +113,6 @@ extern "C" {
     fn nvim_semsg_reload_fail(fname: *const c_char);
     fn nvim_semsg_prep_reload_fail(fname: *const c_char);
 
-    // --- constants ---
-    fn nvim_BF_CHECK_RO() -> c_int;
-
     // --- xstrdup / xfree ---
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
@@ -125,6 +121,12 @@ extern "C" {
 // Read flags (from fileio.h)
 const READ_NEW: c_int = 0x01;
 const READ_KEEP_UNDO: c_int = 0x08;
+
+// Buffer list flags (from buffer.h)
+const BLN_DUMMY: c_int = 4;
+
+// Buffer flags (from buffer_defs.h)
+const BF_CHECK_RO: c_int = 0x02;
 
 // Return values
 const OK: c_int = 1;
@@ -233,7 +235,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
 
     if nvim_buf_is_empty(curbuf) == 0 && saved != FAIL {
         // Allocate a buffer without putting it in the buffer list.
-        savebuf = nvim_buflist_new(std::ptr::null(), std::ptr::null(), 1, nvim_BLN_DUMMY());
+        savebuf = nvim_buflist_new(std::ptr::null(), std::ptr::null(), 1, BLN_DUMMY);
         if !savebuf.is_null() {
             nvim_set_bufref(bufref_ptr, savebuf);
         }
@@ -261,7 +263,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     let curbuf = nvim_get_curbuf();
     if saved == OK {
         // BF_CHECK_RO: check for RO again.
-        nvim_curbuf_set_b_flags_or(nvim_BF_CHECK_RO());
+        nvim_curbuf_set_b_flags_or(BF_CHECK_RO);
         nvim_curbuf_set_b_keep_filetype(1);
 
         let silent = nvim_shortmess_fileinfo();

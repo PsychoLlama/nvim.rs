@@ -86,7 +86,6 @@ extern void getout(int exitval);
 
 int nvim_buf_get_help(buf_T *buf) { return buf->b_help; }
 int nvim_buf_get_terminal(buf_T *buf) { return buf->terminal != NULL; }
-buf_T *nvim_get_lastbuf(void) { return lastbuf; }
 buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
 uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0; }
 uint32_t nvim_buf_meta_total_sign_text(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignText) : 0; }
@@ -106,7 +105,6 @@ int nvim_curbuf_has_ffname(void) { return curbuf->b_ffname != NULL ? 1 : 0; }
 int nvim_curbuf_b_next_null(void) { return curbuf->b_next == NULL ? 1 : 0; }
 const char *nvim_curbuf_get_path(void) { return curbuf->b_p_path; }
 const char *nvim_curbuf_get_inex(void) { return curbuf->b_p_inex; }
-char *nvim_get_namebuff(void) { return NameBuff; }
 const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w_cursor.lnum); }
 void nvim_buf_set_name_body(buf_T *buf, char *name)
 {
@@ -123,7 +121,6 @@ void nvim_check_arg_idx_if_curbuf(buf_T *buf)
 { if (curwin->w_buffer == buf) { check_arg_idx(curwin); } }
 linenr_T nvim_buflist_findlnum(buf_T *buf) { return buflist_findfmark(buf)->mark.lnum; }
 int nvim_get_argcount(void) { return ARGCOUNT; }
-buf_T *nvim_get_cmdwin_buf(void) { return cmdwin_buf; }
 int64_t nvim_buf_get_changedtick_direct(buf_T *buf) { return buf_get_changedtick(buf); }
 int nvim_curwin_get_alt_fnum(void) { return curwin->w_alt_fnum; }
 buf_T *nvim_handle_get_buffer(handle_T handle) { return handle_get_buffer(handle); }
@@ -428,8 +425,6 @@ void nvim_buf_aucmd_restbuf_free(void *aco_void)
 int nvim_readfile_for_buf(buf_T *buf, void *ea_void)
 { return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM,
                   (exarg_T *)ea_void, READ_NEW | READ_DUMMY, false); }
-void nvim_set_visual_reselect(int val) { VIsual_reselect = val != 0; }
-int nvim_get_state_mode(void) { return State; }
 int nvim_buf_terminal_check_size(buf_T *buf)
 { if (buf && buf->terminal) { terminal_check_size(buf->terminal); return 1; } return 0; }
 void nvim_curbuf_dec_nwindows(void) { if (curbuf) { curbuf->b_nwindows--; } }
@@ -492,12 +487,10 @@ void nvim_set_fileencoding_local(const char *fenc) {
 
 // Phase 3: shorten_buf_fname / shorten_fnames accessors
 void nvim_buf_mf_fullname(buf_T *buf) { mf_fullname(buf->b_ml.ml_mfp); }
-void nvim_set_redraw_tabline(int val) { redraw_tabline = (bool)val; }
 int nvim_bt_nofilename(buf_T *buf) { return bt_nofilename(buf) ? 1 : 0; }
 
 // Phase 5: buf_check_timestamp accessors
 int nvim_buf_get_b_orig_mode(const buf_T *buf) { return buf->b_orig_mode; }
-int64_t nvim_get_p_ar(void) { return p_ar; }
 void nvim_buf_copy_mtime_to_mtime_read(buf_T *buf) { buf->b_mtime_read = buf->b_mtime; buf->b_mtime_read_ns = buf->b_mtime_ns; }
 // --- bt_normal wrapper ---
 int nvim_bt_normal(const buf_T *buf) { return bt_normal(buf) ? 1 : 0; }
@@ -520,8 +513,6 @@ int nvim_os_fileinfo(const char *fname, int64_t *mtime_sec, int64_t *mtime_ns,
 }
 // --- os_isdir and os_path_exists (some may already exist in other shims) ---
 int nvim_os_isdir2(const char *name) { return os_isdir(name) ? 1 : 0; }
-// --- allbuf_lock setter ---
-void nvim_set_allbuf_lock(int val) { allbuf_lock = val; }
 // --- VV_ vim variable accessors ---
 void nvim_set_vim_var_fcs_reason(const char *reason) { set_vim_var_string(VV_FCS_REASON, (char *)reason, -1); }
 void nvim_set_vim_var_fcs_choice_empty(void) { set_vim_var_string(VV_FCS_CHOICE, "", -1); }
@@ -530,12 +521,6 @@ void nvim_set_vim_var_warningmsg(const char *msg, int len) { set_vim_var_string(
 // --- UI/message functions ---
 int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 void nvim_os_delay(int ms, int ignoreinput) { os_delay((uint64_t)ms, ignoreinput != 0); }
-int nvim_get_emsg_silent(void) { return emsg_silent; }
-int nvim_get_redraw_cmdline(void) { return (int)redraw_cmdline; }
-// Note: nvim_set_redraw_cmdline is defined in src/nvim-rs/window/src/globals.rs
-int nvim_get_State(void) { return State; }
-int nvim_get_MODE_NORMAL_BUSY(void) { return MODE_NORMAL_BUSY; }
-int nvim_get_MODE_CMDLINE(void) { return MODE_CMDLINE; }
 void nvim_msg_puts_hl_e(const char *s) { msg_puts_hl(s, HLF_E, true); }
 void nvim_msg_puts_hl_w(const char *s) { msg_puts_hl(s, HLF_W, true); }
 // --- home_replace_save wrapper ---
@@ -627,10 +612,6 @@ exarg_T *nvim_exarg_alloc_clear(void) {
   return ea;
 }
 // Note: nvim_exarg_free (frees ea->cmd + ea) is defined above at line ~475
-// BLN_DUMMY constant (from buffer.h)
-int nvim_BLN_DUMMY(void) { return BLN_DUMMY; }
-// BF_CHECK_RO constant
-int nvim_BF_CHECK_RO(void) { return BF_CHECK_RO; }
 
 // =============================================================================
 // open_buffer compound accessors (Phase N: migrate open_buffer to Rust)
