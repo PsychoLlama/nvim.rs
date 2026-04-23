@@ -56,6 +56,67 @@ static void viml_preader_get_line(ParserInputReader *const preader, ParserLine *
   *ret_pline = pline;
 }
 
+// ---------------------------------------------------------------------------
+// C accessor wrappers for static-inline parser functions.
+// These are non-inline wrappers so Rust can call them via extern "C".
+// ---------------------------------------------------------------------------
+
+/// Wrapper for the static-inline viml_parser_advance().
+void nvim_viml_parser_advance(ParserState *const pstate, const size_t len)
+{
+  viml_parser_advance(pstate, len);
+}
+
+/// Wrapper for viml_parser_get_remaining_line() (already non-static).
+bool nvim_viml_parser_get_remaining_line(ParserState *const pstate, ParserLine *const ret_pline)
+{
+  return viml_parser_get_remaining_line(pstate, ret_pline);
+}
+
+/// Wrapper for the static-inline viml_parser_highlight().
+void nvim_viml_parser_highlight(ParserState *const pstate, const ParserPosition start,
+                                const size_t len, const char *const group)
+{
+  viml_parser_highlight(pstate, start, len, group);
+}
+
+/// Get the data and size of reader line at a given index.
+///
+/// Used by Rust's viml_pexpr_repr_token to read token text.
+void nvim_parser_get_line_data(const ParserState *const pstate, size_t line_idx,
+                               const char **data_out, size_t *size_out)
+{
+  *data_out = pstate->reader.lines.items[line_idx].data;
+  *size_out = pstate->reader.lines.items[line_idx].size;
+}
+
+/// Get the current parser position.
+ParserPosition nvim_parser_get_pos(const ParserState *const pstate)
+{
+  return pstate->pos;
+}
+
+/// Get the colors array pointer (may be NULL).
+ParserHighlight *nvim_parser_get_colors(const ParserState *const pstate)
+{
+  return pstate->colors;
+}
+
+/// Get the number of highlight chunks in colors array.
+size_t nvim_parser_get_colors_size(const ParserState *const pstate)
+{
+  if (pstate->colors == NULL) {
+    return 0;
+  }
+  return kv_size(*pstate->colors);
+}
+
+/// Set the highlight group for a chunk at a given index.
+void nvim_parser_set_color_group(const ParserState *const pstate, size_t idx, const char *group)
+{
+  kv_A(*pstate->colors, idx).group = group;
+}
+
 /// Free all memory allocated by the parser on heap
 ///
 /// @param  pstate  Parser state to free.
