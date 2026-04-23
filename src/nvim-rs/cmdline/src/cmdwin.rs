@@ -611,7 +611,8 @@ unsafe extern "C" {
     fn nvim_dealloc_cmdbuff();
 
     // Misc
-    fn nvim_aborting() -> c_int;
+    #[link_name = "aborting"]
+    fn nvim_aborting() -> bool;
     fn nvim_set_ccline_cmdpos_from_cursor();
     fn nvim_emsg_cmdwin_changed();
     fn may_trigger_modechanged();
@@ -904,7 +905,7 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
         nvim_emsg_cmdwin_changed();
     } else {
         // autocmds may abort script processing
-        if nvim_aborting() != 0 && nvim_get_cmdwin_result() != K_IGNORE {
+        if nvim_aborting() && nvim_get_cmdwin_result() != K_IGNORE {
             cmdwin_result = CTRL_C;
         }
 

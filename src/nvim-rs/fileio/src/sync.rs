@@ -626,8 +626,9 @@ const BF_NOTEDITED: c_int = 0x08;
 const UNDO_HASH_SIZE: usize = 32;
 
 extern "C" {
-    /// Returns non-zero if buf has type 'normal'.
-    fn nvim_bt_normal(buf: *const c_void) -> c_int;
+    /// Returns true if buf has type 'normal'.
+    #[link_name = "rs_bt_normal"]
+    fn nvim_bt_normal(buf: *mut c_void) -> bool;
     /// Global p_ar (autoread option).
     static p_ar: i64;
     // Note: rs_buf_store_file_info is defined in this file, not an extern.
@@ -639,12 +640,14 @@ extern "C" {
         size: *mut u64,
         mode: *mut i32,
     ) -> c_int;
-    /// os_isdir wrapper.
-    fn nvim_os_isdir2(name: *const c_char) -> c_int;
+    /// os_isdir: returns true if name is a directory.
+    #[link_name = "os_isdir"]
+    fn nvim_os_isdir2(name: *const c_char) -> bool;
     /// bufIsChanged wrapper.
     fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
-    /// buf_contents_changed wrapper.
-    fn nvim_buf_contents_changed(buf: *mut c_void) -> c_int;
+    /// buf_contents_changed: returns true if buffer contents changed on disk.
+    #[link_name = "buf_contents_changed"]
+    fn nvim_buf_contents_changed(buf: *mut c_void) -> bool;
     /// Sets VV_FCS_REASON to reason string.
     fn nvim_set_vim_var_fcs_reason(reason: *const c_char);
     /// Sets VV_FCS_CHOICE to "".
@@ -661,10 +664,9 @@ extern "C" {
     fn nvim_do_dialog_file_changed(tbuf: *const c_char) -> c_int;
     /// msg_start().
     fn msg_start();
-    /// msg_puts_hl for error highlight.
-    fn nvim_msg_puts_hl_e(s: *const c_char);
-    /// msg_puts_hl for warning highlight.
-    fn nvim_msg_puts_hl_w(s: *const c_char);
+    /// msg_puts_hl(s, hl_id, hist)
+    #[link_name = "msg_puts_hl"]
+    fn nvim_msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
     /// msg_clr_eos().
     fn msg_clr_eos();
     /// msg_end().
@@ -674,15 +676,18 @@ extern "C" {
     static emsg_silent: c_int;
     /// Returns in_assert_fails global.
     static in_assert_fails: bool;
-    /// Returns 1 if UI has messages capability.
-    fn nvim_ui_has_messages() -> c_int;
-    /// os_delay(ms, ignoreinput).
-    fn nvim_os_delay(ms: c_int, ignoreinput: c_int);
+    /// ui_has(extension) -> bool
+    #[link_name = "ui_has"]
+    fn nvim_ui_has(extension: c_int) -> bool;
+    /// os_delay(ms, ignoreinput)
+    #[link_name = "os_delay"]
+    fn nvim_os_delay(ms: u64, ignoreinput: bool);
     /// Sets redraw_cmdline. (defined in window/src/globals.rs, takes bool)
     fn nvim_set_redraw_cmdline(val: bool);
     /// State global.
     static mut State: c_int;
     /// home_replace_save: returns newly allocated string (caller must xfree).
+    #[link_name = "home_replace_save"]
     fn nvim_home_replace_save(buf: *const c_void, fname: *const c_char) -> *mut c_char;
     /// xmalloc.
     fn xmalloc(size: usize) -> *mut c_char;
@@ -692,12 +697,14 @@ extern "C" {
     fn xstrlcat(dst: *mut c_char, src: *const c_char, dstlen: usize) -> usize;
     /// snprintf.
     fn snprintf(buf: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
-    /// buf_reload via nvim_buf_reload wrapper.
+    /// buf_reload (implemented by Rust rs_buf_reload).
+    #[link_name = "buf_reload"]
     fn nvim_buf_reload(buf: *mut c_void, orig_mode: c_int, reload_options: c_int);
     /// u_compute_hash wrapper.
     #[link_name = "u_compute_hash"]
     fn nvim_u_compute_hash(buf: *mut c_void, hash: *mut u8);
-    /// u_write_undo wrapper.
+    /// u_write_undo: write undo file.
+    #[link_name = "u_write_undo"]
     fn nvim_u_write_undo(name: *const c_char, forceit: c_int, buf: *mut c_void, hash: *mut u8);
     /// os_path_exists (from undo.c).
     fn nvim_os_path_exists(path: *const c_char) -> bool;
@@ -767,7 +774,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
     if !br.terminal.is_null()
         || br.b_ffname.is_null()
         || br.ml_mfp.is_null()
-        || nvim_bt_normal(buf) == 0
+        || !nvim_bt_normal(buf)
         || br.b_saving != 0
     {
         return 0;
@@ -844,7 +851,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
 
             let b_fname = bref_void(buf as *const c_void).b_fname;
 
-            if nvim_os_isdir2(b_fname) != 0 {
+            if nvim_os_isdir2(b_fname) {
                 // Don't do anything for a directory.
             } else if (bref_void(buf as *const c_void).b_p_ar >= 0
                 && bref_void(buf as *const c_void).b_p_ar != 0
@@ -861,7 +868,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 } else if nvim_buf_is_changed(buf) != 0 {
                     c"conflict".as_ptr()
                 } else if orig_size != bref_void(buf as *const c_void).b_orig_size
-                    || nvim_buf_contents_changed(buf) != 0
+                    || nvim_buf_contents_changed(buf)
                 {
                     c"changed".as_ptr()
                 } else if orig_mode != bref_void(buf as *const c_void).b_orig_mode {
@@ -991,15 +998,15 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 retval = 2;
             } else if !nvim_get_autocmd_busy() {
                 msg_start();
-                nvim_msg_puts_hl_e(tbuf);
+                nvim_msg_puts_hl(tbuf, 6, true); // HLF_E
                 if *mesg2 != 0 {
-                    nvim_msg_puts_hl_w(mesg2);
+                    nvim_msg_puts_hl(mesg2, 25, true); // HLF_W
                 }
                 msg_clr_eos();
                 nvim_msg_end_wrap();
-                if emsg_silent == 0 && !in_assert_fails && nvim_ui_has_messages() == 0 {
+                if emsg_silent == 0 && !in_assert_fails && !nvim_ui_has(4) {
                     ui_flush();
-                    nvim_os_delay(1004, 1);
+                    nvim_os_delay(1004, true);
                     nvim_set_redraw_cmdline(false);
                 }
                 ALREADY_WARNED.store(true, Ordering::Relaxed);

@@ -11435,6 +11435,7 @@ extern "C" {
     // Buffer functions (use shim names - buflist_findname_exp is a C inline)
     fn rs_buflist_findname_exp(fname: *mut c_char) -> *mut c_void;
     fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
+    #[link_name = "buf_reload"]
     fn nvim_buf_reload(buf: *mut c_void, orig_mode: c_int, reload_options: c_int);
 
     // File I/O (use libc via Rust's libc crate for portability)

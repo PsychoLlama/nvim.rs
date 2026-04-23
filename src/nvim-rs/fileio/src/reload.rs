@@ -40,7 +40,9 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> *mut c_void;
-    fn nvim_wipe_buffer(buf: *mut c_void);
+    /// wipe_buffer(buf, aucmd) - rs_wipe_buffer with explicit aucmd arg
+    #[link_name = "rs_wipe_buffer"]
+    fn nvim_wipe_buffer(buf: *mut c_void, aucmd: bool);
 
     // --- bufref ---
     #[link_name = "set_bufref"]
@@ -56,7 +58,8 @@ extern "C" {
     fn nvim_get_p_ur() -> c_int;
 
     // --- memline ---
-    fn nvim_buf_is_empty(buf: *mut c_void) -> c_int;
+    #[link_name = "rs_buf_is_empty"]
+    fn nvim_buf_is_empty(buf: *mut c_void) -> bool;
     fn nvim_ml_open_buf(buf: *mut c_void) -> c_int;
     #[link_name = "ml_get_buf"]
     fn nvim_ml_get_buf(buf: *mut c_void, lnum: c_int) -> *mut c_char;
@@ -73,12 +76,15 @@ extern "C" {
         flags: c_int,
         silent: c_int,
     ) -> c_int;
-    fn nvim_aborting() -> c_int;
+    #[link_name = "aborting"]
+    fn nvim_aborting() -> bool;
     fn nvim_shortmess_fileinfo() -> c_int;
 
     // --- unchanged / buf_updates ---
-    fn nvim_unchanged(buf: *mut c_void);
-    fn nvim_buf_updates_unload(buf: *mut c_void);
+    #[link_name = "unchanged"]
+    fn nvim_unchanged(buf: *mut c_void, ff: bool, always_inc_changedtick: bool);
+    #[link_name = "buf_updates_unload"]
+    fn nvim_buf_updates_unload(buf: *mut c_void, can_reload: bool);
 
     // --- cursor & view ---
     fn nvim_curwin_set_topline_clamped(topline: c_int);
@@ -103,7 +109,8 @@ extern "C" {
     fn nvim_get_curwin() -> *mut c_void;
 
     // --- do_modelines ---
-    fn nvim_do_modelines();
+    #[link_name = "rs_do_modelines"]
+    fn nvim_do_modelines(flags: c_int);
 
     // --- error messages ---
     fn nvim_semsg_reload_fail(fname: *const c_char);
@@ -229,7 +236,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     let mut bufref: [u64; 2] = [0; 2];
     let bufref_ptr = bufref.as_mut_ptr() as *mut c_void;
 
-    if nvim_buf_is_empty(curbuf) == 0 && saved != FAIL {
+    if !nvim_buf_is_empty(curbuf) && saved != FAIL {
         // Allocate a buffer without putting it in the buffer list.
         savebuf = nvim_buflist_new(std::ptr::null(), std::ptr::null(), 1, BLN_DUMMY);
         if !savebuf.is_null() {
@@ -266,7 +273,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
         let readfile_ok = nvim_readfile_reload(buf, ea, flags, silent);
 
         if readfile_ok != OK {
-            if nvim_aborting() == 0 {
+            if !nvim_aborting() {
                 let b_fname = bref_void(buf as *const c_void).b_fname;
                 nvim_semsg_reload_fail(b_fname);
             }
@@ -274,7 +281,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
                 // Restore old contents: delete what readfile added, then move lines back.
                 loop {
                     let lnum = nvim_get_curbuf_ml_line_count();
-                    if nvim_buf_is_empty(curbuf) != 0 {
+                    if nvim_buf_is_empty(curbuf) {
                         break;
                     }
                     if nvim_ml_delete_in_buf(curbuf, lnum) == FAIL {
@@ -285,13 +292,13 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
             }
         } else if buf == curbuf {
             // Mark as unmodified and manage undo info.
-            nvim_unchanged(buf);
+            nvim_unchanged(buf, true, true);
             if (flags & READ_KEEP_UNDO) == 0 {
                 nvim_u_clearallandblockfree(buf);
             } else {
                 nvim_u_unchanged(curbuf);
             }
-            nvim_buf_updates_unload(curbuf);
+            nvim_buf_updates_unload(curbuf, true);
             buf_mut_void(curbuf).b_mod_set = 1;
         }
     }
@@ -299,7 +306,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     nvim_exarg_free(ea); // frees ea->cmd (from rs_prep_exarg) then ea itself
 
     if !savebuf.is_null() && nvim_bufref_valid(bufref_ptr) != 0 {
-        nvim_wipe_buffer(savebuf);
+        nvim_wipe_buffer(savebuf, false);
     }
 
     // Invalidate diff info.
@@ -334,7 +341,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     }
 
     // Modelines must override settings done by autocommands.
-    nvim_do_modelines();
+    nvim_do_modelines(0);
 
     // Restore curwin/curbuf.
     nvim_aucmd_restbuf_free(aco);

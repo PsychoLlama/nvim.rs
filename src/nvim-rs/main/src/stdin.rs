@@ -48,7 +48,8 @@ unsafe extern "C" {
     fn semsg(fmt: *const c_char, ...);
     fn rs_check_swap_exists_action();
 
-    fn nvim_buf_is_empty(buf: *mut std::ffi::c_void) -> c_int;
+    #[link_name = "rs_buf_is_empty"]
+    fn nvim_buf_is_empty(buf: *mut std::ffi::c_void) -> bool;
     // Returns current curbuf pointer (opaque)
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
     static mut curbuf: *mut std::ffi::c_void;
@@ -95,7 +96,7 @@ pub unsafe extern "C" fn rs_read_stdin() {
         // remember stdin_buf_handle so we can close it if stdin_buf ends up empty
         let stdin_buf_handle = (*stdin_buf.cast::<BufStruct>()).handle;
         let cur = nvim_get_curbuf();
-        let stdin_buf_empty = nvim_buf_is_empty(cur) != 0;
+        let stdin_buf_empty = nvim_buf_is_empty(cur);
 
         // switch back to the original starting buffer
         let mut buf = [0i8; IOSIZE];
@@ -125,7 +126,7 @@ pub unsafe extern "C" fn rs_read_stdin() {
         open_buffer(true, std::ptr::null_mut(), 0);
         // stdin was empty so we should wipe it (e.g. "echo file1 | xargs nvim"). #8561
         let cur = nvim_get_curbuf();
-        if nvim_buf_is_empty(cur) != 0 && !(*cur.cast::<BufStruct>()).b_next.is_null() {
+        if nvim_buf_is_empty(cur) && !(*cur.cast::<BufStruct>()).b_next.is_null() {
             do_cmdline_cmd(c"silent! bnext".as_ptr());
             do_cmdline_cmd(c"silent! bwipeout 1".as_ptr());
         }

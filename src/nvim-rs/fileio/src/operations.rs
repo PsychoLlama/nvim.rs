@@ -1033,7 +1033,8 @@ const MAXPATHL: usize = 4096;
 
 extern "C" {
     /// Check if buftype is "nofile" or similar.
-    fn nvim_bt_nofilename(buf: *mut c_void) -> c_int;
+    #[link_name = "rs_bt_nofilename"]
+    fn nvim_bt_nofilename(buf: *mut c_void) -> bool;
     /// Returns non-zero if the given path looks like a URL.
     fn path_with_url(fname: *const c_char) -> c_int;
     /// Returns non-zero if the path is absolute.
@@ -1072,7 +1073,7 @@ pub unsafe extern "C" fn rs_shorten_buf_fname(
     if b_fname.is_null() {
         return;
     }
-    if unsafe { nvim_bt_nofilename(buf) } != 0 {
+    if unsafe { nvim_bt_nofilename(buf) } {
         return;
     }
     if unsafe { path_with_url(b_fname) } != 0 {

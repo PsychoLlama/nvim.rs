@@ -677,7 +677,7 @@ unsafe extern "C" {
     fn get_expr_line() -> *mut c_char;
     fn xfree(ptr: *mut c_char);
     fn beep_flush();
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn rs_is_literal_register(regname: c_int) -> c_int;
     fn mb_off_next(base: *const c_char, p: *const c_char) -> c_int;
 }
@@ -818,7 +818,7 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
         crate::edit::rs_cmdline_paste(c, literally, false);
 
         // When there was a serious error, abort getting the command line.
-        if aborting() != 0 {
+        if aborting() {
             *gotesc_ptr = true; // will free ccline.cmdbuff after putting it in history
             return GOTO_NORMAL_MODE;
         }
