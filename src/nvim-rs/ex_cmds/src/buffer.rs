@@ -2,7 +2,10 @@
 //!
 //! This module implements Ex commands for buffer management and navigation.
 
-use crate::ExArgHandle;
+use crate::{
+    nvim_exarg_get_addr_count, nvim_exarg_get_arg, nvim_exarg_get_forceit, nvim_exarg_get_line2,
+    ExArgHandle,
+};
 use std::ffi::{c_char, c_int};
 
 // =============================================================================
@@ -380,10 +383,6 @@ extern "C" {
     fn xfree(ptr: *mut std::ffi::c_void);
 
     // ex_file FFI
-    fn nvim_exarg_get_addr_count(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
-    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
     fn shortmess(x: c_int) -> bool;
     fn fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
     fn nvim_excmds_emsg_invarg();

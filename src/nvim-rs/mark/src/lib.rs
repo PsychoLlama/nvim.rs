@@ -250,9 +250,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_mark_win_set_cursor(win: WinHandle, pos: PosT);
 
-    // exarg_T field accessors (from ex_cmds_shim.c)
-    fn nvim_exarg_get_arg(eap: *mut c_void) -> *const c_char;
-    fn nvim_exarg_get_forceit(eap: *mut c_void) -> c_int;
+    // (nvim_exarg_get_arg and nvim_exarg_get_forceit moved to direct ExArg field access)
 
     // Phase 7/8: display accessors (from mark_shim.c)
     fn nvim_mark_get_iobuff() -> *mut c_char;
@@ -5486,8 +5484,9 @@ pub unsafe extern "C" fn exported_free_all_marks() {
 /// `eap` must be a valid exarg_T pointer. `g_curbuf` must be valid.
 #[export_name = "ex_delmarks"]
 pub unsafe extern "C" fn exported_ex_delmarks(eap: *mut c_void) {
-    let arg = nvim_exarg_get_arg(eap);
-    let forceit = nvim_exarg_get_forceit(eap);
+    let ea = &*(eap as *const nvim_ex_cmds_types::ExArg);
+    let arg = ea.arg as *const c_char;
+    let forceit = ea.forceit;
     rs_ex_delmarks(arg, forceit, g_curbuf);
 }
 
@@ -5643,7 +5642,7 @@ unsafe fn show_one_mark(
 /// `eap` must be a valid exarg_T pointer. All globals must be valid.
 #[export_name = "ex_marks"]
 pub unsafe extern "C" fn exported_ex_marks(eap: *mut c_void) {
-    let arg_raw = nvim_exarg_get_arg(eap);
+    let arg_raw = (*(eap as *const nvim_ex_cmds_types::ExArg)).arg as *const c_char;
     let arg: *const c_char = if !arg_raw.is_null() && *arg_raw == 0 {
         std::ptr::null()
     } else {

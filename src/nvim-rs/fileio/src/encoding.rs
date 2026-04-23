@@ -491,10 +491,6 @@ pub unsafe extern "C" fn rs_readfile_charconvert(
 // =============================================================================
 
 extern "C" {
-    /// Get eap->force_enc.
-    fn nvim_exarg_get_force_enc(eap: *const c_void) -> c_int;
-    /// Get eap->cmd (raw pointer; offset by force_enc to get the encoding name).
-    fn nvim_exarg_get_cmd_ptr(eap: *const c_void) -> *const c_char;
     /// Set the local fileencoding option from a string. Wraps set_option_direct.
     fn nvim_set_fileencoding_local(fenc: *const c_char);
 }
@@ -507,19 +503,20 @@ extern "C" {
 /// - `eap` must be a valid non-null pointer to an exarg_T.
 #[export_name = "set_forced_fenc"]
 pub unsafe extern "C" fn rs_set_forced_fenc(eap: *const c_void) {
-    let force_enc = unsafe { nvim_exarg_get_force_enc(eap) };
+    let ea = &*(eap as *const nvim_ex_cmds_types::ExArg);
+    let force_enc = ea.force_enc;
     if force_enc == 0 {
         return;
     }
-    let cmd = unsafe { nvim_exarg_get_cmd_ptr(eap) };
+    let cmd = ea.cmd;
     if cmd.is_null() {
         return;
     }
-    let enc_start = unsafe { cmd.add(force_enc as usize) };
-    let fenc = unsafe { enc_canonize(enc_start) };
+    let enc_start = cmd.add(force_enc as usize);
+    let fenc = enc_canonize(enc_start);
     if !fenc.is_null() {
-        unsafe { nvim_set_fileencoding_local(fenc) };
-        unsafe { xfree(fenc as *mut std::ffi::c_void) };
+        nvim_set_fileencoding_local(fenc);
+        xfree(fenc as *mut std::ffi::c_void);
     }
 }
 

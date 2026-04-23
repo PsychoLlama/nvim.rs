@@ -33,6 +33,12 @@ use nvim_profile::timing::{rs_profile_passed_limit, rs_profile_setlimit};
 use crate::range::LineNr;
 use crate::ExArgHandle;
 use crate::SubIgnoreType;
+// ExArg field accessors (Phase 1: inline Rust, was C shims)
+use crate::{
+    nvim_exarg_get_arg, nvim_exarg_get_cmd, nvim_exarg_get_cmdidx, nvim_exarg_get_line1,
+    nvim_exarg_get_line2, nvim_exarg_get_skip, nvim_exarg_set_flags, nvim_exarg_set_line2,
+    nvim_exarg_set_nextcmd, nvim_excmds_arg_has_valid_delim, nvim_excmds_eap_arg_restore,
+};
 
 // =============================================================================
 // Phase 3: sub_parse_flags migration constants
@@ -129,11 +135,7 @@ extern "C" {
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_get_curbuf() -> *mut crate::BufHandle;
 
-    // sub_joining_lines FFI
-    fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
+    // sub_joining_lines FFI (ExArg accessors moved to crate-level inline Rust)
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     fn do_join(
@@ -1250,19 +1252,15 @@ extern "C" {
         deleted: i64,
     );
     fn line_breakcheck();
-    fn nvim_exarg_set_nextcmd(eap: *mut ExArgHandle, p: *const c_char);
     fn nvim_excmds_msg_empty();
     fn nvim_do_sub_save_pat(pat: *const c_char, patlen: usize, which_pat: c_int);
     fn nvim_do_sub_set_replacement(sub_str: *const c_char);
 }
 
 // Additional C functions used by do_sub
+// (ExArg accessors moved to crate-level inline Rust in lib.rs)
 #[allow(dead_code)]
 extern "C" {
-    fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
-    fn nvim_exarg_get_cmd(eap: *const ExArgHandle) -> *const c_char;
-    fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
-    fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
     fn nvim_curwin_get_cursor_lnum() -> c_int;
     fn semsg(fmt: *const c_char, ...);
     fn rs_hasAnyFolding(win: *mut crate::WinHandle) -> c_int;
@@ -1307,11 +1305,8 @@ extern "C" {
 // Substitute lifecycle (Phase 4 migration)
 // =============================================================================
 
-extern "C" {
-    // ex_substitute_preview accessors
-    fn nvim_excmds_arg_has_valid_delim(eap: *const ExArgHandle) -> c_int;
-    fn nvim_excmds_eap_arg_restore(eap: *mut ExArgHandle, saved: *mut c_char);
-}
+// (nvim_excmds_arg_has_valid_delim and nvim_excmds_eap_arg_restore
+//  moved to crate-level inline Rust in lib.rs)
 
 // =============================================================================
 // old_sub: Rust-owned substitute replacement string state

@@ -6,7 +6,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::{BufHandle, ExArgHandle, WinHandle};
+use crate::{nvim_ecmd_eap_get_do_ecmd_cmd, BufHandle, ExArgHandle, WinHandle};
 
 use libc::atol as c_atol;
 
@@ -250,7 +250,6 @@ extern "C" {
     fn msg_check_for_delay(check_msg_scroll: bool);
     fn msg_start();
     fn fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
-    fn nvim_ecmd_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *const c_char;
     fn do_cmdline(
         cmdline: *mut c_char,
         fgetline: *mut std::ffi::c_void,

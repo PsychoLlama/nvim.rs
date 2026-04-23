@@ -784,20 +784,6 @@ pub unsafe extern "C" fn rs_filemess(buf: *const c_void, name: *const c_char, s:
 // =============================================================================
 
 extern "C" {
-    /// Set eap->cmd (takes ownership of the pointer).
-    fn nvim_exarg_set_cmd(eap: *mut c_void, cmd: *mut c_char);
-    /// Set eap->force_enc.
-    fn nvim_exarg_set_force_enc(eap: *mut c_void, val: c_int);
-    /// Set eap->bad_char.
-    fn nvim_exarg_set_bad_char(eap: *mut c_void, val: c_int);
-    /// Set eap->force_ff.
-    fn nvim_exarg_set_force_ff(eap: *mut c_void, val: c_int);
-    /// Set eap->force_bin.
-    fn nvim_exarg_set_force_bin(eap: *mut c_void, val: c_int);
-    /// Set eap->read_edit.
-    fn nvim_exarg_set_read_edit(eap: *mut c_void, val: c_int);
-    /// Set eap->forceit.
-    fn nvim_exarg_set_forceit(eap: *mut c_void, val: c_int);
     /// Allocate memory (like malloc but abort on OOM).
     fn xmalloc(size: usize) -> *mut c_char;
     /// snprintf: format into buf.
@@ -817,26 +803,27 @@ const FORCE_NOBIN: c_int = 2;
 /// - `buf` must be a valid non-null pointer to a buf_T.
 #[export_name = "prep_exarg"]
 pub unsafe extern "C" fn rs_prep_exarg(eap: *mut c_void, buf: *const c_void) {
-    let fenc = unsafe { bref_void(buf).b_p_fenc };
+    let fenc = bref_void(buf).b_p_fenc;
     // cmd_len = 15 + strlen(buf->b_p_fenc)
     let fenc_len = if fenc.is_null() {
         0
     } else {
-        unsafe { libc::strlen(fenc as *const libc::c_char) }
+        libc::strlen(fenc as *const libc::c_char)
     };
     let cmd_len = 15 + fenc_len;
-    let cmd = unsafe { xmalloc(cmd_len) };
-    unsafe { snprintf(cmd, cmd_len, c"e ++enc=%s".as_ptr(), fenc) };
+    let cmd = xmalloc(cmd_len);
+    snprintf(cmd, cmd_len, c"e ++enc=%s".as_ptr(), fenc);
 
-    unsafe { nvim_exarg_set_cmd(eap, cmd) };
-    unsafe { nvim_exarg_set_force_enc(eap, 8) };
-    unsafe { nvim_exarg_set_bad_char(eap, bref_void(buf).b_bad_char) };
-    unsafe { nvim_exarg_set_force_ff(eap, c_int::from(bref_void(buf).fileformat_char0())) };
-    let bin = unsafe { bref_void(buf).b_p_bin != 0 };
-    let force_bin = if bin { FORCE_BIN } else { FORCE_NOBIN };
-    unsafe { nvim_exarg_set_force_bin(eap, force_bin) };
-    unsafe { nvim_exarg_set_read_edit(eap, 0) };
-    unsafe { nvim_exarg_set_forceit(eap, 0) };
+    // Direct ExArg field access (Phase 1: replaces C shims)
+    let ea = &mut *(eap as *mut nvim_ex_cmds_types::ExArg);
+    ea.cmd = cmd;
+    ea.force_enc = 8;
+    ea.bad_char = bref_void(buf).b_bad_char;
+    ea.force_ff = c_int::from(bref_void(buf).fileformat_char0());
+    let bin = bref_void(buf).b_p_bin != 0;
+    ea.force_bin = if bin { FORCE_BIN } else { FORCE_NOBIN };
+    ea.read_edit = 0;
+    ea.forceit = 0;
 }
 
 // =============================================================================
@@ -867,10 +854,7 @@ extern "C" {
     /// set_options_bin(oldval, newval, opt) -- update binary option.
     #[link_name = "set_options_bin"]
     fn nvim_set_options_bin(oldval: c_int, newval: c_int, opt: c_int);
-    /// Get eap->force_bin.
-    fn nvim_exarg_get_force_bin(eap: *const c_void) -> c_int;
-    /// Get eap->force_ff.
-    fn nvim_exarg_get_force_ff(eap: *const c_void) -> c_int;
+    // (nvim_exarg_get_force_bin/force_ff moved to direct ExArg field access)
     /// apply_autocmds(event, fname, fname_io, force, buf).
     fn apply_autocmds(
         event: c_int,
@@ -919,17 +903,17 @@ pub unsafe extern "C" fn rs_set_file_options(set_options: c_int, eap: *mut c_voi
         let force_ff = if eap.is_null() {
             0
         } else {
-            unsafe { nvim_exarg_get_force_ff(eap) }
+            (*(eap as *const nvim_ex_cmds_types::ExArg)).force_ff
         };
         if force_ff != 0 {
-            let buf = unsafe { nvim_get_curbuf() };
-            let ff = unsafe { nvim_get_fileformat_force(buf, eap) };
-            unsafe { nvim_set_fileformat_local(ff) };
+            let buf = nvim_get_curbuf();
+            let ff = nvim_get_fileformat_force(buf, eap);
+            nvim_set_fileformat_local(ff);
         } else {
-            let p_ffs = unsafe { nvim_get_p_ffs() };
-            if !p_ffs.is_null() && unsafe { *p_ffs } != 0 {
-                let ff = unsafe { rs_default_fileformat() };
-                unsafe { nvim_set_fileformat_local(ff) };
+            let p_ffs = nvim_get_p_ffs();
+            if !p_ffs.is_null() && *p_ffs != 0 {
+                let ff = rs_default_fileformat();
+                nvim_set_fileformat_local(ff);
             }
         }
     }
@@ -937,7 +921,7 @@ pub unsafe extern "C" fn rs_set_file_options(set_options: c_int, eap: *mut c_voi
     let force_bin = if eap.is_null() {
         0
     } else {
-        unsafe { nvim_exarg_get_force_bin(eap) }
+        (*(eap as *const nvim_ex_cmds_types::ExArg)).force_bin
     };
     if force_bin != 0 {
         let buf = unsafe { nvim_get_curbuf() };

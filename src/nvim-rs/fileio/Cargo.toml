@@ -7,6 +7,7 @@ description = "File I/O utilities for Neovim"
 [dependencies]
 nvim-buffer = { path = "../buffer" }
 nvim-window = { path = "../window" }
+nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 bitflags = "2"
 libc = "0.2"
 

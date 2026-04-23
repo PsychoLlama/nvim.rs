@@ -606,9 +606,6 @@ pub unsafe extern "C" fn rs_stropt_get_newval(
 // =============================================================================
 
 extern "C" {
-    fn nvim_exarg_get_cmdidx(eap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_exarg_get_forceit(eap: *mut std::ffi::c_void) -> c_int;
-    fn nvim_exarg_get_arg(eap: *const std::ffi::c_void) -> *const c_char;
     fn nvim_get_cmd_idx_setlocal() -> c_int;
     fn nvim_get_cmd_idx_setglobal() -> c_int;
     /// C `do_set` — parses and executes `:set` arguments.
@@ -628,18 +625,20 @@ const OPT_ONECOLUMN: c_int = 0x20;
 #[export_name = "ex_set"]
 pub unsafe extern "C" fn rs_ex_set(eap: *mut std::ffi::c_void) {
     use crate::setops::{OPT_GLOBAL, OPT_LOCAL};
+    use nvim_ex_cmds_types::ExArg;
 
+    let ea = &*(eap as *const ExArg);
     let mut flags: c_int = 0;
-    let cmdidx = nvim_exarg_get_cmdidx(eap);
+    let cmdidx = ea.cmdidx;
     if cmdidx == nvim_get_cmd_idx_setlocal() {
         flags = OPT_LOCAL;
     } else if cmdidx == nvim_get_cmd_idx_setglobal() {
         flags = OPT_GLOBAL;
     }
-    if nvim_exarg_get_forceit(eap) != 0 {
+    if ea.forceit != 0 {
         flags |= OPT_ONECOLUMN;
     }
-    let arg = nvim_exarg_get_arg(eap.cast_const()).cast_mut();
+    let arg = ea.arg;
     do_set(arg, flags);
 }
 

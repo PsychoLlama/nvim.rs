@@ -26,8 +26,20 @@
 //! between Rust and C code without needing to know their internal layout.
 
 #![allow(unsafe_code)]
+#![allow(clippy::missing_safety_doc)]
 
+use nvim_ex_cmds_types::ExArg;
 use std::ffi::{c_char, c_int, c_uint};
+
+// Helper: cast opaque ExArgHandle pointer to concrete ExArg pointer.
+#[inline]
+unsafe fn eap_as_exarg(eap: *const ExArgHandle) -> *const ExArg {
+    eap.cast::<ExArg>()
+}
+#[inline]
+unsafe fn eap_as_exarg_mut(eap: *mut ExArgHandle) -> *mut ExArg {
+    eap.cast::<ExArg>()
+}
 
 pub mod buffer;
 pub mod display;
@@ -410,23 +422,30 @@ impl BadCharBehavior {
 // C Accessor Function Declarations
 // =============================================================================
 
-extern "C" {
-    // ExArg accessors - these access fields of exarg_T from C
-    /// Get command index from exarg_T
-    pub fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
-    /// Get the argument string from exarg_T
-    pub fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char;
-    /// Get line1 (first line number) from exarg_T
-    pub fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int;
-    /// Get line2 (second line number) from exarg_T
-    pub fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
-    /// Get addr_count (number of addresses given) from exarg_T
-    pub fn nvim_exarg_get_addr_count(eap: *const ExArgHandle) -> c_int;
-    /// Get forceit (! present) from exarg_T
-    pub fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
-    /// Get flags (EXFLAG_*) from exarg_T
-    pub fn nvim_exarg_get_flags(eap: *const ExArgHandle) -> c_int;
+// ExArg field accessors - direct struct field access (Phase 1: replaces C shims)
+pub unsafe fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).cmdidx
+}
+pub unsafe fn nvim_exarg_get_arg(eap: *const ExArgHandle) -> *const c_char {
+    (*eap_as_exarg(eap)).arg
+}
+pub unsafe fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).line1
+}
+pub unsafe fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).line2
+}
+pub unsafe fn nvim_exarg_get_addr_count(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).addr_count
+}
+pub unsafe fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).forceit
+}
+pub unsafe fn nvim_exarg_get_flags(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).flags
+}
 
+extern "C" {
     // Buffer accessors
     /// Get the current buffer
     pub fn nvim_get_curbuf() -> *mut BufHandle;
@@ -857,11 +876,7 @@ extern "C" {
     /// C global in ex_cmds_shim.c: append_indent (autoindent for first appended line)
     pub static mut append_indent: c_int;
 
-    // Exarg mutation
-    /// Set eap->nextcmd.
-    pub fn nvim_exarg_set_nextcmd(eap: *mut ExArgHandle, p: *const c_char);
-    /// Check if eap->nextcmd is NULL.
-    pub fn nvim_exarg_is_nextcmd_null(eap: *mut ExArgHandle) -> c_int;
+    // (ExArg mutation moved to inline Rust below)
 
     // Mark/extmark (direct C functions)
     /// mark_adjust: adjust marks after line changes.
@@ -940,8 +955,7 @@ extern "C" {
     // ex_change accessors and functions
     /// Get curbuf->b_p_ai (autoindent)
     pub fn nvim_curbuf_get_b_p_ai() -> c_int;
-    /// Set eap->line2
-    pub fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
+    // nvim_exarg_set_line2 moved to inline Rust
     /// Call check_cursor_lnum(curwin)
     pub fn nvim_check_cursor_lnum_call();
     /// Get curbuf->b_ml.ml_flags
@@ -958,16 +972,9 @@ extern "C" {
     pub fn nvim_excmds_toggle_b_p_ai();
     /// Get curbuf->b_p_iminsert
     pub fn nvim_excmds_get_b_p_iminsert() -> c_int;
-    /// Check if eap->ea_getline is NULL
-    pub fn nvim_excmds_ea_getline_is_null(eap: *mut ExArgHandle) -> c_int;
-    /// Get eap->cstack->cs_looplevel
+    /// Get eap->cstack->cs_looplevel (cstack_T is complex, keep as C shim)
     pub fn nvim_excmds_get_cstack_looplevel(eap: *mut ExArgHandle) -> c_int;
-    /// Call eap->ea_getline(c, eap->cookie, indent, true)
-    pub fn nvim_excmds_call_getline(eap: *mut ExArgHandle, c: c_int, indent: c_int) -> *mut c_char;
-    /// Get eap->nextcmd pointer
-    pub fn nvim_excmds_get_nextcmd(eap: *mut ExArgHandle) -> *mut c_char;
-    /// Get mutable eap->arg
-    pub fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
+    // (Other ExArg accessors moved to inline Rust)
     /// Mark lines as appended (without mark adjustment)
     pub fn appended_lines(lnum: c_int, count: c_int);
     pub static mut State: c_int;
@@ -979,10 +986,7 @@ extern "C" {
     pub fn xstrdup(s: *const c_char) -> *mut c_char;
 
     // --- sub_joining_lines + sub_grow_buf FFI accessors ---
-    /// Get eap->skip flag.
-    pub fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int;
-    /// Set eap->flags.
-    pub fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int);
+    // (ExArg accessors moved to inline Rust)
     /// do_join: join count lines (direct C call)
     pub fn do_join(
         count: usize,
@@ -1013,6 +1017,169 @@ extern "C" {
         in_map: bool,
         sep: c_int,
     );
+}
+
+// =============================================================================
+// ExArg field accessors (Phase 1: direct struct access, replaces C shims)
+// =============================================================================
+
+/// Set eap->nextcmd.
+pub unsafe fn nvim_exarg_set_nextcmd(eap: *mut ExArgHandle, p: *const c_char) {
+    (*eap_as_exarg_mut(eap)).nextcmd = p as *mut c_char;
+}
+/// Check if eap->nextcmd is NULL.
+pub unsafe fn nvim_exarg_is_nextcmd_null(eap: *mut ExArgHandle) -> c_int {
+    if (*eap_as_exarg(eap)).nextcmd.is_null() {
+        1
+    } else {
+        0
+    }
+}
+/// Set eap->line2.
+pub unsafe fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int) {
+    (*eap_as_exarg_mut(eap)).line2 = line2;
+}
+/// Set eap->line1.
+pub unsafe fn nvim_exarg_set_line1(eap: *mut ExArgHandle, line1: c_int) {
+    (*eap_as_exarg_mut(eap)).line1 = line1;
+}
+/// Get eap->skip flag.
+pub unsafe fn nvim_exarg_get_skip(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).skip
+}
+/// Set eap->flags.
+pub unsafe fn nvim_exarg_set_flags(eap: *mut ExArgHandle, flags: c_int) {
+    (*eap_as_exarg_mut(eap)).flags = flags;
+}
+/// Check eap->cmdidx == CMD_saveas.
+pub unsafe fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int {
+    const CMD_SAVEAS: c_int = 432; // stable value from ex_cmds.lua
+    if (*eap_as_exarg(eap)).cmdidx == CMD_SAVEAS {
+        1
+    } else {
+        0
+    }
+}
+/// Get eap->usefilter.
+pub unsafe fn nvim_exarg_get_usefilter(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).usefilter
+}
+/// Get eap->cmd[1] as unsigned byte.
+pub unsafe fn nvim_exarg_get_cmd_byte1(eap: *const ExArgHandle) -> c_int {
+    let cmd = (*eap_as_exarg(eap)).cmd;
+    if cmd.is_null() {
+        0
+    } else {
+        *cmd.add(1) as u8 as c_int
+    }
+}
+/// Get eap->cmd.
+pub unsafe fn nvim_exarg_get_cmd(eap: *const ExArgHandle) -> *const c_char {
+    (*eap_as_exarg(eap)).cmd
+}
+/// Get eap->nextcmd pointer.
+pub unsafe fn nvim_excmds_get_nextcmd(eap: *mut ExArgHandle) -> *mut c_char {
+    (*eap_as_exarg(eap)).nextcmd
+}
+/// Get mutable eap->arg.
+pub unsafe fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char {
+    (*eap_as_exarg(eap)).arg
+}
+/// Restore eap->arg to saved pointer.
+pub unsafe fn nvim_excmds_eap_arg_restore(eap: *mut ExArgHandle, saved: *mut c_char) {
+    (*eap_as_exarg_mut(eap)).arg = saved;
+}
+/// Check if eap->ea_getline is NULL.
+pub unsafe fn nvim_excmds_ea_getline_is_null(eap: *mut ExArgHandle) -> c_int {
+    if (*eap_as_exarg(eap)).ea_getline.is_none() {
+        1
+    } else {
+        0
+    }
+}
+// nvim_excmds_get_cstack_looplevel is kept as a C shim (cstack_T struct is complex)
+// and declared in the extern block above.
+/// Call eap->ea_getline(c, eap->cookie, indent, true).
+#[no_mangle]
+pub unsafe extern "C" fn nvim_excmds_call_getline(
+    eap: *mut ExArgHandle,
+    c: c_int,
+    indent: c_int,
+) -> *mut c_char {
+    let ea = &*eap_as_exarg(eap);
+    if let Some(f) = ea.ea_getline {
+        f(c, ea.cookie, indent, true)
+    } else {
+        std::ptr::null_mut()
+    }
+}
+/// Check *eap->arg && !ASCII_ISALNUM(*eap->arg).
+pub unsafe fn nvim_excmds_arg_has_valid_delim(eap: *const ExArgHandle) -> c_int {
+    let arg = (*eap_as_exarg(eap)).arg;
+    if arg.is_null() {
+        return 0;
+    }
+    let c = *arg as u8;
+    if c != 0 && !c.is_ascii_alphanumeric() {
+        1
+    } else {
+        0
+    }
+}
+/// Get eap->append.
+pub unsafe fn nvim_excmds_eap_get_append(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).append
+}
+/// Get eap->mkdir_p.
+pub unsafe fn nvim_excmds_eap_get_mkdir_p(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).mkdir_p
+}
+/// Set eap->forceit.
+pub unsafe fn nvim_excmds_set_forceit(eap: *mut ExArgHandle, val: c_int) {
+    (*eap_as_exarg_mut(eap)).forceit = val;
+}
+/// Get eap->force_enc.
+pub unsafe fn nvim_exarg_get_force_enc(eap: *const ExArgHandle) -> c_int {
+    (*eap_as_exarg(eap)).force_enc
+}
+/// Get eap->cmd (ptr).
+pub unsafe fn nvim_exarg_get_cmd_ptr(eap: *const ExArgHandle) -> *const c_char {
+    (*eap_as_exarg(eap)).cmd
+}
+/// Set eap->cmd.
+pub unsafe fn nvim_exarg_set_cmd(eap: *mut ExArgHandle, cmd: *mut c_char) {
+    (*eap_as_exarg_mut(eap)).cmd = cmd;
+}
+/// Set eap->force_enc.
+pub unsafe fn nvim_exarg_set_force_enc(eap: *mut ExArgHandle, val: c_int) {
+    (*eap_as_exarg_mut(eap)).force_enc = val;
+}
+/// Set eap->bad_char.
+pub unsafe fn nvim_exarg_set_bad_char(eap: *mut ExArgHandle, val: c_int) {
+    (*eap_as_exarg_mut(eap)).bad_char = val;
+}
+/// Set eap->force_ff.
+pub unsafe fn nvim_exarg_set_force_ff(eap: *mut ExArgHandle, val: c_int) {
+    (*eap_as_exarg_mut(eap)).force_ff = val;
+}
+/// Set eap->force_bin.
+pub unsafe fn nvim_exarg_set_force_bin(eap: *mut ExArgHandle, val: c_int) {
+    (*eap_as_exarg_mut(eap)).force_bin = val;
+}
+/// Set eap->read_edit.
+pub unsafe fn nvim_exarg_set_read_edit(eap: *mut ExArgHandle, val: c_int) {
+    (*eap_as_exarg_mut(eap)).read_edit = val;
+}
+/// Set eap->forceit (alias).
+pub unsafe fn nvim_exarg_set_forceit(eap: *mut ExArgHandle, val: c_int) {
+    (*eap_as_exarg_mut(eap)).forceit = val;
+}
+/// Get eap->do_ecmd_cmd (or NULL if eap is null).
+pub unsafe fn nvim_ecmd_eap_get_do_ecmd_cmd(eap: *mut ExArgHandle) -> *const c_char {
+    if eap.is_null() {
+        return std::ptr::null();
+    }
+    (*eap_as_exarg(eap)).do_ecmd_cmd
 }
 
 // =============================================================================

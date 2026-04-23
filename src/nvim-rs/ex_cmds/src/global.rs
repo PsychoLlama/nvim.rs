@@ -22,6 +22,11 @@ use std::ffi::{c_char, c_int};
 
 use crate::range::{LineNr, LineRange};
 use crate::ExArgHandle;
+// Phase 1: ExArg field accessors
+use crate::{
+    nvim_exarg_get_cmd, nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2,
+    nvim_excmds_get_arg_mut,
+};
 
 extern crate libc;
 
@@ -40,12 +45,7 @@ extern "C" {
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
     fn msgmore(n: c_int);
 
-    // ex_global FFI
-    fn nvim_exarg_get_cmd(eap: *const ExArgHandle) -> *const c_char;
-    fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
-    fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
+    // ex_global FFI (ExArg accessors moved to crate inline Rust)
     fn nvim_excmds_search_regcomp_multi(
         pat: *const c_char,
         patlen: usize,

@@ -24,6 +24,13 @@ use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
 use crate::range::{LineNr, LineRange};
 use crate::{BufHandle, ExArgHandle, WinHandle};
+// Phase 1: ExArg field accessors (inline Rust in lib.rs)
+use crate::{
+    nvim_exarg_cmdidx_is_saveas, nvim_exarg_get_cmd_byte1, nvim_exarg_get_cmdidx,
+    nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_get_usefilter,
+    nvim_exarg_set_line1, nvim_exarg_set_line2, nvim_excmds_eap_get_append,
+    nvim_excmds_eap_get_mkdir_p, nvim_excmds_get_arg_mut, nvim_excmds_set_forceit,
+};
 
 /// Result of a write operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -257,7 +264,6 @@ pub extern "C" fn rs_should_write_update(is_modified: c_int) -> c_int {
 
 extern "C" {
     fn os_nodetype(fname: *const c_char) -> c_int;
-    fn nvim_excmds_eap_get_mkdir_p(eap: *const ExArgHandle) -> c_int;
     fn os_file_mkdir(fname: *const c_char, mode: c_int) -> c_int;
     fn nvim_excmds_buf_get_b_p_ro(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_buf_get_b_fname(buf: *const BufHandle) -> *const c_char;
@@ -267,8 +273,6 @@ extern "C" {
     fn nvim_excmds_vim_dialog_yesno_question(msg: *const c_char) -> c_int;
     fn nvim_excmds_dialog_msg_readonly(fmt_id: c_int, arg: *const c_char) -> *mut c_char;
     fn nvim_excmds_error_msg(error_id: c_int, arg: *const c_char);
-    fn nvim_excmds_set_forceit(eap: *mut ExArgHandle, val: c_int);
-    fn nvim_exarg_get_forceit(eap: *const ExArgHandle) -> c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
 }
 
@@ -622,7 +626,7 @@ extern "C" {
     fn nvim_excmds_bufref_valid(refp: *mut std::ffi::c_void) -> c_int;
 
     fn buf_write_all(buf: *mut BufHandle, forceit: bool) -> c_int;
-    fn nvim_exarg_get_cmdidx(eap: *mut ExArgHandle) -> c_int;
+    // nvim_exarg_get_cmdidx moved to crate inline Rust
 }
 
 /// Implement `:wall`, `:wqall`, `:xall`. Replaces C `do_wqall`.
@@ -815,9 +819,6 @@ pub unsafe extern "C" fn rs_check_overwrite(
 // =============================================================================
 
 extern "C" {
-    fn nvim_excmds_get_arg_mut(eap: *mut ExArgHandle) -> *mut c_char;
-    fn nvim_excmds_eap_get_append(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_line1(eap: *const ExArgHandle) -> c_int;
     fn fix_fname(ffname: *const c_char) -> *mut c_char;
     fn otherfile(ffname: *const c_char) -> c_int;
     fn nvim_excmds_vim_strchr_cpo_altwrite() -> c_int;
@@ -848,7 +849,7 @@ extern "C" {
     ) -> c_int;
     fn nvim_excmds_saveas_post_success();
     fn do_autochdir();
-    fn nvim_exarg_cmdidx_is_saveas(eap: *const ExArgHandle) -> c_int;
+    // nvim_exarg_cmdidx_is_saveas moved to crate inline Rust
 
     // rs_do_saveas_swap support
     fn apply_autocmds(
@@ -1109,13 +1110,9 @@ extern "C" {
     fn nvim_excmds_curbuf_ffname_not_null() -> c_int;
     fn nvim_excmds_os_path_exists_curbuf_ffname() -> c_int;
 
-    fn nvim_exarg_get_usefilter(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_set_line1(eap: *mut ExArgHandle, line1: c_int);
-    fn nvim_exarg_set_line2(eap: *mut ExArgHandle, line2: c_int);
+    // ExArg accessors moved to crate inline Rust
     fn nvim_curbuf_get_b_ml_ml_line_count() -> c_int;
     fn nvim_excmds_curwin_get_w_arg_idx() -> c_int;
-    fn nvim_exarg_get_cmd_byte1(eap: *const ExArgHandle) -> c_int;
-    fn nvim_exarg_get_line2(eap: *const ExArgHandle) -> c_int;
     fn do_argfile(eap: *mut ExArgHandle, i: c_int);
 }
 

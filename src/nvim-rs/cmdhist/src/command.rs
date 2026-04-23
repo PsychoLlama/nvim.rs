@@ -39,7 +39,7 @@ extern "C" {
     fn nvim_cmdhist_msg_history_zero();
 
     // -- Exarg/expand accessors (ex_cmds_shim.c) --
-    fn nvim_cmdhist_eap_get_arg(eap: ExargPtr) -> *mut c_char;
+    // nvim_cmdhist_eap_get_arg is replaced by direct ExArg field access (Phase 1)
     fn nvim_cmdhist_xp_buf_set(xp: ExpandPtr, idx: c_int, c: c_char);
     fn nvim_cmdhist_xp_buf_ptr(xp: ExpandPtr) -> *mut c_char;
 }
@@ -100,7 +100,7 @@ pub unsafe extern "C" fn rs_ex_history(eap: ExargPtr) {
     let mut hisidx1: c_int = 1;
     let mut hisidx2: c_int = -1;
 
-    let arg = nvim_cmdhist_eap_get_arg(eap);
+    let arg = (*(eap as *const nvim_ex_cmds_types::ExArg)).arg;
     let mut end = arg;
 
     // Parse history type if not starting with digit, '-', or ','

@@ -8,6 +8,7 @@ description = "Ex command implementations for Neovim"
 bitflags = "2"
 libc = "0.2"
 nvim-profile = { path = "../profile" }
+nvim-ex-cmds-types = { path = "../ex_cmds_types" }
 
 [lib]
 crate-type = ["rlib"]
