@@ -65,7 +65,6 @@ extern "C" {
     fn checkpcmark();
     fn xfree(ptr: *mut std::ffi::c_void);
     fn nvim_curwin_get_p_scb() -> bool;
-    fn nvim_curwin_get_p_crb() -> bool;
     fn nvim_validate_cursor_curwin_wrapper();
     fn do_check_scrollbind(flag: bool);
     fn do_check_cursorbind();
@@ -172,7 +171,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         do_check_scrollbind(true);
     }
 
-    if nvim_curwin_get_p_crb() && (*sp).toplevel {
+    if (super::win_ref(nvim_get_curwin()).w_p_crb() != 0) && (*sp).toplevel {
         nvim_validate_cursor_curwin_wrapper();
         do_check_cursorbind();
     }

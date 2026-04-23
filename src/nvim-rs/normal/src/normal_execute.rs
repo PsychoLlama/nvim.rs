@@ -70,10 +70,10 @@ extern "C" {
     fn nvim_get_vgetc_char() -> c_int;
     static vgetc_mod_mask: c_int;
     static km_startsel: bool;
-    fn nvim_get_curwin_w_p_rl() -> bool;
     fn nvim_get_curswant() -> c_int;
     fn nvim_get_cursor_lnum() -> i32;
     fn nvim_get_cursor_col() -> c_int;
+    fn nvim_get_curwin() -> crate::WinHandle;
     static mut msg_nowait: bool;
     static mut msg_didout: bool;
     static mut msg_col: c_int;
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
             break 'finish;
         }
 
-        if nvim_get_curwin_w_p_rl()
+        if (super::win_ref(nvim_get_curwin()).w_p_rl() != 0)
             && KeyTyped
             && KeyStuffed == 0
             && (crate::dispatch::table::rs_table_get_cmd_flags((*sp).idx) & NV_RL != 0)

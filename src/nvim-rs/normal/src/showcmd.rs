@@ -126,7 +126,6 @@ extern "C" {
     // Phase 2: display_showcmd accessors
     static p_sloc: *const std::ffi::c_char;
     fn nvim_get_curwin() -> crate::WinHandle;
-    fn nvim_showcmd_set_w_redr_status();
     fn win_redr_status(wp: crate::WinHandle);
     fn setcursor();
     static mut redraw_tabline: bool;
@@ -513,7 +512,7 @@ pub unsafe extern "C" fn rs_display_showcmd() {
     if sloc == c_int::from(b's') {
         // showcmdloc=statusline
         if is_clear {
-            nvim_showcmd_set_w_redr_status();
+            super::win_mut(super::nvim_get_curwin()).w_redr_status = true;
         } else {
             win_redr_status(nvim_get_curwin());
             setcursor();

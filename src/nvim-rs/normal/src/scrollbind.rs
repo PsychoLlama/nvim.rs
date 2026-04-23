@@ -23,10 +23,6 @@ extern "C" {
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_curwin_buf_eq(buf: BufHandle) -> bool;
-    fn nvim_curwin_get_w_p_diff() -> bool;
-    fn nvim_get_curwin_w_leftcol() -> c_int;
-    fn nvim_curwin_get_w_scbind_pos() -> c_int;
-    fn nvim_curwin_set_w_scbind_pos(val: c_int);
     static p_sbo: *const std::ffi::c_char;
     fn vim_strchr(s: *const std::ffi::c_char, c: c_int) -> *mut std::ffi::c_char;
     fn nvim_scrollbind_sync_windows(
@@ -61,26 +57,30 @@ pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
             did_syncbind = false;
         } else if nvim_get_curwin() == old_curwin {
             // Same window: sync if buffer or diff matches and position changed.
-            if (nvim_curwin_buf_eq(old_buf) || nvim_curwin_get_w_p_diff())
-                && (vtopline != old_vtopline || nvim_get_curwin_w_leftcol() != old_leftcol)
+            if (nvim_curwin_buf_eq(old_buf) || (super::win_ref(nvim_get_curwin()).w_p_diff() != 0))
+                && (vtopline != old_vtopline
+                    || (super::win_ref(nvim_get_curwin()).w_leftcol as c_int) != old_leftcol)
             {
                 rs_check_scrollbind(
                     vtopline - old_vtopline,
-                    nvim_get_curwin_w_leftcol() - old_leftcol,
+                    (super::win_ref(nvim_get_curwin()).w_leftcol as c_int) - old_leftcol,
                 );
             }
         } else if !vim_strchr(p_sbo, 'j' as c_int).is_null() {
             // Window switch: resync relative position if 'j' flag set in 'scrollopt'.
-            rs_check_scrollbind(vtopline - nvim_curwin_get_w_scbind_pos(), 0);
+            rs_check_scrollbind(vtopline - super::win_ref(nvim_get_curwin()).w_scbind_pos, 0);
         }
-        nvim_curwin_set_w_scbind_pos(vtopline);
+        super::win_mut(nvim_get_curwin()).w_scbind_pos = vtopline;
     }
 
     // Update static state.
     OLD_CURWIN.store(nvim_get_curwin() as usize, Ordering::Relaxed);
     OLD_VTOPLINE.store(vtopline, Ordering::Relaxed);
     OLD_BUF.store(nvim_get_curbuf() as usize, Ordering::Relaxed);
-    OLD_LEFTCOL.store(nvim_get_curwin_w_leftcol(), Ordering::Relaxed);
+    OLD_LEFTCOL.store(
+        super::win_ref(nvim_get_curwin()).w_leftcol as c_int,
+        Ordering::Relaxed,
+    );
 }
 
 /// Synchronize scroll-bound windows based on scroll delta.
@@ -93,10 +93,10 @@ pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
 #[export_name = "check_scrollbind"]
 pub unsafe extern "C" fn rs_check_scrollbind(vtopline_diff: c_int, leftcol_diff: c_int) {
     let old_curwin = nvim_get_curwin();
-    let tgt_leftcol = nvim_get_curwin_w_leftcol();
+    let tgt_leftcol = super::win_ref(nvim_get_curwin()).w_leftcol as c_int;
 
     // Check 'scrollopt' for vertical and horizontal scroll flags.
-    let want_ver = nvim_curwin_get_w_p_diff()
+    let want_ver = (super::win_ref(nvim_get_curwin()).w_p_diff() != 0)
         || (!vim_strchr(p_sbo, c_int::from(b'v')).is_null() && vtopline_diff != 0);
     let want_hor = !vim_strchr(p_sbo, c_int::from(b'h')).is_null()
         && (leftcol_diff != 0 || vtopline_diff != 0);

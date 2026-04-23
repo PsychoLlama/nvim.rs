@@ -29,6 +29,7 @@ extern "C" {
     static mut State: c_int;
     static must_redraw: c_int;
     static redraw_mode: c_int;
+    fn time(t: *mut i64) -> i64;
 }
 
 // =============================================================================
@@ -128,7 +129,6 @@ extern "C" {
     fn show_cursor_info_later(full: bool);
     fn update_screen();
     fn redraw_statuslines();
-    fn nvim_curbuf_set_b_last_used();
     fn shortmess(x: c_int) -> bool;
     fn fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
     fn may_clear_sb_text();
@@ -326,7 +326,8 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
         }
     }
 
-    nvim_curbuf_set_b_last_used();
+    nvim_buffer::buf_struct::buf_mut(nvim_buffer::BufHandle::from_ptr(curbuf.cast())).b_last_used =
+        time(std::ptr::null_mut());
 
     // Display message after redraw.
     if !keep_msg.is_null() {
