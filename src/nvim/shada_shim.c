@@ -185,12 +185,12 @@ void *nvim_hmll_map_get(PMap(cstr_t) *map, const char *key) { return (map && key
 void nvim_hmll_map_put(PMap(cstr_t) *map, const char *key, void *entry)
 { if (!map || !key) { return; } bool new_item = false; ptr_t *val = pmap_put_ref(cstr_t)(map, key, NULL, &new_item); if (val) { *val = entry; } }
 void nvim_hmll_map_del(PMap(cstr_t) *map, const char *key) { if (map && key) { pmap_del(cstr_t)(map, key, NULL); } }
-int64_t nvim_get_p_hi(void) { return p_hi; }
-const char *nvim_get_p_shadafile(void) { return p_shadafile; }
+// Deleted: nvim_get_p_hi -- Rust uses extern static p_hi directly
+// Deleted: nvim_get_p_shadafile -- Rust uses extern static p_shadafile directly
 size_t nvim_expand_env(const char *src, char *dst, size_t dstlen)
 { if (!src || !dst || dstlen == 0) { return 0; } expand_env((char *)src, dst, (int)dstlen); return strlen(dst); }
 char *nvim_xmemdupz(const char *s, size_t len) { return xmemdupz(s, len); }
-char *nvim_shada_get_namebuff(void) { return NameBuff; }
+// Deleted: nvim_shada_get_namebuff -- Rust uses extern static NameBuff directly
 const void *nvim_shada_buf_next(const void *buf) { return buf ? ((const buf_T *)buf)->b_next : NULL; }
 const char *nvim_shada_buf_get_ffname(const void *buf) { return buf ? ((const buf_T *)buf)->b_ffname : NULL; }
 int nvim_shada_buf_should_skip(const void *buf) { const buf_T *b = (const buf_T *)buf; return (!b || !b->b_p_bl || bt_quickfix(b) || bt_terminal(b)) ? 1 : 0; }
@@ -236,9 +236,10 @@ void nvim_shada_smsg_reading(const char *fname, int want_info, int want_marks,
 { smsg(0, _("Reading ShaDa file \"%s\"%s%s%s%s"), fname,
        want_info ? _(" info") : "", want_marks ? _(" marks") : "",
        get_oldfiles ? _(" oldfiles") : "", failed ? _(" FAILED") : ""); }
-char *nvim_shada_build_default_path(void)
-{ char *shada_dir = stdpaths_user_state_subpath("shada", 0, false); return concat_fnames_realloc(shada_dir, "main.shada", true); }
-size_t nvim_shada_file_descriptor_size(void) { return sizeof(FileDescriptor); }
+// Deleted: nvim_shada_build_default_path -- Rust calls stdpaths_user_state_subpath+concat_fnames_realloc directly
+// Deleted: nvim_shada_file_descriptor_size -- Rust uses FILE_DESCRIPTOR_SIZE = 48 constant (verified by _Static_assert below)
+_Static_assert(sizeof(FileDescriptor) == 48, "FileDescriptor size changed; update FILE_DESCRIPTOR_SIZE in shada/src/lib.rs");
+_Static_assert(offsetof(FileDescriptor, bytes_read) == 40, "FileDescriptor.bytes_read offset changed; update FILE_DESCRIPTOR_BYTES_READ_OFFSET in shada/src/lib.rs");
 int nvim_shada_curbuf_marks_read(void) { return curbuf->b_marks_read; }
 void nvim_shada_curbuf_set_marks_read(int val) { curbuf->b_marks_read = val; }
 const char *nvim_shada_curbuf_ffname(void) { return curbuf->b_ffname; }
@@ -479,7 +480,7 @@ void nvim_shada_fm_xfree_fname(ShadaEntry *entry) { xfree(entry->data.filemark.f
 int nvim_shada_buf_get_fnum(const void *buf_handle) { return ((const buf_T *)buf_handle)->b_fnum; }
 int nvim_shada_jumplist_marklist_insert(int i) { return rs_marklist_insert(curwin->w_jumplist, sizeof(*curwin->w_jumplist), curwin->w_jumplistlen, i); }
 int nvim_shada_changelist_marklist_insert(void *buf_handle, int i) { buf_T *buf = (buf_T *)buf_handle; return rs_marklist_insert(buf->b_changelist, sizeof(*buf->b_changelist), buf->b_changelistlen, i); }
-char *nvim_shada_file_try_read_buffered(void *fd, size_t len) { return file_try_read_buffered((FileDescriptor *)fd, len); }
-uint64_t nvim_shada_file_bytes_read(void *fd) { return (uint64_t)((FileDescriptor *)fd)->bytes_read; }
+// Deleted: nvim_shada_file_try_read_buffered -- Rust uses #[link_name = "file_try_read_buffered"] directly
+// Deleted: nvim_shada_file_bytes_read -- Rust reads FileDescriptor.bytes_read at offset 40 directly
 void nvim_shada_semsg_u64(const char *fmt, uint64_t val) { semsg(fmt, (unsigned long long)val); }
 void nvim_shada_semsg_2s_u64(const char *fmt, const char *a, uint64_t val, const char *b) { semsg(fmt, a, (unsigned long long)val, b); }

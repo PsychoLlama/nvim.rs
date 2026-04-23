@@ -289,6 +289,33 @@ impl FileDescriptorHandle {
     }
 }
 
+/// Size of FileDescriptor C struct (verified by _Static_assert in shada_shim.c).
+///
+/// Layout (64-bit): int fd(4)+pad(4)+char*buffer(8)+char*read_pos(8)+char*write_pos(8)+
+/// bool wr(1)+bool eof(1)+bool non_blocking(1)+pad(5)+uint64_t bytes_read(8) = 48
+const FILE_DESCRIPTOR_SIZE: usize = 48;
+
+/// Byte offset of the `bytes_read` field in FileDescriptor (verified layout).
+const FILE_DESCRIPTOR_BYTES_READ_OFFSET: usize = 40;
+
+/// Read the `bytes_read` field from a FileDescriptor pointer.
+///
+/// # Safety
+/// `fd` must be a valid, aligned FileDescriptor pointer.
+const unsafe fn file_descriptor_bytes_read(fd: *mut c_void) -> u64 {
+    let byte_ptr = fd.cast::<u8>().add(FILE_DESCRIPTOR_BYTES_READ_OFFSET);
+    // SAFETY: FileDescriptor.bytes_read is at offset 40 (verified by _Static_assert in shada_shim.c).
+    // read_unaligned handles any alignment issues.
+    #[allow(clippy::cast_ptr_alignment)]
+    byte_ptr.cast::<u64>().read_unaligned()
+}
+
+extern "C" {
+    /// Read buffered bytes from a FileDescriptor (zero-copy if data is in buffer).
+    #[link_name = "file_try_read_buffered"]
+    fn nvim_shada_file_try_read_buffered(fd: *mut c_void, len: usize) -> *mut c_char;
+}
+
 /// Opaque handle to PackerBuffer for msgpack packing.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug)]
@@ -390,8 +417,8 @@ extern "C" {
     #[link_name = "xstrdup"]
     fn nvim_xstrdup(s: *const c_char) -> *mut c_char;
 
-    // Option access
-    fn nvim_get_p_hi() -> i64;
+    // Option access (p_hi was nvim_get_p_hi wrapper in shada_shim.c, now extern static)
+    static p_hi: i64;
     fn nvim_get_p_fs() -> bool;
 
     // Error messages
@@ -416,7 +443,8 @@ extern "C" {
         sep_chars: *const c_char,
     ) -> usize;
     fn mb_strnicmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
-    fn nvim_shada_get_namebuff() -> *mut c_char;
+    // NameBuff was nvim_shada_get_namebuff wrapper in shada_shim.c, now extern static
+    static mut NameBuff: [c_char; 4096];
     static firstbuf: *const c_void;
     fn nvim_shada_buf_next(buf: *const c_void) -> *const c_void;
     fn nvim_shada_buf_get_ffname(buf: *const c_void) -> *const c_char;
@@ -509,10 +537,23 @@ extern "C" {
         get_oldfiles: c_int,
         failed: c_int,
     );
-    fn nvim_shada_build_default_path() -> *mut c_char;
+    // nvim_shada_build_default_path removed: see rs_shada_build_default_path below.
     // nvim_shada_semsg_close_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_1s.
     // nvim_shada_semsg_open_error removed (plan 9106c29c Phase 1): use nvim_shada_semsg_2s.
-    fn nvim_shada_file_descriptor_size() -> usize;
+    // nvim_shada_file_descriptor_size removed: FILE_DESCRIPTOR_SIZE constant below.
+    // Two C functions used by rs_shada_build_default_path:
+    #[link_name = "stdpaths_user_state_subpath"]
+    fn nvim_stdpaths_user_state_subpath(
+        fname: *const c_char,
+        trailing_pathseps: c_int,
+        force_expansion: bool,
+    ) -> *mut c_char;
+    #[link_name = "concat_fnames_realloc"]
+    fn nvim_concat_fnames_realloc(
+        fname1: *mut c_char,
+        fname2: *const c_char,
+        sep: bool,
+    ) -> *mut c_char;
 
     // Phase 6: curbuf accessors for check_marks_read
     fn nvim_shada_curbuf_marks_read() -> c_int;
@@ -652,8 +693,8 @@ extern "C" {
         out_hisnum: *mut *mut c_int,
     ) -> *mut c_void;
     // Phase 2 (plan 92c8078e): compound parsing accessors for rs_shada_read_next_item
-    fn nvim_shada_file_try_read_buffered(fd: *mut c_void, len: usize) -> *mut c_char;
-    fn nvim_shada_file_bytes_read(fd: *mut c_void) -> u64;
+    // nvim_shada_file_try_read_buffered replaced by #[link_name] below.
+    // nvim_shada_file_bytes_read replaced by direct struct field access below.
     // nvim_shada_semsg_rcerr_too_long removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
     // nvim_shada_semsg_rcerr_missing removed (plan 9106c29c Phase 1): use nvim_shada_semsg_u64.
 }
@@ -2107,7 +2148,7 @@ pub unsafe fn compute_srni_flags(
     let mut srni_flags: u32 = 0;
     if (flags & SHADA_WANT_INFO) != 0 {
         srni_flags |= SD_READ_UNDISABLEABLE_DATA | SD_READ_REGISTERS | SD_READ_GLOBAL_MARKS;
-        if nvim_get_p_hi() > 0 {
+        if p_hi > 0 {
             srni_flags |= SD_READ_HISTORY;
         }
         if !find_shada_parameter_impl(c_int::from(b'!')).is_null() {
@@ -2141,7 +2182,7 @@ pub unsafe extern "C" fn rs_shada_build_read_flags(flags: c_int, local_marks_par
         srni_flags |= SD_READ_GLOBAL_MARKS;
 
         // Check p_hi (history option)
-        if nvim_get_p_hi() > 0 {
+        if p_hi > 0 {
             srni_flags |= SD_READ_HISTORY;
         }
 
@@ -4018,8 +4059,8 @@ pub unsafe extern "C" fn rs_hms_to_he_array(
 
 // C accessor functions for high-level API
 extern "C" {
-    /// Get current p_shadafile option.
-    fn nvim_get_p_shadafile() -> *const c_char;
+    // p_shadafile was nvim_get_p_shadafile wrapper in shada_shim.c, now extern static
+    static p_shadafile: *const c_char;
     /// Expand environment variables in path.
     fn nvim_expand_env(src: *const c_char, dst: *mut c_char, dstlen: usize) -> usize;
     /// Duplicate string with length and allocation.
@@ -4046,7 +4087,6 @@ const MAXPATHL: usize = 4096;
 pub unsafe extern "C" fn rs_shada_filename(file: *const c_char) -> *mut c_char {
     let file = if file.is_null() || *file == 0 {
         // No file provided, check options
-        let p_shadafile = nvim_get_p_shadafile();
         if !p_shadafile.is_null() && *p_shadafile != 0 {
             // Check if writing to ShaDa file was disabled ("-i NONE" or "--clean")
             let none_str = c"NONE".as_ptr();
@@ -4076,6 +4116,16 @@ pub unsafe extern "C" fn rs_shada_filename(file: *const c_char) -> *mut c_char {
     nvim_xstrdup(file)
 }
 
+/// Build the default ShaDa file path: `<user_state_dir>/shada/main.shada`.
+/// Replaces the C wrapper nvim_shada_build_default_path in shada_shim.c.
+///
+/// # Safety
+/// Calls C stdpaths_user_state_subpath and concat_fnames_realloc.
+unsafe fn rs_shada_build_default_path() -> *mut c_char {
+    let shada_dir = nvim_stdpaths_user_state_subpath(c"shada".as_ptr(), 0, false);
+    nvim_concat_fnames_realloc(shada_dir, c"main.shada".as_ptr(), true)
+}
+
 /// Get the default ShaDa file path.
 ///
 /// Returns a cached path on subsequent calls. The path is built as
@@ -4088,7 +4138,7 @@ pub unsafe extern "C" fn rs_shada_filename(file: *const c_char) -> *mut c_char {
 pub unsafe extern "C" fn rs_shada_get_default_file() -> *const c_char {
     static mut DEFAULT_SHADA_FILE: *mut c_char = std::ptr::null_mut();
     if DEFAULT_SHADA_FILE.is_null() {
-        DEFAULT_SHADA_FILE = nvim_shada_build_default_path();
+        DEFAULT_SHADA_FILE = rs_shada_build_default_path();
     }
     DEFAULT_SHADA_FILE
 }
@@ -4172,7 +4222,7 @@ pub unsafe extern "C" fn rs_shada_read_file(file: *const c_char, flags: c_int) -
     }
 
     // Allocate a FileDescriptor on the heap (opaque C struct)
-    let fd_size = nvim_shada_file_descriptor_size();
+    let fd_size = FILE_DESCRIPTOR_SIZE;
     let sd_reader = nvim_xcalloc(1, fd_size);
     let fd = FileDescriptorHandle::from_ptr(sd_reader);
 
@@ -4695,7 +4745,7 @@ pub unsafe extern "C" fn rs_shada_write(sd_writer: *mut c_void, sd_reader: *mut 
         let hist_char = rs_shada_hist_type2char(i as c_int);
         let mut num_saved = rs_get_shada_parameter(hist_char);
         if num_saved == -1 {
-            num_saved = nvim_get_p_hi() as c_int;
+            num_saved = p_hi as c_int;
         }
         if num_saved > 0 {
             dump_history = true;
@@ -5272,7 +5322,7 @@ pub unsafe extern "C" fn rs_shada_write_file(file: *const c_char, nomerge: bool)
     }
 
     // Allocate FileDescriptor structs on the heap (opaque C structs)
-    let fd_size = nvim_shada_file_descriptor_size();
+    let fd_size = FILE_DESCRIPTOR_SIZE;
     let sd_writer_mem = nvim_xcalloc(1, fd_size);
     let sd_reader_mem = nvim_xcalloc(1, fd_size);
 
@@ -6158,7 +6208,7 @@ unsafe fn rs_shada_read_next_item(
         let mut timestamp_u64: u64 = 0;
         let mut length_u64: u64 = 0;
 
-        let initial_fpos = nvim_shada_file_bytes_read(sd_reader);
+        let initial_fpos = file_descriptor_bytes_read(sd_reader);
 
         // Read type / timestamp / length
         let mru_ret = rs_msgpack_read_uint64(fd, true, &raw mut type_u64);
@@ -6213,7 +6263,7 @@ unsafe fn rs_shada_read_next_item(
             }
         }
 
-        let parse_pos = nvim_shada_file_bytes_read(sd_reader);
+        let parse_pos = file_descriptor_bytes_read(sd_reader);
 
         // Try zero-alloc read from internal buffer, else malloc+read
         let buf_from_file = nvim_shada_file_try_read_buffered(sd_reader, length);
@@ -6401,9 +6451,9 @@ pub unsafe extern "C" fn rs_shada_read(sd_reader: *mut c_void, flags: c_int) {
     let mut hms: [HistoryMergerState; HIST_COUNT] =
         std::array::from_fn(|_| HistoryMergerState::default());
     if need_history {
-        let p_hi = nvim_get_p_hi();
+        let hist_limit = p_hi;
         for (i, hms_slot) in hms.iter_mut().enumerate() {
-            rs_hms_init(hms_slot, i as u8, p_hi as usize, true, true);
+            rs_hms_init(hms_slot, i as u8, hist_limit as usize, true, true);
         }
     }
 
@@ -6850,7 +6900,7 @@ pub unsafe extern "C" fn rs_shada_read_string(string: NvimString, flags: c_int) 
     if string.data.is_null() || string.size == 0 {
         return;
     }
-    let fd_size = nvim_shada_file_descriptor_size();
+    let fd_size = FILE_DESCRIPTOR_SIZE;
     let sd_reader = nvim_xcalloc(1, fd_size);
     let fd = FileDescriptorHandle::from_ptr(sd_reader);
     file_open_buffer(fd, string.data, string.size);
@@ -7589,7 +7639,7 @@ pub unsafe extern "C" fn rs_shada_removable(name: *const c_char) -> c_int {
             c", ".as_ptr(),
         );
         if part[0] == b'r' {
-            let name_buff = nvim_shada_get_namebuff();
+            let name_buff = std::ptr::addr_of_mut!(NameBuff).cast::<c_char>();
             home_replace(
                 std::ptr::null(),
                 part.as_ptr().add(1).cast(),
