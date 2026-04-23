@@ -90,6 +90,18 @@ pub enum ExprOptScope {
     Local = b'l' as isize,
 }
 
+impl TryFrom<u8> for ExprOptScope {
+    type Error = u8;
+    fn try_from(v: u8) -> Result<Self, u8> {
+        match v {
+            0 => Ok(ExprOptScope::Unspecified),
+            b'g' => Ok(ExprOptScope::Global),
+            b'l' => Ok(ExprOptScope::Local),
+            other => Err(other),
+        }
+    }
+}
+
 /// ExprAssignmentType — assignment operator variant.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

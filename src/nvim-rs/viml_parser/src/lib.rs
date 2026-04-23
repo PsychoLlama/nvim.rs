@@ -23,6 +23,8 @@ pub mod ast;
 pub mod expr_types;
 pub mod lexer;
 pub mod literal;
+pub mod parser;
+pub mod quoted_string;
 pub mod repr;
 pub mod string_tables;
 pub mod token;
