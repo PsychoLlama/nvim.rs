@@ -52,3 +52,12 @@ pub const CPO_CONCAT: c_int = b'C' as c_int;
 
 /// CONV_NONE: no encoding conversion.
 pub const CONV_NONE: c_int = 0;
+
+/// EVENT_SOURCECMD autocmd event (validated by _Static_assert in runtime_ffi.c).
+pub const EVENT_SOURCECMD: c_int = 101;
+
+/// EVENT_SOURCEPRE autocmd event (validated by _Static_assert in runtime_ffi.c).
+pub const EVENT_SOURCEPRE: c_int = 103;
+
+/// EVENT_SOURCEPOST autocmd event (validated by _Static_assert in runtime_ffi.c).
+pub const EVENT_SOURCEPOST: c_int = 102;

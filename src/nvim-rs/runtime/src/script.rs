@@ -6,7 +6,7 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
-use crate::constants::MAXPATHL;
+use crate::constants::{IOSIZE, MAXPATHL};
 use crate::globals::{self, ScriptitemT};
 use crate::{LinenrT, ScidT, ScriptItemHandle};
 
@@ -48,7 +48,7 @@ extern "C" {
     fn gettext(msgid: *const c_char) -> *const c_char;
     // NameBuff and IObuff are declared in statics block below
     fn nvim_rt_home_replace(name: *const c_char, buf: *mut c_char, len: usize);
-    fn nvim_rt_format_script_entry(i: c_int, namebuff: *const c_char);
+    // format_script_entry implemented inline in Rust
     #[link_name = "message_filtered"]
     fn nvim_rt_message_filtered(msg: *const c_char) -> bool;
     #[link_name = "msg_putchar"]
@@ -350,7 +350,17 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
 
         if !sn_name.is_null() {
             nvim_rt_home_replace(sn_name, namebuff, MAXPATHL);
-            nvim_rt_format_script_entry(i, namebuff);
+            // format_script_entry: "%3d: %s" into IObuff
+            {
+                use std::io::Write as _;
+                let nb = std::ffi::CStr::from_ptr(namebuff.cast_const()).to_bytes();
+                let buf_slice = std::slice::from_raw_parts_mut(
+                    nvim_rt_iobuff_arr.as_ptr().cast_mut().cast::<u8>(),
+                    IOSIZE,
+                );
+                let mut cur = std::io::Cursor::new(&mut *buf_slice);
+                let _ = write!(cur, "{i:3}: {}\0", std::str::from_utf8_unchecked(nb));
+            }
             if !nvim_rt_message_filtered(iobuff) {
                 nvim_rt_msg_putchar(c_int::from(b'\n'));
                 nvim_rt_msg_outtrans(iobuff, 0, false);

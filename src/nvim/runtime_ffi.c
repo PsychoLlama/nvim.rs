@@ -113,6 +113,11 @@ _Static_assert(EW_NOBREAK == 0x40000, "EW_NOBREAK must be 0x40000");
 _Static_assert(CPO_CONCAT == 'C', "CPO_CONCAT must be 'C'");
 _Static_assert(CONV_NONE == 0, "CONV_NONE must be 0");
 
+// Phase 4: validate EVENT_SOURCE* constants inlined into Rust (constants.rs)
+_Static_assert(EVENT_SOURCECMD == 101, "EVENT_SOURCECMD must be 101");
+_Static_assert(EVENT_SOURCEPOST == 102, "EVENT_SOURCEPOST must be 102");
+_Static_assert(EVENT_SOURCEPRE == 103, "EVENT_SOURCEPRE must be 103");
+
 // Phase 3: validate estack_T layout mirrored in Rust (globals.rs EstackT)
 _Static_assert(sizeof(estack_T) == 32, "estack_T size must be 32");
 _Static_assert(offsetof(estack_T, es_lnum) == 0, "estack_T.es_lnum must be at offset 0");
@@ -304,11 +309,7 @@ bool nvim_exarg_arg_is_nul(void *eap) { return *((exarg_T *)eap)->arg == NUL; }
 /// Call home_replace(NULL, name, buf, len, true).
 void nvim_rt_home_replace(const char *name, char *buf, size_t len) { home_replace(NULL, name, buf, len, true); }
 
-void nvim_rt_format_script_entry(int i, const char *namebuff)
-{
-  vim_snprintf(IObuff, (size_t)IOSIZE, "%3d: %s", i, namebuff);
-}
-
+// Deleted: nvim_rt_format_script_entry — reimplemented in Rust (script.rs).
 // Deleted: nvim_rt_msg_putchar_nl — Rust calls msg_putchar('\n') directly via link_name.
 // Deleted: nvim_rt_msg_outtrans — Rust calls msg_outtrans(msg, 0, false) directly via link_name.
 
@@ -518,13 +519,7 @@ void nvim_rt_report_make_pending_finish(void) { report_make_pending(CSTP_FINISH,
 
 // Deleted: nvim_rt_apply_autocmds — Rust uses apply_autocmds directly via link_name.
 
-/// Get EVENT_SOURCECMD value.
-int nvim_rt_EVENT_SOURCECMD(void) { return EVENT_SOURCECMD; }
-/// Get EVENT_SOURCEPRE value.
-int nvim_rt_EVENT_SOURCEPRE(void) { return EVENT_SOURCEPRE; }
-/// Get EVENT_SOURCEPOST value.
-int nvim_rt_EVENT_SOURCEPOST(void) { return EVENT_SOURCEPOST; }
-
+// Deleted: nvim_rt_EVENT_SOURCECMD/PRE/POST — Rust uses constants directly from constants.rs.
 
 /// vimrc_found wrapper.
 
@@ -548,12 +543,7 @@ int nvim_rt_get_sourcing_lnum(void) { return SOURCING_LNUM; }
 
 // Deleted: nvim_rt_get_time_fd — Rust imports time_fd directly as extern static.
 
-/// time_push/pop/msg wrappers.
-void nvim_rt_time_msg_iobuff(const char *fname)
-{
-  vim_snprintf(IObuff, (size_t)IOSIZE, "sourcing %s", fname);
-  time_msg(IObuff, NULL);
-}
+// Deleted: nvim_rt_time_msg_iobuff — reimplemented in Rust (dosource.rs).
 
 /// prof_child_enter/exit wrappers.
 
@@ -620,11 +610,7 @@ const char *nvim_rt_curbuf_get_ft(void) { return curbuf ? curbuf->b_p_ft : NULL;
 
 // Deleted: nvim_rt_string_convert — Rust uses string_convert directly via link_name.
 
-/// Check BOM: firstline[0..2] == {0xef, 0xbb, 0xbf}.
-bool nvim_rt_check_utf8_bom(const uint8_t *line, size_t len)
-{
-  return len >= 3 && line[0] == 0xef && line[1] == 0xbb && line[2] == 0xbf;
-}
+// Deleted: nvim_rt_check_utf8_bom — reimplemented in Rust (dosource.rs).
 
 /// add_win_cmd_modifiers wrapper.
 void nvim_rt_add_win_cmd_modifiers(char *buf, bool *multi_mods)
@@ -634,8 +620,7 @@ void nvim_rt_add_win_cmd_modifiers(char *buf, bool *multi_mods)
 
 /// os_setenv wrapper.
 
-/// SYS_OPTWIN_FILE constant.
-const char *nvim_rt_SYS_OPTWIN_FILE(void) { return SYS_OPTWIN_FILE; }
+// Deleted: nvim_rt_SYS_OPTWIN_FILE — Rust uses compile-time constant SYS_OPTWIN_FILE.
 
 // nvim_rt_openscript deleted: openscript now exported directly from Rust (typebuf.rs, Phase 2)
 
@@ -656,16 +641,7 @@ int nvim_rt_exarg_get_line1(const void *eap) { return (int)((exarg_T *)eap)->lin
 /// ml_get wrapper.
 const char *nvim_rt_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
 
-/// snprintf IObuff: ":{range}lua buffer=N" or ":source buffer=N".
-void nvim_rt_snprintf_source_buffer_name(char *buf, int size, bool ex_lua, int fnum)
-{
-  if (ex_lua) {
-    snprintf(buf, (size_t)size, ":{range}lua buffer=%d", fnum);
-  } else {
-    snprintf(buf, (size_t)size, ":source buffer=%d", fnum);
-  }
-}
-
+// Deleted: nvim_rt_snprintf_source_buffer_name — reimplemented in Rust (dosource.rs).
 
 // Deleted: nvim_rt_emsg_norange — Rust calls emsg(gettext(e_norange)) directly.
 // Deleted: nvim_rt_semsg_notopen — Rust calls semsg(gettext(e_notopen), fname) directly.
@@ -680,16 +656,9 @@ const char *nvim_rt_get_sourcing_name_if_set(void)
 /// SOURCING_LNUM value.
 int nvim_rt_get_sourcing_lnum_value(void) { return HAVE_SOURCING_INFO ? SOURCING_LNUM : 0; }
 
-/// vim_snprintf for traceback name.
-void nvim_rt_snprintf_traceback(char *buf, int size, const char *traceback_name,
-                                 const char *sourcing_name, int sourcing_lnum)
-{
-  vim_snprintf(buf, (size_t)size, "%s called at %s:%" PRId64,
-               traceback_name, sourcing_name, (int64_t)sourcing_lnum);
-}
+// Deleted: nvim_rt_snprintf_traceback — reimplemented in Rust (dosource.rs).
 
-/// STRICMP wrapper (case-insensitive string compare).
-int nvim_rt_STRICMP(const char *a, const char *b) { return STRICMP(a, b); }
+// Deleted: nvim_rt_STRICMP — Rust uses strcasecmp directly via link_name.
 
 // =============================================================================
 // Phase 5: Accessors for rs_do_in_path / rs_do_in_cached_path

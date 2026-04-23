@@ -18,7 +18,8 @@ use std::ffi::{c_char, c_int, c_void};
 use std::ptr;
 
 use crate::constants::{
-    DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, DOSO_VIMRC, IOSIZE, PROF_YES, SID_STR,
+    DOCMD_NOWAIT, DOCMD_REPEAT, DOCMD_VERBOSE, DOSO_VIMRC, EVENT_SOURCECMD, EVENT_SOURCEPOST,
+    EVENT_SOURCEPRE, IOSIZE, PROF_YES, SID_STR,
 };
 use crate::doso;
 use crate::globals;
@@ -58,6 +59,7 @@ extern "C" {
     fn nvim_rt_src_os_isdir(fname: *const c_char) -> bool;
     #[link_name = "path_tail"]
     fn nvim_rt_src_path_tail(fname: *const c_char) -> *mut c_char;
+    #[link_name = "strcasecmp"]
     fn nvim_rt_STRICMP(a: *const c_char, b: *const c_char) -> c_int;
     fn path_with_extension(path: *const c_char, ext: *const c_char) -> bool;
 
@@ -73,9 +75,7 @@ extern "C" {
         force: bool,
         buf: *mut c_void,
     ) -> bool;
-    fn nvim_rt_EVENT_SOURCECMD() -> c_int;
-    fn nvim_rt_EVENT_SOURCEPRE() -> c_int;
-    fn nvim_rt_EVENT_SOURCEPOST() -> c_int;
+    // EVENT_SOURCECMD/PRE/POST are Rust constants in constants.rs
     #[link_name = "aborting"]
     fn nvim_rt_aborting() -> bool;
     #[link_name = "vimrc_found"]
@@ -118,7 +118,8 @@ extern "C" {
     fn nvim_rt_time_push(rel_time: *mut u64, start_time: *mut u64);
     #[link_name = "time_pop"]
     fn nvim_rt_time_pop(rel_time: u64);
-    fn nvim_rt_time_msg_iobuff(fname: *const c_char);
+    #[link_name = "time_msg"]
+    fn nvim_rt_time_msg(msg: *const c_char, start: *const c_void);
     #[link_name = "prof_child_enter"]
     fn nvim_rt_prof_child_enter(wait_start: *mut u64);
     #[link_name = "prof_child_exit"]
@@ -168,8 +169,7 @@ extern "C" {
     fn nvim_rt_cookie_teardown_conv(cookie: *mut c_void);
     fn nvim_rt_cookie_get_conv(cookie: *mut c_void) -> *mut c_void;
 
-    // BOM detection
-    fn nvim_rt_check_utf8_bom(line: *const u8, len: usize) -> bool;
+    // BOM detection implemented inline in Rust (check_utf8_bom)
 
     // Encoding
     #[link_name = "convert_setup"]
@@ -186,12 +186,7 @@ extern "C" {
     fn nvim_rt_curbuf_get_fnum() -> c_int;
     fn nvim_rt_curbuf_get_fname() -> *const c_char;
     fn nvim_rt_curbuf_get_ft() -> *const c_char;
-    fn nvim_rt_snprintf_source_buffer_name(
-        buf: *mut c_char,
-        size: c_int,
-        ex_lua: bool,
-        fnum: c_int,
-    );
+    // snprintf_source_buffer_name implemented inline in Rust
     fn nvim_rt_ml_get(lnum: c_int) -> *const c_char;
     fn nvim_rt_exarg_get_line1(eap: *mut c_void) -> c_int;
     fn nvim_rt_exarg_get_line2(eap: *mut c_void) -> LinenrT;
@@ -212,18 +207,12 @@ extern "C" {
     fn nvim_rt_add_win_cmd_modifiers(buf: *mut c_char, multi_mods: *mut bool);
     #[link_name = "os_setenv"]
     fn nvim_rt_os_setenv(name: *const c_char, val: *const c_char, overwrite: c_int);
-    fn nvim_rt_SYS_OPTWIN_FILE() -> *const c_char;
+    // SYS_OPTWIN_FILE is a compile-time constant in Rust
 
     // do_source_str helpers
     fn nvim_rt_get_sourcing_name_if_set() -> *const c_char;
     fn nvim_rt_get_sourcing_lnum_value() -> c_int;
-    fn nvim_rt_snprintf_traceback(
-        buf: *mut c_char,
-        size: c_int,
-        traceback_name: *const c_char,
-        sourcing_name: *const c_char,
-        sourcing_lnum: c_int,
-    );
+    // snprintf_traceback implemented inline in Rust
 
     // File I/O helpers (for rs_fopen_noinh_readbin)
     fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
@@ -269,6 +258,82 @@ const FAIL: c_int = 0;
 const OK: c_int = 1;
 const ETYPE_SCRIPT: c_int = 1;
 
+/// optwin.lua sourced by `:options`.
+const SYS_OPTWIN_FILE: &[u8] = b"$VIMRUNTIME/scripts/optwin.lua\0";
+
+// =============================================================================
+// Pure Rust helpers (replacing C wrappers)
+// =============================================================================
+
+/// Check for a UTF-8 BOM at the start of `line` (replaces nvim_rt_check_utf8_bom).
+#[inline]
+fn check_utf8_bom(line: *const u8, len: usize) -> bool {
+    if len < 3 {
+        return false;
+    }
+    unsafe { *line == 0xef && *line.add(1) == 0xbb && *line.add(2) == 0xbf }
+}
+
+/// Write ":{range}lua buffer=N" or ":source buffer=N" into `buf[..size]`
+/// (replaces nvim_rt_snprintf_source_buffer_name).
+///
+/// # Safety
+/// `buf` must point to a writable buffer of at least `size` bytes.
+unsafe fn snprintf_source_buffer_name(buf: *mut c_char, size: usize, ex_lua: bool, fnum: c_int) {
+    use std::io::Write as _;
+    let slice = std::slice::from_raw_parts_mut(buf.cast::<u8>(), size);
+    let mut cursor = std::io::Cursor::new(&mut *slice);
+    if ex_lua {
+        let _ = write!(cursor, ":{{range}}lua buffer={fnum}\0");
+    } else {
+        let _ = write!(cursor, ":source buffer={fnum}\0");
+    }
+}
+
+/// Write `"{traceback_name} called at {sourcing_name}:{sourcing_lnum}"` into `buf[..size]`
+/// (replaces nvim_rt_snprintf_traceback).
+///
+/// # Safety
+/// `buf` must be a writable buffer of at least `size` bytes; string pointers must be valid.
+unsafe fn snprintf_traceback(
+    buf: *mut c_char,
+    size: usize,
+    traceback_name: *const c_char,
+    sourcing_name: *const c_char,
+    sourcing_lnum: c_int,
+) {
+    use std::io::Write as _;
+    let tb = std::ffi::CStr::from_ptr(traceback_name).to_bytes();
+    let sn = std::ffi::CStr::from_ptr(sourcing_name).to_bytes();
+    let slice = std::slice::from_raw_parts_mut(buf.cast::<u8>(), size);
+    let mut cursor = std::io::Cursor::new(&mut *slice);
+    let _ = write!(
+        cursor,
+        "{} called at {}:{}\0",
+        std::str::from_utf8_unchecked(tb),
+        std::str::from_utf8_unchecked(sn),
+        sourcing_lnum
+    );
+}
+
+/// Write "sourcing {fname}" into IObuff and call time_msg (replaces nvim_rt_time_msg_iobuff).
+///
+/// # Safety
+/// `fname` must be a valid C string.
+unsafe fn time_msg_iobuff(fname: *const c_char) {
+    use std::io::Write as _;
+    let fname_str = std::ffi::CStr::from_ptr(fname).to_bytes();
+    let buf: *mut u8 = nvim_rt_iobuff_arr.as_ptr().cast_mut().cast();
+    let slice = std::slice::from_raw_parts_mut(buf, IOSIZE);
+    let mut cursor = std::io::Cursor::new(&mut *slice);
+    let _ = write!(
+        cursor,
+        "sourcing {}\0",
+        std::str::from_utf8_unchecked(fname_str)
+    );
+    nvim_rt_time_msg(nvim_rt_iobuff_arr.as_ptr(), ptr::null());
+}
+
 // =============================================================================
 // do_source_buffer_init: read buffer lines into cookie->buflines
 // =============================================================================
@@ -290,7 +355,7 @@ unsafe fn do_source_buffer_init(
         if ffname.is_null() {
             let iobuff = nvim_rt_iobuff_arr.as_ptr().cast_mut();
             let fnum = nvim_rt_curbuf_get_fnum();
-            nvim_rt_snprintf_source_buffer_name(iobuff, IOSIZE as c_int, ex_lua, fnum);
+            snprintf_source_buffer_name(iobuff, IOSIZE, ex_lua, fnum);
             xstrdup(iobuff)
         } else {
             xstrdup(ffname)
@@ -418,14 +483,18 @@ pub unsafe extern "C" fn rs_do_source_ext(
 
     if str_arg.is_null() {
         // Apply SourceCmd autocmds
-        let ev_sourcecmd = nvim_rt_EVENT_SOURCECMD();
-        if rs_has_autocmd(ev_sourcecmd, fname_exp, 0)
-            && nvim_rt_apply_autocmds(ev_sourcecmd, fname_exp, fname_exp, false, nvim_rt_curbuf)
+        if rs_has_autocmd(EVENT_SOURCECMD, fname_exp, 0)
+            && nvim_rt_apply_autocmds(EVENT_SOURCECMD, fname_exp, fname_exp, false, nvim_rt_curbuf)
         {
             retval = if nvim_rt_aborting() { FAIL } else { OK };
             if retval == OK {
-                let ev_sourcepost = nvim_rt_EVENT_SOURCEPOST();
-                nvim_rt_apply_autocmds(ev_sourcepost, fname_exp, fname_exp, false, nvim_rt_curbuf);
+                nvim_rt_apply_autocmds(
+                    EVENT_SOURCEPOST,
+                    fname_exp,
+                    fname_exp,
+                    false,
+                    nvim_rt_curbuf,
+                );
             }
             xfree(fname_exp.cast());
             nvim_rt_cookie_free_full(cookie);
@@ -433,8 +502,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
         }
 
         // Apply SourcePre autocmds
-        let ev_sourcepre = nvim_rt_EVENT_SOURCEPRE();
-        nvim_rt_apply_autocmds(ev_sourcepre, fname_exp, fname_exp, false, nvim_rt_curbuf);
+        nvim_rt_apply_autocmds(EVENT_SOURCEPRE, fname_exp, fname_exp, false, nvim_rt_curbuf);
     }
 
     if !nvim_rt_cookie_get_src_from_buf_or_str(cookie) {
@@ -612,7 +680,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
         firstline = getsourceline_for_bom(cookie);
         if !firstline.is_null() {
             let flen = libc_strlen(firstline as *const u8);
-            if nvim_rt_check_utf8_bom(firstline as *const u8, flen) {
+            if check_utf8_bom(firstline as *const u8, flen) {
                 // Found BOM - setup conversion, skip over BOM
                 let p_enc = nvim_rt_p_enc;
                 let vcp = nvim_rt_cookie_get_conv(cookie);
@@ -659,7 +727,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
 
     if !l_time_fd.is_null() {
         let fname_for_msg = nvim_rt_cookie_get_fname(cookie);
-        nvim_rt_time_msg_iobuff(fname_for_msg);
+        time_msg_iobuff(fname_for_msg);
         nvim_rt_time_pop(rel_time);
     }
 
@@ -695,9 +763,8 @@ pub unsafe extern "C" fn rs_do_source_ext(
     // SourcePost autocmds
     let stored_fname = nvim_rt_cookie_get_fname(cookie);
     if str_arg.is_null() && trigger_source_post {
-        let ev_sourcepost = nvim_rt_EVENT_SOURCEPOST();
         nvim_rt_apply_autocmds(
-            ev_sourcepost,
+            EVENT_SOURCEPOST,
             stored_fname,
             stored_fname,
             false,
@@ -819,7 +886,10 @@ pub unsafe extern "C" fn rs_ex_options(eap: *mut c_void) {
     let mut multi_mods = false;
     nvim_rt_add_win_cmd_modifiers(buf.as_mut_ptr().cast(), &raw mut multi_mods);
     nvim_rt_os_setenv(c"OPTWIN_CMD".as_ptr(), buf.as_ptr().cast(), 1);
-    rs_cmd_source(nvim_rt_SYS_OPTWIN_FILE().cast_mut(), ptr::null_mut());
+    rs_cmd_source(
+        SYS_OPTWIN_FILE.as_ptr().cast::<c_char>().cast_mut(),
+        ptr::null_mut(),
+    );
 }
 
 /// Source lines from the current buffer.
@@ -853,9 +923,9 @@ pub unsafe extern "C" fn rs_do_source_str(
     let mut sname_buf = [0u8; 256];
     if !sname.is_null() {
         let sourcing_lnum = nvim_rt_get_sourcing_lnum_value();
-        nvim_rt_snprintf_traceback(
+        snprintf_traceback(
             sname_buf.as_mut_ptr().cast(),
-            sname_buf.len() as c_int,
+            sname_buf.len(),
             traceback_name,
             sname,
             sourcing_lnum,
