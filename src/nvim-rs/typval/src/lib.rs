@@ -5506,6 +5506,389 @@ pub unsafe extern "C" fn rs_tv_item_lock(
     TV_ITEM_LOCK_RECURSE.set(recurse);
 }
 
+// =============================================================================
+// Phase 4 (typval migration): dict free/unref/equal/extend/copy
+// =============================================================================
+
+extern "C" {
+    // Phase 4 accessors
+    fn nvim_dict_free_hashtab_contents(d: DictHandle);
+    fn nvim_dict_free_watchers(d: DictHandle);
+    fn nvim_dict_gc_unlink_and_free(d: DictHandle);
+    // nvim_get_tv_in_free_unref_items: already in existing extern block
+    fn nvim_dict_is_watched(d: DictHandle) -> c_int;
+    fn nvim_dict_item_copy_impl(di: DictItemHandle) -> DictItemHandle;
+    fn nvim_dict_item_alloc_impl(key: *const c_char) -> DictItemHandle;
+    fn nvim_dict_item_alloc_len_impl(key: *const c_char, len: usize) -> DictItemHandle;
+    fn nvim_dict_watcher_notify(
+        d: DictHandle,
+        key: *const c_char,
+        newtv: TypevalHandle,
+        oldtv: TypevalHandle,
+    );
+    fn nvim_valid_varname(name: *const c_char) -> c_int;
+    fn nvim_var_check_ro(flags: c_int, name: *const c_char, name_len: usize) -> bool;
+    fn nvim_dictitem_get_flags(di: DictItemHandle) -> c_int;
+    fn nvim_dict_hash_lock(d: DictHandle);
+    fn nvim_dict_hash_unlock(d: DictHandle);
+    fn nvim_dict_hash_remove(d: DictHandle, hi: HashItemHandle);
+    fn nvim_dictitem_get_key_ptr(di: DictItemHandle) -> *const c_char;
+    fn nvim_semsg_key_exists(key: *const c_char);
+    fn nvim_dict_copy_key_convert(
+        conv: *const c_void,
+        key: *const c_char,
+        len_out: *mut usize,
+    ) -> *mut c_char;
+    fn nvim_dict_item_free_raw(di: DictItemHandle);
+    fn nvim_dict_set_copyid_and_copydict(orig: DictHandle, copy_id: c_int, copy: DictHandle);
+    // nvim_got_int already declared in existing extern block
+    // nvim_get_tv_in_free_unref_items already declared in existing extern block
+    fn nvim_dict_set_refcount(d: DictHandle, rc: c_int);
+    fn nvim_dict_get_len_impl(d: DictHandle) -> c_int;
+    fn nvim_dict_get_scope_impl(d: DictHandle) -> c_int;
+    fn tv_dict_alloc() -> DictHandle;
+    fn tv_dict_wrong_func_name(d: DictHandle, tv: TypevalHandle, name: *const c_char) -> c_int;
+}
+
+/// Free items contained in a dictionary.
+///
+/// Migrated from C `tv_dict_free_contents`.
+///
+/// # Safety
+///
+/// `d` must be a valid non-null pointer to `dict_T`.
+#[export_name = "tv_dict_free_contents"]
+pub unsafe extern "C" fn rs_tv_dict_free_contents(d: DictHandle) {
+    nvim_dict_free_hashtab_contents(d);
+    nvim_dict_free_watchers(d);
+}
+
+/// Free a dictionary itself, ignoring items it contains.
+///
+/// Migrated from C `tv_dict_free_dict`.
+///
+/// # Safety
+///
+/// `d` must be a valid non-null pointer to `dict_T`.
+#[export_name = "tv_dict_free_dict"]
+pub unsafe extern "C" fn rs_tv_dict_free_dict(d: DictHandle) {
+    nvim_dict_gc_unlink_and_free(d);
+}
+
+/// Free a dictionary, including all items it contains.
+///
+/// Migrated from C `tv_dict_free`.
+///
+/// # Safety
+///
+/// `d` must be a valid non-null pointer to `dict_T`.
+#[export_name = "tv_dict_free"]
+pub unsafe extern "C" fn rs_tv_dict_free(d: DictHandle) {
+    if nvim_get_tv_in_free_unref_items() != 0 {
+        return;
+    }
+    rs_tv_dict_free_contents(d);
+    rs_tv_dict_free_dict(d);
+}
+
+/// Unreference a dictionary: decrement refcount and free at zero.
+///
+/// Migrated from C `tv_dict_unref`.
+///
+/// # Safety
+///
+/// `d` must be a valid pointer to `dict_T`, or null.
+#[export_name = "tv_dict_unref"]
+pub unsafe extern "C" fn rs_tv_dict_unref(d: DictHandle) {
+    if d.is_null() {
+        return;
+    }
+    let rc = nvim_dict_get_refcount(d);
+    let new_rc = rc - 1;
+    // Update refcount via increment accessor in reverse:
+    // We don't have a decrement accessor, so use nvim_dict_get_refcount/set approach.
+    // Actually: dec refcount by calling the C helper directly with a trick:
+    // We create a wrapper that decrements. Add nvim_dict_dec_refcount accessor.
+    // For now, use the existing pattern: if rc <= 1, free; else decrement via...
+    // Actually we need to set the refcount. Let's use:
+    //   nvim_dict_inc_refcount sets +1. We need -1.
+    // Use: set refcount = rc - 1
+    nvim_dict_set_refcount(d, new_rc);
+    if new_rc <= 0 {
+        rs_tv_dict_free(d);
+    }
+}
+
+// Note: nvim_dict_get_len_impl / nvim_dict_get_scope_impl are wrapper names used below
+
+/// Compare two dictionaries for equality.
+///
+/// Migrated from C `tv_dict_equal`.
+///
+/// # Safety
+///
+/// `d1` and `d2` must be valid pointers to `dict_T`, or null.
+#[export_name = "tv_dict_equal"]
+pub unsafe extern "C" fn rs_tv_dict_equal(d1: DictHandle, d2: DictHandle, ic: bool) -> bool {
+    if d1.as_ptr() == d2.as_ptr() {
+        return true;
+    }
+    let len1 = nvim_dict_get_len_impl(d1);
+    let len2 = nvim_dict_get_len_impl(d2);
+    if len1 != len2 {
+        return false;
+    }
+    if len1 == 0 {
+        // empty and NULL dicts are considered equal
+        return true;
+    }
+    if d1.is_null() || d2.is_null() {
+        return false;
+    }
+
+    // Iterate d1, find each key in d2, compare values
+    let ht_used = nvim_dict_get_ht_used(d1);
+    let hi_removed = nvim_hash_removed_ptr();
+    let mut hi = nvim_dict_get_ht_array(d1);
+    let mut todo = ht_used;
+    while todo > 0 {
+        let key = nvim_hashitem_get_key(hi);
+        if !key.is_null() && key != hi_removed {
+            let di1 = nvim_hashitem_to_dictitem(hi);
+            let key_ptr = nvim_dictitem_get_key_ptr(di1);
+            let di2 = nvim_dict_find(d2, key_ptr, -1);
+            if di2.is_null() {
+                return false;
+            }
+            let tv1 = nvim_dictitem_get_tv(di1);
+            let tv2 = nvim_dictitem_get_tv(di2);
+            if !rs_tv_equal(tv1, tv2, ic) {
+                return false;
+            }
+            todo -= 1;
+        }
+        hi = nvim_hashitem_next(hi);
+    }
+    true
+}
+
+/// The extend() argument error message (TV_CSTRING semantics).
+static EXTEND_ARG_ERRMSG: &[u8] = b"extend() argument\0";
+
+/// Extend dictionary d1 with items from d2.
+///
+/// Migrated from C `tv_dict_extend`.
+///
+/// # Safety
+///
+/// `d1`, `d2`, `action` must be valid non-null pointers.
+#[export_name = "tv_dict_extend"]
+pub unsafe extern "C" fn rs_tv_dict_extend(d1: DictHandle, d2: DictHandle, action: *const c_char) {
+    let watched = nvim_dict_is_watched(d1) != 0;
+    let arg_errmsg = EXTEND_ARG_ERRMSG.as_ptr().cast::<c_char>();
+    let arg_errmsg_len = EXTEND_ARG_ERRMSG.len() - 1; // exclude NUL
+
+    let action_char = *action as u8;
+
+    if action_char == b'm' {
+        nvim_dict_hash_lock(d2);
+    }
+
+    // Iterate d2 hashtab
+    let ht_used = nvim_dict_get_ht_used(d2);
+    let hi_removed = nvim_hash_removed_ptr();
+    let mut hi = nvim_dict_get_ht_array(d2);
+    let mut todo = ht_used;
+    let mut should_break = false;
+
+    while todo > 0 && !should_break {
+        let key = nvim_hashitem_get_key(hi);
+        if !key.is_null() && key != hi_removed {
+            let di2 = nvim_hashitem_to_dictitem(hi);
+            let di2_key = nvim_dictitem_get_key_ptr(di2);
+            let di1 = nvim_dict_find(d1, di2_key, -1);
+
+            // Check key validity for scoped dicts
+            let scope = nvim_dict_get_scope_impl(d1);
+            if scope != 0 && nvim_valid_varname(di2_key) == 0 {
+                should_break = true;
+            } else if di1.is_null() {
+                if action_char == b'm' {
+                    // Move item from d2 to d1
+                    let new_di = di2;
+                    let di2_tv = nvim_dictitem_get_tv(new_di);
+                    if nvim_dict_add_item(d1, new_di) != 0 {
+                        // OK = 1 (non-zero)
+                        nvim_dict_hash_remove(d2, hi);
+                        nvim_dict_watcher_notify(
+                            d1,
+                            di2_key,
+                            di2_tv,
+                            TypevalHandle::from_ptr(std::ptr::null()),
+                        );
+                    }
+                } else {
+                    let new_di = nvim_dict_item_copy_impl(di2);
+                    let new_di_tv = nvim_dictitem_get_tv(new_di);
+                    let new_di_key = nvim_dictitem_get_key_ptr(new_di);
+                    if nvim_dict_add_item(d1, new_di) == 0 {
+                        // FAIL = 0
+                        nvim_dict_item_free(new_di);
+                    } else if watched {
+                        nvim_dict_watcher_notify(
+                            d1,
+                            new_di_key,
+                            new_di_tv,
+                            TypevalHandle::from_ptr(std::ptr::null()),
+                        );
+                    }
+                }
+            } else if action_char == b'e' {
+                nvim_semsg_key_exists(di2_key);
+                should_break = true;
+            } else if action_char == b'f' && di2 != di1 {
+                let di1_tv = nvim_dictitem_get_tv(di1);
+                let di1_v_lock = nvim_tv_get_v_lock(di1_tv);
+                let di1_flags = nvim_dictitem_get_flags(di1);
+                if value_check_lock_impl(di1_v_lock, arg_errmsg, arg_errmsg_len)
+                    || nvim_var_check_ro(di1_flags, arg_errmsg, arg_errmsg_len)
+                {
+                    should_break = true;
+                } else {
+                    // Check for wrong func name
+                    let di2_tv = nvim_dictitem_get_tv(di2);
+                    if tv_dict_wrong_func_name(d1, di2_tv, di2_key) != 0 {
+                        should_break = true;
+                    } else if watched {
+                        // Allocate properly aligned stack space for oldtv.
+                        // typval_T is 16 bytes; [u64; 2] = 16 bytes with 8-byte alignment.
+                        let mut oldtv_buf = [0u64; 2];
+                        let oldtv_ptr = oldtv_buf.as_mut_ptr().cast::<c_void>();
+                        let oldtv_th = TypevalHandle::from_ptr(oldtv_ptr);
+                        rs_tv_copy(di1_tv, oldtv_th);
+                        // clear di1_tv and copy di2_tv into it
+                        tv_clear(di1_tv);
+                        rs_tv_copy(di2_tv, di1_tv);
+                        let di1_key = nvim_dictitem_get_key_ptr(di1);
+                        nvim_dict_watcher_notify(d1, di1_key, di1_tv, oldtv_th);
+                        tv_clear(oldtv_th);
+                    } else {
+                        tv_clear(di1_tv);
+                        rs_tv_copy(di2_tv, di1_tv);
+                    }
+                }
+            }
+            // 'k' (keep) and other actions: just skip duplicates (do nothing)
+            todo -= 1;
+        }
+        hi = nvim_hashitem_next(hi);
+    }
+
+    if action_char == b'm' {
+        nvim_dict_hash_unlock(d2);
+    }
+}
+
+/// Make a copy of dictionary.
+///
+/// Migrated from C `tv_dict_copy`.
+///
+/// # Safety
+///
+/// `conv` must be a valid pointer to `vimconv_T`, or null.
+/// `orig` must be a valid pointer to `dict_T`, or null.
+#[export_name = "tv_dict_copy"]
+pub unsafe extern "C" fn rs_tv_dict_copy(
+    conv: *const c_void,
+    orig: DictHandle,
+    deep: bool,
+    copy_id: c_int,
+) -> DictHandle {
+    if orig.is_null() {
+        return DictHandle::from_ptr(std::ptr::null());
+    }
+
+    let copy = tv_dict_alloc();
+
+    if copy_id != 0 {
+        nvim_dict_set_copyid_and_copydict(orig, copy_id, copy);
+    }
+
+    // Iterate orig hashtab
+    let ht_used = nvim_dict_get_ht_used(orig);
+    let hi_removed = nvim_hash_removed_ptr();
+    let mut hi = nvim_dict_get_ht_array(orig);
+    let mut todo = ht_used;
+    let mut failed = false;
+
+    // CONV_NONE = 0
+    let conv_is_none = conv.is_null() || {
+        // conv->vc_type is at offset 0 (int)
+        let vc_type = *conv.cast::<c_int>();
+        vc_type == 0
+    };
+
+    while todo > 0 && !failed {
+        if nvim_got_int() != 0 {
+            break;
+        }
+        let key = nvim_hashitem_get_key(hi);
+        if !key.is_null() && key != hi_removed {
+            let di = nvim_hashitem_to_dictitem(hi);
+            let di_key = nvim_dictitem_get_key_ptr(di);
+
+            let new_di = if conv_is_none {
+                nvim_dict_item_alloc_impl(di_key)
+            } else {
+                let mut len_out: usize = 0;
+                let converted_key =
+                    nvim_dict_copy_key_convert(conv, di_key, std::ptr::addr_of_mut!(len_out));
+                if converted_key.is_null() {
+                    // Use original key with computed length
+                    nvim_dict_item_alloc_len_impl(di_key, len_out)
+                } else {
+                    let new_item =
+                        nvim_dict_item_alloc_len_impl(converted_key.cast_const(), len_out);
+                    nvim_xfree(converted_key.cast());
+                    new_item
+                }
+            };
+
+            let di_tv = nvim_dictitem_get_tv(di);
+            let new_di_tv = nvim_dictitem_get_tv(new_di);
+
+            if deep {
+                if var_item_copy(conv, di_tv, new_di_tv, deep, copy_id) == FAIL {
+                    // FAIL = 0
+                    nvim_dict_item_free_raw(new_di);
+                    failed = true;
+                }
+            } else {
+                rs_tv_copy(di_tv, new_di_tv);
+            }
+
+            if !failed && nvim_dict_add_item(copy, new_di) == 0 {
+                // FAIL = 0
+                nvim_dict_item_free(new_di);
+                failed = true;
+            }
+
+            todo -= 1;
+        }
+        hi = nvim_hashitem_next(hi);
+    }
+
+    // Increment refcount
+    nvim_dict_inc_refcount(copy);
+
+    if nvim_got_int() != 0 {
+        rs_tv_dict_unref(copy);
+        return DictHandle::from_ptr(std::ptr::null());
+    }
+
+    copy
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

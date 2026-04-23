@@ -923,84 +923,7 @@ void tv_dict_watcher_notify(dict_T *const dict, const char *const key, typval_T 
 
 // tv_dict_alloc migrated to Rust (Phase 3)
 
-/// Free items contained in a dictionary
-///
-/// @param[in,out]  d  Dictionary to clear.
-void tv_dict_free_contents(dict_T *const d)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Lock the hashtab, we don't want it to resize while freeing items.
-  hash_lock(&d->dv_hashtab);
-  assert(d->dv_hashtab.ht_locked > 0);
-  HASHTAB_ITER(&d->dv_hashtab, hi, {
-    // Remove the item before deleting it, just in case there is
-    // something recursive causing trouble.
-    dictitem_T *const di = TV_DICT_HI2DI(hi);
-    hash_remove(&d->dv_hashtab, hi);
-    tv_dict_item_free(di);
-  });
-
-  while (!QUEUE_EMPTY(&d->watchers)) {
-    QUEUE *w = QUEUE_HEAD(&d->watchers);
-    QUEUE_REMOVE(w);
-    DictWatcher *watcher = tv_dict_watcher_node_data(w);
-    tv_dict_watcher_free(watcher);
-  }
-
-  hash_clear(&d->dv_hashtab);
-  d->dv_hashtab.ht_locked--;
-  hash_init(&d->dv_hashtab);
-}
-
-/// Free a dictionary itself, ignoring items it contains
-///
-/// Ignores the reference count.
-///
-/// @param[in,out]  d  Dictionary to free.
-void tv_dict_free_dict(dict_T *const d)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // Remove the dict from the list of dicts for garbage collection.
-  if (d->dv_used_prev == NULL) {
-    gc_first_dict = d->dv_used_next;
-  } else {
-    d->dv_used_prev->dv_used_next = d->dv_used_next;
-  }
-  if (d->dv_used_next != NULL) {
-    d->dv_used_next->dv_used_prev = d->dv_used_prev;
-  }
-
-  NLUA_CLEAR_REF(d->lua_table_ref);
-  xfree(d);
-}
-
-/// Free a dictionary, including all items it contains
-///
-/// Ignores the reference count.
-///
-/// @param  d  Dictionary to free.
-void tv_dict_free(dict_T *const d)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (tv_in_free_unref_items) {
-    return;
-  }
-
-  tv_dict_free_contents(d);
-  tv_dict_free_dict(d);
-}
-
-/// Unreference a dictionary
-///
-/// Decrements the reference count and frees dictionary when it becomes zero.
-///
-/// @param[in]  d  Dictionary to operate on.
-void tv_dict_unref(dict_T *const d)
-{
-  if (d != NULL && --d->dv_refcount <= 0) {
-    tv_dict_free(d);
-  }
-}
+// tv_dict_free_contents, tv_dict_free_dict, tv_dict_free, tv_dict_unref migrated to Rust (Phase 4)
 
 //{{{2 Indexing/searching
 
@@ -1072,182 +995,7 @@ int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name)
 
 // tv_dict_clear deleted (dead code, Phase 6h)
 
-/// Extend dictionary with items from another dictionary
-///
-/// @param  d1  Dictionary to extend.
-/// @param[in]  d2  Dictionary to extend with.
-/// @param[in]  action  "error", "force", "move", "keep":
-///                     e*, including "error": duplicate key gives an error.
-///                     f*, including "force": duplicate d2 keys override d1.
-///                     m*, including "move": move items instead of copying.
-///                     other, including "keep": duplicate d2 keys ignored.
-void tv_dict_extend(dict_T *const d1, dict_T *const d2, const char *const action)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const bool watched = tv_dict_is_watched(d1);
-  const char *const arg_errmsg = _("extend() argument");
-  const size_t arg_errmsg_len = strlen(arg_errmsg);
-
-  if (*action == 'm') {
-    hash_lock(&d2->dv_hashtab);  // don't rehash on hash_remove()
-  }
-
-  HASHTAB_ITER(&d2->dv_hashtab, hi2, {
-    dictitem_T *const di2 = TV_DICT_HI2DI(hi2);
-    dictitem_T *const di1 = tv_dict_find(d1, di2->di_key, -1);
-    // Check the key to be valid when adding to any scope.
-    if (d1->dv_scope != VAR_NO_SCOPE && !valid_varname(di2->di_key)) {
-      break;
-    }
-    if (di1 == NULL) {
-      if (*action == 'm') {
-        // Cheap way to move a dict item from "d2" to "d1".
-        // If dict_add() fails then "d2" won't be empty.
-        dictitem_T *const new_di = di2;
-        if (tv_dict_add(d1, new_di) == OK) {
-          hash_remove(&d2->dv_hashtab, hi2);
-          tv_dict_watcher_notify(d1, new_di->di_key, &new_di->di_tv, NULL);
-        }
-      } else {
-        dictitem_T *const new_di = tv_dict_item_copy(di2);
-        if (tv_dict_add(d1, new_di) == FAIL) {
-          tv_dict_item_free(new_di);
-        } else if (watched) {
-          tv_dict_watcher_notify(d1, new_di->di_key, &new_di->di_tv, NULL);
-        }
-      }
-    } else if (*action == 'e') {
-      semsg(_("E737: Key already exists: %s"), di2->di_key);
-      break;
-    } else if (*action == 'f' && di2 != di1) {
-      typval_T oldtv;
-
-      if (value_check_lock(di1->di_tv.v_lock, arg_errmsg, arg_errmsg_len)
-          || var_check_ro(di1->di_flags, arg_errmsg, arg_errmsg_len)) {
-        break;
-      }
-      // Disallow replacing a builtin function.
-      if (tv_dict_wrong_func_name(d1, &di2->di_tv, di2->di_key)) {
-        break;
-      }
-
-      if (watched) {
-        tv_copy(&di1->di_tv, &oldtv);
-      }
-
-      tv_clear(&di1->di_tv);
-      tv_copy(&di2->di_tv, &di1->di_tv);
-
-      if (watched) {
-        tv_dict_watcher_notify(d1, di1->di_key, &di1->di_tv, &oldtv);
-        tv_clear(&oldtv);
-      }
-    }
-  });
-
-  if (*action == 'm') {
-    hash_unlock(&d2->dv_hashtab);
-  }
-}
-
-/// Compare two dictionaries
-///
-/// @param[in]  d1  First dictionary.
-/// @param[in]  d2  Second dictionary.
-/// @param[in]  ic  True if case is to be ignored.
-///
-/// @return True if dictionaries are equal, false otherwise.
-bool tv_dict_equal(dict_T *const d1, dict_T *const d2, const bool ic)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (d1 == d2) {
-    return true;
-  }
-  if (tv_dict_len(d1) != tv_dict_len(d2)) {
-    return false;
-  }
-  if (tv_dict_len(d1) == 0) {
-    // empty and NULL dicts are considered equal
-    return true;
-  }
-  if (d1 == NULL || d2 == NULL) {
-    return false;
-  }
-
-  TV_DICT_ITER(d1, di1, {
-    dictitem_T *const di2 = tv_dict_find(d2, di1->di_key, -1);
-    if (di2 == NULL) {
-      return false;
-    }
-    if (!tv_equal(&di1->di_tv, &di2->di_tv, ic)) {
-      return false;
-    }
-  });
-  return true;
-}
-
-/// Make a copy of dictionary
-///
-/// @param[in]  conv  If non-NULL, then all internal strings will be converted.
-/// @param[in]  orig  Original dictionary to copy.
-/// @param[in]  deep  If false, then shallow copy will be done.
-/// @param[in]  copyID  See var_item_copy().
-///
-/// @return Copied dictionary. May be NULL in case original dictionary is NULL
-///         or some failure happens. The refcount of the new dictionary is set
-///         to 1.
-dict_T *tv_dict_copy(const vimconv_T *const conv, dict_T *const orig, const bool deep,
-                     const int copyID)
-{
-  if (orig == NULL) {
-    return NULL;
-  }
-
-  dict_T *copy = tv_dict_alloc();
-  if (copyID != 0) {
-    orig->dv_copyID = copyID;
-    orig->dv_copydict = copy;
-  }
-  TV_DICT_ITER(orig, di, {
-    if (got_int) {
-      break;
-    }
-    dictitem_T *new_di;
-    if (conv == NULL || conv->vc_type == CONV_NONE) {
-      new_di = tv_dict_item_alloc(di->di_key);
-    } else {
-      size_t len = strlen(di->di_key);
-      char *const key = string_convert(conv, di->di_key, &len);
-      if (key == NULL) {
-        new_di = tv_dict_item_alloc_len(di->di_key, len);
-      } else {
-        new_di = tv_dict_item_alloc_len(key, len);
-        xfree(key);
-      }
-    }
-    if (deep) {
-      if (var_item_copy(conv, &di->di_tv, &new_di->di_tv, deep,
-                        copyID) == FAIL) {
-        xfree(new_di);
-        break;
-      }
-    } else {
-      tv_copy(&di->di_tv, &new_di->di_tv);
-    }
-    if (tv_dict_add(copy, new_di) == FAIL) {
-      tv_dict_item_free(new_di);
-      break;
-    }
-  });
-
-  copy->dv_refcount++;
-  if (got_int) {
-    tv_dict_unref(copy);
-    copy = NULL;
-  }
-
-  return copy;
-}
+// tv_dict_extend, tv_dict_equal, tv_dict_copy migrated to Rust (Phase 4)
 
 /// Set all existing keys in "dict" as read-only.
 ///
@@ -2289,6 +2037,119 @@ void nvim_dict_free_impl(dict_T *d) { tv_dict_free(d); }
 /// Delegates to C tv_dict_unref (before migration).
 void nvim_dict_unref_impl(dict_T *d) { tv_dict_unref(d); }
 
+// Phase 4 accessors for tv_dict_free_contents / tv_dict_free_dict migration
+
+/// Free all items in a dict's hashtab and reset it (high-level for Rust tv_dict_free_contents).
+/// Does NOT free watchers; call nvim_dict_free_watchers separately.
+void nvim_dict_free_hashtab_contents(dict_T *d)
+{
+  hash_lock(&d->dv_hashtab);
+  assert(d->dv_hashtab.ht_locked > 0);
+  HASHTAB_ITER(&d->dv_hashtab, hi, {
+    dictitem_T *const di = TV_DICT_HI2DI(hi);
+    hash_remove(&d->dv_hashtab, hi);
+    tv_dict_item_free(di);
+  });
+  hash_clear(&d->dv_hashtab);
+  d->dv_hashtab.ht_locked--;
+  hash_init(&d->dv_hashtab);
+}
+
+/// Free all watchers from a dict's watcher QUEUE (high-level for Rust tv_dict_free_contents).
+void nvim_dict_free_watchers(dict_T *d)
+{
+  while (!QUEUE_EMPTY(&d->watchers)) {
+    QUEUE *w = QUEUE_HEAD(&d->watchers);
+    QUEUE_REMOVE(w);
+    DictWatcher *watcher = tv_dict_watcher_node_data(w);
+    tv_dict_watcher_free(watcher);
+  }
+}
+
+/// Remove dict from GC list, clear lua_table_ref, and xfree it (high-level for Rust tv_dict_free_dict).
+void nvim_dict_gc_unlink_and_free(dict_T *d)
+{
+  if (d->dv_used_prev == NULL) {
+    gc_first_dict = d->dv_used_next;
+  } else {
+    d->dv_used_prev->dv_used_next = d->dv_used_next;
+  }
+  if (d->dv_used_next != NULL) {
+    d->dv_used_next->dv_used_prev = d->dv_used_prev;
+  }
+  NLUA_CLEAR_REF(d->lua_table_ref);
+  xfree(d);
+}
+
+/// Get dict is_watched status (accessor for Rust tv_dict_extend).
+int nvim_dict_is_watched(const dict_T *d) { return tv_dict_is_watched(d); }
+
+/// tv_dict_item_copy wrapper (creates a copy of a dict item, accessor for Rust).
+dictitem_T *nvim_dict_item_copy_impl(const dictitem_T *di)
+{
+  return tv_dict_item_copy(di);
+}
+
+/// Allocate a dict item with given key (accessor for Rust, avoids circular call).
+dictitem_T *nvim_dict_item_alloc_impl(const char *key)
+{
+  return tv_dict_item_alloc(key);
+}
+
+/// Call tv_dict_watcher_notify (accessor for Rust tv_dict_extend).
+void nvim_dict_watcher_notify(dict_T *d, const char *key, typval_T *newtv, typval_T *oldtv)
+{
+  tv_dict_watcher_notify(d, key, newtv, oldtv);
+}
+
+/// Check if varname is valid (accessor for Rust tv_dict_extend).
+int nvim_valid_varname(const char *name) { return valid_varname(name); }
+
+/// var_check_ro wrapper (accessor for Rust tv_dict_extend).
+bool nvim_var_check_ro(int flags, const char *name, size_t name_len)
+{
+  return var_check_ro(flags, name, name_len);
+}
+
+/// Get di_flags from a dictitem (accessor for Rust tv_dict_extend).
+int nvim_dictitem_get_flags(const dictitem_T *di) { return (int)di->di_flags; }
+
+/// hash_lock on dict's hashtab (accessor for Rust tv_dict_extend).
+void nvim_dict_hash_lock(dict_T *d) { hash_lock(&d->dv_hashtab); }
+
+/// hash_unlock on dict's hashtab (accessor for Rust tv_dict_extend).
+void nvim_dict_hash_unlock(dict_T *d) { hash_unlock(&d->dv_hashtab); }
+
+/// hash_remove on dict's hashtab for given item (accessor for Rust tv_dict_extend).
+void nvim_dict_hash_remove(dict_T *d, hashitem_T *hi) { hash_remove(&d->dv_hashtab, hi); }
+
+/// Get di_key from a dictitem as mutable (accessor for Rust).
+const char *nvim_dictitem_get_key_ptr(const dictitem_T *di) { return di->di_key; }
+
+/// Emit "E737: Key already exists" error (accessor for Rust tv_dict_extend).
+void nvim_semsg_key_exists(const char *key) { semsg(_("E737: Key already exists: %s"), key); }
+
+/// string_convert wrapper for tv_dict_copy (accessor for Rust).
+/// Converts key using vimconv, writing new length to len_out. Returns NULL if no conversion.
+char *nvim_dict_copy_key_convert(const vimconv_T *conv, const char *key, size_t *len_out)
+{
+  *len_out = strlen(key);
+  return string_convert(conv, (char *)key, len_out);
+}
+
+/// Allocate a new dict item with given key and length (accessor for Rust tv_dict_copy).
+dictitem_T *nvim_dict_item_alloc_len_impl(const char *key, size_t len)
+{
+  return tv_dict_item_alloc_len(key, len);
+}
+
+/// Increment dict refcount and set dv_copyID/dv_copydict (accessor for Rust tv_dict_copy).
+void nvim_dict_set_copyid_and_copydict(dict_T *orig, int copyID, dict_T *copy)
+{
+  orig->dv_copyID = copyID;
+  orig->dv_copydict = copy;
+}
+
 /// Increment dict refcount (accessor for Rust).
 void nvim_dict_inc_refcount(dict_T *d) { d->dv_refcount++; }
 
@@ -2547,6 +2408,20 @@ void nvim_tv_dict2list_items(typval_T *argvars, typval_T *rettv)
 {
   tv_dict2list(argvars, rettv, kDict2ListItems);
 }
+
+// Phase 4 additional accessors
+
+/// Set dv_refcount on a dict (accessor for Rust tv_dict_unref).
+void nvim_dict_set_refcount(dict_T *d, int rc) { d->dv_refcount = rc; }
+
+/// Free a dict item without clearing its tv (for error paths in tv_dict_copy where tv is unset).
+void nvim_dict_item_free_raw(dictitem_T *di) { xfree(di); }
+
+/// Get tv_dict_len (number of items) for a dict (accessor for Rust tv_dict_equal).
+int nvim_dict_get_len_impl(const dict_T *d) { return tv_dict_len(d); }
+
+/// Get dv_scope from a dict (accessor for Rust tv_dict_extend).
+int nvim_dict_get_scope_impl(const dict_T *d) { return (int)d->dv_scope; }
 
 // Phase 6g: f_keys, f_values accessors
 

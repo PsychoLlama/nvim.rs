@@ -491,6 +491,15 @@ extern bool tv_islocked(const typval_T *tv);
 // Lock/unlock operations (migrated to Rust, Phase 3)
 extern void tv_item_lock(typval_T *tv, int deep, bool lock, bool check_refcount);
 
+// Dict free/unref/equal/extend/copy (migrated to Rust, Phase 4)
+extern void tv_dict_free_contents(dict_T *d);
+extern void tv_dict_free_dict(dict_T *d);
+extern void tv_dict_free(dict_T *d);
+extern void tv_dict_unref(dict_T *d);
+extern bool tv_dict_equal(dict_T *d1, dict_T *d2, bool ic);
+extern void tv_dict_extend(dict_T *d1, dict_T *d2, const char *action);
+extern dict_T *tv_dict_copy(const vimconv_T *conv, dict_T *orig, bool deep, int copyID);
+
 // Float getter (migrated to Rust)
 extern float_T tv_get_float(const typval_T *tv);
 
