@@ -2721,23 +2721,9 @@ void nvim_ex_delfunction_impl(exarg_T *eap)
 /// It is supposed to be referenced if either it is referenced itself or if l:,
 /// a: or a:000 are referenced as all these are statically allocated within
 /// funccall structure.
-/// Phase 5: C implementation shim for fc_referenced.
-int nvim_fc_referenced_impl(const funccall_T *fc)
-{
-  return (fc->fc_l_varlist.lv_refcount != DO_NOT_FREE_CNT)
-         || fc->fc_l_vars.dv_refcount != DO_NOT_FREE_CNT
-         || fc->fc_l_avars.dv_refcount != DO_NOT_FREE_CNT
-         || fc->fc_refcount > 0;
-}
+// nvim_fc_referenced_impl inlined into rs_fc_referenced (Rust, Phase 12)
 
-/// Phase 5: C implementation shim for can_free_funccal.
-int nvim_can_free_funccal_impl(funccall_T *fc, int copyID)
-{
-  return fc->fc_l_varlist.lv_copyID != copyID
-         && fc->fc_l_vars.dv_copyID != copyID
-         && fc->fc_l_avars.dv_copyID != copyID
-         && fc->fc_copyID != copyID;
-}
+// nvim_can_free_funccal_impl inlined into rs_can_free_funccal (Rust, Phase 12)
 
 /// Phase 6: C implementation shim for ex_return (called from Rust).
 void nvim_ex_return_impl(exarg_T *eap)
@@ -3350,56 +3336,14 @@ dictitem_T *nvim_find_var_in_scoped_ht_impl(const char *name, const size_t namel
   return v;
 }
 
-/// Set "copyID + 1" in previous_funccal and callers.
-/// Phase 5: C implementation shim for set_ref_in_previous_funccal.
-int nvim_set_ref_in_previous_funccal_impl(int copyID)
-{
-  for (funccall_T *fc = previous_funccal; fc != NULL; fc = fc->fc_caller) {
-    fc->fc_copyID = copyID + 1;
-    if (rs_set_ref_in_ht(&fc->fc_l_vars.dv_hashtab, copyID + 1, NULL)
-        || rs_set_ref_in_ht(&fc->fc_l_avars.dv_hashtab, copyID + 1, NULL)
-        || rs_set_ref_in_list_items(&fc->fc_l_varlist, copyID + 1, NULL)) {
-      return true;
-    }
-  }
-  return false;
-}
+// nvim_set_ref_in_previous_funccal_impl inlined into rs_set_ref_in_previous_funccal (Rust, Phase 12)
 
-/// Phase 5: C implementation shim for set_ref_in_funccal.
-int nvim_set_ref_in_funccal_impl(funccall_T *fc, int copyID)
-{
-  if (fc->fc_copyID != copyID) {
-    fc->fc_copyID = copyID;
-    if (rs_set_ref_in_ht(&fc->fc_l_vars.dv_hashtab, copyID, NULL)
-        || rs_set_ref_in_ht(&fc->fc_l_avars.dv_hashtab, copyID, NULL)
-        || rs_set_ref_in_list_items(&fc->fc_l_varlist, copyID, NULL)
-        || set_ref_in_func(NULL, fc->fc_func, copyID)) {
-      return true;
-    }
-  }
-  return false;
-}
+// nvim_set_ref_in_funccal_impl inlined into rs_set_ref_in_funccal (Rust, Phase 12)
 
-
-/// Phase 5: C implementation shim for set_ref_in_call_stack.
-int nvim_set_ref_in_call_stack_impl(int copyID)
-{
-  for (funccall_T *fc = current_funccal; fc != NULL; fc = fc->fc_caller) {
-    if (rs_set_ref_in_funccal(fc, copyID)) {
-      return true;
-    }
-  }
-  for (funccal_entry_T *entry = funccal_stack; entry != NULL; entry = entry->next) {
-    for (funccall_T *fc = entry->top_funccal; fc != NULL; fc = fc->fc_caller) {
-      if (rs_set_ref_in_funccal(fc, copyID)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
+// nvim_set_ref_in_call_stack_impl inlined into rs_set_ref_in_call_stack (Rust, Phase 12)
 
 /// Phase 5: C implementation shim for set_ref_in_functions.
+/// Cannot inline: requires HASHITEM_EMPTY and HI2UF macros for hash iteration.
 int nvim_set_ref_in_functions_impl(int copyID)
 {
   int todo = (int)func_hashtab.ht_used;
@@ -3415,16 +3359,7 @@ int nvim_set_ref_in_functions_impl(int copyID)
   return false;
 }
 
-/// Phase 5: C implementation shim for set_ref_in_func_args.
-int nvim_set_ref_in_func_args_impl(int copyID)
-{
-  for (int i = 0; i < funcargs.ga_len; i++) {
-    if (rs_set_ref_in_item(((typval_T **)funcargs.ga_data)[i], copyID, NULL, NULL)) {
-      return true;
-    }
-  }
-  return false;
-}
+// nvim_set_ref_in_func_args_impl inlined into rs_set_ref_in_func_args (Rust, Phase 12)
 
 // nvim_set_ref_in_func_impl inlined into rs_set_ref_in_func (Rust, Phase 11)
 
@@ -3762,3 +3697,23 @@ void nvim_partial_set_func(partial_T *pt, ufunc_T *fp) { if (pt) { pt->pt_func =
 void nvim_partial_set_argv(partial_T *pt, typval_T *argv) { if (pt) { pt->pt_argv = argv; } }
 void nvim_partial_set_argc(partial_T *pt, int argc) { if (pt) { pt->pt_argc = argc; } }
 char *nvim_tv_get_vstring_mut(typval_T *tv) { return tv ? tv->vval.v_string : NULL; }
+
+// Phase 12: funccall_T field accessors for inlining GC shims into Rust
+funccall_T *nvim_get_previous_funccal(void) { return previous_funccal; }
+void nvim_set_fc_copyID(funccall_T *fc, int v) { if (fc) { fc->fc_copyID = v; } }
+int nvim_get_fc_copyID(const funccall_T *fc) { return fc ? fc->fc_copyID : 0; }
+int nvim_get_fc_refcount(const funccall_T *fc) { return fc ? fc->fc_refcount : 0; }
+// Sub-struct field accessors (refcount / copyID from fc_l_varlist, fc_l_vars, fc_l_avars)
+int nvim_fc_varlist_lv_refcount(const funccall_T *fc) { return fc ? fc->fc_l_varlist.lv_refcount : 0; }
+int nvim_fc_l_vars_dv_refcount(const funccall_T *fc) { return fc ? fc->fc_l_vars.dv_refcount : 0; }
+int nvim_fc_l_avars_dv_refcount(const funccall_T *fc) { return fc ? fc->fc_l_avars.dv_refcount : 0; }
+int nvim_fc_varlist_lv_copyID(const funccall_T *fc) { return fc ? fc->fc_l_varlist.lv_copyID : 0; }
+int nvim_fc_l_vars_dv_copyID(const funccall_T *fc) { return fc ? fc->fc_l_vars.dv_copyID : 0; }
+int nvim_fc_l_avars_dv_copyID(const funccall_T *fc) { return fc ? fc->fc_l_avars.dv_copyID : 0; }
+hashtab_T *nvim_fc_l_vars_ht(funccall_T *fc) { return fc ? &fc->fc_l_vars.dv_hashtab : NULL; }
+hashtab_T *nvim_fc_l_avars_ht(funccall_T *fc) { return fc ? &fc->fc_l_avars.dv_hashtab : NULL; }
+list_T *nvim_fc_l_varlist(funccall_T *fc) { return fc ? &fc->fc_l_varlist : NULL; }
+// nvim_get_current_funccal already defined above (line 3517)
+// funcargs garray accessors for set_ref_in_func_args
+int nvim_funcargs_len(void) { return funcargs.ga_len; }
+typval_T *nvim_funcargs_item(int i) { return ((typval_T **)funcargs.ga_data)[i]; }
