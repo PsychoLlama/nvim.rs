@@ -4,9 +4,9 @@
 
 use crate::{
     nvim_exarg_get_addr_count, nvim_exarg_get_arg, nvim_exarg_get_forceit, nvim_exarg_get_line2,
-    nvim_excmds_curbuf_clear_filenames, nvim_excmds_curbuf_get_ffname,
-    nvim_excmds_curbuf_get_fname, nvim_excmds_curbuf_get_sfname, nvim_excmds_curbuf_is,
-    nvim_excmds_curbuf_set_bf_notedited, nvim_excmds_curbuf_set_ffname,
+    nvim_excmds_buf_get_b_fnum, nvim_excmds_cmdmod_has_keepalt, nvim_excmds_curbuf_clear_filenames,
+    nvim_excmds_curbuf_get_ffname, nvim_excmds_curbuf_get_fname, nvim_excmds_curbuf_get_sfname,
+    nvim_excmds_curbuf_is, nvim_excmds_curbuf_set_bf_notedited, nvim_excmds_curbuf_set_ffname,
     nvim_excmds_curbuf_set_sfname, nvim_excmds_curwin_cursor_lnum, nvim_excmds_set_curwin_alt_fnum,
     ExArgHandle,
 };
@@ -374,8 +374,7 @@ extern "C" {
         lnum: c_int,
         flags: c_int,
     ) -> *mut crate::BufHandle;
-    fn nvim_excmds_buf_get_b_fnum(buf: *const crate::BufHandle) -> c_int;
-    fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
+    // nvim_excmds_buf_get_b_fnum, nvim_excmds_cmdmod_has_keepalt moved to Phase 3 inline Rust
     // nvim_excmds_set_curwin_alt_fnum, nvim_excmds_curwin_cursor_lnum moved to Phase 2 inline Rust
     fn do_autochdir();
     fn xfree(ptr: *mut std::ffi::c_void);

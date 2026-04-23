@@ -75,8 +75,6 @@ int nvim_is_one_window(void) { return ONE_WINDOW ? 1 : 0; }
 void nvim_set_ex_no_reprint(int val) { ex_no_reprint = val != 0; }
 int nvim_get_ex_no_reprint(void) { return ex_no_reprint ? 1 : 0; }
 const char *nvim_get_e_empty_buffer(void) { return _(e_empty_buffer); }
-int nvim_cmdmod_has_lockmarks(void) { return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0; }
-int nvim_cmdmod_has_keeppatterns(void) { return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0; }
 void nvim_check_pos_visual(void) { check_pos(curbuf, &VIsual); }
 void nvim_transchar_nonprint_curbuf(char *buf, int c) { transchar_nonprint(curbuf, buf, c); }
 void nvim_curbuf_set_op_start(linenr_T lnum, colnr_T col) { curbuf->b_op_start.lnum = lnum; curbuf->b_op_start.col = col; }
@@ -177,7 +175,6 @@ void nvim_excmds_reset_binding_curwin(void) { RESET_BINDING(curwin); }
 void nvim_excmds_set_foldcolumn_zero(void) { set_option_direct(kOptFoldcolumn, STATIC_CSTR_AS_OPTVAL("0"), 0, SID_NONE); }
 int nvim_excmds_oldfiles_count(void) { list_T *l = get_vim_var_list(VV_OLDFILES); return l == NULL ? 0 : (int)tv_list_len(l); }
 const char *nvim_excmds_oldfiles_find_str(int idx) { list_T *l = get_vim_var_list(VV_OLDFILES); if (l == NULL) { return NULL; } return tv_list_find_str(l, idx); }
-int nvim_excmds_cmdmod_has_browse(void) { return (cmdmod.cmod_flags & CMOD_BROWSE) != 0; }
 void nvim_excmds_do_exedit_edit(exarg_T *eap, char *arg) { char *saved_arg = eap->arg; int saved_cmdidx = eap->cmdidx; eap->arg = arg; eap->cmdidx = CMD_edit; cmdmod.cmod_flags &= ~CMOD_BROWSE; do_exedit(eap, NULL); eap->arg = saved_arg; eap->cmdidx = saved_cmdidx; }
 int nvim_excmds_any_buf_changed(void)
 {
@@ -226,11 +223,7 @@ void nvim_excmds_emsg_with_arg(int id, const char *arg)
   }
 }
 void nvim_excmds_disable_inccommand(void) { set_option_direct(kOptInccommand, STATIC_CSTR_AS_OPTVAL(""), 0, SID_NONE); }
-int nvim_excmds_cmdmod_has_keepalt(void) { return (cmdmod.cmod_flags & CMOD_KEEPALT) != 0 ? 1 : 0; }
 int nvim_excmds_os_path_exists_curbuf_ffname(void) { return curbuf->b_ffname != NULL && os_path_exists(curbuf->b_ffname) ? 1 : 0; }
-int nvim_excmds_cmdmod_save_clear_lockmarks(void) { int saved = cmdmod.cmod_flags; cmdmod.cmod_flags &= ~CMOD_LOCKMARKS; return saved; }
-void nvim_excmds_cmdmod_restore_flags(int saved) { cmdmod.cmod_flags = saved; }
-int nvim_excmds_cmdmod_has_keepmarks_now(void) { return (cmdmod.cmod_flags & CMOD_KEEPMARKS) != 0 ? 1 : 0; }
 int nvim_excmds_buf_write_filter(const char *itmp, int line1, int line2, exarg_T *eap) { return buf_write(curbuf, (char *)itmp, NULL, (linenr_T)line1, (linenr_T)line2, eap, false, false, false, true) == OK ? 1 : 0; }
 int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap) { return readfile((char *)otmp, NULL, (linenr_T)line2, 0, (linenr_T)MAXLNUM, eap, READ_FILTER, false) == OK ? 1 : 0; }
 int nvim_excmds_p_cpo_no_remmark(void) { return vim_strchr(p_cpo, CPO_REMMARK) == NULL ? 1 : 0; }
@@ -260,14 +253,11 @@ void nvim_excmds_curbuf_op_restore(uint64_t saved_start, uint64_t saved_end) { c
 void nvim_excmds_curbuf_op_adjust_lnum(int delta) { curbuf->b_op_start.lnum += (linenr_T)delta; curbuf->b_op_end.lnum += (linenr_T)delta; }
 _Static_assert(CMD_xall == 537, "CMD_xall mismatch -- update the Rust constant in write.rs");
 _Static_assert(CMD_wqall == 532, "CMD_wqall mismatch -- update the Rust constant in write.rs");
-buf_T *nvim_excmds_buf_get_next(const buf_T *buf) { return buf->b_next; }
 int nvim_excmds_buf_has_running_job(const buf_T *buf) { return (buf->terminal != NULL && channel_job_running((uint64_t)buf->b_p_channel)) ? 1 : 0; }
-int nvim_excmds_buf_get_b_fnum(const buf_T *buf) { return buf->b_fnum; }
 void nvim_excmds_semsg_e141(int64_t fnum) { semsg(_("E141: No file name for buffer %" PRId64), fnum); }
 int nvim_excmds_check_readonly_buf(int forceit_in, buf_T *buf, int *forceit_out) { exarg_T fake_eap = { 0 }; fake_eap.forceit = (bool)forceit_in; int result = rs_check_readonly(&fake_eap, buf); *forceit_out = (int)fake_eap.forceit; return result; }
 void *nvim_excmds_new_bufref(buf_T *buf) { bufref_T *ref = xmalloc(sizeof(bufref_T)); set_bufref(ref, buf); return ref; }
 int nvim_excmds_bufref_valid(void *ref) { return bufref_valid((bufref_T *)ref) ? 1 : 0; }
-int nvim_excmds_buf_get_b_flags(const buf_T *buf) { return (int)buf->b_flags; }
 int nvim_excmds_cpo_no_overnew(void) { return vim_strchr(p_cpo, CPO_OVERNEW) == NULL ? 1 : 0; }
 int nvim_excmds_dialog_overwrite(exarg_T *eap, const char *fname) { char buff[DIALOG_MSG_SIZE]; dialog_msg(buff, _("Overwrite existing file \"%s\"?"), (char *)fname); if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2) == VIM_YES) { eap->forceit = true; return 1; } return 0; }
 char *nvim_excmds_get_first_dir(void) { if (*p_dir == NUL) { char *dir = xmalloc(5); STRCPY(dir, "."); return dir; } char *dir = xmalloc(MAXPATHL); char *p = p_dir; copy_option_part(&p, dir, MAXPATHL, ","); return dir; }
@@ -284,17 +274,11 @@ int nvim_excmds_curbuf_check_writable(void) { return 1; }
 int nvim_excmds_dialog_write_partial(void) { return vim_dialog_yesno(VIM_QUESTION, NULL, _("Write partial file?"), 2) == VIM_YES ? 1 : 0; }
 void nvim_excmds_buf_swap_filenames(buf_T *alt_buf) { char *tmp; tmp = alt_buf->b_fname; alt_buf->b_fname = curbuf->b_fname; curbuf->b_fname = tmp; tmp = alt_buf->b_ffname; alt_buf->b_ffname = curbuf->b_ffname; curbuf->b_ffname = tmp; tmp = alt_buf->b_sfname; alt_buf->b_sfname = curbuf->b_sfname; curbuf->b_sfname = tmp; }
 void nvim_excmds_buf_name_changed_curbuf(void) { buf_name_changed(curbuf); }
-int nvim_excmds_buf_get_b_p_bl(const buf_T *buf) { return buf->b_p_bl ? 1 : 0; }
-void nvim_excmds_buf_set_b_p_bl_true(buf_T *buf) { buf->b_p_bl = true; }
-int nvim_excmds_buf_ft_is_empty(const buf_T *buf) { return *buf->b_p_ft == NUL ? 1 : 0; }
 int nvim_excmds_augroup_exists_filetypedetect(void) { return augroup_exists("filetypedetect") ? 1 : 0; }
 void nvim_excmds_do_doautocmd_filetypedetect(void) { do_doautocmd("filetypedetect BufRead", true, NULL); }
 void nvim_excmds_do_modelines(void) { do_modelines(0); }
 int nvim_excmds_buf_write_do_write(const char *ffname, const char *fname, int line1, int line2, exarg_T *eap, int append, int forceit) { return buf_write(curbuf, (char *)ffname, (char *)fname, (linenr_T)line1, (linenr_T)line2, eap, (bool)append, (bool)forceit, true, false) == OK ? 1 : 0; }
 void nvim_excmds_saveas_post_success(void) { curbuf->b_p_ro = false; redraw_tabline = true; }
-int nvim_excmds_buf_get_b_p_ro(const buf_T *buf) { return buf->b_p_ro ? 1 : 0; }
-const char *nvim_excmds_buf_get_b_fname(const buf_T *buf) { return buf->b_fname; }
-const char *nvim_excmds_buf_get_b_ffname_ptr(const buf_T *buf) { return buf->b_ffname; }
 int nvim_excmds_buf_ffname_path_exists(const buf_T *buf) { return (buf->b_ffname != NULL && os_path_exists(buf->b_ffname)) ? 1 : 0; }
 int nvim_excmds_buf_ffname_is_writable(const buf_T *buf) { return (buf->b_ffname != NULL && os_file_is_writable(buf->b_ffname)) ? 1 : 0; }
 int nvim_excmds_p_confirm_or_cmod_confirm(void) { return (p_confirm || (cmdmod.cmod_flags & CMOD_CONFIRM)) ? 1 : 0; }

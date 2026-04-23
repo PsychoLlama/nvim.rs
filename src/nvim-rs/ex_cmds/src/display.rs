@@ -15,7 +15,7 @@
 use std::ffi::{c_int, c_long, CStr};
 
 use crate::range::{LineNr, LineRange};
-use crate::ExArgHandle;
+use crate::{nvim_excmds_cmdmod_has_browse, ExArgHandle};
 
 /// Display mode for `:print`, `:number`, and `:list` commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -864,7 +864,7 @@ extern "C" {
     fn msg_clr_eos();
     fn msg_putchar(c: c_int);
     fn os_breakcheck();
-    fn nvim_excmds_cmdmod_has_browse() -> c_int;
+    // nvim_excmds_cmdmod_has_browse moved to Phase 3 inline Rust
     fn prompt_for_input(
         prompt: *const std::ffi::c_char,
         hl_id: c_int,

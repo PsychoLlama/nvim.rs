@@ -17,6 +17,7 @@ use crate::{
     nvim_ecmd_curwin_set_pcmark, nvim_ecmd_curwin_set_ws_to_buf, nvim_ecmd_curwin_ws_is_own_buf,
     nvim_ecmd_dec_curwin_buf_nwindows_safe, nvim_ecmd_eap_get_do_ecmd_cmd,
     nvim_ecmd_win_buf_is_null, nvim_ecmd_win_restore_buffer, nvim_ecmd_win_set_locked,
+    nvim_excmds_buf_get_b_fname, nvim_excmds_buf_get_b_fnum, nvim_excmds_cmdmod_has_keepalt,
     nvim_excmds_curbuf_get_b_fnum, nvim_excmds_curbuf_get_b_nwindows,
     nvim_excmds_curbuf_get_ffname, nvim_excmds_curbuf_get_fname, nvim_excmds_curbuf_ml_line_count,
     nvim_excmds_curwin_cursor_lnum, nvim_excmds_set_curwin_alt_fnum, BufHandle, ExArgHandle,
@@ -101,8 +102,7 @@ extern "C" {
     fn nvim_ecmd_curwin_set_scbind_pos_from_topline();
 
     // buf_T opaque handle accessors
-    fn nvim_excmds_buf_get_b_fnum(buf: *const BufHandle) -> c_int;
-    fn nvim_excmds_buf_get_b_fname(buf: *const BufHandle) -> *const c_char;
+    // nvim_excmds_buf_get_b_fnum, nvim_excmds_buf_get_b_fname moved to Phase 3 inline Rust
     fn nvim_ecmd_set_curbuf(buf: *mut BufHandle);
 
     // bufref_T heap handle accessors (exposed as void*)
@@ -192,7 +192,7 @@ extern "C" {
     fn nvim_ecmd_cmdwin_restore(type_: c_int, win: *mut WinHandle, old_curwin: *mut WinHandle);
     static mut exmode_active: bool;
     static mut skip_redraw: bool;
-    fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
+    // nvim_excmds_cmdmod_has_keepalt moved to Phase 3 inline Rust
     fn nvim_get_p_sol() -> c_int;
     static mut msg_scroll: c_int;
     fn nvim_get_p_verbose() -> c_int;

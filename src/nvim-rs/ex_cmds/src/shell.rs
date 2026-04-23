@@ -1041,17 +1041,15 @@ pub extern "C" fn rs_needs_shell_escape(c: c_int) -> c_int {
 // =============================================================================
 
 use crate::{
+    nvim_cmdmod_has_lockmarks, nvim_excmds_cmdmod_has_keepmarks_now,
+    nvim_excmds_cmdmod_restore_flags, nvim_excmds_cmdmod_save_clear_lockmarks,
     nvim_excmds_curbuf_op_end_lnum, nvim_excmds_curbuf_op_start_lnum,
     nvim_excmds_curbuf_set_op_end_lnum, nvim_excmds_curbuf_set_op_start_lnum,
     nvim_excmds_curwin_cursor_restore, nvim_excmds_curwin_cursor_save, ExArgHandle,
 };
 
 extern "C" {
-    // do_filter accessors (Phase 2 curbuf/curwin functions moved to use crate::{})
-    fn nvim_excmds_cmdmod_save_clear_lockmarks() -> c_int;
-    fn nvim_excmds_cmdmod_restore_flags(saved: c_int);
-    fn nvim_cmdmod_has_lockmarks() -> c_int;
-    fn nvim_excmds_cmdmod_has_keepmarks_now() -> c_int;
+    // do_filter accessors (cmdmod functions moved to Phase 3 inline Rust)
     fn vim_tempname() -> *mut c_char;
     fn nvim_excmds_buf_write_filter(
         itmp: *const c_char,

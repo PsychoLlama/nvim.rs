@@ -35,11 +35,12 @@ use crate::ExArgHandle;
 use crate::SubIgnoreType;
 // ExArg field accessors (Phase 1: inline Rust, was C shims)
 use crate::{
-    nvim_curwin_get_w_botline, nvim_curwin_get_w_p_crb, nvim_curwin_get_w_p_fen,
-    nvim_curwin_get_w_p_nu, nvim_curwin_set_w_p_fen, nvim_exarg_get_arg, nvim_exarg_get_cmd,
-    nvim_exarg_get_cmdidx, nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_get_skip,
-    nvim_exarg_set_flags, nvim_exarg_set_line2, nvim_exarg_set_nextcmd,
-    nvim_excmds_arg_has_valid_delim, nvim_excmds_eap_arg_restore,
+    nvim_cmdmod_has_keeppatterns, nvim_cmdmod_has_lockmarks, nvim_curwin_get_w_botline,
+    nvim_curwin_get_w_p_crb, nvim_curwin_get_w_p_fen, nvim_curwin_get_w_p_nu,
+    nvim_curwin_set_w_p_fen, nvim_exarg_get_arg, nvim_exarg_get_cmd, nvim_exarg_get_cmdidx,
+    nvim_exarg_get_line1, nvim_exarg_get_line2, nvim_exarg_get_skip, nvim_exarg_set_flags,
+    nvim_exarg_set_line2, nvim_exarg_set_nextcmd, nvim_excmds_arg_has_valid_delim,
+    nvim_excmds_eap_arg_restore,
 };
 
 // =============================================================================
@@ -1295,8 +1296,7 @@ extern "C" {
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn msg(s: *const c_char, hl_id: c_int) -> c_int;
     fn emsg(s: *const c_char) -> c_int;
-    fn nvim_cmdmod_has_lockmarks() -> c_int;
-    fn nvim_cmdmod_has_keeppatterns() -> c_int;
+    // nvim_cmdmod_has_lockmarks, nvim_cmdmod_has_keeppatterns moved to Phase 3 inline Rust
     fn fast_breakcheck();
 }
 

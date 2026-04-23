@@ -714,8 +714,7 @@ extern "C" {
     ) -> *mut BufHandle;
 
     // ex_copy accessors and functions
-    /// Check if CMOD_LOCKMARKS is set in cmdmod
-    pub fn nvim_cmdmod_has_lockmarks() -> c_int;
+    // nvim_cmdmod_has_lockmarks moved to Phase 3 inline Rust
     /// Set curbuf->b_op_start
     pub fn nvim_curbuf_set_op_start(lnum: c_int, col: c_int);
     /// Set curbuf->b_op_end
@@ -1471,6 +1470,87 @@ pub unsafe extern "C" fn nvim_ecmd_curwin_set_ws_to_buf(buf: *mut BufHandle) {
     // b_s is at absolute offset 11240 in BufStruct (synblock_T, opaque)
     const B_S_OFFSET: usize = 11240;
     curwin_mut().w_s = (buf as *mut u8).add(B_S_OFFSET) as *mut std::ffi::c_void;
+}
+
+// =============================================================================
+// Phase 3 partial: cmdmod flag accessors + buf_T param accessors
+// =============================================================================
+
+use nvim_ex_cmds_types::CmdMod;
+
+extern "C" {
+    static mut cmdmod: CmdMod;
+}
+
+// CMOD_* flag constants (validated by _Static_assert in ex_cmds_shim.c)
+const CMOD_BROWSE: c_int = 0x0040;
+#[allow(dead_code)]
+const CMOD_CONFIRM: c_int = 0x0080;
+const CMOD_KEEPALT: c_int = 0x0100;
+const CMOD_KEEPMARKS: c_int = 0x0200;
+const CMOD_LOCKMARKS: c_int = 0x0800;
+const CMOD_KEEPPATTERNS: c_int = 0x1000;
+
+#[no_mangle]
+pub unsafe extern "C" fn nvim_cmdmod_has_lockmarks() -> c_int {
+    c_int::from((cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0)
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_cmdmod_has_keeppatterns() -> c_int {
+    c_int::from((cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0)
+}
+pub unsafe fn nvim_excmds_cmdmod_has_browse() -> c_int {
+    c_int::from((cmdmod.cmod_flags & CMOD_BROWSE) != 0)
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_excmds_cmdmod_has_keepalt() -> c_int {
+    c_int::from((cmdmod.cmod_flags & CMOD_KEEPALT) != 0)
+}
+pub unsafe fn nvim_excmds_cmdmod_has_keepmarks_now() -> c_int {
+    c_int::from((cmdmod.cmod_flags & CMOD_KEEPMARKS) != 0)
+}
+pub unsafe fn nvim_excmds_cmdmod_save_clear_lockmarks() -> c_int {
+    let saved = cmdmod.cmod_flags;
+    cmdmod.cmod_flags &= !CMOD_LOCKMARKS;
+    saved
+}
+pub unsafe fn nvim_excmds_cmdmod_restore_flags(saved: c_int) {
+    cmdmod.cmod_flags = saved;
+}
+
+// --- buf_T param accessors (Phase 3 partial) ---
+pub unsafe fn nvim_excmds_buf_get_next(buf: *mut BufHandle) -> *mut BufHandle {
+    buf_ref_raw(buf as *mut std::ffi::c_void).b_next as *mut BufHandle
+}
+pub unsafe fn nvim_excmds_buf_get_b_fnum(buf: *const BufHandle) -> c_int {
+    (buf as *const BufStruct).as_ref().map_or(0, |b| b.handle)
+}
+pub unsafe fn nvim_excmds_buf_get_b_flags(buf: *const BufHandle) -> c_int {
+    buf_ref_raw(buf as *mut std::ffi::c_void).b_flags
+}
+pub unsafe fn nvim_excmds_buf_get_b_p_bl(buf: *const BufHandle) -> c_int {
+    buf_ref_raw(buf as *mut std::ffi::c_void).b_p_bl
+}
+pub unsafe fn nvim_excmds_buf_set_b_p_bl_true(buf: *mut BufHandle) {
+    buf_mut_raw(buf as *mut std::ffi::c_void).b_p_bl = 1;
+}
+#[no_mangle]
+pub unsafe extern "C" fn nvim_excmds_buf_ft_is_empty(buf: *const BufHandle) -> c_int {
+    let b = buf_ref_raw(buf as *mut std::ffi::c_void);
+    if b.b_p_ft.is_null() {
+        1
+    } else {
+        c_int::from(*b.b_p_ft == 0)
+    }
+}
+pub unsafe fn nvim_excmds_buf_get_b_p_ro(buf: *const BufHandle) -> c_int {
+    buf_ref_raw(buf as *mut std::ffi::c_void).b_p_ro
+}
+pub unsafe fn nvim_excmds_buf_get_b_fname(buf: *const BufHandle) -> *const c_char {
+    buf_ref_raw(buf as *mut std::ffi::c_void).b_fname
+}
+pub unsafe fn nvim_excmds_buf_get_b_ffname_ptr(buf: *const BufHandle) -> *const c_char {
+    buf_ref_raw(buf as *mut std::ffi::c_void).b_ffname
 }
 
 // =============================================================================

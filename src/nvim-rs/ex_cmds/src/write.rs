@@ -29,6 +29,9 @@ use crate::{
     nvim_ecmd_buf_has_memfile, nvim_exarg_cmdidx_is_saveas, nvim_exarg_get_cmd_byte1,
     nvim_exarg_get_cmdidx, nvim_exarg_get_forceit, nvim_exarg_get_line1, nvim_exarg_get_line2,
     nvim_exarg_get_usefilter, nvim_exarg_set_line1, nvim_exarg_set_line2,
+    nvim_excmds_buf_ft_is_empty, nvim_excmds_buf_get_b_ffname_ptr, nvim_excmds_buf_get_b_flags,
+    nvim_excmds_buf_get_b_fname, nvim_excmds_buf_get_b_fnum, nvim_excmds_buf_get_b_p_bl,
+    nvim_excmds_buf_get_b_p_ro, nvim_excmds_buf_get_next, nvim_excmds_buf_set_b_p_bl_true,
     nvim_excmds_curbuf_ffname_not_null, nvim_excmds_curbuf_get_b_fnum,
     nvim_excmds_curbuf_get_b_nwindows, nvim_excmds_curbuf_get_ffname, nvim_excmds_curbuf_get_fname,
     nvim_excmds_curbuf_get_sfname, nvim_excmds_curwin_get_w_arg_idx, nvim_excmds_eap_get_append,
@@ -268,8 +271,7 @@ pub extern "C" fn rs_should_write_update(is_modified: c_int) -> c_int {
 extern "C" {
     fn os_nodetype(fname: *const c_char) -> c_int;
     fn os_file_mkdir(fname: *const c_char, mode: c_int) -> c_int;
-    fn nvim_excmds_buf_get_b_p_ro(buf: *const BufHandle) -> c_int;
-    fn nvim_excmds_buf_get_b_fname(buf: *const BufHandle) -> *const c_char;
+    // nvim_excmds_buf_get_b_p_ro, nvim_excmds_buf_get_b_fname moved to Phase 3 inline Rust
     fn nvim_excmds_buf_ffname_path_exists(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_buf_ffname_is_writable(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_p_confirm_or_cmod_confirm() -> c_int;
@@ -610,13 +612,12 @@ const CMD_WQALL: c_int = 532;
 extern "C" {
     fn before_quit_all(eap: *mut ExArgHandle) -> c_int;
     fn getout(code: c_int) -> !;
-    fn nvim_excmds_buf_get_next(buf: *const BufHandle) -> *mut BufHandle;
+    // nvim_excmds_buf_get_next, nvim_excmds_buf_get_b_ffname_ptr, nvim_excmds_buf_get_b_fnum
+    // moved to Phase 3 inline Rust
     fn nvim_excmds_buf_has_running_job(buf: *const BufHandle) -> c_int;
     fn no_write_message_nobang(buf: *mut BufHandle);
     fn bufIsChanged(buf: *mut BufHandle) -> c_int;
     fn rs_bt_dontwrite(buf: *mut BufHandle) -> bool;
-    fn nvim_excmds_buf_get_b_ffname_ptr(buf: *const BufHandle) -> *const c_char;
-    fn nvim_excmds_buf_get_b_fnum(buf: *const BufHandle) -> c_int;
     fn nvim_excmds_semsg_e141(fnum: i64);
     fn nvim_excmds_check_readonly_buf(
         forceit_in: c_int,
@@ -723,7 +724,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
 
 extern "C" {
     fn rs_bt_nofilename(buf: *mut BufHandle) -> bool;
-    fn nvim_excmds_buf_get_b_flags(buf: *const BufHandle) -> c_int;
+    // nvim_excmds_buf_get_b_flags moved to Phase 3 inline Rust
     fn nvim_excmds_cpo_no_overnew() -> c_int;
     fn os_path_exists(ffname: *const c_char) -> c_int;
     fn os_isdir(ffname: *const c_char) -> c_int;
@@ -861,9 +862,8 @@ extern "C" {
     fn aborting() -> c_int;
     fn nvim_excmds_buf_swap_filenames(alt_buf: *mut BufHandle);
     fn nvim_excmds_buf_name_changed_curbuf();
-    fn nvim_excmds_buf_get_b_p_bl(buf: *const BufHandle) -> c_int;
-    fn nvim_excmds_buf_set_b_p_bl_true(buf: *mut BufHandle);
-    fn nvim_excmds_buf_ft_is_empty(buf: *const BufHandle) -> c_int;
+    // nvim_excmds_buf_get_b_p_bl, nvim_excmds_buf_set_b_p_bl_true, nvim_excmds_buf_ft_is_empty
+    // moved to Phase 3 inline Rust
     fn nvim_excmds_augroup_exists_filetypedetect() -> c_int;
     fn nvim_excmds_do_doautocmd_filetypedetect();
     fn nvim_excmds_do_modelines();
