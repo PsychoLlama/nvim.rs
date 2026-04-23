@@ -160,6 +160,26 @@ extern "C" {
     );
     // call_user_func_check is Rust (funccal.rs), exported as "call_user_func_check"
     // Already declared above as "call_user_func_check" -- using that one.
+
+    // Phase 23: For get_func_tv migration
+    fn nvim_evalarg_should_evaluate(ea: *const c_void) -> bool;
+    fn nvim_funcargs_ga_itemsize() -> c_int;
+    fn nvim_funcargs_ga_init();
+    fn nvim_funcargs_ga_grow();
+    fn nvim_funcargs_push_tv_ptr(tv: *mut c_void);
+    fn nvim_funcargs_dec_len(n: c_int);
+    fn nvim_get_testing_flag() -> c_int;
+    fn nvim_emsg_e740_too_many_args(name: *const c_char);
+    fn nvim_emsg_e116_invalid_args(name: *const c_char);
+    // get_func_arguments is Rust (parsing.rs), exported as "get_func_arguments"
+    fn get_func_arguments(
+        arg: *mut *mut c_char,
+        evalarg: *mut c_void,
+        partial_argc: c_int,
+        argvars: *mut c_void,
+        argcount: *mut c_int,
+    ) -> c_int;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
 }
 
 // =============================================================================
@@ -837,5 +857,108 @@ pub unsafe extern "C" fn rs_call_func(
     unsafe { xfree(tofree.cast::<c_void>()) };
     unsafe { xfree(name.cast::<c_void>()) };
 
+    ret
+}
+
+// =============================================================================
+// get_func_tv
+// =============================================================================
+//
+// Phase 23: Migrated from userfunc.c.
+
+/// Parse function arguments and call the function.
+///
+/// # Safety
+/// All pointers must be valid. `name` must be a NUL-terminated C string.
+/// `arg` must point to a valid C string pointer. `evalarg` may be null.
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+#[unsafe(export_name = "get_func_tv")]
+pub unsafe extern "C" fn rs_get_func_tv(
+    name: *const c_char,
+    len: c_int,
+    rettv: *mut c_void,
+    arg: *mut *mut c_char,
+    evalarg: *mut c_void,
+    funcexe: *mut c_void,
+) -> c_int {
+    // argvars: (MAX_FUNC_ARGS + 1) * SIZEOF_TYPVAL bytes, zero-initialized
+    let mut argvars_buf = [0u8; (MAX_FUNC_ARGS + 1) * SIZEOF_TYPVAL];
+    let argvars = argvars_buf.as_mut_ptr().cast::<c_void>();
+    let mut argcount: c_int = 0;
+
+    let evaluate = unsafe { nvim_evalarg_should_evaluate(evalarg) };
+
+    let mut argp = unsafe { *arg };
+
+    // Get partial_argc from funcexe->fe_partial->pt_argc
+    let partial = unsafe { nvim_funcexe_get_partial(funcexe.cast_const()) };
+    let partial_argc = if partial.is_null() {
+        0
+    } else {
+        unsafe { nvim_partial_get_argc(partial.cast_const()) }
+    };
+
+    let ret = unsafe {
+        get_func_arguments(
+            std::ptr::addr_of_mut!(argp),
+            evalarg,
+            partial_argc,
+            argvars,
+            std::ptr::addr_of_mut!(argcount),
+        )
+    };
+
+    #[allow(clippy::cast_possible_truncation)]
+    let max_func_args: c_int = MAX_FUNC_ARGS as c_int;
+    let ret = if ret == OK {
+        let mut i: c_int = 0;
+
+        if unsafe { nvim_get_testing_flag() } != 0 {
+            // Register argvars for test_garbagecollect_now()
+            if unsafe { nvim_funcargs_ga_itemsize() } == 0 {
+                unsafe { nvim_funcargs_ga_init() };
+            }
+            while i < argcount {
+                unsafe { nvim_funcargs_ga_grow() };
+                let tv_slot = unsafe {
+                    argvars
+                        .cast::<u8>()
+                        .add(i as usize * SIZEOF_TYPVAL)
+                        .cast::<c_void>()
+                };
+                unsafe { nvim_funcargs_push_tv_ptr(tv_slot) };
+                i += 1;
+            }
+        }
+
+        let r = unsafe { rs_call_func(name, len, rettv, argcount, argvars, funcexe) };
+        unsafe { nvim_funcargs_dec_len(i) };
+        r
+    } else {
+        if evaluate && !unsafe { aborting() } {
+            if argcount == max_func_args {
+                unsafe { nvim_emsg_e740_too_many_args(name) };
+            } else {
+                unsafe { nvim_emsg_e116_invalid_args(name) };
+            }
+        }
+        FAIL
+    };
+
+    // Clear argument typvals
+    let mut ac = argcount;
+    while ac > 0 {
+        ac -= 1;
+        let slot = unsafe {
+            argvars
+                .cast::<u8>()
+                .add(ac as usize * SIZEOF_TYPVAL)
+                .cast::<c_void>()
+        };
+        unsafe { tv_clear(slot) };
+    }
+
+    unsafe { *arg = skipwhite(argp) };
     ret
 }

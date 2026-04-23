@@ -371,53 +371,9 @@ extern int get_func_arguments(char **arg, evalarg_T *const evalarg, int partial_
 /// @param funcexe  various values
 ///
 /// @return  OK or FAIL.
-int get_func_tv(const char *name, int len, typval_T *rettv, char **arg, evalarg_T *const evalarg,
-                funcexe_T *funcexe)
-{
-  typval_T argvars[MAX_FUNC_ARGS + 1];          // vars for arguments
-  int argcount = 0;                     // number of arguments found
-  const bool evaluate = evalarg == NULL ? false : (evalarg->eval_flags & EVAL_EVALUATE);
-
-  char *argp = *arg;
-  int ret = get_func_arguments(&argp, evalarg,
-                               (funcexe->fe_partial == NULL
-                                ? 0
-                                : funcexe->fe_partial->pt_argc),
-                               argvars, &argcount);
-
-  assert(ret == OK || ret == FAIL);  // suppress clang false positive
-  if (ret == OK) {
-    int i = 0;
-
-    if (get_vim_var_nr(VV_TESTING)) {
-      // Prepare for calling test_garbagecollect_now(), need to know
-      // what variables are used on the call stack.
-      if (funcargs.ga_itemsize == 0) {
-        ga_init(&funcargs, (int)sizeof(typval_T *), 50);
-      }
-      for (i = 0; i < argcount; i++) {
-        ga_grow(&funcargs, 1);
-        ((typval_T **)funcargs.ga_data)[funcargs.ga_len++] = &argvars[i];
-      }
-    }
-    ret = call_func(name, len, rettv, argcount, argvars, funcexe);
-
-    funcargs.ga_len -= i;
-  } else if (!aborting() && evaluate) {
-    if (argcount == MAX_FUNC_ARGS) {
-      emsg_funcname(N_("E740: Too many arguments for function %s"), name);
-    } else {
-      emsg_funcname(N_("E116: Invalid arguments for function %s"), name);
-    }
-  }
-
-  while (--argcount >= 0) {
-    tv_clear(&argvars[argcount]);
-  }
-
-  *arg = skipwhite(argp);
-  return ret;
-}
+// get_func_tv migrated to Rust (Phase 23, funccal.rs)
+extern int get_func_tv(const char *name, int len, typval_T *rettv, char **arg,
+                       evalarg_T *const evalarg, funcexe_T *funcexe);
 
 #define FLEN_FIXED 40
 
@@ -3185,6 +3141,17 @@ linenr_T nvim_funcexe_get_lastline(const funcexe_T *fe) { return fe ? fe->fe_las
 
 // Phase 22: accessors for call_func migration (funccal.rs)
 void nvim_tv_set_unknown(typval_T *tv) { tv->v_type = VAR_UNKNOWN; }
+
+// Phase 23: accessors for get_func_tv migration (funccal.rs)
+bool nvim_evalarg_should_evaluate(const evalarg_T *ea) { return ea ? (ea->eval_flags & EVAL_EVALUATE) != 0 : false; }
+int nvim_funcargs_ga_itemsize(void) { return funcargs.ga_itemsize; }
+void nvim_funcargs_ga_init(void) { ga_init(&funcargs, (int)sizeof(typval_T *), 50); }
+void nvim_funcargs_ga_grow(void) { ga_grow(&funcargs, 1); }
+void nvim_funcargs_push_tv_ptr(typval_T *tv) { ((typval_T **)funcargs.ga_data)[funcargs.ga_len++] = tv; }
+void nvim_funcargs_dec_len(int n) { funcargs.ga_len -= n; }
+int nvim_get_testing_flag(void) { return get_vim_var_nr(VV_TESTING); }
+void nvim_emsg_e740_too_many_args(const char *name) { emsg_funcname(N_("E740: Too many arguments for function %s"), name); }
+void nvim_emsg_e116_invalid_args(const char *name) { emsg_funcname(N_("E116: Invalid arguments for function %s"), name); }
 dict_T *nvim_funcexe_get_selfdict(const funcexe_T *fe) { return fe ? fe->fe_selfdict : NULL; }
 partial_T *nvim_funcexe_get_partial(const funcexe_T *fe) { return fe ? fe->fe_partial : NULL; }
 bool nvim_funcexe_get_evaluate(const funcexe_T *fe) { return fe ? fe->fe_evaluate : false; }
