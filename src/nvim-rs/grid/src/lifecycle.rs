@@ -730,6 +730,32 @@ pub unsafe extern "C" fn rs_win_grid_alloc(wp: *mut std::ffi::c_void) {
 }
 
 // =============================================================================
+// Phase 3: wline_T size helper
+// =============================================================================
+
+/// Mirror of C `wline_T` (buffer_defs.h) for size computation.
+///
+/// Must match layout exactly: linenr_T=i32, uint16_t, bool, bool, i32, i32.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct WlineT {
+    wl_lnum: i32,
+    wl_size: u16,
+    wl_valid: bool,
+    wl_folded: bool,
+    wl_foldend: i32,
+    wl_lastlnum: i32,
+}
+
+/// Return `sizeof(wline_T)` for use in C/Rust allocations.
+///
+/// Replaces the C function `nvim_wline_T_size()` in window_shim.c.
+#[unsafe(export_name = "nvim_wline_T_size")]
+pub extern "C" fn wline_t_size() -> usize {
+    std::mem::size_of::<WlineT>()
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

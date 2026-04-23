@@ -32,6 +32,7 @@ extern "C" {
     fn skipwhite(s: *const c_char) -> *mut c_char;
     fn skiptowhite(s: *const c_char) -> *mut c_char;
     fn ends_excmd(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
     fn xfree(ptr: *mut c_void);
     fn syn_check_group(name: *const c_char, len: c_int) -> c_int;

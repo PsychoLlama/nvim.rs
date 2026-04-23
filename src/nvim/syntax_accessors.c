@@ -268,8 +268,7 @@ void nvim_syn_update_si_attr(int idx) { if (idx >= 0 && idx < current_state.ga_l
 const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx) { if (em == NULL || subidx < 0 || subidx >= NSUBEXP) return NULL; return (const char *)em->matches[subidx]; }
 int nvim_syn_mb_strcmp_ic(int ic, const char *a, const char *b) { if (a == NULL || b == NULL) return a == b ? 0 : 1; return mb_strcmp_ic(ic, a, b); }
 char nvim_syn_getcurline_at_col(void) { return rs_syn_getcurline()[current_col]; }
-int nvim_syn_is_id_list_all(int16_t *list) { return list == ID_LIST_ALL ? 1 : 0; }
-int16_t *nvim_syn_get_id_list_all(void) { return ID_LIST_ALL; }
+// nvim_syn_is_id_list_all, nvim_syn_get_id_list_all: exported from Rust (syntax crate, types.rs)
 void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen) { str_foldcase(src, srclen, dst, dstlen); }
 void *nvim_syn_get_buf(void) { return syn_buf; }
 void nvim_syn_set_syn_buf(void *buf) { syn_buf = (buf_T *)buf; }
@@ -281,9 +280,7 @@ void *nvim_syn_win_get_buffer_ptr(void *wp) { return wp ? ((win_T *)wp)->w_buffe
 int nvim_win_get_foldnestmax(void *wp) { return wp ? (int)((win_T *)wp)->w_p_fdn : 0; }
 int nvim_syn_buf_get_line_count(void *buf) { return buf ? (int)((buf_T *)buf)->b_ml.ml_line_count : 0; }
 int nvim_syn_buf_get_changed_tick(void *buf) { return buf ? (int)buf_get_changedtick((buf_T *)buf) : 0; }
-int nvim_syn_get_display_tick(void) { return (int)display_tick; }
-int nvim_syn_get_got_int(void) { return got_int; }
-int nvim_syn_get_rows(void) { return (int)Rows; }
+// nvim_syn_get_display_tick, nvim_syn_get_got_int, nvim_syn_get_rows: exported from Rust (window crate, globals.rs)
 int nvim_buf_get_synmaxcol(buf_T *buf) { return (int)buf->b_p_smc; }
 win_T *nvim_syn_get_win(void) { return syn_win; }
 char **nvim_syn_get_cmdlinep(void) { return syn_cmdlinep; }
@@ -332,11 +329,11 @@ int nvim_syn_ccomment_find(win_T *wp, int start_lnum, int *out_start_lnum)
   return found;
 }
 
-void nvim_syn_xmemcpyz(char *dst, const char *src, int len) { xmemcpyz(dst, src, (size_t)len); }
-char *nvim_syn_strpbrk(const char *s, const char *chars) { return strpbrk(s, chars); }
+// nvim_syn_xmemcpyz: replaced by inline Rust (ptr::copy_nonoverlapping in opt_parse.rs)
+// nvim_syn_strpbrk: replaced by #[link_name = "strpbrk"] in Rust (opt_parse.rs)
+// nvim_syn_ascii_iswhite_char: replaced by #[link_name = "rs_ascii_iswhite"] in Rust
+// nvim_syn_toupper_asc: replaced by #[link_name = "rs_ascii_toupper"] in Rust
 void nvim_syn_semsg_1s(const char *fmt, const char *arg) { semsg(fmt, arg); }
-int nvim_syn_ascii_iswhite_char(int c) { return ascii_iswhite(c); }
-int nvim_syn_toupper_asc(int c) { return TOUPPER_ASC(c); }
 char *nvim_syn_vim_strnsave_up(const char *str, int len) { return vim_strnsave_up(str, (size_t)len); }
 void nvim_syn_set_nextcmd(exarg_T *eap, char *rest) { eap->nextcmd = check_nextcmd(rest); }
 char *nvim_syn_get_eap_arg(const exarg_T *eap) { return eap->arg; }
@@ -401,7 +398,7 @@ void nvim_syn_do_unlet(const char *name, int len) { do_unlet(name, (size_t)len, 
 int nvim_synblock_is_buf_block(synblock_T *block) { return (block == &curwin->w_buffer->b_s) ? 1 : 0; }
 void nvim_syn_redraw_curbuf_later(void) { redraw_curbuf_later(UPD_SOME_VALID); }
 int nvim_syn_syntax_present_curwin(void) { return syntax_present(curwin) ? 1 : 0; }
-int nvim_syn_get_columns(void) { return (int)Columns; }
+// nvim_syn_get_columns: exported from Rust (window crate, globals.rs)
 void nvim_syn_set_include_link(int val) { include_link = val; }
 void nvim_syn_set_include_default(int val) { include_default = val; }
 void nvim_syn_set_include_none(int val) { include_none = val; }

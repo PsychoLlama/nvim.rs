@@ -25,14 +25,16 @@ extern "C" {
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn skiptowhite(p: *const c_char) -> *mut c_char;
     fn ends_excmd(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_toupper"]
     fn nvim_syn_toupper_asc(c: c_int) -> c_int;
 
     // Memory
     fn xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
     fn xmalloc(size: usize) -> *mut c_void;
-    fn nvim_syn_xmemcpyz(dst: *mut c_char, src: *const c_char, len: c_int);
+    #[link_name = "strpbrk"]
     fn nvim_syn_strpbrk(s: *const c_char, chars: *const c_char) -> *mut c_char;
 
     // Error messages
@@ -448,7 +450,9 @@ pub unsafe fn get_id_list_impl(
 
         // Allocate name with room for "^" prefix and "$" suffix
         let name = xmalloc((item_len + 3) as usize) as *mut c_char;
-        nvim_syn_xmemcpyz(name.add(1), p, item_len);
+        // Copy item_len bytes then write null terminator (replaces nvim_syn_xmemcpyz)
+        std::ptr::copy_nonoverlapping(p, name.add(1), item_len as usize);
+        *name.add(1 + item_len as usize) = 0;
         *name = 0; // placeholder for potential "^"
 
         // Check for special keywords

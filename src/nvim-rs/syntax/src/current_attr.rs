@@ -64,6 +64,7 @@ extern "C" {
     // Word check
     fn nvim_syn_vim_iswordp_buf(p: *mut i8) -> c_int;
     fn utf_head_off(base: *mut i8, p: *mut i8) -> c_int;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
 
     // getcurline

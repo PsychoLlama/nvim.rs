@@ -40,6 +40,7 @@ extern "C" {
     // string helpers
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn ends_excmd(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
     fn xstrnsave(s: *const c_char, len: c_int) -> *mut c_char;
     fn nvim_syn_semsg_1s(fmt: *const c_char, arg: *const c_char);

@@ -1920,6 +1920,14 @@ pub extern "C" fn rs_redrawing() -> bool {
     redrawing_impl()
 }
 
+/// C shim replacement: `nvim_redrawing()` returns c_int (1 = redrawing, 0 = not).
+///
+/// Replaces the C wrapper in window_shim.c.
+#[unsafe(export_name = "nvim_redrawing")]
+pub extern "C" fn nvim_redrawing_wrapper() -> std::ffi::c_int {
+    std::ffi::c_int::from(redrawing_impl())
+}
+
 /// Check if the new Nvim application "screen" dimensions are valid.
 /// Correct it if it's too small or way too big.
 ///
@@ -1955,7 +1963,22 @@ pub extern "C" fn rs_cmdline_number_prompt() -> c_int {
 extern "C" {
     #[link_name = "rs_last_stl_height"]
     fn nvim_last_stl_height(morewin: c_int) -> c_int;
-    fn nvim_set_vim_var_echospace(val: c_int);
+    // rs_set_vim_var_nr: Rust function from vars crate
+    #[link_name = "rs_set_vim_var_nr"]
+    fn rs_set_vim_var_nr_drawscreen(idx: c_int, val: i64);
+}
+
+/// VV_ECHOSPACE vim variable index (from eval_defs.h enum).
+/// Counted from VV_COUNT=0 position in VimVarIndex enum.
+const VV_ECHOSPACE: c_int = 87;
+
+/// Set v:echospace to val.
+///
+/// Replaces the C shim `nvim_set_vim_var_echospace()` in window_shim.c.
+/// Called from the drawscreen column computation.
+#[unsafe(export_name = "nvim_set_vim_var_echospace")]
+pub unsafe extern "C" fn set_vim_var_echospace(val: c_int) {
+    rs_set_vim_var_nr_drawscreen(VV_ECHOSPACE, i64::from(val));
 }
 
 /// COL_RULER from drawscreen.c — columns needed by standard ruler.
@@ -2007,7 +2030,7 @@ pub extern "C" fn rs_comp_col() {
         }
         sc_col = new_sc_col;
         ru_col = new_ru_col;
-        nvim_set_vim_var_echospace(new_sc_col - 1);
+        set_vim_var_echospace(new_sc_col - 1);
     }
 }
 

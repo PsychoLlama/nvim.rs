@@ -690,6 +690,7 @@ extern "C" {
 
     // String helpers
     fn ends_excmd(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
 
     // Error messages

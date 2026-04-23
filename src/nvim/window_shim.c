@@ -259,7 +259,7 @@ int nvim_get_command_frame_height(void) { return command_frame_height ? 1 : 0; }
 int nvim_get_curtab_ch_used(void) { return curtab ? (int)curtab->tp_ch_used : 0; }
 void nvim_set_curtab_ch_used(int64_t val) { if (curtab) { curtab->tp_ch_used = val; } }
 void nvim_set_min_set_ch(int64_t val) { min_set_ch = val; }
-void nvim_update_cmdline_row(void) { cmdline_row = Rows - (int)p_ch; }
+// nvim_update_cmdline_row: exported from Rust (window crate, globals.rs)
 void nvim_grid_clear_cmd_area(void)
 { if (msg_scrolled != 0 || !full_screen) { return; } GridView *grid = &default_gridview; if (!ui_has(kUIMessages)) { msg_grid_validate(); grid = &msg_grid_adj; } grid_clear(grid, cmdline_row, Rows, 0, Columns, 0); msg_row = cmdline_row; }
 void nvim_semsg_e92_buf_not_found(int64_t nr) { semsg(_("E92: Buffer %" PRId64 " not found"), nr); }
@@ -332,22 +332,22 @@ int nvim_one_window_and_locked_split(void) { return (ONE_WINDOW && curwin && cur
 wline_T *nvim_win_get_wl_entry(win_T *wp, int idx) { return (idx < 0 || idx >= wp->w_lines_valid) ? NULL : &wp->w_lines[idx]; }
 
 // Accessors for w_lines array management (used by rs_win_grid_alloc)
-size_t nvim_wline_T_size(void) { return sizeof(wline_T); }
+// nvim_wline_T_size: exported from Rust (grid crate, lifecycle.rs)
 linenr_T nvim_wline_get_lnum(wline_T *wl) { return wl->wl_lnum; }
 linenr_T nvim_wline_get_foldend(wline_T *wl) { return wl->wl_foldend; }
 bool nvim_wline_get_valid(wline_T *wl) { return wl->wl_valid; }
 bool nvim_wline_get_folded(wline_T *wl) { return wl->wl_folded; }
 uint16_t nvim_wline_get_size(wline_T *wl) { return wl->wl_size; }
 linenr_T nvim_wline_get_lastlnum(wline_T *wl) { return wl->wl_lastlnum; }
-int nvim_redrawing(void) { return redrawing() ? 1 : 0; }
+// nvim_redrawing: exported from Rust (drawscreen crate, lib.rs)
 int nvim_win_rl_cursor_col(win_T *wp) { if (!wp) { return 0; } char *cursor = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) + wp->w_cursor.col; return wp->w_view_width - wp->w_wcol - ((utf_ptr2cells(cursor) == 2 && vim_isprintc(utf_ptr2char(cursor))) ? 2 : 1); }
 void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col) { ScreenGrid *grid = grid_adjust(&wp->w_grid, &row, &col); if (grid) { ui_grid_cursor_goto(grid->handle, row, col); } }
-int nvim_VIsual_active(void) { return VIsual_active ? 1 : 0; }
+// nvim_VIsual_active: exported from Rust (window crate, globals.rs)
 void nvim_ui_call_set_title(const char *s) { ui_call_set_title(cstr_as_string(s ? s : "")); }
 void nvim_ui_call_set_icon(const char *s) { ui_call_set_icon(cstr_as_string(s ? s : "")); }
 int nvim_utf_cp_bounds_end_off(const char *str, const char *ptr) { return utf_cp_bounds((char *)str, (char *)ptr).end_off; }
 int nvim_cmdline_mouse_used(void) { return get_cmdline_info()->mouse_used != NULL ? 1 : 0; }
-void nvim_set_vim_var_echospace(int val) { set_vim_var_nr(VV_ECHOSPACE, val); }
+// nvim_set_vim_var_echospace: exported from Rust (drawscreen crate, lib.rs)
 bool nvim_win_get_b_cjk(const win_T *wp) { return wp->w_s->b_cjk != 0; }
 const bool *nvim_win_get_b_spell_ismw(const win_T *wp) { return wp->w_s->b_spell_ismw; }
 const char *nvim_win_get_b_spell_ismw_mb(const win_T *wp) { return wp->w_s->b_spell_ismw_mb; }
@@ -649,7 +649,7 @@ int nvim_win_get_config_border_side_char(win_T *wp, int i) { return (wp && i >= 
 linenr_T nvim_win_buf_ml_line_count(win_T *wp) { return (wp && wp->w_buffer) ? wp->w_buffer->b_ml.ml_line_count : 0; }
 // nvim_get_curwin_handle: already exported from Rust (window crate, globals.rs)
 // STATUS_HEIGHT constant
-int nvim_get_status_height_const(void) { return STATUS_HEIGHT; }
+// nvim_get_status_height_const: exported from Rust (window crate, globals.rs)
 
 // Mouse globals: already defined in getchar.c:
 // nvim_get_mouse_row, nvim_get_mouse_col, nvim_get_mouse_grid
@@ -667,8 +667,7 @@ void nvim_textpos2screenpos(win_T *wp, linenr_T lnum, int col, int *rowp, int *s
 // find_window_by_handle with error ignored (returns NULL on failure)
 win_T *nvim_find_window_by_handle_safe(int handle) { Error dummy = ERROR_INIT; win_T *wp = find_window_by_handle(handle, &dummy); api_clear_error(&dummy); return wp; }
 // UPD_VALID and UPD_NOT_VALID constants
-int nvim_get_upd_valid(void) { return UPD_VALID; }
-int nvim_get_upd_not_valid(void) { return UPD_NOT_VALID; }
+// nvim_get_upd_valid, nvim_get_upd_not_valid: exported from Rust (window crate, globals.rs)
 // win_T w_config accessors after merge
 int nvim_win_get_config_relative_after_merge(win_T *wp) { return wp ? (int)wp->w_config.relative : 0; }
 int nvim_win_get_config_window_after_merge(win_T *wp) { return wp ? (int)wp->w_config.window : 0; }

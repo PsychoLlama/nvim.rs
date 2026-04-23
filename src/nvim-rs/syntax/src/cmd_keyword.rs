@@ -58,6 +58,7 @@ extern "C" {
     // String helpers
     fn skipwhite(p: *const c_char) -> *mut c_char;
     fn ends_excmd(c: c_int) -> c_int;
+    #[link_name = "rs_ascii_iswhite"]
     fn nvim_syn_ascii_iswhite_char(c: c_int) -> c_int;
     fn utfc_ptr2len(p: *mut c_char) -> c_int;
 

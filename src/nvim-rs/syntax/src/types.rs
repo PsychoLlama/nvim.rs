@@ -493,6 +493,24 @@ pub const ITEM_MATCHGROUP: c_int = 3;
 /// In C this is `((int16_t *)-1)`, we use a sentinel value
 pub const ID_LIST_ALL_SENTINEL: isize = -1;
 
+/// Return the ID_LIST_ALL sentinel pointer `(int16_t *)-1`.
+///
+/// Replaces the C function `nvim_syn_get_id_list_all()` in syntax_accessors.c.
+#[must_use]
+#[unsafe(export_name = "nvim_syn_get_id_list_all")]
+pub extern "C" fn get_id_list_all() -> IdListHandle {
+    IdListHandle(ID_LIST_ALL_SENTINEL as *mut i16)
+}
+
+/// Check if an ID list pointer equals the ID_LIST_ALL sentinel.
+///
+/// Replaces the C function `nvim_syn_is_id_list_all()` in syntax_accessors.c.
+#[must_use]
+#[unsafe(export_name = "nvim_syn_is_id_list_all")]
+pub extern "C" fn is_id_list_all(list: IdListHandle) -> std::ffi::c_int {
+    std::ffi::c_int::from(list.0 == ID_LIST_ALL_SENTINEL as *mut i16)
+}
+
 // =============================================================================
 // Syntax ID helper types and functions
 // =============================================================================

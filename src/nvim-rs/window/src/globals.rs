@@ -85,6 +85,12 @@ extern "C" {
     static mut postponed_split_tab: c_int;
     static mut last_chdir_reason: *mut c_char;
     static mut cmdline_win: WinHandle;
+
+    // Phase 3 globals
+    static mut got_int: bool; // interrupt flag
+    static mut display_tick: u64; // disptick_T (uint64_t)
+    static mut VIsual_active: bool; // visual mode active
+    static mut cmdline_row: c_int; // row of command line
 }
 
 // -------------------------------------------------------------------------
@@ -981,4 +987,96 @@ pub unsafe extern "C" fn get_columns() -> c_int {
 #[export_name = "nvim_set_p_ch"]
 pub unsafe extern "C" fn set_p_ch_alias(val: i64) {
     p_ch = val;
+}
+
+// -------------------------------------------------------------------------
+// Phase 3: Constants and global accessors for cross-crate use
+// -------------------------------------------------------------------------
+
+/// STATUS_HEIGHT constant (height of status line = 1).
+#[must_use]
+#[export_name = "nvim_get_status_height_const"]
+pub const extern "C" fn get_status_height_const() -> c_int {
+    1
+}
+
+/// UPD_VALID constant (= 10, buffer not changed).
+#[must_use]
+#[export_name = "nvim_get_upd_valid"]
+pub const extern "C" fn get_upd_valid() -> c_int {
+    10
+}
+
+/// UPD_NOT_VALID constant (= 40, buffer needs complete redraw).
+#[must_use]
+#[export_name = "nvim_get_upd_not_valid"]
+pub const extern "C" fn get_upd_not_valid() -> c_int {
+    40
+}
+
+/// Get VIsual_active as c_int (1 if true, 0 if false).
+///
+/// # Safety
+/// Accesses C global VIsual_active.
+#[must_use]
+#[export_name = "nvim_VIsual_active"]
+pub unsafe extern "C" fn get_visual_active() -> c_int {
+    c_int::from(VIsual_active)
+}
+
+/// Get got_int as c_int (1 if true, 0 if false).
+///
+/// # Safety
+/// Accesses C global got_int.
+#[must_use]
+#[export_name = "nvim_syn_get_got_int"]
+pub unsafe extern "C" fn get_got_int() -> c_int {
+    c_int::from(got_int)
+}
+
+/// Get display_tick as c_int (truncated from u64).
+///
+/// # Safety
+/// Accesses C global display_tick.
+#[must_use]
+#[export_name = "nvim_syn_get_display_tick"]
+pub unsafe extern "C" fn get_display_tick() -> c_int {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    {
+        display_tick as c_int
+    }
+}
+
+/// Get Rows for syntax use.
+///
+/// # Safety
+/// Accesses C global Rows.
+#[must_use]
+#[export_name = "nvim_syn_get_rows"]
+pub unsafe extern "C" fn get_syn_rows() -> c_int {
+    Rows
+}
+
+/// Get Columns for syntax use.
+///
+/// # Safety
+/// Accesses C global Columns.
+#[must_use]
+#[export_name = "nvim_syn_get_columns"]
+pub unsafe extern "C" fn get_syn_columns() -> c_int {
+    Columns
+}
+
+/// Update cmdline_row = Rows - p_ch.
+///
+/// Replaces the C shim `nvim_update_cmdline_row()` in window_shim.c.
+///
+/// # Safety
+/// Accesses C globals Rows, p_ch, cmdline_row.
+#[export_name = "nvim_update_cmdline_row"]
+pub unsafe extern "C" fn update_cmdline_row() {
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        cmdline_row = Rows - p_ch as c_int;
+    }
 }
