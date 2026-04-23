@@ -252,6 +252,10 @@ extern "C" {
     static debug_tick: c_int;
     static do_profiling: c_int;
 
+    // Phase 35: for func_call migration
+    fn nvim_func_call_iter_args(args: *mut c_void, argv: *mut c_void, max_args: c_int) -> c_int;
+    fn nvim_curwin_cursor_lnum() -> i32;
+
     // Phase 31: for nvim_free_funccal_contents_impl and nvim_cleanup_function_call_impl migration
     fn nvim_fc_l_vars_ht_clear(fc: *mut c_void);
     fn nvim_fc_l_avars_ht_clear(fc: *mut c_void);
@@ -1510,4 +1514,125 @@ pub unsafe extern "C" fn nvim_ex_return_impl(eap: *mut c_void) {
         unsafe { nvim_syn_emsg_skip_dec() };
     }
     unsafe { clear_evalarg(evalarg_ptr, eap) };
+}
+
+// =============================================================================
+// func_call
+// =============================================================================
+//
+// Phase 35: inlined from C func_call.
+
+// funcexe_T field offsets (see userfunc.h; matches 64-byte C struct on 64-bit).
+const FUNCEXE_FIRSTLINE_OFFSET: usize = 8;
+const FUNCEXE_LASTLINE_OFFSET: usize = 12;
+const FUNCEXE_EVALUATE_OFFSET: usize = 24;
+const FUNCEXE_PARTIAL_OFFSET: usize = 32;
+const FUNCEXE_SELFDICT_OFFSET: usize = 40;
+const SIZEOF_FUNCEXE_FC: usize = 64;
+
+/// Call a function with its typval list arguments.
+///
+/// # Safety
+/// All pointers must be valid.
+#[unsafe(export_name = "func_call")]
+#[allow(clippy::cast_possible_wrap, clippy::similar_names)]
+pub unsafe extern "C" fn rs_func_call(
+    name: *mut c_char,
+    args: *mut c_void,
+    partial: *const c_void,
+    selfdict: *mut c_void,
+    rettv: *mut c_void,
+) -> c_int {
+    let mut argv_buf = [0u8; (MAX_FUNC_ARGS + 1) * SIZEOF_TYPVAL];
+    let argv_ptr = argv_buf.as_mut_ptr().cast::<c_void>();
+
+    let partial_argc = if partial.is_null() {
+        0
+    } else {
+        unsafe { nvim_partial_get_argc(partial) }
+    };
+    #[allow(clippy::cast_possible_truncation)]
+    let max_args = (MAX_FUNC_ARGS as c_int) - partial_argc;
+
+    let arg_count = unsafe { nvim_func_call_iter_args(args, argv_ptr, max_args) };
+    if arg_count < 0 {
+        // Error already emitted; copies already freed by the C shim.
+        return FAIL;
+    }
+
+    // Build funcexe_T on stack (zero-initialized = FUNCEXE_INIT).
+    let mut funcexe = [0u8; SIZEOF_FUNCEXE_FC];
+    let cursor_lnum: i32 = unsafe { nvim_curwin_cursor_lnum() };
+    // fe_firstline (i32 at offset 8)
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        std::ptr::write_unaligned(
+            funcexe
+                .as_mut_ptr()
+                .add(FUNCEXE_FIRSTLINE_OFFSET)
+                .cast::<i32>(),
+            cursor_lnum,
+        );
+    }
+    // fe_lastline (i32 at offset 12)
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        std::ptr::write_unaligned(
+            funcexe
+                .as_mut_ptr()
+                .add(FUNCEXE_LASTLINE_OFFSET)
+                .cast::<i32>(),
+            cursor_lnum,
+        );
+    }
+    // fe_evaluate (bool at offset 24) = true
+    funcexe[FUNCEXE_EVALUATE_OFFSET] = 1;
+    // fe_partial (ptr at offset 32)
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        std::ptr::write_unaligned(
+            funcexe
+                .as_mut_ptr()
+                .add(FUNCEXE_PARTIAL_OFFSET)
+                .cast::<*const c_void>(),
+            partial,
+        );
+    }
+    // fe_selfdict (ptr at offset 40)
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        std::ptr::write_unaligned(
+            funcexe
+                .as_mut_ptr()
+                .add(FUNCEXE_SELFDICT_OFFSET)
+                .cast::<*mut c_void>(),
+            selfdict,
+        );
+    }
+
+    let r = unsafe {
+        rs_call_func(
+            name,
+            -1,
+            rettv,
+            arg_count,
+            argv_ptr,
+            funcexe.as_mut_ptr().cast::<c_void>(),
+        )
+    };
+
+    // Free the arguments.
+    let mut i = arg_count - 1;
+    while i >= 0 {
+        let slot = unsafe {
+            argv_ptr
+                .cast::<u8>()
+                .add(i as usize * SIZEOF_TYPVAL)
+                .cast::<c_void>()
+        };
+        unsafe { tv_clear(slot) };
+        i -= 1;
+    }
+
+    r
 }

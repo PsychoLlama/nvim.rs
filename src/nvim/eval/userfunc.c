@@ -942,38 +942,10 @@ void free_all_functions(void)
 #endif
 
 
-int func_call(char *name, typval_T *args, partial_T *partial, dict_T *selfdict, typval_T *rettv)
-{
-  typval_T argv[MAX_FUNC_ARGS + 1];
-  int argc = 0;
-  int r = 0;
-
-  TV_LIST_ITER(args->vval.v_list, item, {
-    if (argc == MAX_FUNC_ARGS - (partial == NULL ? 0 : partial->pt_argc)) {
-      emsg(_("E699: Too many arguments"));
-      goto func_call_skip_call;
-    }
-    // Make a copy of each argument.  This is needed to be able to set
-    // v_lock to VAR_FIXED in the copy without changing the original list.
-    tv_copy(TV_LIST_ITEM_TV(item), &argv[argc++]);
-  });
-
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_firstline = curwin->w_cursor.lnum;
-  funcexe.fe_lastline = curwin->w_cursor.lnum;
-  funcexe.fe_evaluate = true;
-  funcexe.fe_partial = partial;
-  funcexe.fe_selfdict = selfdict;
-  r = call_func(name, -1, rettv, argc, argv, &funcexe);
-
-func_call_skip_call:
-  // Free the arguments.
-  while (argc > 0) {
-    tv_clear(&argv[--argc]);
-  }
-
-  return r;
-}
+// func_call migrated to Rust (funccal.rs Phase 35).
+// rs_func_call now implements the logic directly.
+extern int func_call(char *name, typval_T *args, partial_T *partial, dict_T *selfdict,
+                     typval_T *rettv);
 
 // callback_call_retnr migrated to Rust (funccal.rs Phase 15)
 
@@ -2824,3 +2796,26 @@ void nvim_tv_reset_to_number_zero(typval_T *tv)
   if (tv) { tv->v_type = VAR_NUMBER; tv->vval.v_number = 0; }
 }
 char *nvim_encode_tv2echo(void *tv) { return encode_tv2echo((typval_T *)tv, NULL); }
+
+// Phase 35: accessors for func_call migration (funccal.rs)
+/// Iterates args list, copies each typval into argv[].
+/// Returns argc on success, -1 on "E699: Too many arguments" (frees copied args).
+int nvim_func_call_iter_args(typval_T *args, typval_T *argv, int max_args)
+{
+  int argc = 0;
+  bool overflow = false;
+  TV_LIST_ITER(args->vval.v_list, item, {
+    if (argc == max_args) {
+      emsg(_("E699: Too many arguments"));
+      overflow = true;
+      break;
+    }
+    tv_copy(TV_LIST_ITEM_TV(item), &argv[argc++]);
+  });
+  if (overflow) {
+    while (argc > 0) { tv_clear(&argv[--argc]); }
+    return -1;
+  }
+  return argc;
+}
+linenr_T nvim_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
