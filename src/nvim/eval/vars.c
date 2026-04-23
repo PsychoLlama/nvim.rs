@@ -126,6 +126,9 @@ extern void rs_get_var_from(const char *varname, typval_T *rettv, typval_T *deft
                              tabpage_T *tp, win_T *win, buf_T *buf);
 // (rs_f_* functions are declared below)
 
+// Phase 4: heredoc functions migrated to Rust
+extern list_T *rs_heredoc_get(exarg_T *eap, char *cmd, int script_get);
+
 // Phase 3: listing and redirection functions migrated to Rust
 extern char *rs_cat_prefix_varname(int prefix, const char *name);
 extern char *rs_get_user_var_name(expand_T *xp, int idx);
@@ -676,180 +679,7 @@ static char *eval_all_expr_in_str(char *str) { return rs_eval_all_expr_in_str(st
 ///
 /// @return  a List with {lines} or NULL on failure.
 list_T *heredoc_get(exarg_T *eap, char *cmd, bool script_get)
-{
-  char *marker;
-  int marker_indent_len = 0;
-  int text_indent_len = 0;
-  char *text_indent = NULL;
-  char dot[] = ".";
-  bool heredoc_in_string = false;
-  char *line_arg = NULL;
-  char *nl_ptr = vim_strchr(cmd, '\n');
-
-  if (nl_ptr != NULL) {
-    heredoc_in_string = true;
-    line_arg = nl_ptr + 1;
-    *nl_ptr = NUL;
-  } else if (eap->ea_getline == NULL) {
-    emsg(_(e_cannot_use_heredoc_here));
-    return NULL;
-  }
-
-  // Check for the optional 'trim' word before the marker
-  cmd = skipwhite(cmd);
-  bool evalstr = false;
-  bool eval_failed = false;
-  while (true) {
-    if (strncmp(cmd, "trim", 4) == 0
-        && (cmd[4] == NUL || ascii_iswhite(cmd[4]))) {
-      cmd = skipwhite(cmd + 4);
-
-      // Trim the indentation from all the lines in the here document.
-      // The amount of indentation trimmed is the same as the indentation
-      // of the first line after the :let command line.  To find the end
-      // marker the indent of the :let command line is trimmed.
-      char *p = *eap->cmdlinep;
-      while (ascii_iswhite(*p)) {
-        p++;
-        marker_indent_len++;
-      }
-      text_indent_len = -1;
-
-      continue;
-    }
-    if (strncmp(cmd, "eval", 4) == 0
-        && (cmd[4] == NUL || ascii_iswhite(cmd[4]))) {
-      cmd = skipwhite(cmd + 4);
-      evalstr = true;
-      continue;
-    }
-    break;
-  }
-
-  const char comment_char = '"';
-  // The marker is the next word.
-  if (*cmd != NUL && *cmd != comment_char) {
-    marker = skipwhite(cmd);
-    char *p = skiptowhite(marker);
-    if (*skipwhite(p) != NUL && *skipwhite(p) != comment_char) {
-      semsg(_(e_trailing_arg), p);
-      return NULL;
-    }
-    *p = NUL;
-    if (!script_get && islower((uint8_t)(*marker))) {
-      emsg(_("E221: Marker cannot start with lower case letter"));
-      return NULL;
-    }
-  } else {
-    // When getting lines for an embedded script, if the marker is missing,
-    // accept '.' as the marker.
-    if (script_get) {
-      marker = dot;
-    } else {
-      emsg(_("E172: Missing marker"));
-      return NULL;
-    }
-  }
-
-  char *theline = NULL;
-  list_T *l = tv_list_alloc(0);
-  while (true) {
-    int mi = 0;
-    int ti = 0;
-
-    if (heredoc_in_string) {
-      // heredoc in a string separated by newlines.  Get the next line
-      // from the string.
-
-      if (*line_arg == NUL) {
-        if (!script_get) {
-          semsg(_(e_missing_end_marker_str), marker);
-        }
-        break;
-      }
-
-      theline = line_arg;
-      char *next_line = vim_strchr(theline, '\n');
-      if (next_line == NULL) {
-        line_arg += strlen(line_arg);
-      } else {
-        *next_line = NUL;
-        line_arg = next_line + 1;
-      }
-    } else {
-      xfree(theline);
-      theline = eap->ea_getline(NUL, eap->cookie, 0, false);
-      if (theline == NULL) {
-        if (!script_get) {
-          semsg(_(e_missing_end_marker_str), marker);
-        }
-        break;
-      }
-    }
-
-    // with "trim": skip the indent matching the :let line to find the
-    // marker
-    if (marker_indent_len > 0
-        && strncmp(theline, *eap->cmdlinep, (size_t)marker_indent_len) == 0) {
-      mi = marker_indent_len;
-    }
-    if (strcmp(marker, theline + mi) == 0) {
-      break;
-    }
-
-    // If expression evaluation failed in the heredoc, then skip till the
-    // end marker.
-    if (eval_failed) {
-      continue;
-    }
-
-    if (text_indent_len == -1 && *theline != NUL) {
-      // set the text indent from the first line.
-      char *p = theline;
-      text_indent_len = 0;
-      while (ascii_iswhite(*p)) {
-        p++;
-        text_indent_len++;
-      }
-      text_indent = xmemdupz(theline, (size_t)text_indent_len);
-    }
-    // with "trim": skip the indent matching the first line
-    if (text_indent != NULL) {
-      for (ti = 0; ti < text_indent_len; ti++) {
-        if (theline[ti] != text_indent[ti]) {
-          break;
-        }
-      }
-    }
-
-    char *str = theline + ti;
-    if (evalstr && !eap->skip) {
-      str = eval_all_expr_in_str(str);
-      if (str == NULL) {
-        // expression evaluation failed
-        eval_failed = true;
-        continue;
-      }
-      tv_list_append_allocated_string(l, str);
-    } else {
-      tv_list_append_string(l, str, -1);
-    }
-  }
-  if (heredoc_in_string) {
-    // Next command follows the heredoc in the string.
-    eap->nextcmd = line_arg;
-  } else {
-    xfree(theline);
-  }
-  xfree(text_indent);
-
-  if (eval_failed) {
-    // expression evaluation in the heredoc failed
-    tv_list_free(l);
-    return NULL;
-  }
-  return l;
-}
+{ return rs_heredoc_get(eap, cmd, script_get); }
 
 /// ":let" list all variable values
 /// ":let var1 var2" list variable values
@@ -2751,6 +2581,21 @@ char *nvim_get_redir_varname(void) { return redir_varname; }
 
 /// Non-inline wrapper for STRCPY (for Rust FFI).
 void nvim_strcpy(char *dst, const char *src) { STRCPY(dst, src); }
+
+// Phase 4: heredoc_get accessor shims for Rust FFI
+
+/// Check if eap->ea_getline is non-NULL.
+int nvim_eap_has_getline(const void *eap) { return ((const exarg_T *)eap)->ea_getline != NULL; }
+
+/// Call eap->ea_getline(c, cookie, indent, false) and return the result.
+char *nvim_eap_call_getline(void *eap_void, int c, int indent)
+{
+  exarg_T *eap = (exarg_T *)eap_void;
+  return eap->ea_getline((char)c, eap->cookie, indent, false);
+}
+
+/// Get *eap->cmdlinep (the command line string for trim indent detection).
+const char *nvim_eap_get_cmdlinep_str(const void *eap) { return *((const exarg_T *)eap)->cmdlinep; }
 
 /// Get a script line to execute, from a heredoc (<<) or regular string.
 /// Used by python, tcl, etc. when the argument starts with "<<".
