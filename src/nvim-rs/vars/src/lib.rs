@@ -40,6 +40,7 @@ use std::ffi::{c_char, c_int};
 // Submodules
 pub mod checks;
 pub mod eval_helpers;
+pub mod listing;
 pub mod lookup;
 pub mod option_conv;
 pub mod viml_funcs;

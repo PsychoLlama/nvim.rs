@@ -125,6 +125,15 @@ extern char *rs_set_cmdarg(exarg_T *eap, char *oldarg);
 extern void rs_get_var_from(const char *varname, typval_T *rettv, typval_T *deftv, int htname,
                              tabpage_T *tp, win_T *win, buf_T *buf);
 // (rs_f_* functions are declared below)
+
+// Phase 3: listing and redirection functions migrated to Rust
+extern char *rs_cat_prefix_varname(int prefix, const char *name);
+extern char *rs_get_user_var_name(expand_T *xp, int idx);
+extern void rs_var_redir_str(const char *value, int value_len);
+extern void rs_list_hashtable_vars(hashtab_T *ht, const char *prefix, int empty, int *first);
+extern void rs_list_one_var(dictitem_T *v, const char *prefix, int *first);
+extern void rs_list_one_var_a(const char *prefix, const char *name, ptrdiff_t name_len,
+                               VarType type, const char *string, int *first);
 extern void rs_f_gettabvar(typval_T *argvars, typval_T *rettv);
 extern void rs_f_gettabwinvar(typval_T *argvars, typval_T *rettv);
 extern void rs_f_getwinvar(typval_T *argvars, typval_T *rettv);
@@ -1055,30 +1064,7 @@ const char *skip_var_list(const char *arg, int *var_count, int *semicolon, bool 
 /// @param empty  if true also list NULL strings as empty strings.
 void list_hashtable_vars(hashtab_T *ht, const char *prefix, int empty, int *first)
 {
-  hashitem_T *hi;
-  dictitem_T *di;
-  int todo;
-
-  todo = (int)ht->ht_used;
-  for (hi = ht->ht_array; todo > 0 && !got_int; hi++) {
-    if (!HASHITEM_EMPTY(hi)) {
-      todo--;
-      di = TV_DICT_HI2DI(hi);
-      char buf[IOSIZE];
-
-      // apply :filter /pat/ to variable name
-      xstrlcpy(buf, prefix, IOSIZE);
-      xstrlcat(buf, di->di_key, IOSIZE);
-      if (message_filtered(buf)) {
-        continue;
-      }
-
-      if (empty || di->di_tv.v_type != VAR_STRING
-          || di->di_tv.vval.v_string != NULL) {
-        list_one_var(di, prefix, first);
-      }
-    }
-  }
+  rs_list_hashtable_vars(ht, prefix, empty, first);
 }
 
 /// List global variables.
@@ -1694,104 +1680,12 @@ static size_t varnamebuflen = 0;
 /// Function to concatenate a prefix and a variable name.
 char *cat_prefix_varname(int prefix, const char *name)
   FUNC_ATTR_NONNULL_ALL
-{
-  size_t len = strlen(name) + 3;
-
-  if (len > varnamebuflen) {
-    xfree(varnamebuf);
-    len += 10;                          // some additional space
-    varnamebuf = xmalloc(len);
-    varnamebuflen = len;
-  }
-  *varnamebuf = (char)prefix;
-  varnamebuf[1] = ':';
-  STRCPY(varnamebuf + 2, name);
-  return varnamebuf;
-}
+{ return rs_cat_prefix_varname(prefix, name); }
 
 /// Function given to ExpandGeneric() to obtain the list of user defined
 /// (global/buffer/window/built-in) variable names.
 char *get_user_var_name(expand_T *xp, int idx)
-{
-  static size_t gdone;
-  static size_t bdone;
-  static size_t wdone;
-  static size_t tdone;
-  static size_t vidx;
-  static hashitem_T *hi;
-
-  if (idx == 0) {
-    gdone = bdone = wdone = vidx = 0;
-    tdone = 0;
-  }
-
-  // Global variables
-  if (gdone < globvarht.ht_used) {
-    if (gdone++ == 0) {
-      hi = globvarht.ht_array;
-    } else {
-      hi++;
-    }
-    while (HASHITEM_EMPTY(hi)) {
-      hi++;
-    }
-    if (strncmp("g:", xp->xp_pattern, 2) == 0) {
-      return cat_prefix_varname('g', hi->hi_key);
-    }
-    return hi->hi_key;
-  }
-
-  // b: variables
-  const hashtab_T *ht = &prevwin_curwin()->w_buffer->b_vars->dv_hashtab;
-  if (bdone < ht->ht_used) {
-    if (bdone++ == 0) {
-      hi = ht->ht_array;
-    } else {
-      hi++;
-    }
-    while (HASHITEM_EMPTY(hi)) {
-      hi++;
-    }
-    return cat_prefix_varname('b', hi->hi_key);
-  }
-
-  // w: variables
-  ht = &prevwin_curwin()->w_vars->dv_hashtab;
-  if (wdone < ht->ht_used) {
-    if (wdone++ == 0) {
-      hi = ht->ht_array;
-    } else {
-      hi++;
-    }
-    while (HASHITEM_EMPTY(hi)) {
-      hi++;
-    }
-    return cat_prefix_varname('w', hi->hi_key);
-  }
-
-  // t: variables
-  ht = &curtab->tp_vars->dv_hashtab;
-  if (tdone < ht->ht_used) {
-    if (tdone++ == 0) {
-      hi = ht->ht_array;
-    } else {
-      hi++;
-    }
-    while (HASHITEM_EMPTY(hi)) {
-      hi++;
-    }
-    return cat_prefix_varname('t', hi->hi_key);
-  }
-
-  // v: variables
-  if (vidx < ARRAY_SIZE(vimvars)) {
-    return cat_prefix_varname('v', get_vim_var_name((VimVarIndex)vidx++));
-  }
-
-  XFREE_CLEAR(varnamebuf);
-  varnamebuflen = 0;
-  return NULL;
-}
+{ return rs_get_user_var_name(xp, idx); }
 
 // More v: variable set wrappers (logic in Rust)
 void set_vim_var_type(const VimVarIndex idx, const VarType type) { rs_set_vim_var_type(idx, type); }
@@ -2157,10 +2051,7 @@ static void delete_var(hashtab_T *ht, hashitem_T *hi)
 /// List the value of one internal variable.
 static void list_one_var(dictitem_T *v, const char *prefix, int *first)
 {
-  char *const s = encode_tv2echo(&v->di_tv, NULL);
-  list_one_var_a(prefix, v->di_key, (ptrdiff_t)strlen(v->di_key),
-                 v->di_tv.v_type, (s == NULL ? "" : s), first);
-  xfree(s);
+  rs_list_one_var(v, prefix, first);
 }
 
 /// @param[in]  name_len  Length of the name. May be -1, in this case strlen()
@@ -2169,48 +2060,7 @@ static void list_one_var(dictitem_T *v, const char *prefix, int *first)
 static void list_one_var_a(const char *prefix, const char *name, const ptrdiff_t name_len,
                            const VarType type, const char *string, int *first)
 {
-  if (*first) {
-    msg_ext_set_kind("list_cmd");
-    msg_start();
-  } else {
-    msg_putchar('\n');
-  }
-  // don't use msg() to avoid overwriting "v:statusmsg"
-  if (*prefix != NUL) {
-    msg_puts(prefix);
-  }
-  if (name != NULL) {  // "a:" vars don't have a name stored
-    msg_puts_len(name, name_len, 0, false);
-  }
-  msg_putchar(' ');
-  msg_advance(22);
-  if (type == VAR_NUMBER) {
-    msg_putchar('#');
-  } else if (type == VAR_FUNC || type == VAR_PARTIAL) {
-    msg_putchar('*');
-  } else if (type == VAR_LIST) {
-    msg_putchar('[');
-    if (*string == '[') {
-      string++;
-    }
-  } else if (type == VAR_DICT) {
-    msg_putchar('{');
-    if (*string == '{') {
-      string++;
-    }
-  } else {
-    msg_putchar(' ');
-  }
-
-  msg_outtrans(string, 0, false);
-
-  if (type == VAR_FUNC || type == VAR_PARTIAL) {
-    msg_puts("()");
-  }
-  if (*first) {
-    msg_clr_eos();
-    *first = false;
-  }
+  rs_list_one_var_a(prefix, name, name_len, type, string, first);
 }
 
 /// Additional handling for setting a v: variable.
@@ -2594,22 +2444,7 @@ int var_redir_start(char *name, bool append)
 ///   :let foo
 ///   :redir END
 void var_redir_str(const char *value, int value_len)
-{
-  if (redir_lval == NULL) {
-    return;
-  }
-
-  int len;
-  if (value_len == -1) {
-    len = (int)strlen(value);           // Append the entire string
-  } else {
-    len = value_len;                    // Append only "value_len" characters
-  }
-
-  ga_grow(&redir_ga, len);
-  memmove((char *)redir_ga.ga_data + redir_ga.ga_len, value, (size_t)len);
-  redir_ga.ga_len += len;
-}
+{ rs_var_redir_str(value, value_len); }
 
 /// Stop redirecting command output to a variable.
 /// Frees the allocated memory.
@@ -2836,6 +2671,86 @@ void nvim_goto_tabpage_tp(void *tp, int trigger_enter, int trigger_leave)
 {
   goto_tabpage_tp((tabpage_T *)tp, (bool)trigger_enter, (bool)trigger_leave);
 }
+
+// Phase 3: hashtab iteration and listing accessors for Rust FFI
+
+/// Get ht->ht_array (pointer to first hashitem_T).
+void *nvim_vars_ht_get_array(void *ht) { return ((hashtab_T *)ht)->ht_array; }
+
+/// Get ht->ht_used (void* param to avoid conflicting with syntax_accessors.c).
+size_t nvim_vars_ht_get_used(void *ht) { return ((hashtab_T *)ht)->ht_used; }
+
+/// Get hi->hi_key (void* param to avoid conflicting with typval.c).
+const char *nvim_vars_hashitem_get_key(void *hi) { return ((hashitem_T *)hi)->hi_key; }
+
+/// Get di->di_key (void* param to avoid conflicting with typval.c).
+const char *nvim_vars_dictitem_get_key(void *di) { return ((dictitem_T *)di)->di_key; }
+
+/// Get xp->xp_pattern (void* param to avoid conflicting with option_shim.c).
+const char *nvim_vars_xp_get_pattern(void *xp) { return ((expand_T *)xp)->xp_pattern; }
+
+/// got_int accessor (bool return to avoid conflicting with typval.c c_int).
+bool nvim_vars_got_int(void) { return got_int; }
+
+/// Advance a hashitem pointer by one (pointer arithmetic).
+void *nvim_hashitem_advance(void *hi) { return (hashitem_T *)hi + 1; }
+
+/// Get &globvarht.
+void *nvim_get_globvarht_ptr(void) { return &globvarht; }
+
+/// Get &vimvarht.
+void *nvim_get_vimvarht_ptr(void) { return &vimvarht; }
+
+/// Get prevwin_curwin() buf vars dv_hashtab pointer (for get_user_var_name).
+void *nvim_prevwin_curwin_buf_vars_ht(void) { return &prevwin_curwin()->w_buffer->b_vars->dv_hashtab; }
+
+/// Get prevwin_curwin() win vars dv_hashtab pointer (for get_user_var_name).
+void *nvim_prevwin_curwin_win_vars_ht(void) { return &prevwin_curwin()->w_vars->dv_hashtab; }
+
+/// Get curtab tp_vars dv_hashtab pointer.
+void *nvim_curtab_tp_vars_ht(void) { return &curtab->tp_vars->dv_hashtab; }
+
+/// Get vimvars array size.
+int nvim_vimvars_array_size(void) { return (int)ARRAY_SIZE(vimvars); }
+
+/// Get varnamebuf pointer address.
+char **nvim_get_varnamebuf_ptr(void) { return &varnamebuf; }
+
+/// Get varnamebuflen pointer address.
+size_t *nvim_get_varnamebuflen_ptr(void) { return &varnamebuflen; }
+
+/// IOSIZE constant.
+int nvim_get_iosize(void) { return IOSIZE; }
+
+/// xstrlcpy wrapper with IOSIZE limit.
+void nvim_xstrlcpy_iosize(char *dst, const char *src) { xstrlcpy(dst, src, IOSIZE); }
+
+/// xstrlcat wrapper with IOSIZE limit.
+void nvim_xstrlcat_iosize(char *dst, const char *src) { xstrlcat(dst, src, IOSIZE); }
+
+/// message_filtered wrapper.
+bool nvim_message_filtered(const char *buf) { return message_filtered(buf); }
+
+/// get_vim_var_name wrapper.
+const char *nvim_get_vim_var_name(int idx) { return get_vim_var_name((VimVarIndex)idx); }
+
+/// redir_ga ga_grow wrapper.
+void nvim_redir_ga_grow(int len) { ga_grow(&redir_ga, len); }
+
+/// Append bytes to redir_ga.
+void nvim_redir_ga_append(const char *value, int len) {
+  memmove((char *)redir_ga.ga_data + redir_ga.ga_len, value, (size_t)len);
+  redir_ga.ga_len += len;
+}
+
+/// Get redir_lval pointer.
+void *nvim_get_redir_lval(void) { return redir_lval; }
+
+/// Get redir_varname pointer.
+char *nvim_get_redir_varname(void) { return redir_varname; }
+
+/// Non-inline wrapper for STRCPY (for Rust FFI).
+void nvim_strcpy(char *dst, const char *src) { STRCPY(dst, src); }
 
 /// Get a script line to execute, from a heredoc (<<) or regular string.
 /// Used by python, tcl, etc. when the argument starts with "<<".
