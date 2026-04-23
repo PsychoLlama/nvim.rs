@@ -5065,7 +5065,7 @@ extern "C" {
     fn nvim_terminal_init_timer();
     fn nvim_terminal_teardown_timer();
     fn nvim_set_topline_curwin(lnum: c_int);
-    fn nvim_curbuf_ml_line_count() -> c_int;
+    static mut curbuf: *mut std::ffi::c_void;
     fn nvim_curwin_get_view_height() -> c_int;
     fn nvim_curwin_get_w_p_rl() -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
@@ -5101,7 +5101,8 @@ pub unsafe extern "C" fn rs_terminal_check_cursor() {
         return;
     }
     let t = unsafe { &*term_ptr };
-    let ml_line_count = unsafe { nvim_curbuf_ml_line_count() };
+    let ml_line_count =
+        nvim_buffer::buf_struct::buf_ref(nvim_buffer::BufHandle::from_ptr(curbuf)).ml_line_count;
     let linenr = rs_terminal_row_to_linenr(t.cursor.row, t.sb_current);
     let lnum = ml_line_count.min(linenr);
     unsafe { nvim_curwin_set_cursor_lnum(lnum) };

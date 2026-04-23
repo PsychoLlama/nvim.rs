@@ -84,27 +84,15 @@ extern int rs_read_buffer(bool read_stdin, exarg_T *eap, int flags);
 // getout declared in main.h.generated.h (included via buffer_shim.c.generated.h indirectly)
 extern void getout(int exitval);
 
-int nvim_buf_get_help(buf_T *buf) { return buf->b_help; }
-int nvim_buf_get_terminal(buf_T *buf) { return buf->terminal != NULL; }
 buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
 uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0; }
 uint32_t nvim_buf_meta_total_sign_text(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignText) : 0; }
 int nvim_bufref_get_fnum(bufref_T *bufref) { return bufref->br_fnum; }
 int nvim_bufref_get_buf_free_count(bufref_T *bufref) { return bufref->br_buf_free_count; }
 int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
-const char *nvim_buf_get_b_fname(buf_T *buf) { return buf->b_fname; }
-const char *nvim_buf_get_b_ffname(buf_T *buf) { return buf->b_ffname; }
-int nvim_buf_get_b_p_ro(buf_T *buf) { return buf->b_p_ro; }
 int nvim_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
-uint64_t *nvim_buf_get_chartab(buf_T *buf) { return buf->b_chartab; }
 int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
 int nvim_buf_get_locked(buf_T *buf) { return buf->b_locked; }
-const char *nvim_curbuf_get_ffname(void) { return curbuf->b_ffname; }
-int nvim_curbuf_get_handle(void) { return curbuf->handle; }
-int nvim_curbuf_has_ffname(void) { return curbuf->b_ffname != NULL ? 1 : 0; }
-int nvim_curbuf_b_next_null(void) { return curbuf->b_next == NULL ? 1 : 0; }
-const char *nvim_curbuf_get_path(void) { return curbuf->b_p_path; }
-const char *nvim_curbuf_get_inex(void) { return curbuf->b_p_inex; }
 const char *nvim_curbuf_get_line_ptr(void) { return ml_get_buf(curbuf, curwin->w_cursor.lnum); }
 void nvim_buf_set_name_body(buf_T *buf, char *name)
 {
@@ -128,7 +116,6 @@ int nvim_buf_terminal_running(buf_T *buf)
 { return (buf && buf->terminal && terminal_running(buf->terminal)) ? 1 : 0; }
 int nvim_buf_channel_job_running(buf_T *buf)
 { return (buf && buf->terminal && channel_job_running((uint64_t)buf->b_p_channel)) ? 1 : 0; }
-const char *nvim_curbuf_get_fname(void) { return curbuf->b_fname; }
 
 /// Wrapper for try_getdigits: parses digits at s, sets *vers, returns bytes consumed.
 /// Returns -1 on failure (no digits parsed).
@@ -159,9 +146,6 @@ int nvim_bufname_regex_valid(void *handle)
 void nvim_bufname_regex_free(void *handle)
 { if (handle == NULL) { return; } vim_regfree(((regmatch_T *)handle)->regprog); xfree(handle); }
 int nvim_curwin_get_p_diff(void) { return curwin->w_p_diff ? 1 : 0; }
-int nvim_curbuf_ml_line_count(void) { return curbuf->b_ml.ml_line_count; }
-bool nvim_get_curbuf_b_u_synced(void) { return curbuf->b_u_synced; }
-bool nvim_curbuf_has_b_p_fex(void) { return *curbuf->b_p_fex != NUL; }
 
 // buf_T option field offset table (indexed by OptIndex, -1 = unhandled)
 void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
@@ -429,7 +413,6 @@ int nvim_buf_terminal_check_size(buf_T *buf)
 { if (buf && buf->terminal) { terminal_check_size(buf->terminal); return 1; } return 0; }
 void nvim_curbuf_dec_nwindows(void) { if (curbuf) { curbuf->b_nwindows--; } }
 int nvim_curwin_buffer_is_null(void) { return curwin->w_buffer == NULL ? 1 : 0; }
-OptInt nvim_curbuf_get_p_tw(void) { return curbuf->b_p_tw; }
 int nvim_curwin_buffer_is_buf(buf_T *buf) { return curwin->w_buffer == buf ? 1 : 0; }
 int nvim_buf_aucmd_open_buffer(buf_T *buf)
 { aco_save_T aco; aucmd_prepbuf(&aco, buf); int status = open_buffer(false, NULL, 0);
@@ -490,7 +473,6 @@ void nvim_buf_mf_fullname(buf_T *buf) { mf_fullname(buf->b_ml.ml_mfp); }
 int nvim_bt_nofilename(buf_T *buf) { return bt_nofilename(buf) ? 1 : 0; }
 
 // Phase 5: buf_check_timestamp accessors
-int nvim_buf_get_b_orig_mode(const buf_T *buf) { return buf->b_orig_mode; }
 void nvim_buf_copy_mtime_to_mtime_read(buf_T *buf) { buf->b_mtime_read = buf->b_mtime; buf->b_mtime_read_ns = buf->b_mtime_ns; }
 // --- bt_normal wrapper ---
 int nvim_bt_normal(const buf_T *buf) { return bt_normal(buf) ? 1 : 0; }
@@ -561,7 +543,6 @@ int nvim_ml_open_buf(buf_T *buf) {
 void nvim_curbuf_set_b_flags_or(int flags) { curbuf->b_flags |= flags; }
 void nvim_curbuf_set_b_keep_filetype(int val) { curbuf->b_keep_filetype = (bool)val; }
 void nvim_curbuf_set_b_mod_set(int val) { curbuf->b_mod_set = (bool)val; }
-int nvim_curbuf_get_b_orig_mode(void) { return curbuf->b_orig_mode; }
 // Note: nvim_curwin_get_topline is defined in window_shim.c
 void nvim_curwin_set_topline_clamped(linenr_T topline) {
   linenr_T max_line = curbuf->b_ml.ml_line_count;

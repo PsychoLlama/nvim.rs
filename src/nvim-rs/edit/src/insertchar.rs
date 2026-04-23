@@ -72,7 +72,7 @@ extern "C" {
     fn nvim_has_format_option(c: c_int) -> bool;
 
     // -- formatexpr availability --
-    fn nvim_curbuf_has_b_p_fex() -> bool;
+    static mut curbuf: *mut std::ffi::c_void;
 
     // -- end_comment_pending comment replacement (complex C logic) --
     fn nvim_handle_end_comment_pending(c: c_int);
@@ -177,7 +177,10 @@ pub unsafe extern "C" fn rs_insertchar(c: c_int, flags: c_int, second_indent: c_
         let mut do_internal = true;
         let virtcol = get_nolist_virtcol() + char2cells(if c != 0 { c } else { gchar_cursor() });
 
-        if nvim_curbuf_has_b_p_fex()
+        let curbuf_b_p_fex =
+            nvim_buffer::buf_struct::buf_ref(nvim_buffer::BufHandle::from_ptr(curbuf)).b_p_fex;
+        if !curbuf_b_p_fex.is_null()
+            && *curbuf_b_p_fex != 0
             && (flags & INSCHAR_NO_FEX == 0)
             && (force_format != 0 || virtcol > textwidth)
         {

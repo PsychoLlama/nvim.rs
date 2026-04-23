@@ -89,7 +89,6 @@ extern "C" {
     fn nvim_curwin_set_cursor(lnum: c_int, col: c_int);
     fn nvim_check_cursor_curwin();
     fn nvim_update_topline_curwin();
-    fn nvim_curbuf_get_b_orig_mode() -> c_int;
 
     // --- fold helpers (from fold crate) ---
     fn rs_diff_invalidate(buf: *mut c_void);
@@ -333,7 +332,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     nvim_for_all_tab_windows_end(iter);
 
     // If mode didn't change and 'readonly' was set, keep old value.
-    if orig_mode == nvim_curbuf_get_b_orig_mode() {
+    if orig_mode == bref_void(curbuf as *const c_void).b_orig_mode {
         buf_mut_void(curbuf).b_p_ro |= old_ro;
     }
 

@@ -20,8 +20,6 @@ use crate::{buf_struct::buf_ref, BufHandle};
 extern "C" {
     // curbuf accessors
     fn nvim_get_curbuf() -> BufHandle;
-    fn nvim_curbuf_get_ffname() -> *const c_char;
-    fn nvim_curbuf_ml_line_count() -> c_int;
     fn nvim_get_curbuf_ml_flags() -> c_int;
 
     // Buffer accessors
@@ -135,7 +133,7 @@ pub struct BufRef {
 #[no_mangle]
 pub unsafe extern "C" fn do_autochdir() {
     if nvim_get_p_acd() != 0 {
-        let ffname = nvim_curbuf_get_ffname();
+        let ffname = buf_ref(nvim_get_curbuf()).b_ffname;
         if starting == 0 && !ffname.is_null() {
             // vim_chdirfile takes a mutable pointer; const-cast is safe here
             // as the function only reads the string.
@@ -248,7 +246,7 @@ pub unsafe extern "C" fn curbuf_locked() -> bool {
 /// Accesses global `curbuf`. Must be called on the main Neovim thread.
 #[no_mangle]
 pub unsafe extern "C" fn buf_clear() {
-    let line_count = nvim_curbuf_ml_line_count();
+    let line_count = buf_ref(nvim_get_curbuf()).ml_line_count;
     let curbuf = nvim_get_curbuf();
     extmark_free_all(curbuf);
     while nvim_get_curbuf_ml_flags() & ML_EMPTY == 0 {
@@ -560,7 +558,7 @@ pub unsafe extern "C" fn rs_buf_contents_changed(buf: BufHandle) -> bool {
     if nvim_ml_open_curbuf() == OK && nvim_readfile_for_buf(buf, ea) == OK {
         // Compare the two files line by line.
         let buf_lines = buf_ref(buf).ml_line_count;
-        let curbuf_lines = nvim_curbuf_ml_line_count();
+        let curbuf_lines = buf_ref(nvim_get_curbuf()).ml_line_count;
         if buf_lines == curbuf_lines {
             differ = false;
             let mut lnum = 1;
@@ -600,7 +598,6 @@ pub unsafe extern "C" fn rs_buf_contents_changed(buf: BufHandle) -> bool {
 // =============================================================================
 
 extern "C" {
-    fn nvim_curbuf_get_fname() -> *const c_char;
     fn shortmess(x: c_int) -> bool;
     fn readfile(
         fname: *const c_char,
@@ -654,17 +651,17 @@ pub unsafe extern "C" fn rs_read_buffer(read_stdin: bool, eap: *mut c_void, flag
     // Read from the buffer which the text is already filled in and append at
     // the end.  This makes it possible to retry when 'fileformat' or
     // 'fileencoding' was guessed wrong.
-    let line_count = nvim_curbuf_ml_line_count();
+    let line_count = buf_ref(nvim_get_curbuf()).ml_line_count;
     let mut retval = readfile(
         if read_stdin {
             std::ptr::null()
         } else {
-            nvim_curbuf_get_ffname()
+            buf_ref(nvim_get_curbuf()).b_ffname
         },
         if read_stdin {
             std::ptr::null()
         } else {
-            nvim_curbuf_get_fname()
+            buf_ref(nvim_get_curbuf()).b_fname
         },
         line_count,
         0,
@@ -683,7 +680,7 @@ pub unsafe extern "C" fn rs_read_buffer(read_stdin: bool, eap: *mut c_void, flag
         }
     } else {
         // Delete the converted lines.
-        while nvim_curbuf_ml_line_count() > line_count {
+        while buf_ref(nvim_get_curbuf()).ml_line_count > line_count {
             ml_delete(line_count);
         }
     }

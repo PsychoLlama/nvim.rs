@@ -57,9 +57,6 @@ extern "C" {
     /// Get buf->b_may_swap (defined in change_ffi.c, returns bool)
     fn nvim_buf_get_b_may_swap(buf: *mut BufHandle) -> bool;
 
-    /// Get buf->b_p_ro
-    fn nvim_buf_get_b_p_ro(buf: *mut BufHandle) -> c_int;
-
     // -------------------------------------------------------------------------
     // Phase 5: ml_setflags accessors
     // -------------------------------------------------------------------------
@@ -106,7 +103,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     }
 
     // When 'updatecount' is non-zero swapfile may be opened later.
-    if nvim_buf_get_terminal(buf) == 0 && p_uc != 0 && nvim_buf_get_p_swf(buf) != 0 {
+    if (*buf.cast::<BufStruct>()).terminal.is_null() && p_uc != 0 && nvim_buf_get_p_swf(buf) != 0 {
         nvim_buf_set_b_may_swap_true(buf);
     } else {
         nvim_buf_set_b_may_swap(buf, 0);
@@ -161,7 +158,7 @@ pub unsafe extern "C" fn rs_ml_open(buf: *mut BufHandle) -> c_int {
     // Always sync block 0 to disk so findswapname() can check the file name.
     // Don't do this for help files or spell buffers.
     mf_put(mfp, hp0, true, false);
-    if nvim_buf_get_help(buf) == 0 && nvim_buf_get_b_spell(buf) == 0 {
+    if (*buf.cast::<BufStruct>()).b_help == 0 && nvim_buf_get_b_spell(buf) == 0 {
         mf_sync(mfp, 0);
     }
 
@@ -306,7 +303,7 @@ pub unsafe extern "C" fn rs_ml_setname(buf: *mut BufHandle) {
 pub unsafe extern "C" fn rs_ml_open_files() {
     let mut buf = nvim_get_firstbuf();
     while !buf.is_null() {
-        if nvim_buf_get_b_p_ro(buf) == 0 || nvim_buf_get_b_changed(buf) {
+        if (*buf.cast::<BufStruct>()).b_p_ro == 0 || nvim_buf_get_b_changed(buf) {
             rs_ml_open_file(buf);
         }
         buf = nvim_buf_get_next(buf);
@@ -336,7 +333,7 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
         || nvim_mf_get_fd(mfp) >= 0
         || nvim_buf_get_p_swf(buf) == 0
         || nvim_get_cmod_flags() & CMOD_NOSWAPFILE != 0
-        || nvim_buf_get_terminal(buf) != 0
+        || !(*buf.cast::<BufStruct>()).terminal.is_null()
     {
         return; // nothing to do
     }
@@ -399,7 +396,7 @@ pub unsafe extern "C" fn rs_ml_open_file(buf: *mut BufHandle) {
         nvim_inc_no_wait_return();
         let spname = buf_spname(buf);
         let display_name = if spname.is_null() {
-            nvim_buf_get_b_fname(buf).cast_mut()
+            (*buf.cast::<BufStruct>()).b_fname.cast_mut()
         } else {
             spname
         };
@@ -432,7 +429,7 @@ pub unsafe extern "C" fn rs_check_need_swap(newfile: c_int) {
     let curbuf = nvim_get_curbuf();
     if !curbuf.is_null()
         && nvim_buf_get_b_may_swap(curbuf)
-        && (nvim_buf_get_b_p_ro(curbuf) == 0 || newfile == 0)
+        && ((*curbuf.cast::<BufStruct>()).b_p_ro == 0 || newfile == 0)
     {
         rs_ml_open_file(curbuf);
     }
@@ -627,9 +624,6 @@ extern "C" {
 
     #[link_name = "nvim_get_cmdmod_cmod_flags"]
     fn nvim_get_cmod_flags() -> c_int;
-
-    /// Get buf->terminal (returns 1 if terminal buffer)
-    fn nvim_buf_get_terminal(buf: *mut BufHandle) -> c_int;
 
     /// Get p_dir option (directories for swap files)
     fn nvim_get_p_dir() -> *mut c_char;
@@ -1284,9 +1278,6 @@ extern "C" {
     /// Get buf->b_ml.ml_mfp->mf_fname
     fn nvim_buf_get_ml_mfp_fname(buf: *mut BufHandle) -> *mut c_char;
 
-    /// Get buf->b_ffname
-    fn nvim_buf_get_b_ffname(buf: *mut BufHandle) -> *const c_char;
-
     /// Get buf->b_p_fenc
     fn nvim_buf_get_b_p_fenc(buf: *mut BufHandle) -> *const c_char;
 
@@ -1312,7 +1303,7 @@ use crate::types::{B0_FNAME_SIZE_NOCRYPT, B0_HAS_FENC, B0_SAME_DIR};
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_b0_dir_flag(b0p: *mut c_void, buf: *mut BufHandle) {
     let mfp_fname = nvim_buf_get_ml_mfp_fname(buf);
-    let ffname = nvim_buf_get_b_ffname(buf);
+    let ffname = (*buf.cast::<BufStruct>()).b_ffname;
     let flags = nvim_b0_get_flags_byte(b0p);
     if same_directory(mfp_fname, ffname) != 0 {
         nvim_b0_set_flags_byte(b0p, flags | B0_SAME_DIR);
@@ -1400,7 +1391,7 @@ use crate::types::B0_FNAME_SIZE_CRYPT;
     clippy::cast_possible_wrap
 )]
 pub unsafe extern "C" fn rs_set_b0_fname(b0p: *mut c_void, buf: *mut BufHandle) {
-    let ffname = nvim_buf_get_b_ffname(buf);
+    let ffname = (*buf.cast::<BufStruct>()).b_ffname;
 
     if ffname.is_null() {
         // No file name: clear b0_fname
@@ -1538,12 +1529,6 @@ extern "C" {
 
     /// Decrement no_wait_return
     fn nvim_dec_no_wait_return();
-
-    /// Get buf->b_help
-    fn nvim_buf_get_help(buf: *mut BufHandle) -> c_int;
-
-    /// Get buf->b_fname as const char*
-    fn nvim_buf_get_b_fname(buf: *mut BufHandle) -> *const c_char;
 
     /// Check if path link exists
     fn nvim_os_fileinfo_link(fname: *const c_char) -> c_int;
@@ -1731,7 +1716,7 @@ unsafe fn do_swapexists(buf: *mut BufHandle, fname: *const c_char) -> c_int {
     nvim_clear_vim_var_swapchoice();
 
     // Trigger SwapExists autocommands (allbuf_lock inside nvim_apply_autocmds_swapexists)
-    let buf_fname = nvim_buf_get_b_fname(buf);
+    let buf_fname = (*buf.cast::<BufStruct>()).b_fname;
     nvim_apply_autocmds_swapexists(buf_fname, buf);
 
     nvim_clear_vim_var_swapname();
@@ -1770,7 +1755,7 @@ unsafe fn attention_message(
     // Get swap file mtime via rs_swapfile_info (fills sb with info, sets proc_running)
     let swap_mtime = rs_swapfile_info(fname.cast_mut(), sb, proc_running);
 
-    let buf_fname = nvim_buf_get_b_fname(buf);
+    let buf_fname = (*buf.cast::<BufStruct>()).b_fname;
     nvim_sb_append(sb, c"While opening file \"".as_ptr());
     nvim_sb_append(sb, buf_fname);
     nvim_sb_append(sb, "\"\n".as_ptr().cast());
@@ -1847,7 +1832,7 @@ pub unsafe extern "C" fn rs_findswapname(
     old_fname: *const c_char,
     found_existing_dir: *mut bool,
 ) -> *mut c_char {
-    let buf_fname = nvim_buf_get_b_fname(buf);
+    let buf_fname = (*buf.cast::<BufStruct>()).b_fname;
 
     // Isolate a directory name from *dirp and put it in dir_name.
     // We pre-count the length of *dirp so we can allocate enough space.
@@ -1867,7 +1852,7 @@ pub unsafe extern "C" fn rs_findswapname(
     // We try different swapfile names until we find one that does not exist yet.
     let mut fname = rs_makeswapname(
         buf_fname.cast_mut(),
-        nvim_buf_get_b_ffname(buf).cast_mut(),
+        (*buf.cast::<BufStruct>()).b_ffname.cast_mut(),
         buf,
         dir_name,
     );
@@ -1908,7 +1893,7 @@ pub unsafe extern "C" fn rs_findswapname(
             // viewing a help file, or when the path of the file is different.
             if nvim_get_recoverymode() == 0
                 && !buf_fname.is_null()
-                && nvim_buf_get_help(buf) == 0
+                && (*buf.cast::<BufStruct>()).b_help == 0
                 && ((*buf.cast::<BufStruct>()).b_flags & BF_DUMMY) == 0
             {
                 let mut differ = false;
@@ -1927,7 +1912,7 @@ pub unsafe extern "C" fn rs_findswapname(
 
                         let b0_flags = nvim_b0_get_flags_byte(b0p);
                         let b0_fname = nvim_b0_get_fname_ptr(b0p);
-                        let full_fname = nvim_buf_get_b_ffname(buf);
+                        let full_fname = (*buf.cast::<BufStruct>()).b_ffname;
                         if (b0_flags & B0_SAME_DIR) != 0 {
                             if nvim_path_fnamecmp(
                                 nvim_path_tail_const(full_fname),
@@ -2192,8 +2177,6 @@ extern "C" {
     /// Check if original file changed since last read
     fn nvim_buf_file_unchanged(buf: *mut BufHandle) -> c_int;
 
-    // nvim_buf_get_b_ffname already declared in Phase 1 extern block above.
-
     /// Check if buffer has unsaved changes
     fn nvim_buf_is_changed(buf: *mut BufHandle) -> c_int;
 
@@ -2245,7 +2228,7 @@ pub unsafe extern "C" fn rs_ml_sync_one(
     if nvim_buf_is_changed(buf) != 0
         && check_file != 0
         && nvim_mf_need_trans(mfp) != 0
-        && !nvim_buf_get_b_ffname(buf).is_null()
+        && !(*buf.cast::<BufStruct>()).b_ffname.is_null()
         && nvim_buf_file_unchanged(buf) != 0
     {
         // Original file no longer matches; preserve to translate negative blocks.

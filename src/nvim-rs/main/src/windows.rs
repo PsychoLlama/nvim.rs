@@ -4,6 +4,7 @@
 //! C functions in main.c.
 
 use crate::setup::MparmT;
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int};
 
 // Values for window_layout (must match C enums in main.c)
@@ -74,7 +75,6 @@ unsafe extern "C" {
     fn nvim_curwin_get_next() -> *mut std::ffi::c_void;
     fn nvim_firstwin_get_buffer() -> *mut std::ffi::c_void;
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
-    fn nvim_curbuf_has_ffname() -> c_int;
     fn nvim_win_get_p_pvw(win: *mut std::ffi::c_void) -> c_int;
     fn nvim_win_get_next_in_tab(win: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
 
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn rs_edit_buffers(parmp: *mut MparmT, cwd: *mut c_char) {
         // Only open the file if there is no file in this window yet.
         let curbuf = nvim_get_curbuf();
         let firstwin_buf = nvim_firstwin_get_buffer();
-        if curbuf == firstwin_buf || nvim_curbuf_has_ffname() == 0 {
+        if curbuf == firstwin_buf || (*curbuf.cast::<BufStruct>()).b_ffname.is_null() {
             nvim_window::win_struct::win_mut(nvim_get_curwin()).w_arg_idx = arg_idx;
             // Edit file from arg list, if there is one.
             swap_exists_did_quit = false;

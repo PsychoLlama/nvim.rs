@@ -853,10 +853,8 @@ pub unsafe extern "C" fn rs_did_set_scrollbind(args: *mut c_void) -> CallbackRes
 extern "C" {
     fn u_compute_hash(buf: *mut std::ffi::c_void, hash: *mut u8);
     fn u_read_undo(name: *const c_char, hash: *const u8, orig_name: *const c_char) -> c_int;
-    fn nvim_buf_get_b_ffname(buf: *const std::ffi::c_void) -> *const c_char;
     static mut p_udf: c_int;
     fn nvim_buf_is_changed(buf: *mut c_void) -> c_int;
-    fn nvim_buf_get_b_fname(buf: *const c_void) -> *const c_char;
     fn nvim_for_all_buffers(callback: unsafe extern "C" fn(*mut c_void));
     fn nvim_optset_get_flags(args: *const c_void) -> c_int;
     fn nvim_optset_get_oldval_number(args: *const c_void) -> crate::OptInt;
@@ -879,7 +877,7 @@ pub unsafe extern "C" fn rs_did_set_undofile(buf: *mut std::ffi::c_void) -> Call
 
     if (*buf.cast::<BufStruct>()).b_p_udf != 0 {
         // 'undofile' was set - try to read undo file
-        let fname = nvim_buf_get_b_ffname(buf);
+        let fname = (*buf.cast::<BufStruct>()).b_ffname;
         if !fname.is_null() && *fname != 0 {
             let mut hash = [0u8; UNDO_HASH_SIZE];
             u_compute_hash(buf, hash.as_mut_ptr());
@@ -907,7 +905,7 @@ unsafe extern "C" fn undofile_buf_callback(bp: *mut c_void) {
         && nvim_buf_is_changed(bp) == 0
         && !(*bp.cast::<BufStruct>()).ml_mfp.is_null()
     {
-        let fname = nvim_buf_get_b_fname(bp);
+        let fname = (*bp.cast::<BufStruct>()).b_fname;
         if !fname.is_null() && *fname != 0 {
             let mut hash = [0u8; UNDO_HASH_SIZE];
             u_compute_hash(bp, hash.as_mut_ptr());

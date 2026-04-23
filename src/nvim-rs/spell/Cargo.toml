@@ -10,6 +10,7 @@ repository.workspace = true
 libc = "0.2"
 nvim-strings = { path = "../strings" }
 nvim-window = { path = "../window" }
+nvim-buffer = { path = "../buffer" }
 
 [lints]
 workspace = true

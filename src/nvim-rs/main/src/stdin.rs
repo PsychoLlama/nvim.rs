@@ -2,7 +2,8 @@
 //!
 //! Implements `rs_read_stdin` replacing the static C function in main.c.
 
-use nvim_buffer::buf_struct::BufStruct;
+use nvim_buffer::buf_struct::{buf_ref, BufStruct};
+use nvim_buffer::BufHandle;
 use std::ffi::{c_char, c_int};
 
 // Buffer list flags
@@ -47,12 +48,10 @@ unsafe extern "C" {
     fn semsg(fmt: *const c_char, ...);
     fn rs_check_swap_exists_action();
 
-    fn nvim_curbuf_get_handle() -> c_int;
-    fn nvim_curbuf_has_ffname() -> c_int;
     fn nvim_buf_is_empty(buf: *mut std::ffi::c_void) -> c_int;
-    fn nvim_curbuf_b_next_null() -> c_int;
     // Returns current curbuf pointer (opaque)
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
+    static mut curbuf: *mut std::ffi::c_void;
 
     static mut swap_exists_action: c_int;
     static mut no_wait_return: c_int;
@@ -69,7 +68,7 @@ pub unsafe extern "C" fn rs_read_stdin() {
     no_wait_return = true as c_int;
     let save_msg_didany = msg_didany;
 
-    if nvim_curbuf_has_ffname() != 0 {
+    if !buf_ref(BufHandle::from_ptr(curbuf)).b_ffname.is_null() {
         // curbuf is already opened for a file, create a new buffer for stdin. #35269
         let stdin_buf = buflist_new(std::ptr::null_mut(), std::ptr::null_mut(), 0, BLN_LISTED);
         if stdin_buf.is_null() {
@@ -78,7 +77,7 @@ pub unsafe extern "C" fn rs_read_stdin() {
         }
 
         // remember the current buffer number so we can go back to it
-        let initial_buf_handle = nvim_curbuf_get_handle();
+        let initial_buf_handle = buf_ref(BufHandle::from_ptr(curbuf)).handle;
 
         // set the buffer we just created as curbuf so we can read stdin into it
         set_curbuf(stdin_buf, 0, false);
@@ -95,8 +94,8 @@ pub unsafe extern "C" fn rs_read_stdin() {
 
         // remember stdin_buf_handle so we can close it if stdin_buf ends up empty
         let stdin_buf_handle = (*stdin_buf.cast::<BufStruct>()).handle;
-        let curbuf = nvim_get_curbuf();
-        let stdin_buf_empty = nvim_buf_is_empty(curbuf) != 0;
+        let cur = nvim_get_curbuf();
+        let stdin_buf_empty = nvim_buf_is_empty(cur) != 0;
 
         // switch back to the original starting buffer
         let mut buf = [0i8; IOSIZE];
@@ -125,8 +124,8 @@ pub unsafe extern "C" fn rs_read_stdin() {
         // Create memfile and read from stdin.
         open_buffer(true, std::ptr::null_mut(), 0);
         // stdin was empty so we should wipe it (e.g. "echo file1 | xargs nvim"). #8561
-        let curbuf = nvim_get_curbuf();
-        if nvim_buf_is_empty(curbuf) != 0 && nvim_curbuf_b_next_null() == 0 {
+        let cur = nvim_get_curbuf();
+        if nvim_buf_is_empty(cur) != 0 && !(*cur.cast::<BufStruct>()).b_next.is_null() {
             do_cmdline_cmd(c"silent! bnext".as_ptr());
             do_cmdline_cmd(c"silent! bwipeout 1".as_ptr());
         }

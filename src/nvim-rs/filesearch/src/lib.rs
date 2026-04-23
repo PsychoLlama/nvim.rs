@@ -28,6 +28,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::too_many_lines)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
@@ -127,12 +128,7 @@ extern "C" {
 
     // Current buffer accessors
     fn nvim_get_curbuf_sua() -> *const c_char;
-    #[allow(dead_code)]
-    fn nvim_curbuf_get_ffname() -> *const c_char;
-    #[allow(dead_code)]
-    fn nvim_curbuf_get_path() -> *const c_char;
-    #[allow(dead_code)]
-    fn nvim_curbuf_get_inex() -> *const c_char;
+    static mut curbuf: *mut std::ffi::c_void;
 
     // Current window accessors
     #[allow(dead_code)]
@@ -1853,7 +1849,7 @@ pub unsafe extern "C" fn rs_vim_chdir(new_dir: *mut c_char) -> c_int {
     }
 
     // Get current buffer filename for relative search
-    let curbuf_ffname = nvim_curbuf_get_ffname();
+    let curbuf_ffname = (*curbuf.cast::<BufStruct>()).b_ffname;
 
     // Allocate pointers for the search context
     let mut file_to_find: *mut c_char = ptr::null_mut();
@@ -1930,7 +1926,7 @@ pub unsafe extern "C" fn rs_find_file_in_path(
     search_ctx: *mut *mut libc::c_void,
 ) -> *mut c_char {
     // Use buffer-local path if set, otherwise global path
-    let curbuf_path = nvim_curbuf_get_path();
+    let curbuf_path = (*curbuf.cast::<BufStruct>()).b_p_path;
     let path_option = if curbuf_path.is_null() || *curbuf_path == 0 {
         p_path.cast_const()
     } else {
@@ -2239,7 +2235,7 @@ pub unsafe extern "C" fn rs_grab_file_name(count: c_int, file_lnum: *mut i32) ->
             *file_lnum = getdigits_int32(std::ptr::addr_of_mut!(p), false, 0);
         }
 
-        let curbuf_ffname = nvim_curbuf_get_ffname();
+        let curbuf_ffname = (*curbuf.cast::<BufStruct>()).b_ffname;
         return rs_find_file_name_in_path(
             ptr,
             len,
@@ -2264,7 +2260,7 @@ pub unsafe extern "C" fn rs_file_name_at_cursor(
     file_lnum: *mut i32,
 ) -> *mut c_char {
     let cursor_col = nvim_curwin_get_cursor_col();
-    let curbuf_ffname = nvim_curbuf_get_ffname();
+    let curbuf_ffname = (*curbuf.cast::<BufStruct>()).b_ffname;
     rs_file_name_in_line(
         get_cursor_line_ptr(),
         cursor_col,
@@ -2410,7 +2406,7 @@ pub unsafe extern "C" fn rs_find_file_name_in_path(
     }
 
     // Apply includeexpr if enabled and set
-    let curbuf_inex = nvim_curbuf_get_inex();
+    let curbuf_inex = (*curbuf.cast::<BufStruct>()).b_p_inex;
     if (options & FNAME_INCL) != 0 && !curbuf_inex.is_null() && *curbuf_inex != 0 {
         tofree = eval_includeexpr(ptr, len);
         if !tofree.is_null() {

@@ -51,9 +51,6 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn nvim_get_curwin() -> WinHandle;
 
-    fn nvim_curbuf_get_ffname() -> *const c_char;
-    fn nvim_curbuf_get_fname() -> *const c_char;
-
     fn rs_buf_spname(buf: BufHandle) -> *mut c_char;
     fn rs_bt_dontwrite(buf: BufHandle) -> bool;
     fn curbufIsChanged() -> bool;
@@ -457,14 +454,14 @@ pub unsafe fn fileinfo_impl(fullname: c_int, shorthelp: bool, dont_truncate: boo
     let spname = rs_buf_spname(curbuf);
     if spname.is_null() {
         let name: *const c_char = if fullname == 0 {
-            let fname = nvim_curbuf_get_fname();
+            let fname = buf_ref(nvim_get_curbuf()).b_fname;
             if fname.is_null() {
-                nvim_curbuf_get_ffname()
+                buf_ref(nvim_get_curbuf()).b_ffname
             } else {
                 fname
             }
         } else {
-            nvim_curbuf_get_ffname()
+            buf_ref(nvim_get_curbuf()).b_ffname
         };
         // home_replace writes directly into remaining buffer space
         let null_buf = BufHandle(std::ptr::null_mut());

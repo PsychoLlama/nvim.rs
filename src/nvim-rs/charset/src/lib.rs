@@ -14,6 +14,7 @@
 #![allow(clippy::map_entry)]
 #![allow(clippy::cast_lossless)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::c_char;
 use std::ffi::c_int;
 
@@ -663,8 +664,6 @@ extern "C" {
     /// Get the current buffer (`curbuf` global).
     fn nvim_get_curbuf() -> BufHandle;
 
-    /// Get the `b_chartab` field from a buffer.
-    fn nvim_buf_get_chartab(buf: BufHandle) -> *const u64;
 }
 
 /// Check if a character is a word character using buffer-specific chartab.
@@ -681,14 +680,8 @@ fn vim_iswordc_buf_impl(c: c_int, buf: BufHandle) -> bool {
         return false;
     }
 
-    // SAFETY: buf is a valid buffer handle, nvim_buf_get_chartab returns valid pointer
-    let chartab_ptr = unsafe { nvim_buf_get_chartab(buf) };
-    if chartab_ptr.is_null() {
-        return false;
-    }
-
-    // SAFETY: chartab_ptr is a valid pointer to [u64; 4]
-    let chartab: &[u64; 4] = unsafe { &*(chartab_ptr as *const [u64; 4]) };
+    // SAFETY: buf.0 is a valid buf_T pointer (checked above)
+    let chartab: &[u64; 4] = unsafe { &(*buf.0.cast::<BufStruct>()).b_chartab };
     vim_iswordc_tab(c, chartab)
 }
 
@@ -1915,7 +1908,7 @@ pub unsafe extern "C" fn rs_parse_isopt(
     let buf_chartab = if buf.is_null() {
         std::ptr::null_mut()
     } else {
-        nvim_buf_get_chartab(BufHandle(buf)).cast_mut()
+        (*buf.cast::<BufStruct>()).b_chartab.as_mut_ptr()
     };
 
     // Parse the option string
@@ -2124,15 +2117,15 @@ pub unsafe extern "C" fn rs_buf_init_chartab(buf: *mut std::ffi::c_void, global:
     }
 
     // Clear buffer chartab
-    let buf_chartab = nvim_buf_get_chartab(BufHandle(buf)).cast_mut();
-    if !buf_chartab.is_null() {
+    let buf_chartab = (*buf.cast::<BufStruct>()).b_chartab.as_mut_ptr();
+    {
         for i in 0..4 {
             *buf_chartab.add(i) = 0;
         }
     }
 
     // In lisp mode, '-' is included in keywords
-    if nvim_charset_get_buf_lisp(BufHandle(buf)) != 0 && !buf_chartab.is_null() {
+    if nvim_charset_get_buf_lisp(BufHandle(buf)) != 0 {
         set_chartab(buf_chartab, b'-');
     }
 

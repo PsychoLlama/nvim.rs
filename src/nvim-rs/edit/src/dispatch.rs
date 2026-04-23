@@ -182,7 +182,7 @@ extern "C" {
     fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
     fn invoke_prompt_interrupt() -> bool;
     fn prompt_invoke_callback();
-    fn nvim_get_curbuf_b_u_synced() -> bool;
+    static mut curbuf: *mut c_void;
     fn nvim_get_p_paste() -> c_int;
     fn char_before_cursor() -> c_int;
     fn char_avail() -> bool;
@@ -504,7 +504,7 @@ unsafe fn do_check_pum(s: *mut InsertState) {
         nvim_set_pum_want_active(0);
     }
 
-    if nvim_get_curbuf_b_u_synced() {
+    if nvim_buffer::buf_struct::buf_ref(nvim_buffer::BufHandle::from_ptr(curbuf)).b_u_synced != 0 {
         nvim_set_ins_need_undo(1);
     }
 }

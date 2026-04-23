@@ -982,7 +982,7 @@ const DOBUF_UNLOAD_ACTION: c_int = 2;
 /// Accesses global Neovim state. Must be called on the main thread.
 #[unsafe(export_name = "handle_swap_exists")]
 pub unsafe extern "C" fn rs_handle_swap_exists(old_curbuf: *mut c_void) {
-    let old_tw = nvim_curbuf_get_p_tw();
+    let old_tw = buf_ref(nvim_get_curbuf()).b_p_tw;
 
     if swap_exists_action == SEA_QUIT {
         // Reset the error/interrupt/exception state here so that
@@ -1024,7 +1024,7 @@ pub unsafe extern "C" fn rs_handle_swap_exists(old_curbuf: *mut c_void) {
 
         if !buf.is_null() {
             enter_buffer(buf);
-            if old_tw != nvim_curbuf_get_p_tw() {
+            if old_tw != buf_ref(nvim_get_curbuf()).b_p_tw {
                 check_colorcolumn(std::ptr::null(), nvim_get_curwin());
             }
         }
@@ -1369,7 +1369,6 @@ extern "C" {
     fn nvim_buf_terminal_check_size(buf: BufHandle) -> c_int;
     fn nvim_curbuf_dec_nwindows();
     fn nvim_curwin_buffer_is_null() -> c_int;
-    fn nvim_curbuf_get_p_tw() -> i64;
     fn nvim_curwin_buffer_is_buf(buf: BufHandle) -> c_int;
     fn aborting() -> c_int;
     fn rs_win_valid(win: *mut c_void) -> c_int;
@@ -1398,7 +1397,7 @@ const EVENT_BUFLEAVE: c_int = 7;
 #[unsafe(export_name = "set_curbuf")]
 pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jumplist: bool) {
     let unload = action == DOBUF_UNLOAD || action == DOBUF_DEL || action == DOBUF_WIPE;
-    let old_tw = nvim_curbuf_get_p_tw();
+    let old_tw = buf_ref(nvim_get_curbuf()).b_p_tw;
     let last_winid = rs_get_last_winid();
 
     if update_jumplist {
@@ -1485,7 +1484,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         } else {
             BufHandle::from_ptr(lastbuf)
         });
-        if old_tw != nvim_curbuf_get_p_tw() {
+        if old_tw != buf_ref(nvim_get_curbuf()).b_p_tw {
             check_colorcolumn(std::ptr::null(), nvim_get_curwin());
         }
     }
@@ -2261,7 +2260,6 @@ extern "C" {
     );
     fn rs_bt_nofileread(buf: BufHandle) -> bool;
     fn rs_foldUpdateAll_curwin();
-    fn nvim_curbuf_has_ffname() -> c_int;
     /// Open memfile for buffer. Returns FAIL (0) on failure, OK (1) on success.
     fn ml_open(buf: BufHandle) -> c_int;
     /// Exit with the given exit value.
@@ -2366,7 +2364,7 @@ pub unsafe extern "C" fn rs_open_buffer(
     let silent_int: c_int = c_int::from(silent);
 
     // Save old text-width before ml_open attempt (needed for fallback path).
-    let old_tw = nvim_curbuf_get_p_tw();
+    let old_tw = buf_ref(nvim_get_curbuf()).b_p_tw;
 
     // Handle readonlymode + try ml_open. Returns 0 (FAIL) if we should bail.
     if open_buffer_ml_init_impl(old_tw) == 0 {
@@ -2392,7 +2390,7 @@ pub unsafe extern "C" fn rs_open_buffer(
 
     // Read the file or stdin.
     let mut read_fifo: c_int = 0;
-    if nvim_curbuf_has_ffname() != 0 {
+    if !buf_ref(nvim_get_curbuf()).b_ffname.is_null() {
         retval = nvim_open_buffer_read_file(eap, flags, silent_int, &raw mut read_fifo);
     } else if read_stdin {
         retval = nvim_open_buffer_read_stdin(eap, flags, silent_int);

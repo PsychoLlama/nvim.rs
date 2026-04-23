@@ -11398,7 +11398,6 @@ extern "C" {
     fn nvim_curwin_get_ws_b_langp() -> *const crate::GArrayRaw;
     fn nvim_curbuf_get_b_s_b_p_spl() -> *mut c_char;
     fn nvim_get_NameBuff() -> *mut c_char;
-    fn nvim_buf_get_b_orig_mode(buf: *mut c_void) -> c_int;
     fn nvim_buf_ml_mfp_is_null(buf: *mut c_void) -> bool;
 
     // String / path functions
@@ -11821,7 +11820,7 @@ pub unsafe extern "C" fn rs_spell_add_word(
 
         // Reload if edited elsewhere.
         if !buf_ptr.is_null() {
-            let orig_mode = nvim_buf_get_b_orig_mode(buf_ptr);
+            let orig_mode = (*buf_ptr.cast::<nvim_buffer::buf_struct::BufStruct>()).b_orig_mode;
             nvim_buf_reload(buf_ptr, orig_mode, 0);
         }
 

@@ -31,6 +31,7 @@
 #![allow(clippy::ptr_cast_constness)]
 #![allow(clippy::as_ptr_cast_mut)]
 
+use nvim_buffer::buf_struct::BufStruct;
 use std::ffi::{c_char, c_int, c_longlong, c_void};
 
 use nvim_utf8proc::{
@@ -1281,8 +1282,6 @@ extern "C" {
     /// Get the current buffer (`curbuf` global).
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
 
-    /// Get the `b_chartab` field from a buffer.
-    fn nvim_buf_get_chartab(buf: *mut std::ffi::c_void) -> *const u64;
 }
 
 /// Return the value of the cellwidth table for the character `c`.
@@ -2023,17 +2022,7 @@ pub unsafe extern "C" fn rs_utf_class(c: c_int) -> c_int {
         }
         return utf_class_tab_impl(c, &[0, 0, 0, 0]);
     }
-    let chartab = nvim_buf_get_chartab(curbuf);
-    if chartab.is_null() {
-        // No chartab - use default behavior
-        if c < 0x100 {
-            if c == i32::from(b' ') || c == i32::from(b'\t') || c == 0 || c == 0xa0 {
-                return 0;
-            }
-            return 1;
-        }
-        return utf_class_tab_impl(c, &[0, 0, 0, 0]);
-    }
+    let chartab = (*curbuf.cast::<BufStruct>()).b_chartab.as_ptr();
 
     // Delegate to rs_utf_class_tab
     rs_utf_class_tab(c, chartab)
@@ -2128,10 +2117,7 @@ pub unsafe extern "C" fn rs_mb_get_class(p: *const c_char) -> c_int {
     if curbuf.is_null() {
         return 0;
     }
-    let chartab = nvim_buf_get_chartab(curbuf);
-    if chartab.is_null() {
-        return 0;
-    }
+    let chartab = (*curbuf.cast::<BufStruct>()).b_chartab.as_ptr();
 
     // Delegate to rs_mb_get_class_tab
     rs_mb_get_class_tab(p, chartab)
