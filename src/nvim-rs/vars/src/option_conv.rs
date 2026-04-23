@@ -224,6 +224,23 @@ extern "C" {
     // string
     fn strlen(s: *const c_char) -> usize;
     fn snprintf(s: *mut c_char, maxlen: usize, fmt: *const c_char, ...) -> c_int;
+    fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn concat_str(s1: *const c_char, s2: *const c_char) -> *mut c_char;
+
+    // option lookup / modification
+    fn find_option_var_end(
+        arg: *mut *const c_char,
+        opt_idxp: *mut OptIndex,
+        opt_flags: *mut c_int,
+    ) -> *const c_char;
+    fn is_option_hidden(opt_idx: OptIndex) -> c_int;
+    fn get_tty_option(name: *const c_char) -> OptVal;
+    fn get_option_value(opt_idx: OptIndex, opt_flags: c_int) -> OptVal;
+
+    // arithmetic helpers
+    fn rs_num_divide(n1: OptInt, n2: OptInt) -> OptInt;
+    fn rs_num_modulus(n1: OptInt, n2: OptInt) -> OptInt;
 }
 
 // NUMBUFLEN matches C #define (30 bytes for number as string)
@@ -612,4 +629,134 @@ struct ExargFields {
     force_ff: c_int,              // offset 144
     force_enc: c_int,             // offset 148
     bad_char: c_int,              // offset 152
+}
+
+// =============================================================================
+// ex_let_option: set an option, part of :let var = expr
+// =============================================================================
+
+// Error messages matching C static strings
+const E_E996: &[u8] = b"E996: Cannot lock an option\0";
+const E_E18: &[u8] = b"E18: Unexpected characters in :let\0";
+const E_UNKNOWN_OPT2: &[u8] = b"E355: Unknown option: %s\0";
+const E_LETWRONG: &[u8] = b"E734: Wrong variable type for %s=\0";
+
+/// Set an option, part of ex_let_one().
+///
+/// Matches C `ex_let_option`. Returns updated arg pointer on success, NULL on error.
+///
+/// # Safety
+/// All pointer arguments must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_let_option(
+    arg: *mut c_char,
+    tv: TvPtr,
+    is_const: bool,
+    endchars: *const c_char,
+    op: *const c_char,
+) -> *mut c_char {
+    if is_const {
+        emsg(E_E996.as_ptr() as *const c_char);
+        return ptr::null_mut();
+    }
+
+    let mut arg_end: *mut c_char = ptr::null_mut();
+    let mut opt_idx: OptIndex = -1;
+    let mut opt_flags: c_int = 0;
+    let mut arg_const = arg as *const c_char;
+
+    let p = find_option_var_end(&mut arg_const, &mut opt_idx, &mut opt_flags);
+
+    if p.is_null()
+        || (!endchars.is_null() && vim_strchr(endchars, *skipwhite(p) as c_int).is_null())
+    {
+        emsg(E_E18.as_ptr() as *const c_char);
+        return ptr::null_mut();
+    }
+
+    // Temporarily NUL-terminate at p.
+    let c1 = *p;
+    *(p as *mut c_char) = 0;
+
+    let is_tty_opt = rs_is_tty_option(arg_const) != 0;
+    let hidden = is_option_hidden(opt_idx) != 0;
+    let curval = if is_tty_opt {
+        get_tty_option(arg_const)
+    } else {
+        get_option_value(opt_idx, opt_flags)
+    };
+    let mut newval = OptVal::nil();
+
+    if curval.type_ == K_OPT_VAL_TYPE_NIL {
+        semsg(E_UNKNOWN_OPT2.as_ptr() as *const c_char, arg_const);
+    } else if !op.is_null()
+        && *op != b'=' as c_char
+        && ((curval.type_ != K_OPT_VAL_TYPE_STRING && *op == b'.' as c_char)
+            || (curval.type_ == K_OPT_VAL_TYPE_STRING && *op != b'.' as c_char))
+    {
+        semsg(E_LETWRONG.as_ptr() as *const c_char, op);
+    } else {
+        let mut error = false;
+        newval = rs_tv_to_optval(tv, opt_idx, arg_const, &mut error);
+        if !error {
+            let is_num =
+                curval.type_ == K_OPT_VAL_TYPE_NUMBER || curval.type_ == K_OPT_VAL_TYPE_BOOLEAN;
+            let is_string = curval.type_ == K_OPT_VAL_TYPE_STRING;
+
+            if !op.is_null() && *op != b'=' as c_char {
+                if !hidden && is_num {
+                    let cur_n = if curval.type_ == K_OPT_VAL_TYPE_NUMBER {
+                        curval.data.number
+                    } else {
+                        curval.data.boolean as OptInt
+                    };
+                    let new_n = if newval.type_ == K_OPT_VAL_TYPE_NUMBER {
+                        newval.data.number
+                    } else {
+                        newval.data.boolean as OptInt
+                    };
+                    let result_n = match *op as u8 {
+                        b'+' => cur_n + new_n,
+                        b'-' => cur_n - new_n,
+                        b'*' => cur_n * new_n,
+                        b'/' => rs_num_divide(cur_n, new_n),
+                        b'%' => rs_num_modulus(cur_n, new_n),
+                        _ => new_n,
+                    };
+                    if curval.type_ == K_OPT_VAL_TYPE_NUMBER {
+                        newval = OptVal::number(result_n);
+                    } else {
+                        // TRISTATE_FROM_INT: -1→kNone, 0→kFalse, 1→kTrue
+                        let tri = match result_n.cmp(&0) {
+                            std::cmp::Ordering::Less => K_NONE,
+                            std::cmp::Ordering::Equal => K_FALSE,
+                            std::cmp::Ordering::Greater => K_TRUE,
+                        };
+                        newval = OptVal::boolean(tri);
+                    }
+                } else if !hidden && is_string {
+                    let curval_data = curval.data.string.data as *const c_char;
+                    let newval_data = newval.data.string.data as *const c_char;
+                    if !curval_data.is_null() && !newval_data.is_null() {
+                        let newval_old = newval;
+                        let concatenated = concat_str(curval_data, newval_data);
+                        newval = OptVal::cstr_as(concatenated);
+                        rs_optval_free(newval_old);
+                    }
+                }
+            }
+
+            let err = set_option_value_handle_tty(arg_const, opt_idx, newval, opt_flags);
+            arg_end = p as *mut c_char;
+            if !err.is_null() {
+                emsg(err);
+            }
+        }
+    }
+
+    // Restore the character we NUL-terminated.
+    *(p as *mut c_char) = c1;
+    rs_optval_free(curval);
+    rs_optval_free(newval);
+    arg_end
 }

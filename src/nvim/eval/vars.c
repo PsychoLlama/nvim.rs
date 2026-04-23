@@ -115,11 +115,13 @@ extern void rs_set_vim_var_list(VimVarIndex idx, list_T *val);
 extern void rs_set_vim_var_dict(VimVarIndex idx, dict_T *val);
 extern void rs_set_vim_var_partial(VimVarIndex idx, partial_T *val);
 
-// Phase 1 (new): option conversion and set_cmdarg migrated to Rust
+// Phase 1/7: option conversion, set_cmdarg, and ex_let_option migrated to Rust
 extern OptVal rs_tv_to_optval(typval_T *tv, OptIndex opt_idx, const char *option, bool *error);
 extern void rs_optval_as_tv(OptVal value, bool numbool, typval_T *rettv);
 extern void rs_set_option_from_tv(const char *varname, typval_T *varp);
 extern char *rs_set_cmdarg(exarg_T *eap, char *oldarg);
+extern char *rs_ex_let_option(char *arg, typval_T *tv, bool is_const, const char *endchars,
+                              const char *op);
 
 // Phase 2: VimL f_ functions migrated to Rust
 extern void rs_get_var_from(const char *varname, typval_T *rettv, typval_T *deftv, int htname,
@@ -1020,99 +1022,7 @@ static char *ex_let_option(char *arg, typval_T *const tv, const bool is_const,
                            const char *const endchars, const char *const op)
   FUNC_ATTR_NONNULL_ARG(1, 2) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (is_const) {
-    emsg(_("E996: Cannot lock an option"));
-    return NULL;
-  }
-
-  // Find the end of the name.
-  char *arg_end = NULL;
-  OptIndex opt_idx;
-  int opt_flags;
-
-  char *const p = (char *)find_option_var_end((const char **)&arg, &opt_idx, &opt_flags);
-
-  if (p == NULL || (endchars != NULL && vim_strchr(endchars, (uint8_t)(*skipwhite(p))) == NULL)) {
-    emsg(_(e_letunexp));
-    return NULL;
-  }
-
-  const char c1 = *p;
-  *p = NUL;
-
-  bool is_tty_opt = rs_is_tty_option(arg);
-  bool hidden = is_option_hidden(opt_idx);
-  OptVal curval = is_tty_opt ? get_tty_option(arg) : get_option_value(opt_idx, opt_flags);
-  OptVal newval = NIL_OPTVAL;
-
-  if (curval.type == kOptValTypeNil) {
-    semsg(_(e_unknown_option2), arg);
-    goto theend;
-  }
-  if (op != NULL && *op != '='
-      && ((curval.type != kOptValTypeString && *op == '.')
-          || (curval.type == kOptValTypeString && *op != '.'))) {
-    semsg(_(e_letwrong), op);
-    goto theend;
-  }
-
-  bool error;
-  newval = tv_to_optval(tv, opt_idx, arg, &error);
-  if (error) {
-    goto theend;
-  }
-
-  // Current value and new value must have the same type.
-  assert(curval.type == newval.type);
-  const bool is_num = curval.type == kOptValTypeNumber || curval.type == kOptValTypeBoolean;
-  const bool is_string = curval.type == kOptValTypeString;
-
-  if (op != NULL && *op != '=') {
-    if (!hidden && is_num) {  // number or bool
-      OptInt cur_n = curval.type == kOptValTypeNumber ? curval.data.number : curval.data.boolean;
-      OptInt new_n = newval.type == kOptValTypeNumber ? newval.data.number : newval.data.boolean;
-
-      switch (*op) {
-      case '+':
-        new_n = cur_n + new_n; break;
-      case '-':
-        new_n = cur_n - new_n; break;
-      case '*':
-        new_n = cur_n * new_n; break;
-      case '/':
-        new_n = rs_num_divide(cur_n, new_n); break;
-      case '%':
-        new_n = rs_num_modulus(cur_n, new_n); break;
-      }
-
-      if (curval.type == kOptValTypeNumber) {
-        newval = NUMBER_OPTVAL(new_n);
-      } else {
-        newval = BOOLEAN_OPTVAL(TRISTATE_FROM_INT(new_n));
-      }
-    } else if (!hidden && is_string) {  // string
-      const char *curval_data = curval.data.string.data;
-      const char *newval_data = newval.data.string.data;
-
-      if (curval_data != NULL && newval_data != NULL) {
-        OptVal newval_old = newval;
-        newval = CSTR_AS_OPTVAL(concat_str(curval_data, newval_data));
-        rs_optval_free(newval_old);
-      }
-    }
-  }
-
-  const char *err = set_option_value_handle_tty(arg, opt_idx, newval, opt_flags);
-  arg_end = p;
-  if (err != NULL) {
-    emsg(_(err));
-  }
-
-theend:
-  *p = c1;
-  rs_optval_free(curval);
-  rs_optval_free(newval);
-  return arg_end;
+  return rs_ex_let_option(arg, tv, is_const, endchars, op);
 }
 
 /// Set a register, part of ex_let_one().
