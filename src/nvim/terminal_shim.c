@@ -321,23 +321,11 @@ void nvim_terminal_vterm_set_palette(void *state, int i, int r, int g, int b)
   vterm_state_set_palette_color((VTermState *)state, i, &color); }
 void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
 void nvim_terminal_set_put(void *term) { set_put(ptr_t, &invalidated_terminals, (Terminal *)term); }
-void nvim_term_sb_concat_len(void *sb, const char *data, size_t len) { kv_concat_len(*(StringBuilder *)sb, data, len); }
-size_t nvim_term_sb_size(const void *sb) { return kv_size(*(const StringBuilder *)sb); }
-char *nvim_term_sb_items(void *sb) { return ((StringBuilder *)sb)->items; }
-void nvim_term_sb_reset(void *sb) { ((StringBuilder *)sb)->size = 0; }
-void nvim_term_sb_push_char(void *sb, char c) { kv_push(*(StringBuilder *)sb, c); }
-size_t nvim_scrollback_line_size(size_t cols) { return sizeof(ScrollbackLine) + cols * sizeof(VTermScreenCell); }
-size_t nvim_scrollback_line_cols(const void *sbrow) { return ((const ScrollbackLine *)sbrow)->cols; }
-const void *nvim_scrollback_line_cells(const void *sbrow) { return ((const ScrollbackLine *)sbrow)->cells; }
-void *nvim_scrollback_line_cells_mut(void *sbrow) { return ((ScrollbackLine *)sbrow)->cells; }
-size_t nvim_vterm_screen_cell_size(void) { return sizeof(VTermScreenCell); }
-void nvim_vterm_cell_zero(void *cell_ptr) { VTermScreenCell *c = (VTermScreenCell *)cell_ptr; c->schar = 0; c->width = 1; }
 
 int nvim_terminal_invalidated_check_del(void *term)
 { if (!set_has(ptr_t, &invalidated_terminals, (Terminal *)term)) { return 0; }
   block_autocmds(); rs_refresh_terminal((Terminal *)term); unblock_autocmds();
   set_del(ptr_t, &invalidated_terminals, (Terminal *)term); return 1; }
-void nvim_term_sb_destroy(void *sb) { kv_destroy(*(StringBuilder *)sb); }
 void nvim_terminal_timer_start(void) { time_watcher_start(&refresh_timer, refresh_timer_cb, REFRESH_DELAY, 0); }
 void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
 { Error err = ERROR_INIT;
@@ -447,7 +435,6 @@ void nvim_terminal_main_put_termrequest(emit_termrequest_fn_t fn, void *term,
                                         char *sequence, size_t seqlen,
                                         void *pending_send, intptr_t row, intptr_t col,
                                         intptr_t sb_deleted) { multiqueue_put(loop_get_events(&main_loop), fn, term, sequence, (void *)seqlen, pending_send, (void *)row, (void *)col, (void *)sb_deleted); }
-void *nvim_term_sb_alloc_init(void) { StringBuilder *sb = xmalloc(sizeof(StringBuilder)); kv_init(*sb); return sb; }
 void nvim_vterm_screen_get_cell_c(void *vts, int row, int col, void *cell) { vterm_screen_get_cell((VTermScreen *)vts, (VTermPos){ .row = row, .col = col }, (VTermScreenCell *)cell); }
 void *nvim_mouse_find_win_inner(int *grid, int *row, int *col) { return mouse_find_win_inner(grid, row, col); }
 int nvim_ins_char_typebuf_c(int c, int mod_mask_val) { return ins_char_typebuf(c, mod_mask_val, true); }

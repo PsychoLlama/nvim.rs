@@ -258,6 +258,163 @@ pub struct CStringBuilder {
     pub items: *mut i8,
 }
 
+// =============================================================================
+// CStringBuilder helpers (Phase 3: replaces nvim_term_sb_* C wrappers)
+// =============================================================================
+
+/// Cast a raw `*mut c_void` to a `&mut CStringBuilder`.
+///
+/// # Safety
+/// `sb` must be a valid, non-null pointer to a `CStringBuilder`.
+#[inline]
+unsafe fn sb_mut<'a>(sb: *mut c_void) -> &'a mut CStringBuilder {
+    unsafe { &mut *sb.cast::<CStringBuilder>() }
+}
+
+/// Cast a raw `*const c_void` to a `&CStringBuilder`.
+///
+/// # Safety
+/// `sb` must be a valid, non-null pointer to a `CStringBuilder`.
+#[inline]
+unsafe fn sb_ref<'a>(sb: *const c_void) -> &'a CStringBuilder {
+    unsafe { &*sb.cast::<CStringBuilder>() }
+}
+
+/// Append `len` bytes from `data` to the `StringBuilder`. Grows by doubling if needed.
+///
+/// Equivalent to `kv_concat_len(*(StringBuilder*)sb, data, len)`.
+///
+/// # Safety
+/// `sb` must be a valid `*mut CStringBuilder`. `data` must point to `len` bytes.
+unsafe fn sb_concat_len(sb: *mut c_void, data: *const i8, len: usize) {
+    if len == 0 {
+        return;
+    }
+    let s = unsafe { sb_mut(sb) };
+    // Grow if needed: new_capacity = max(capacity * 2, size + len, 8)
+    if s.size + len > s.capacity {
+        let new_cap = (s.capacity * 2).max(s.size + len).max(8);
+        s.items = unsafe { nvim_term_xrealloc(s.items.cast::<c_void>(), new_cap).cast::<i8>() };
+        s.capacity = new_cap;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(data, s.items.add(s.size), len);
+    }
+    s.size += len;
+}
+
+/// Push a single char onto the `StringBuilder`. Grows by doubling if needed.
+///
+/// Equivalent to `kv_push(*(StringBuilder*)sb, c)`.
+///
+/// # Safety
+/// `sb` must be a valid `*mut CStringBuilder`.
+unsafe fn sb_push_char(sb: *mut c_void, c: i8) {
+    let s = unsafe { sb_mut(sb) };
+    if s.size == s.capacity {
+        let new_cap = (s.capacity * 2).max(8);
+        s.items = unsafe { nvim_term_xrealloc(s.items.cast::<c_void>(), new_cap).cast::<i8>() };
+        s.capacity = new_cap;
+    }
+    unsafe { s.items.add(s.size).write(c) };
+    s.size += 1;
+}
+
+/// Free the items buffer and zero the fields.
+///
+/// Equivalent to `kv_destroy(*(StringBuilder*)sb)`.
+///
+/// # Safety
+/// `sb` must be a valid `*mut CStringBuilder`.
+unsafe fn sb_destroy(sb: *mut c_void) {
+    let s = unsafe { sb_mut(sb) };
+    unsafe { xfree(s.items.cast::<c_void>()) };
+    s.size = 0;
+    s.capacity = 0;
+    s.items = std::ptr::null_mut();
+}
+
+/// Allocate and zero-initialize a heap `CStringBuilder`.
+///
+/// Equivalent to `nvim_term_sb_alloc_init()`.
+///
+/// # Safety
+/// Caller must eventually free with `sb_destroy` then `xfree`.
+unsafe fn sb_alloc_init() -> *mut c_void {
+    unsafe { xcalloc(1, std::mem::size_of::<CStringBuilder>()) }
+}
+
+// =============================================================================
+// ScrollbackLine helpers (Phase 3: replaces nvim_scrollback_line_* C wrappers)
+// =============================================================================
+
+/// Size of a single `VTermScreenCell` (matches C `sizeof(VTermScreenCell)`).
+const VTERM_SCREEN_CELL_SIZE: usize = std::mem::size_of::<nvim_vterm::VTermScreenCell>();
+
+/// Byte size of a `ScrollbackLine` with `cols` cells.
+///
+/// Equivalent to `nvim_scrollback_line_size(cols)`.
+#[inline]
+fn scrollback_line_size(cols: usize) -> usize {
+    std::mem::size_of::<usize>() + cols * VTERM_SCREEN_CELL_SIZE
+}
+
+/// Read the `cols` field from a `ScrollbackLine*`.
+///
+/// Equivalent to `nvim_scrollback_line_cols(sbrow)`.
+///
+/// # Safety
+/// `sbrow` must be a valid `ScrollbackLine*`.
+#[inline]
+unsafe fn scrollback_line_cols(sbrow: *const c_void) -> usize {
+    unsafe { *sbrow.cast::<usize>() }
+}
+
+/// Get a const pointer to the cells array inside a `ScrollbackLine*`.
+///
+/// Equivalent to `nvim_scrollback_line_cells(sbrow)`.
+///
+/// # Safety
+/// `sbrow` must be a valid `ScrollbackLine*`.
+#[inline]
+unsafe fn scrollback_line_cells(sbrow: *const c_void) -> *const c_void {
+    unsafe {
+        sbrow
+            .cast::<u8>()
+            .add(std::mem::size_of::<usize>())
+            .cast::<c_void>()
+    }
+}
+
+/// Get a mutable pointer to the cells array inside a `ScrollbackLine*`.
+///
+/// Equivalent to `nvim_scrollback_line_cells_mut(sbrow)`.
+///
+/// # Safety
+/// `sbrow` must be a valid `ScrollbackLine*`.
+#[inline]
+unsafe fn scrollback_line_cells_mut(sbrow: *mut c_void) -> *mut c_void {
+    unsafe {
+        sbrow
+            .cast::<u8>()
+            .add(std::mem::size_of::<usize>())
+            .cast::<c_void>()
+    }
+}
+
+/// Zero a `VTermScreenCell` at `cell_ptr` (schar=0, width=1).
+///
+/// Equivalent to `nvim_vterm_cell_zero(cell_ptr)`.
+///
+/// # Safety
+/// `cell_ptr` must be a valid `*mut VTermScreenCell`.
+#[inline]
+unsafe fn vterm_cell_zero(cell_ptr: *mut c_void) {
+    let cell = unsafe { &mut *cell_ptr.cast::<nvim_vterm::VTermScreenCell>() };
+    cell.schar = 0;
+    cell.width = 1;
+}
+
 /// `struct terminal` from terminal.c -- repr(C), layout-verified.
 ///
 /// # Safety
@@ -2750,19 +2907,6 @@ extern "C" {
 
     /// Accessor: add terminal to invalidated set without starting timer.
     fn nvim_terminal_set_put(term: *mut c_void);
-
-    /// Return the byte size of a `ScrollbackLine` with `cols` cells.
-    fn nvim_scrollback_line_size(cols: usize) -> usize;
-    /// Get `cols` field from a `ScrollbackLine *`.
-    fn nvim_scrollback_line_cols(sbrow: *const c_void) -> usize;
-    /// Get pointer to cells array inside a `ScrollbackLine *` (const).
-    fn nvim_scrollback_line_cells(sbrow: *const c_void) -> *const c_void;
-    /// Get mutable pointer to cells array inside a `ScrollbackLine *`.
-    fn nvim_scrollback_line_cells_mut(sbrow: *mut c_void) -> *mut c_void;
-    /// Return the size of a single `VTermScreenCell`.
-    fn nvim_vterm_screen_cell_size() -> usize;
-    /// Zero-fill a `VTermScreenCell` at the given pointer (schar=0, width=1).
-    fn nvim_vterm_cell_zero(cell_ptr: *mut c_void);
 }
 
 /// `VTerm` scrollback push callback -- store a line going offscreen.
@@ -2792,7 +2936,7 @@ pub unsafe extern "C" fn rs_term_sb_push(
     // cols >= 0 because it comes from vterm (number of columns)
     #[allow(clippy::cast_sign_loss)]
     let c = cols as usize;
-    let cell_size = unsafe { nvim_vterm_screen_cell_size() };
+    let cell_size = VTERM_SCREEN_CELL_SIZE;
     // sb_buffer is *mut *mut c_void (array of ScrollbackLine* pointers)
     let sb_buf = t.sb_buffer;
 
@@ -2801,7 +2945,7 @@ pub unsafe extern "C" fn rs_term_sb_push(
     if t.sb_current == t.sb_size {
         // Buffer is full. Recycle the last row if it has the right column count.
         let last = unsafe { *sb_buf.add(t.sb_current - 1) };
-        if unsafe { nvim_scrollback_line_cols(last) } == c {
+        if unsafe { scrollback_line_cols(last) } == c {
             sbrow = last;
         } else {
             unsafe { xfree(last) };
@@ -2822,7 +2966,7 @@ pub unsafe extern "C" fn rs_term_sb_push(
     }
 
     if sbrow.is_null() {
-        let row_size = unsafe { nvim_scrollback_line_size(c) };
+        let row_size = scrollback_line_size(c);
         sbrow = unsafe { xmalloc(row_size) };
         // Write cols field (first usize in ScrollbackLine)
         unsafe { sbrow.cast::<usize>().write(c) };
@@ -2842,7 +2986,7 @@ pub unsafe extern "C" fn rs_term_sb_push(
     }
 
     // Copy cells into the row: memcpy(sbrow->cells, cells, cell_size * c)
-    let dest = unsafe { nvim_scrollback_line_cells_mut(sbrow) };
+    let dest = unsafe { scrollback_line_cells_mut(sbrow) };
     unsafe { std::ptr::copy_nonoverlapping(cells.cast::<u8>(), dest.cast::<u8>(), cell_size * c) };
 
     unsafe { nvim_terminal_set_put(data) };
@@ -2888,12 +3032,12 @@ pub unsafe extern "C" fn rs_term_sb_pop(
     // cols >= 0 because it comes from vterm
     #[allow(clippy::cast_sign_loss)]
     let c = cols as usize;
-    let cell_size = unsafe { nvim_vterm_screen_cell_size() };
-    let sbrow_cols = unsafe { nvim_scrollback_line_cols(sbrow) };
+    let cell_size = VTERM_SCREEN_CELL_SIZE;
+    let sbrow_cols = unsafe { scrollback_line_cols(sbrow) };
     let cols_to_copy = c.min(sbrow_cols);
 
     // Copy stored cells to the output buffer
-    let src = unsafe { nvim_scrollback_line_cells(sbrow) };
+    let src = unsafe { scrollback_line_cells(sbrow) };
     unsafe {
         std::ptr::copy_nonoverlapping(
             src.cast::<u8>(),
@@ -2905,7 +3049,7 @@ pub unsafe extern "C" fn rs_term_sb_pop(
     // Zero-fill any remaining columns
     for col in cols_to_copy..c {
         let cell_ptr = unsafe { cells.cast::<u8>().add(cell_size * col).cast::<c_void>() };
-        unsafe { nvim_vterm_cell_zero(cell_ptr) };
+        unsafe { vterm_cell_zero(cell_ptr) };
     }
 
     unsafe { xfree(sbrow) };
@@ -3024,11 +3168,6 @@ extern "C" {
     fn nvim_terminal_timer_start();
     fn nvim_terminal_buf_set_title(buf: *mut c_void, title: *const i8, len: usize);
     fn nvim_term_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
-    fn nvim_term_sb_concat_len(sb: *mut c_void, data: *const i8, len: usize);
-    fn nvim_term_sb_size(sb: *const c_void) -> usize;
-    fn nvim_term_sb_items(sb: *mut c_void) -> *mut i8;
-    fn nvim_term_sb_reset(sb: *mut c_void);
-    fn nvim_term_sb_push_char(sb: *mut c_void, c: i8);
     fn nvim_vterm_value_boolean(val: *const c_void) -> c_int;
     fn nvim_vterm_value_number(val: *const c_void) -> c_int;
     fn nvim_vterm_frag_str(val: *const c_void) -> *const i8;
@@ -3084,7 +3223,6 @@ extern "C" {
         col: isize,
         sb_deleted: isize,
     );
-    fn nvim_term_sb_alloc_init() -> *mut c_void;
     fn xmemdup(src: *const c_void, len: usize) -> *mut c_void;
     // Phase 7: refresh pipeline
     fn rs_buf_valid(buf: *mut c_void) -> c_int;
@@ -3128,7 +3266,6 @@ extern "C" {
     fn nvim_term_utf_ptr2char(s: *const i8) -> c_int;
     // Phase 10: terminal_destroy helpers
     fn nvim_terminal_invalidated_check_del(term: *mut c_void) -> c_int;
-    fn nvim_term_sb_destroy(sb: *mut c_void);
     #[link_name = "vterm_free"]
     fn nvim_vterm_free(vt: *mut c_void);
     #[link_name = "multiqueue_free"]
@@ -3167,17 +3304,17 @@ pub unsafe extern "C" fn rs_fetch_cell(
         if sbrow.is_null() {
             return 0;
         }
-        let cols = unsafe { nvim_scrollback_line_cols(sbrow.cast()) };
+        let cols = unsafe { scrollback_line_cols(sbrow.cast()) };
         #[allow(clippy::cast_sign_loss)]
         let col_idx = col as usize;
         if col_idx < cols {
-            let cells_ptr = unsafe { nvim_scrollback_line_cells(sbrow.cast()) };
-            let cell_size = unsafe { nvim_vterm_screen_cell_size() };
+            let cells_ptr = unsafe { scrollback_line_cells(sbrow.cast()) };
+            let cell_size = VTERM_SCREEN_CELL_SIZE;
             let src = unsafe { cells_ptr.cast::<u8>().add(col_idx * cell_size) };
             unsafe { std::ptr::copy_nonoverlapping(src, cell.cast::<u8>(), cell_size) };
         } else {
             // Out of bounds: write empty cell
-            unsafe { nvim_vterm_cell_zero(cell) };
+            unsafe { vterm_cell_zero(cell) };
             return 0;
         }
     } else {
@@ -3274,7 +3411,7 @@ pub unsafe extern "C" fn rs_terminal_do_send(term: TerminalHandle, data: *const 
     }
     let pending_send = unsafe { term.as_ref().pending.send };
     if !pending_send.is_null() {
-        unsafe { nvim_term_sb_concat_len(pending_send, data, size) };
+        unsafe { sb_concat_len(pending_send, data, size) };
         return;
     }
     // Call write_cb via transmute (fn ptr stored as *mut c_void in opts)
@@ -3417,10 +3554,10 @@ pub unsafe extern "C" fn rs_terminal_destroy(termpp: *mut *mut c_void) {
         unsafe { xfree(t.title.cast::<c_void>()) };
         unsafe { xfree(t.selection_buffer.cast::<c_void>()) };
         unsafe {
-            nvim_term_sb_destroy((&raw mut t.selection).cast::<c_void>());
+            sb_destroy((&raw mut t.selection).cast::<c_void>());
         };
         unsafe {
-            nvim_term_sb_destroy((&raw mut t.termrequest_buffer).cast::<c_void>());
+            sb_destroy((&raw mut t.termrequest_buffer).cast::<c_void>());
         };
         unsafe { nvim_vterm_free(t.vt) };
         unsafe { nvim_multiqueue_free(t.pending.events) };
@@ -3726,17 +3863,17 @@ pub unsafe extern "C" fn rs_on_osc(
     let treq_buf = (&raw mut t.termrequest_buffer).cast::<c_void>();
 
     if initial != 0 {
-        unsafe { nvim_term_sb_reset(treq_buf) };
+        unsafe { sb_mut(treq_buf).size = 0 };
         unsafe { nvim_term_treqbuf_printf_osc(user, command) };
     }
-    unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
+    unsafe { sb_concat_len(treq_buf, str_ptr, len) };
 
     if is_final != 0 {
         if unsafe { nvim_terminal_has_termrequest_event() } != 0 {
             unsafe { rs_schedule_termrequest(user) };
         }
         if command == 8 {
-            unsafe { nvim_term_sb_push_char(treq_buf, 0) };
+            unsafe { sb_push_char(treq_buf, 0) };
             // Offset past "\x1b]8;" (4 bytes)
             let osc8_start = unsafe { t.termrequest_buffer.items.add(4) };
             let mut attr: c_int = 0;
@@ -3778,13 +3915,13 @@ pub unsafe extern "C" fn rs_on_dcs(
     let treq_buf = (&raw mut t.termrequest_buffer).cast::<c_void>();
 
     if initial != 0 {
-        unsafe { nvim_term_sb_reset(treq_buf) };
+        unsafe { sb_mut(treq_buf).size = 0 };
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         unsafe {
             nvim_term_treqbuf_printf_dcs(user, command, commandlen as c_int);
         };
     }
-    unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
+    unsafe { sb_concat_len(treq_buf, str_ptr, len) };
     if is_final != 0 {
         unsafe { rs_schedule_termrequest(user) };
     }
@@ -3819,10 +3956,10 @@ pub unsafe extern "C" fn rs_on_apc(
     let treq_buf = (&raw mut t.termrequest_buffer).cast::<c_void>();
 
     if initial != 0 {
-        unsafe { nvim_term_sb_reset(treq_buf) };
+        unsafe { sb_mut(treq_buf).size = 0 };
         unsafe { nvim_term_treqbuf_printf_apc(user) };
     }
-    unsafe { nvim_term_sb_concat_len(treq_buf, str_ptr, len) };
+    unsafe { sb_concat_len(treq_buf, str_ptr, len) };
     if is_final != 0 {
         unsafe { rs_schedule_termrequest(user) };
     }
@@ -3897,7 +4034,7 @@ pub unsafe extern "C" fn rs_term_selection_set(
     }
 
     if len > 0 {
-        unsafe { nvim_term_sb_concat_len((&raw mut t.selection).cast(), str_ptr, len) };
+        unsafe { sb_concat_len((&raw mut t.selection).cast(), str_ptr, len) };
     }
 
     if is_final != 0 {
@@ -3969,11 +4106,11 @@ pub unsafe extern "C" fn rs_emit_termrequest(argv: *mut *mut c_void) {
 
     let term_pending_send = t.pending.send;
     t.pending.send = std::ptr::null_mut();
-    let sb_size = unsafe { nvim_term_sb_size(pending_send) };
+    let sb_size = unsafe { sb_ref(pending_send).size };
     if sb_size > 0 {
-        let sb_items = unsafe { nvim_term_sb_items(pending_send) };
+        let sb_items = unsafe { sb_ref(pending_send).items };
         unsafe { rs_terminal_do_send(term, sb_items, sb_size) };
-        unsafe { nvim_term_sb_destroy(pending_send) };
+        unsafe { sb_destroy(pending_send) };
     }
     if term_pending_send != pending_send {
         t.pending.send = term_pending_send;
@@ -3992,11 +4129,11 @@ pub unsafe extern "C" fn rs_schedule_termrequest(term_ptr: *mut c_void) {
     let term = unsafe { TerminalHandle::from_ptr(term_ptr) };
     let t = unsafe { term.as_mut() };
 
-    t.pending.send = unsafe { nvim_term_sb_alloc_init() }.cast();
+    t.pending.send = unsafe { sb_alloc_init() }.cast();
 
     let line = rs_terminal_row_to_linenr(t.cursor.row, t.sb_current);
     let seq_data = t.termrequest_buffer.items;
-    let seq_len = unsafe { nvim_term_sb_size((&raw mut t.termrequest_buffer).cast()) };
+    let seq_len = t.termrequest_buffer.size;
     let sequence = unsafe { xmemdup(seq_data.cast::<c_void>(), seq_len) }.cast::<i8>();
 
     #[allow(clippy::cast_possible_wrap)]
