@@ -108,15 +108,6 @@ extern "C" {
     /// Get the `cmdmod.cmod_flags` field.
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
 
-    /// Get the `br_buf` field from a bufref.
-    fn nvim_bufref_get_buf(bufref: *const std::ffi::c_void) -> BufHandle;
-
-    /// Get the `br_fnum` field from a bufref.
-    fn nvim_bufref_get_fnum(bufref: *const std::ffi::c_void) -> c_int;
-
-    /// Get the `br_buf_free_count` field from a bufref.
-    fn nvim_bufref_get_buf_free_count(bufref: *const std::ffi::c_void) -> c_int;
-
     /// Emit an error message.
     #[link_name = "emsg"]
     fn nvim_emsg(msg: *const c_char) -> bool;
@@ -229,9 +220,10 @@ fn bufref_valid_impl(bufref: *const std::ffi::c_void) -> bool {
     if bufref.is_null() {
         return false;
     }
-    // SAFETY: We check for null above.
+    // SAFETY: We check for null above. bufref points to a valid bufref_T.
     unsafe {
-        let cached_count = nvim_bufref_get_buf_free_count(bufref);
+        let br = &*(bufref.cast::<crate::misc::BufRef>());
+        let cached_count = br.br_buf_free_count;
         let current_count = crate::state::get_buf_free_count();
 
         if cached_count == current_count {
@@ -240,13 +232,13 @@ fn bufref_valid_impl(bufref: *const std::ffi::c_void) -> bool {
         }
 
         // buf_free_count changed, need to verify the buffer is still valid
-        let buf = nvim_bufref_get_buf(bufref);
+        let buf = BufHandle(br.br_buf);
         if !buf_valid_impl(buf) {
             return false;
         }
 
         // Also verify the buffer's fnum still matches
-        let ref_fnum = nvim_bufref_get_fnum(bufref);
+        let ref_fnum = br.br_fnum;
         // SAFETY: buf is a valid non-null buf_T* (verified by buf_valid_impl above).
         let buf_fnum = buf_ref(buf).handle;
         ref_fnum == buf_fnum

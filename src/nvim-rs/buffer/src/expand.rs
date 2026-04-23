@@ -15,7 +15,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-use crate::{buf_struct::buf_ref, BufHandle};
+use crate::{buf_struct::buf_ref, win_ref_raw, BufHandle};
 
 // Return values matching C OK/FAIL
 const OK: c_int = 0;
@@ -61,8 +61,8 @@ extern "C" {
     /// Execute `vim_regexec` on a regmatch handle against name.
     fn nvim_regmatch_exec(handle: *mut c_void, name: *const c_char) -> bool;
 
-    /// Get curwin->w_p_diff value.
-    fn nvim_curwin_get_p_diff() -> c_int;
+    /// Get the current window.
+    fn nvim_get_curwin() -> *mut c_void;
 
     /// Fuzzy match a string against a pattern. Returns score or `FUZZY_SCORE_NONE`.
     #[link_name = "fuzzy_match_str"]
@@ -191,7 +191,7 @@ pub unsafe fn expand_bufnames_impl(
     *file = std::ptr::null_mut();
 
     // BUF_DIFF_FILTER: only diff buffers, and curwin must be in diff mode
-    if (options & BUF_DIFF_FILTER) != 0 && nvim_curwin_get_p_diff() == 0 {
+    if (options & BUF_DIFF_FILTER) != 0 && win_ref_raw(nvim_get_curwin()).w_p_diff() == 0 {
         return FAIL;
     }
 

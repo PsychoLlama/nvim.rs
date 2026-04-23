@@ -84,11 +84,8 @@ extern int rs_read_buffer(bool read_stdin, exarg_T *eap, int flags);
 // getout declared in main.h.generated.h (included via buffer_shim.c.generated.h indirectly)
 extern void getout(int exitval);
 
-buf_T *nvim_bufref_get_buf(bufref_T *bufref) { return bufref->br_buf; }
 uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0; }
 uint32_t nvim_buf_meta_total_sign_text(buf_T *buf) { return buf ? buf_meta_total(buf, kMTMetaSignText) : 0; }
-int nvim_bufref_get_fnum(bufref_T *bufref) { return bufref->br_fnum; }
-int nvim_bufref_get_buf_free_count(bufref_T *bufref) { return bufref->br_buf_free_count; }
 int nvim_buf_get_fnum(buf_T *buf) { return buf->b_fnum; }
 int nvim_get_cmdmod_cmod_flags(void) { return cmdmod.cmod_flags; }
 int nvim_buf_get_nwindows(buf_T *buf) { return buf->b_nwindows; }
@@ -145,8 +142,6 @@ int nvim_bufname_regex_valid(void *handle)
 { return handle != NULL && ((regmatch_T *)handle)->regprog != NULL ? 1 : 0; }
 void nvim_bufname_regex_free(void *handle)
 { if (handle == NULL) { return; } vim_regfree(((regmatch_T *)handle)->regprog); xfree(handle); }
-int nvim_curwin_get_p_diff(void) { return curwin->w_p_diff ? 1 : 0; }
-
 // buf_T option field offset table (indexed by OptIndex, -1 = unhandled)
 void nvim_buf_opt_field_offsets(ptrdiff_t *out, int len)
 {
@@ -537,32 +532,6 @@ exarg_T *nvim_exarg_alloc_clear(void) {
 // =============================================================================
 
 
-/// Set mf_dirty to MF_DIRTY_YES_NOSYNC if memfile exists.
-void nvim_curbuf_mf_set_nosync(void)
-{
-  if (curbuf->b_ml.ml_mfp != NULL) {
-    curbuf->b_ml.ml_mfp->mf_dirty = MF_DIRTY_YES_NOSYNC;
-  }
-}
-
-/// If mf_dirty == MF_DIRTY_YES_NOSYNC, upgrade to MF_DIRTY_YES.
-void nvim_curbuf_mf_unset_nosync(void)
-{
-  if (curbuf->b_ml.ml_mfp != NULL
-      && curbuf->b_ml.ml_mfp->mf_dirty == MF_DIRTY_YES_NOSYNC) {
-    curbuf->b_ml.ml_mfp->mf_dirty = MF_DIRTY_YES;
-  }
-}
-
-/// Initialize bufref, modified_was_set, and cursor validity for open_buffer.
-/// Returns the old_curbuf bufref via the out pointer.
-void nvim_open_buffer_setup_bufref(bufref_T *old_curbuf_out)
-{
-  set_bufref(old_curbuf_out, curbuf);
-  curbuf->b_modified_was_set = false;
-  curwin->w_valid = 0;
-}
-
 /// Read the file into curbuf for open_buffer.
 /// Handles UNIX fifo detection and binary-mode save/restore.
 /// @param eap  exarg pointer (may be NULL)
@@ -660,21 +629,6 @@ void nvim_open_buffer_set_changed(int retval, int read_stdin, int read_fifo)
   }
 }
 
-/// Set topline/topfill to 1/0 if VALID_TOPLINE is not set.
-void nvim_curwin_init_topline(void)
-{
-  if (!(curwin->w_valid & VALID_TOPLINE)) {
-    curwin->w_topline = 1;
-    curwin->w_topfill = 0;
-  }
-}
-
-/// Fire EVENT_BUFENTER and update retval.
-void nvim_open_buffer_bufenter(int *retval)
-{
-  apply_autocmds_retval(EVENT_BUFENTER, NULL, NULL, false, curbuf, retval);
-}
-
 /// Execute the post-BUFENTER section of open_buffer:
 /// - validates old_curbuf is still alive with memfile
 /// - calls aucmd_prepbuf, do_modelines, clears BF_CHECK_RO|BF_NEVERLOADED
@@ -697,9 +651,6 @@ void nvim_open_buffer_post_autocmd(bufref_T *old_curbuf, int flags, int *retval)
   }
   aucmd_restbuf(&aco);
 }
-
-/// Call rs_foldUpdateAll on curwin (convenience wrapper for Rust).
-void rs_foldUpdateAll_curwin(void) { rs_foldUpdateAll(curwin); }
 
 // =============================================================================
 // free_buffer cluster compound accessors (Phase N: migrate free_buffer to Rust)

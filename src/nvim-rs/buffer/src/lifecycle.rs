@@ -2238,9 +2238,6 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
 // =============================================================================
 
 extern "C" {
-    fn nvim_curbuf_mf_set_nosync();
-    fn nvim_curbuf_mf_unset_nosync();
-    fn nvim_open_buffer_setup_bufref(old_curbuf: *mut crate::misc::BufRef);
     fn nvim_open_buffer_read_file(
         eap: *mut ExArg,
         flags: c_int,
@@ -2250,15 +2247,25 @@ extern "C" {
     fn nvim_open_buffer_read_stdin(eap: *mut ExArg, flags: c_int, silent: c_int) -> c_int;
     fn nvim_curbuf_init_first_load();
     fn nvim_open_buffer_set_changed(retval: c_int, read_stdin: c_int, read_fifo: c_int);
-    fn nvim_curwin_init_topline();
-    fn nvim_open_buffer_bufenter(retval: *mut c_int);
     fn nvim_open_buffer_post_autocmd(
         old_curbuf: *mut crate::misc::BufRef,
         flags: c_int,
         retval: *mut c_int,
     );
     fn rs_bt_nofileread(buf: BufHandle) -> bool;
-    fn rs_foldUpdateAll_curwin();
+    /// Get `mf_dirty` field from a `memfile_T` pointer.
+    fn nvim_mf_get_dirty(mfp: *mut c_void) -> c_int;
+    /// Set `mf_dirty` field on a `memfile_T` pointer.
+    fn nvim_mf_set_dirty(mfp: *mut c_void, val: c_int);
+    /// `apply_autocmds_retval`: fire autocmd and update retval.
+    fn apply_autocmds_retval(
+        event: c_int,
+        fname: *mut c_char,
+        fname_io: *mut c_char,
+        force: bool,
+        buf: *mut c_void,
+        retval: *mut c_int,
+    ) -> bool;
     /// Open memfile for buffer. Returns FAIL (0) on failure, OK (1) on success.
     fn ml_open(buf: BufHandle) -> c_int;
     /// Exit with the given exit value.
@@ -2277,6 +2284,11 @@ const READ_NOFILE: c_int = 0x100;
 
 /// `BF_NEVERLOADED` constant for the `ml_open` init path (mirrors `buf_flags::BF_NEVERLOADED`).
 const BF_NEVERLOADED_ML: c_int = 0x04;
+/// `mf_dirty` values (from `memfile_defs.h` `MF_DIRTY_*` enum).
+const MF_DIRTY_YES_NOSYNC: c_int = 2;
+const MF_DIRTY_YES: c_int = 1;
+/// `VALID_TOPLINE` flag (from `window_defs.h`).
+const VALID_TOPLINE_FLAG: c_int = 0x80;
 
 /// Open memfile for the current buffer, handling the fallback path on failure.
 ///
@@ -2371,7 +2383,12 @@ pub unsafe extern "C" fn rs_open_buffer(
     }
 
     // Do not sync this buffer yet; may first want to read the file.
-    nvim_curbuf_mf_set_nosync();
+    {
+        let mfp = buf_ref(nvim_get_curbuf()).ml_mfp;
+        if !mfp.is_null() {
+            nvim_mf_set_dirty(mfp, MF_DIRTY_YES_NOSYNC);
+        }
+    }
 
     // Save bufref so we can detect if autocommands changed curbuf.
     let mut old_curbuf = crate::misc::BufRef {
@@ -2379,7 +2396,12 @@ pub unsafe extern "C" fn rs_open_buffer(
         br_fnum: 0,
         br_buf_free_count: 0,
     };
-    nvim_open_buffer_setup_bufref(&raw mut old_curbuf);
+    {
+        let curbuf = nvim_get_curbuf();
+        crate::misc::set_bufref(&raw mut old_curbuf, curbuf);
+        buf_mut(curbuf).b_modified_was_set = 0;
+        win_mut_raw(nvim_get_curwin()).w_valid = 0;
+    }
 
     // A buffer without an actual file should not use the buffer name to read.
     let curbuf = nvim_get_curbuf();
@@ -2397,12 +2419,30 @@ pub unsafe extern "C" fn rs_open_buffer(
     // If neither, retval stays OK and read_fifo stays 0.
 
     // Can now sync buffer; handle first-load; set changed state.
-    nvim_curbuf_mf_unset_nosync();
+    {
+        let mfp = buf_ref(nvim_get_curbuf()).ml_mfp;
+        if !mfp.is_null() && nvim_mf_get_dirty(mfp) == MF_DIRTY_YES_NOSYNC {
+            nvim_mf_set_dirty(mfp, MF_DIRTY_YES);
+        }
+    }
     nvim_curbuf_init_first_load();
     nvim_open_buffer_set_changed(retval, c_int::from(read_stdin), read_fifo);
-    rs_foldUpdateAll_curwin();
-    nvim_curwin_init_topline();
-    nvim_open_buffer_bufenter(&raw mut retval);
+    rs_foldUpdateAll(nvim_get_curwin());
+    {
+        let wp = win_mut_raw(nvim_get_curwin());
+        if (wp.w_valid & VALID_TOPLINE_FLAG) == 0 {
+            wp.w_topline = 1;
+            wp.w_topfill = 0;
+        }
+    }
+    apply_autocmds_retval(
+        EVENT_BUFENTER,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        false,
+        nvim_get_curbuf().0,
+        &raw mut retval,
+    );
     if retval == FAIL {
         return retval;
     }
