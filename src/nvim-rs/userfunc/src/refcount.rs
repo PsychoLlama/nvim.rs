@@ -11,7 +11,6 @@ extern "C" {
     fn nvim_ufunc_decrement_refcount(fp: *mut c_void) -> c_int;
     fn nvim_ufunc_increment_refcount(fp: *mut c_void);
     fn nvim_ufunc_get_calls(fp: *mut c_void) -> c_int;
-    fn nvim_func_clear_free_impl(fp: *mut c_void, force: c_int);
     fn nvim_func_clear_impl(fp: *mut c_void, force: c_int);
     fn nvim_func_free_impl(fp: *mut c_void);
     fn nvim_func_clear_items_impl(fp: *mut c_void);
@@ -33,7 +32,7 @@ pub unsafe extern "C" fn rs_func_ptr_unref(fp: *mut c_void) {
     if new_count <= 0 {
         // Only delete it when it's not being used.
         if unsafe { nvim_ufunc_get_calls(fp) } == 0 {
-            unsafe { nvim_func_clear_free_impl(fp, 0) };
+            unsafe { rs_func_clear_free(fp, 0) };
         }
     }
 }
@@ -148,5 +147,6 @@ pub unsafe extern "C" fn rs_func_free(fp: *mut c_void) {
 /// Clear and free a function (combined).
 #[no_mangle]
 pub unsafe extern "C" fn rs_func_clear_free(fp: *mut c_void, force: c_int) {
-    unsafe { nvim_func_clear_free_impl(fp, force) };
+    unsafe { rs_func_clear(fp, force) };
+    unsafe { rs_func_free(fp) };
 }

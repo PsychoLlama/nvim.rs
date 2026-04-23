@@ -819,12 +819,7 @@ void nvim_func_free_impl(ufunc_T *fp)
   xfree(fp);
 }
 
-/// Phase 4: C implementation shim for func_clear_free.
-void nvim_func_clear_free_impl(ufunc_T *fp, int force)
-{
-  rs_func_clear(fp, force);
-  rs_func_free(fp);
-}
+// nvim_func_clear_free_impl inlined into rs_func_clear_free (Rust, Phase 8)
 
 /// Phase 7: C implementation shim for create_funccal (called from Rust).
 funccall_T *nvim_create_funccal_impl(ufunc_T *fp, typval_T *rettv)
@@ -838,15 +833,7 @@ funccall_T *nvim_create_funccal_impl(ufunc_T *fp, typval_T *rettv)
   return fc;
 }
 
-/// Allocate a funccall_T, link it in current_funccal and fill in "fp" and "rettv".
-/// Must be followed by one call to remove_funccal() or cleanup_function_call().
-/// Phase 7: C implementation shim for remove_funccal (called from Rust).
-void nvim_remove_funccal_impl(void)
-{
-  funccall_T *fc = current_funccal;
-  current_funccal = fc->fc_caller;
-  rs_free_funccal(fc);
-}
+// nvim_remove_funccal_impl inlined into rs_remove_funccal (Rust, Phase 8)
 
 /// Call a user function
 ///

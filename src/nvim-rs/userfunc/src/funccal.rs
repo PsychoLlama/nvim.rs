@@ -12,12 +12,16 @@ extern "C" {
     fn nvim_cleanup_function_call_impl(fc: *mut c_void);
     fn nvim_funccal_unref_impl(fc: *mut c_void, fp: *mut c_void, force: c_int);
     fn nvim_create_funccal_impl(fp: *mut c_void, rettv: *mut c_void) -> *mut c_void;
-    fn nvim_remove_funccal_impl();
     fn nvim_save_funccal_impl(entry: *mut c_void);
     fn nvim_restore_funccal_impl();
     fn nvim_ex_delfunction_impl(eap: *mut c_void);
     fn nvim_emsg_funcname_impl(errmsg: *const c_char, name: *const c_char);
     fn nvim_user_func_error_impl(error: c_int, name: *const c_char, found_var: c_int);
+
+    // current_funccal access (for inlining remove_funccal)
+    fn get_current_funccal() -> *mut c_void;
+    fn set_current_funccal(fc: *mut c_void);
+    fn nvim_fc_get_caller(fc: *mut c_void) -> *mut c_void;
 }
 
 // =============================================================================
@@ -71,7 +75,10 @@ pub unsafe extern "C" fn rs_create_funccal(fp: *mut c_void, rettv: *mut c_void) 
 
 #[unsafe(export_name = "remove_funccal")]
 pub unsafe extern "C" fn rs_remove_funccal() {
-    unsafe { nvim_remove_funccal_impl() };
+    let fc = unsafe { get_current_funccal() };
+    let caller = unsafe { nvim_fc_get_caller(fc) };
+    unsafe { set_current_funccal(caller) };
+    unsafe { rs_free_funccal(fc) };
 }
 
 // =============================================================================
