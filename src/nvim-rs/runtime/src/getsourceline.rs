@@ -33,7 +33,7 @@ extern "C" {
     fn nvim_rt_skipwhite(p: *const c_char) -> *mut c_char;
     #[link_name = "skipwhite_len"]
     fn nvim_rt_skipwhite_len(p: *const c_char, len: usize) -> *const c_char;
-    fn nvim_rt_get_p_cpo() -> *const c_char;
+    // p_cpo declared in static block below
     #[link_name = "vim_strchr"]
     fn nvim_rt_vim_strchr(buf: *const c_char, c: c_int) -> *mut c_char;
 
@@ -80,6 +80,11 @@ extern "C" {
     fn nvim_rt_string_convert(vcp: *mut c_void, s: *mut c_char, len: *mut usize) -> *mut c_char;
     fn nvim_rt_conv_get_type(vcp: *const c_void) -> c_int;
 
+}
+
+extern "C" {
+    #[link_name = "p_cpo"]
+    static nvim_rt_p_cpo: *const c_char;
 }
 
 // =============================================================================
@@ -296,7 +301,7 @@ pub unsafe extern "C" fn rs_getsourceline(
 
     // Concatenate continuation lines (backslash-continued) unless 'C' is in
     // 'cpoptions'.
-    let no_cpo_concat = nvim_rt_vim_strchr(nvim_rt_get_p_cpo(), CPO_CONCAT).is_null();
+    let no_cpo_concat = nvim_rt_vim_strchr(nvim_rt_p_cpo, CPO_CONCAT).is_null();
     if !line.is_null() && do_concat && no_cpo_concat {
         // Compensate for the one line read-ahead.
         nvim_rt_cookie_dec_sourcing_lnum(cookie);

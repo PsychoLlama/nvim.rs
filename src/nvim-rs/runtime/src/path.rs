@@ -66,13 +66,14 @@ extern "C" {
     fn nvim_rt_after_pathsep(b: *const c_char, s: *const c_char) -> bool;
     #[link_name = "memcnt"]
     fn nvim_rt_memcnt(s: *const c_void, c: c_int, n: usize) -> usize;
-    fn nvim_rt_get_appname() -> *const c_char;
+    #[link_name = "get_appname"]
+    fn nvim_rt_get_appname(namelike: bool) -> *const c_char;
+    #[link_name = "stdpaths_get_xdg_var"]
     fn nvim_rt_stdpaths_get_xdg_var(xdg_type: c_int) -> *mut c_char;
     #[link_name = "vim_getenv"]
     fn nvim_rt_vim_getenv(name: *const c_char) -> *mut c_char;
     #[link_name = "os_isdir"]
     fn nvim_rt_os_isdir(name: *const c_char) -> bool;
-    fn nvim_rt_get_default_lib_dir() -> *const c_char;
     #[link_name = "vim_get_prefix_from_exepath"]
     fn nvim_rt_vim_get_prefix_from_exepath(buf: *mut c_char);
     #[link_name = "append_path"]
@@ -91,7 +92,14 @@ extern "C" {
         cookie: *mut c_void,
     ) -> c_int;
 
-    fn nvim_rt_get_iobuff() -> *mut c_char;
+}
+
+extern "C" {
+    #[link_name = "default_lib_dir"]
+    static nvim_rt_default_lib_dir: *const c_char;
+
+    #[link_name = "IObuff"]
+    static nvim_rt_iobuff_arr: [c_char; 1025]; // IOSIZE
 }
 
 // =============================================================================
@@ -376,7 +384,7 @@ unsafe fn add_env_sep_dirs(
         return dest;
     }
     let mut iter: *const c_void = ptr::null();
-    let appname = nvim_rt_get_appname();
+    let appname = nvim_rt_get_appname(false);
     let appname_len = libc::strlen(appname);
     loop {
         let mut dir_len: usize = 0;
@@ -445,11 +453,11 @@ unsafe fn add_dir(
             *dest = PATHSEP as c_char;
             dest = dest.add(1);
         }
-        let appname = nvim_rt_get_appname();
+        let appname = nvim_rt_get_appname(false);
         let appname_len = libc::strlen(appname);
         let iosize = IOSIZE;
         assert!(appname_len < iosize - 5); // sizeof("-data")
-        let iobuff = nvim_rt_get_iobuff();
+        let iobuff = nvim_rt_iobuff_arr.as_ptr().cast_mut();
         xmemcpyz(iobuff.cast(), appname.cast(), appname_len);
         // On MSWIN, "-data" would be appended for kXDGDataHome/kXDGStateHome.
         // Not applicable on Linux.
@@ -502,7 +510,7 @@ pub unsafe extern "C" fn rs_path_is_after(buf: *const c_char, buflen: usize) -> 
 /// Returns allocated string or NULL.
 #[export_name = "get_lib_dir"]
 pub unsafe extern "C" fn rs_get_lib_dir() -> *mut c_char {
-    let default_lib = nvim_rt_get_default_lib_dir();
+    let default_lib = nvim_rt_default_lib_dir;
     if !default_lib.is_null() && libc::strlen(default_lib) != 0 && nvim_rt_os_isdir(default_lib) {
         return xstrdup(default_lib);
     }
@@ -545,7 +553,7 @@ pub unsafe extern "C" fn rs_runtimepath_default(clean_arg: bool) -> *mut c_char 
     let mut config_len: usize = 0;
     let mut vimruntime_len: usize = 0;
     let mut libdir_len: usize = 0;
-    let appname_len = libc::strlen(nvim_rt_get_appname());
+    let appname_len = libc::strlen(nvim_rt_get_appname(false));
 
     if !data_home.is_null() {
         data_len = libc::strlen(data_home);

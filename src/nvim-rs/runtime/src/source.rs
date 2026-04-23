@@ -33,7 +33,7 @@ extern "C" {
     #[link_name = "convert_setup"]
     fn nvim_rt_convert_setup(vcp: *mut c_void, from: *mut c_char, to: *const c_char) -> c_int;
     fn nvim_rt_cookie_get_conv(cookie: *mut c_void) -> *mut c_void;
-    fn nvim_rt_get_p_enc() -> *const c_char;
+    // p_enc is a global
 
     // Conditional cleanup
     fn nvim_rt_cleanup_conditionals(
@@ -53,6 +53,11 @@ extern "C" {
 
     // Memory management
     fn xfree(ptr: *mut c_void);
+}
+
+extern "C" {
+    #[link_name = "p_enc"]
+    static nvim_rt_p_enc: *const c_char;
 }
 
 // =============================================================================
@@ -115,7 +120,7 @@ pub unsafe extern "C" fn rs_ex_scriptencoding(eap: *mut c_void) {
 
     let sp = nvim_rt_exarg_get_source_cookie(eap);
     let vcp = nvim_rt_cookie_get_conv(sp);
-    let p_enc = nvim_rt_get_p_enc();
+    let p_enc = nvim_rt_p_enc;
     nvim_rt_convert_setup(vcp, name, p_enc);
 
     if !name.is_null() && name != arg {

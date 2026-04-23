@@ -80,7 +80,7 @@ extern "C" {
     fn nvim_rt_aborting() -> bool;
     #[link_name = "vimrc_found"]
     fn nvim_rt_vimrc_found(fname_exp: *const c_char, env: *const c_char);
-    fn nvim_rt_get_curbuf() -> *mut c_void;
+    // curbuf is a global buf_T *curbuf
 
     // File I/O
     // nvim_rt_fopen_noinh_readbin: migrated to Rust (see bottom of this file)
@@ -113,7 +113,8 @@ extern "C" {
     fn estack_pop();
 
     // Profiling
-    fn nvim_rt_get_time_fd() -> *mut c_void;
+    // time_fd is declared in a static block below
+
     #[link_name = "time_push"]
     fn nvim_rt_time_push(rel_time: *mut u64, start_time: *mut u64);
     #[link_name = "time_pop"]
@@ -176,10 +177,9 @@ extern "C" {
     fn nvim_rt_convert_setup(vcp: *mut c_void, from: *mut c_char, to: *const c_char) -> c_int;
     #[link_name = "string_convert"]
     fn nvim_rt_string_convert(vcp: *mut c_void, s: *mut c_char, len: *mut usize) -> *mut c_char;
-    fn nvim_rt_get_p_enc() -> *const c_char;
+    // p_enc is accessed via static below
 
     // IObuff / getsourceline passthrough
-    fn nvim_rt_src_get_iobuff() -> *mut c_char;
     fn nvim_rt_emsg_interr();
 
     // Buffer init helpers
@@ -234,6 +234,25 @@ extern "C" {
     fn os_set_cloexec(fd: c_int) -> c_int;
 }
 
+// Global variables imported directly
+extern "C" {
+    /// Currently active buffer (buf_T *curbuf)
+    #[link_name = "curbuf"]
+    static nvim_rt_curbuf: *mut c_void;
+
+    /// Timing log file (FILE *time_fd)
+    #[link_name = "time_fd"]
+    static nvim_rt_time_fd: *mut c_void;
+
+    /// I/O buffer (char IObuff[IOSIZE])
+    #[link_name = "IObuff"]
+    static nvim_rt_iobuff_arr: [c_char; 1025]; // IOSIZE
+
+    /// Encoding option (char *p_enc)
+    #[link_name = "p_enc"]
+    static nvim_rt_p_enc: *const c_char;
+}
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -253,7 +272,7 @@ unsafe fn do_source_buffer_init(
     eap: *const c_void,
     ex_lua: bool,
 ) -> *mut c_char {
-    let curbuf = nvim_rt_get_curbuf();
+    let curbuf = nvim_rt_curbuf;
     if curbuf.is_null() {
         return ptr::null_mut();
     }
@@ -261,7 +280,7 @@ unsafe fn do_source_buffer_init(
     let fname = {
         let ffname = nvim_rt_curbuf_get_ffname();
         if ffname.is_null() {
-            let iobuff = nvim_rt_src_get_iobuff();
+            let iobuff = nvim_rt_iobuff_arr.as_ptr().cast_mut();
             let fnum = nvim_rt_curbuf_get_fnum();
             nvim_rt_snprintf_source_buffer_name(iobuff, IOSIZE as c_int, ex_lua, fnum);
             xstrdup(iobuff)
@@ -389,24 +408,12 @@ pub unsafe extern "C" fn rs_do_source_ext(
         // Apply SourceCmd autocmds
         let ev_sourcecmd = nvim_rt_EVENT_SOURCECMD();
         if rs_has_autocmd(ev_sourcecmd, fname_exp, 0)
-            && nvim_rt_apply_autocmds(
-                ev_sourcecmd,
-                fname_exp,
-                fname_exp,
-                false,
-                nvim_rt_get_curbuf(),
-            )
+            && nvim_rt_apply_autocmds(ev_sourcecmd, fname_exp, fname_exp, false, nvim_rt_curbuf)
         {
             retval = if nvim_rt_aborting() { FAIL } else { OK };
             if retval == OK {
                 let ev_sourcepost = nvim_rt_EVENT_SOURCEPOST();
-                nvim_rt_apply_autocmds(
-                    ev_sourcepost,
-                    fname_exp,
-                    fname_exp,
-                    false,
-                    nvim_rt_get_curbuf(),
-                );
+                nvim_rt_apply_autocmds(ev_sourcepost, fname_exp, fname_exp, false, nvim_rt_curbuf);
             }
             xfree(fname_exp.cast());
             nvim_rt_cookie_free_full(cookie);
@@ -415,13 +422,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
 
         // Apply SourcePre autocmds
         let ev_sourcepre = nvim_rt_EVENT_SOURCEPRE();
-        nvim_rt_apply_autocmds(
-            ev_sourcepre,
-            fname_exp,
-            fname_exp,
-            false,
-            nvim_rt_get_curbuf(),
-        );
+        nvim_rt_apply_autocmds(ev_sourcepre, fname_exp, fname_exp, false, nvim_rt_curbuf);
     }
 
     if !nvim_rt_cookie_get_src_from_buf_or_str(cookie) {
@@ -490,7 +491,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
     // Profiling / timing
     let mut rel_time: u64 = 0;
     let mut start_time: u64 = 0;
-    let l_time_fd = nvim_rt_get_time_fd();
+    let l_time_fd = nvim_rt_time_fd;
     if !l_time_fd.is_null() {
         nvim_rt_time_push(&raw mut rel_time, &raw mut start_time);
     }
@@ -591,7 +592,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
             let flen = libc_strlen(firstline as *const u8);
             if nvim_rt_check_utf8_bom(firstline as *const u8, flen) {
                 // Found BOM - setup conversion, skip over BOM
-                let p_enc = nvim_rt_get_p_enc();
+                let p_enc = nvim_rt_p_enc;
                 let vcp = nvim_rt_cookie_get_conv(cookie);
                 nvim_rt_convert_setup(vcp, c"utf-8".as_ptr().cast_mut(), p_enc);
                 let converted = nvim_rt_string_convert(vcp, firstline.add(3), ptr::null_mut());
@@ -678,7 +679,7 @@ pub unsafe extern "C" fn rs_do_source_ext(
             stored_fname,
             stored_fname,
             false,
-            nvim_rt_get_curbuf(),
+            nvim_rt_curbuf,
         );
     }
 

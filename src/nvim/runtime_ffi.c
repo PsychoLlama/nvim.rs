@@ -298,9 +298,8 @@ bool nvim_exarg_arg_is_nul(void *eap) { return *((exarg_T *)eap)->arg == NUL; }
 
 void nvim_rt_emsg_invarg(void) { emsg(_(e_invarg)); }
 
-char *nvim_rt_get_namebuff(void) { return NameBuff; }
-
-char *nvim_rt_get_iobuff(void) { return IObuff; }
+// Deleted: nvim_rt_get_namebuff — Rust imports NameBuff directly as extern static.
+// Deleted: nvim_rt_get_iobuff — Rust imports IObuff directly as extern static.
 
 /// Call home_replace(NULL, name, buf, len, true).
 void nvim_rt_home_replace(const char *name, char *buf, size_t len) { home_replace(NULL, name, buf, len, true); }
@@ -431,12 +430,9 @@ const void *nvim_rt_vim_env_iter_rev(const char *val, const void *iter,
 }
 
 
-const char *nvim_rt_get_appname(void) { return get_appname(false); }
-
-char *nvim_rt_stdpaths_get_xdg_var(int type) { return stdpaths_get_xdg_var((XDGVarType)type); }
-
-
-const char *nvim_rt_get_default_lib_dir(void) { return default_lib_dir; }
+// Deleted: nvim_rt_get_appname — Rust calls get_appname(false) directly via link_name.
+// Deleted: nvim_rt_stdpaths_get_xdg_var — Rust calls stdpaths_get_xdg_var directly via link_name.
+// Deleted: nvim_rt_get_default_lib_dir — Rust imports default_lib_dir directly as extern static.
 
 
 // Deleted: nvim_rt_append_path — Rust uses append_path directly via link_name.
@@ -496,8 +492,7 @@ void *nvim_rt_getline_get_source_cookie(void *fgetline, void *cookie) { return g
 
 /// Setup encoding conversion.
 
-/// Get p_enc (the 'encoding' option value).
-const char *nvim_rt_get_p_enc(void) { return p_enc; }
+// Deleted: nvim_rt_get_p_enc — Rust imports p_enc directly as extern static.
 
 /// cleanup_conditionals wrapper.
 int nvim_rt_cleanup_conditionals(void *cstack, int searched_cond, int inclusive)
@@ -564,8 +559,7 @@ const char *nvim_rt_get_sourcing_name(void) { return HAVE_SOURCING_INFO ? SOURCI
 /// Get SOURCING_LNUM.
 int nvim_rt_get_sourcing_lnum(void) { return SOURCING_LNUM; }
 
-/// Get time_fd.
-void *nvim_rt_get_time_fd(void) { return time_fd; }
+// Deleted: nvim_rt_get_time_fd — Rust imports time_fd directly as extern static.
 
 /// time_push/pop/msg wrappers.
 void nvim_rt_time_msg_iobuff(const char *fname)
@@ -620,8 +614,7 @@ void nvim_rt_si_set_pr_start(void *si, uint64_t tm)
 /// emsg for E_INTERR.
 void nvim_rt_emsg_interr(void) { emsg(_(e_interr)); }
 
-/// curbuf accessor.
-void *nvim_rt_get_curbuf(void) { return curbuf; }
+// Deleted: nvim_rt_get_curbuf — Rust imports curbuf directly as extern static.
 
 /// curbuf->b_ffname accessor.
 const char *nvim_rt_curbuf_get_ffname(void) { return curbuf ? curbuf->b_ffname : NULL; }
@@ -635,8 +628,7 @@ const char *nvim_rt_curbuf_get_fname(void) { return curbuf ? curbuf->b_fname : N
 /// curbuf->b_p_ft accessor (filetype).
 const char *nvim_rt_curbuf_get_ft(void) { return curbuf ? curbuf->b_p_ft : NULL; }
 
-/// IObuff accessor.
-char *nvim_rt_src_get_iobuff(void) { return IObuff; }
+// Deleted: nvim_rt_src_get_iobuff — Rust imports IObuff directly as extern static.
 
 // Deleted: nvim_rt_nlua_exec_ga — Rust uses nlua_exec_ga directly via link_name.
 
@@ -770,8 +762,7 @@ void nvim_rt_smsg_searching_rtp(const char *name)
 
 // Deleted: nvim_rt_vim_strchr — Rust uses vim_strchr directly via link_name.
 
-/// p_cpo accessor.
-const char *nvim_rt_get_p_cpo(void) { return p_cpo; }
+// Deleted: nvim_rt_get_p_cpo — Rust imports p_cpo directly as extern static.
 
 // Deleted: nvim_rt_dbg_breakpoint — Rust uses dbg_breakpoint directly via link_name.
 // Deleted: nvim_rt_dbg_find_breakpoint — Rust uses dbg_find_breakpoint directly via link_name.

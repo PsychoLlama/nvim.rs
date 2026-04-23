@@ -44,8 +44,7 @@ extern "C" {
     #[link_name = "do_exedit"]
     fn do_exedit_c(eap: *mut c_void, old_curwin: *mut c_void);
     fn nvim_rt_emsg_invarg();
-    fn nvim_rt_get_namebuff() -> *mut c_char;
-    fn nvim_rt_get_iobuff() -> *mut c_char;
+    // NameBuff and IObuff are declared in statics block below
     fn nvim_rt_home_replace(name: *const c_char, buf: *mut c_char, len: usize);
     fn nvim_rt_format_script_entry(i: c_int, namebuff: *const c_char);
     #[link_name = "message_filtered"]
@@ -93,6 +92,16 @@ extern "C" {
 
     // xfree
     fn xfree(ptr: *mut c_void);
+}
+
+extern "C" {
+    /// NameBuff[MAXPATHL] buffer for expanding file names
+    #[link_name = "NameBuff"]
+    static nvim_rt_namebuff: [c_char; 4096]; // MAXPATHL
+
+    /// IObuff[IOSIZE] buffer for sprintf, I/O
+    #[link_name = "IObuff"]
+    static nvim_rt_iobuff_arr: [c_char; 1025]; // IOSIZE
 }
 
 // =============================================================================
@@ -313,7 +322,7 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
             nvim_rt_exarg_set_arg(eap, sn_name.cast_mut());
         } else {
             let arg = nvim_rt_exarg_get_arg(eap);
-            let namebuff = nvim_rt_get_namebuff();
+            let namebuff = nvim_rt_namebuff.as_ptr().cast_mut();
             nvim_rt_expand_env(arg, namebuff, MAXPATHL as c_int);
             nvim_rt_exarg_set_arg(eap, namebuff);
         }
@@ -323,8 +332,8 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
 
     // List all scripts
     let count = globals::script_items_get_len();
-    let namebuff = nvim_rt_get_namebuff();
-    let iobuff = nvim_rt_get_iobuff();
+    let namebuff = nvim_rt_namebuff.as_ptr().cast_mut();
+    let iobuff = nvim_rt_iobuff_arr.as_ptr().cast_mut();
 
     let mut i: c_int = 1;
     while i <= count && !globals::got_int {
