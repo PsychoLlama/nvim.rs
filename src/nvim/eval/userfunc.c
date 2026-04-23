@@ -3426,29 +3426,7 @@ int nvim_set_ref_in_func_args_impl(int copyID)
   return false;
 }
 
-/// Phase 5: C implementation shim for set_ref_in_func.
-int nvim_set_ref_in_func_impl(char *name, ufunc_T *fp_in, int copyID)
-{
-  ufunc_T *fp = fp_in;
-  int error = FCERR_NONE;
-  char fname_buf[FLEN_FIXED + 1];
-  char *tofree = NULL;
-  bool abort = false;
-  if (name == NULL && fp_in == NULL) {
-    return false;
-  }
-  if (fp_in == NULL) {
-    char *fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
-    fp = find_func(fname);
-  }
-  if (fp != NULL) {
-    for (funccall_T *fc = fp->uf_scoped; fc != NULL; fc = fc->fc_func->uf_scoped) {
-      abort = abort || rs_set_ref_in_funccal(fc, copyID);
-    }
-  }
-  xfree(tofree);
-  return abort;
-}
+// nvim_set_ref_in_func_impl inlined into rs_set_ref_in_func (Rust, Phase 11)
 
 /// Registers a luaref as a lambda.
 char *register_luafunc(LuaRef ref)
