@@ -1952,84 +1952,8 @@ char *get_user_func_name(expand_T *xp, int idx)
 }
 
 /// Phase 7: C implementation shim for ex_delfunction (called from Rust).
-void nvim_ex_delfunction_impl(exarg_T *eap)
-{
-  ufunc_T *fp = NULL;
-  funcdict_T fudi;
-
-  char *p = eap->arg;
-  char *name = trans_function_name(&p, eap->skip, 0, &fudi, NULL);
-  xfree(fudi.fd_newkey);
-  if (name == NULL) {
-    if (fudi.fd_dict != NULL && !eap->skip) {
-      emsg(_(e_funcref));
-    }
-    return;
-  }
-  if (!ends_excmd(*skipwhite(p))) {
-    xfree(name);
-    semsg(_(e_trailing_arg), p);
-    return;
-  }
-  eap->nextcmd = check_nextcmd(p);
-  if (eap->nextcmd != NULL) {
-    *p = NUL;
-  }
-
-  if (isdigit((uint8_t)(*name)) && fudi.fd_dict == NULL) {
-    if (!eap->skip) {
-      semsg(_(e_invarg2), eap->arg);
-    }
-    xfree(name);
-    return;
-  }
-  if (!eap->skip) {
-    fp = find_func(name);
-  }
-  xfree(name);
-
-  if (!eap->skip) {
-    if (fp == NULL) {
-      if (!eap->forceit) {
-        semsg(_(e_nofunc), eap->arg);
-      }
-      return;
-    }
-    if (fp->uf_calls > 0) {
-      semsg(_("E131: Cannot delete function %s: It is in use"), eap->arg);
-      return;
-    }
-    // check `uf_refcount > 2` because deleting a function should also reduce
-    // the reference count, and 1 is the initial refcount.
-    if (fp->uf_refcount > 2) {
-      semsg(_("Cannot delete function %s: It is being used internally"),
-            eap->arg);
-      return;
-    }
-
-    if (fudi.fd_dict != NULL) {
-      // Delete the dict item that refers to the function, it will
-      // invoke func_unref() and possibly delete the function.
-      tv_dict_item_remove(fudi.fd_dict, fudi.fd_di);
-    } else {
-      // A normal function (not a numbered function or lambda) has a
-      // refcount of 1 for the entry in the hashtable.  When deleting
-      // it and the refcount is more than one, it should be kept.
-      // A numbered function or lambda should be kept if the refcount is
-      // one or more.
-      if (fp->uf_refcount > (rs_func_name_refcount(fp->uf_name) ? 0 : 1)) {
-        // Function is still referenced somewhere. Don't free it but
-        // do remove it from the hashtable.
-        if (rs_func_remove(fp)) {
-          fp->uf_refcount--;
-        }
-        fp->uf_flags |= FC_DELETED;
-      } else {
-        rs_func_clear_free(fp, 0);
-      }
-    }
-  }
-}
+// nvim_ex_delfunction_impl migrated to Rust (funccal.rs Phase 32).
+// rs_ex_delfunction now implements the logic directly.
 
 /// ":delfunction {name}"
 /// Check whether funccall is still referenced outside
@@ -2983,4 +2907,25 @@ void nvim_cleanup_function_call_put_in_prev_list(funccall_T *fc)
     made_copy = 0;
     want_garbage_collect = true;
   }
+}
+
+// Phase 32: accessors for nvim_ex_delfunction_impl migration (funccal.rs)
+int nvim_eap_get_forceit_int(const exarg_T *eap) { return eap ? eap->forceit : 0; }
+int nvim_ufunc_get_refcount(const ufunc_T *fp) { return fp ? fp->uf_refcount : 0; }
+void nvim_ufunc_or_flags_deleted(ufunc_T *fp) { if (fp) { fp->uf_flags |= FC_DELETED; } }
+dict_T *nvim_fudi_get_dict(const funcdict_T *fudi) { return fudi ? fudi->fd_dict : NULL; }
+char *nvim_fudi_get_newkey(const funcdict_T *fudi) { return fudi ? fudi->fd_newkey : NULL; }
+dictitem_T *nvim_fudi_get_di(const funcdict_T *fudi) { return fudi ? fudi->fd_di : NULL; }
+void nvim_tv_dict_item_remove(dict_T *dict, dictitem_T *di) { tv_dict_item_remove(dict, di); }
+void nvim_emsg_funcref(void) { emsg(_(e_funcref)); }
+int nvim_ends_excmd_skipwhite(const char *p) { return ends_excmd(*skipwhite(p)); }
+void nvim_semsg_e_invarg2(const char *arg) { semsg(_(e_invarg2), arg); }
+void nvim_semsg_nofunc(const char *arg) { semsg(_(e_nofunc), arg); }
+void nvim_semsg_e131_in_use(const char *arg)
+{
+  semsg(_("E131: Cannot delete function %s: It is in use"), arg);
+}
+void nvim_semsg_cannot_delete_internal(const char *arg)
+{
+  semsg(_("Cannot delete function %s: It is being used internally"), arg);
 }

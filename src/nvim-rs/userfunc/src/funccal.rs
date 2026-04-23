@@ -9,8 +9,6 @@
 use std::ffi::{c_char, c_int, c_void};
 
 extern "C" {
-    fn nvim_ex_delfunction_impl(eap: *mut c_void);
-
     // Phase 27: for rs_funccal_unref inlining
     fn nvim_get_previous_funccal() -> *mut c_void;
     fn nvim_set_previous_funccal(fc: *mut c_void);
@@ -206,6 +204,32 @@ extern "C" {
     fn do_return(eap: *mut c_void, reanimate: c_int, is_cmd: c_int, rettv: *mut c_void) -> c_int;
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
     fn clear_evalarg(evalarg: *mut c_void, eap: *mut c_void);
+
+    // Phase 32: for nvim_ex_delfunction_impl migration
+    fn nvim_eap_get_forceit_int(eap: *const c_void) -> c_int;
+    fn nvim_ufunc_get_refcount(fp: *const c_void) -> c_int;
+    fn nvim_ufunc_or_flags_deleted(fp: *mut c_void);
+    fn nvim_ufunc_get_calls(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_decrement_refcount(fp: *mut c_void) -> c_int;
+    fn nvim_fudi_get_dict(fudi: *const c_void) -> *mut c_void;
+    fn nvim_fudi_get_newkey(fudi: *const c_void) -> *mut c_char;
+    fn nvim_fudi_get_di(fudi: *const c_void) -> *mut c_void;
+    fn nvim_tv_dict_item_remove(dict: *mut c_void, di: *mut c_void);
+    fn nvim_emsg_funcref();
+    fn nvim_ends_excmd_skipwhite(p: *const c_char) -> c_int;
+    fn nvim_semsg_e_invarg2(arg: *const c_char);
+    fn nvim_semsg_nofunc(arg: *const c_char);
+    fn nvim_semsg_e131_in_use(arg: *const c_char);
+    fn nvim_semsg_cannot_delete_internal(arg: *const c_char);
+    fn nvim_ufunc_get_name(fp: *mut c_void) -> *const c_char;
+    fn trans_function_name(
+        pp: *mut *mut c_char,
+        skip: c_int,
+        flags: c_int,
+        fudi: *mut c_void,
+        partial: *mut c_void,
+    ) -> *mut c_char;
+    fn nvim_emsg_trailing_arg(p: *const c_char);
 
     // Phase 31: for nvim_free_funccal_contents_impl and nvim_cleanup_function_call_impl migration
     fn nvim_fc_l_vars_ht_clear(fc: *mut c_void);
@@ -442,10 +466,114 @@ pub unsafe extern "C" fn rs_restore_funccal() {
 // =============================================================================
 // ex_delfunction
 // =============================================================================
+//
+// Phase 32: inlined from nvim_ex_delfunction_impl.
+// funcdict_T is 3 pointers = 24 bytes on 64-bit.
+const SIZEOF_FUNCDICT: usize = 24;
 
 #[unsafe(export_name = "ex_delfunction")]
+#[allow(clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_ex_delfunction(eap: *mut c_void) {
-    unsafe { nvim_ex_delfunction_impl(eap) };
+    let mut fudi = [0u8; SIZEOF_FUNCDICT];
+    let fudi_ptr = fudi.as_mut_ptr().cast::<c_void>();
+
+    // p = eap->arg; then trans_function_name advances *pp
+    let mut p = unsafe { nvim_eap_get_arg(eap) };
+    let skip = unsafe { nvim_eap_get_skip(eap) };
+    let name = unsafe {
+        trans_function_name(
+            std::ptr::addr_of_mut!(p),
+            skip,
+            0,
+            fudi_ptr,
+            std::ptr::null_mut(),
+        )
+    };
+
+    // xfree(fudi.fd_newkey)
+    let newkey = unsafe { nvim_fudi_get_newkey(fudi_ptr) };
+    if !newkey.is_null() {
+        unsafe { xfree(newkey.cast::<c_void>()) };
+    }
+
+    if name.is_null() {
+        let fd_dict = unsafe { nvim_fudi_get_dict(fudi_ptr) };
+        if !fd_dict.is_null() && skip == 0 {
+            unsafe { nvim_emsg_funcref() };
+        }
+        return;
+    }
+
+    if unsafe { nvim_ends_excmd_skipwhite(p) } == 0 {
+        unsafe { xfree(name.cast::<c_void>()) };
+        unsafe { nvim_emsg_trailing_arg(p) };
+        return;
+    }
+
+    let nextcmd = unsafe { check_nextcmd(p) };
+    unsafe { nvim_eap_set_nextcmd(eap, nextcmd) };
+    if !nextcmd.is_null() {
+        // *p = NUL
+        unsafe { *p.cast::<u8>() = 0 };
+    }
+
+    let fd_dict = unsafe { nvim_fudi_get_dict(fudi_ptr) };
+    let first_byte = unsafe { *name.cast::<u8>() };
+    if first_byte.is_ascii_digit() && fd_dict.is_null() {
+        if skip == 0 {
+            let eap_arg = unsafe { nvim_eap_get_arg(eap) };
+            unsafe { nvim_semsg_e_invarg2(eap_arg) };
+        }
+        unsafe { xfree(name.cast::<c_void>()) };
+        return;
+    }
+
+    let fp = if skip == 0 {
+        unsafe { find_func(name) }
+    } else {
+        std::ptr::null_mut()
+    };
+    unsafe { xfree(name.cast::<c_void>()) };
+
+    if skip == 0 {
+        let eap_arg = unsafe { nvim_eap_get_arg(eap) };
+        if fp.is_null() {
+            if unsafe { nvim_eap_get_forceit_int(eap) } == 0 {
+                unsafe { nvim_semsg_nofunc(eap_arg) };
+            }
+            return;
+        }
+        if unsafe { nvim_ufunc_get_calls(fp) } > 0 {
+            unsafe { nvim_semsg_e131_in_use(eap_arg) };
+            return;
+        }
+        // check `uf_refcount > 2` because deleting a function should also reduce
+        // the reference count, and 1 is the initial refcount.
+        if unsafe { nvim_ufunc_get_refcount(fp) } > 2 {
+            unsafe { nvim_semsg_cannot_delete_internal(eap_arg) };
+            return;
+        }
+
+        if fd_dict.is_null() {
+            let fname = unsafe { nvim_ufunc_get_name(fp) };
+            // refcount threshold: 0 if numbered/lambda (name_refcount != 0), else 1
+            let refcount_threshold =
+                c_int::from(unsafe { crate::names::rs_func_name_refcount(fname) } == 0);
+            if unsafe { nvim_ufunc_get_refcount(fp) } > refcount_threshold {
+                // Function still referenced. Remove from hashtable but keep.
+                if unsafe { crate::refcount::rs_func_remove(fp) } != 0 {
+                    unsafe { nvim_ufunc_decrement_refcount(fp) };
+                }
+                unsafe { nvim_ufunc_or_flags_deleted(fp) };
+            } else {
+                unsafe { crate::refcount::rs_func_clear_free(fp, 0) };
+            }
+        } else {
+            // Delete the dict item that refers to the function; invokes func_unref().
+            let di = unsafe { nvim_fudi_get_di(fudi_ptr) };
+            unsafe { nvim_tv_dict_item_remove(fd_dict, di) };
+        }
+    }
 }
 
 // =============================================================================
