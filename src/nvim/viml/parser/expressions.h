@@ -367,18 +367,23 @@ typedef struct {
 } ExprAST;
 
 /// Array mapping ExprASTNodeType to maximum amount of children node may have
+/// Provided by Rust (string_tables.rs via libnvim_rs.a)
 extern const uint8_t node_maxchildren[];
 
 /// Array mapping ExprASTNodeType values to their stringified versions
+/// Provided by Rust (string_tables.rs via libnvim_rs.a)
 extern const char *const east_node_type_tab[];
 
 /// Array mapping ExprComparisonType values to their stringified versions
+/// Provided by Rust (string_tables.rs via libnvim_rs.a)
 extern const char *const eltkn_cmp_type_tab[];
 
 /// Array mapping ExprCaseCompareStrategy values to their stringified versions
+/// Provided by Rust (string_tables.rs via libnvim_rs.a)
 extern const char *const ccs_tab[];
 
 /// Array mapping ExprAssignmentType values to their stringified versions
+/// Provided by Rust (string_tables.rs via libnvim_rs.a)
 extern const char *const expr_asgn_type_tab[];
 
 #include "viml/parser/expressions.h.generated.h"

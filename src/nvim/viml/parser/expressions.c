@@ -742,26 +742,7 @@ static const char *const eltkn_type_tab[] = {
   [kExprLexAssignment] = "Assignment",
 };
 
-const char *const eltkn_cmp_type_tab[] = {
-  [kExprCmpEqual] = "Equal",
-  [kExprCmpMatches] = "Matches",
-  [kExprCmpGreater] = "Greater",
-  [kExprCmpGreaterOrEqual] = "GreaterOrEqual",
-  [kExprCmpIdentical] = "Identical",
-};
-
-const char *const expr_asgn_type_tab[] = {
-  [kExprAsgnPlain] = "Plain",
-  [kExprAsgnAdd] = "Add",
-  [kExprAsgnSubtract] = "Subtract",
-  [kExprAsgnConcat] = "Concat",
-};
-
-const char *const ccs_tab[] = {
-  [kCCStrategyUseOption] = "UseOption",
-  [kCCStrategyMatchCase] = "MatchCase",
-  [kCCStrategyIgnoreCase] = "IgnoreCase",
-};
+// eltkn_cmp_type_tab, expr_asgn_type_tab, ccs_tab: migrated to Rust (string_tables.rs)
 
 static const char *const eltkn_mul_type_tab[] = {
   [kExprLexMulMul] = "Mul",
@@ -858,47 +839,7 @@ viml_pexpr_repr_token_end:
   return ret;
 }
 
-const char *const east_node_type_tab[] = {
-  [kExprNodeMissing] = "Missing",
-  [kExprNodeOpMissing] = "OpMissing",
-  [kExprNodeTernary] = "Ternary",
-  [kExprNodeTernaryValue] = "TernaryValue",
-  [kExprNodeRegister] = "Register",
-  [kExprNodeSubscript] = "Subscript",
-  [kExprNodeListLiteral] = "ListLiteral",
-  [kExprNodeUnaryPlus] = "UnaryPlus",
-  [kExprNodeBinaryPlus] = "BinaryPlus",
-  [kExprNodeNested] = "Nested",
-  [kExprNodeCall] = "Call",
-  [kExprNodePlainIdentifier] = "PlainIdentifier",
-  [kExprNodePlainKey] = "PlainKey",
-  [kExprNodeComplexIdentifier] = "ComplexIdentifier",
-  [kExprNodeUnknownFigure] = "UnknownFigure",
-  [kExprNodeLambda] = "Lambda",
-  [kExprNodeDictLiteral] = "DictLiteral",
-  [kExprNodeCurlyBracesIdentifier] = "CurlyBracesIdentifier",
-  [kExprNodeComma] = "Comma",
-  [kExprNodeColon] = "Colon",
-  [kExprNodeArrow] = "Arrow",
-  [kExprNodeComparison] = "Comparison",
-  [kExprNodeConcat] = "Concat",
-  [kExprNodeConcatOrSubscript] = "ConcatOrSubscript",
-  [kExprNodeInteger] = "Integer",
-  [kExprNodeFloat] = "Float",
-  [kExprNodeSingleQuotedString] = "SingleQuotedString",
-  [kExprNodeDoubleQuotedString] = "DoubleQuotedString",
-  [kExprNodeOr] = "Or",
-  [kExprNodeAnd] = "And",
-  [kExprNodeUnaryMinus] = "UnaryMinus",
-  [kExprNodeBinaryMinus] = "BinaryMinus",
-  [kExprNodeNot] = "Not",
-  [kExprNodeMultiplication] = "Multiplication",
-  [kExprNodeDivision] = "Division",
-  [kExprNodeMod] = "Mod",
-  [kExprNodeOption] = "Option",
-  [kExprNodeEnvironment] = "Environment",
-  [kExprNodeAssignment] = "Assignment",
-};
+// east_node_type_tab: migrated to Rust (string_tables.rs)
 
 /// Represent `int` character as a string
 ///
@@ -977,47 +918,7 @@ static inline void viml_pexpr_debug_print_token(const ParserState *const pstate,
   viml_pexpr_debug_print_token(pstate, tkn)
 #endif
 
-const uint8_t node_maxchildren[] = {
-  [kExprNodeMissing] = 0,
-  [kExprNodeOpMissing] = 2,
-  [kExprNodeTernary] = 2,
-  [kExprNodeTernaryValue] = 2,
-  [kExprNodeRegister] = 0,
-  [kExprNodeSubscript] = 2,
-  [kExprNodeListLiteral] = 1,
-  [kExprNodeUnaryPlus] = 1,
-  [kExprNodeBinaryPlus] = 2,
-  [kExprNodeNested] = 1,
-  [kExprNodeCall] = 2,
-  [kExprNodePlainIdentifier] = 0,
-  [kExprNodePlainKey] = 0,
-  [kExprNodeComplexIdentifier] = 2,
-  [kExprNodeUnknownFigure] = 1,
-  [kExprNodeLambda] = 2,
-  [kExprNodeDictLiteral] = 1,
-  [kExprNodeCurlyBracesIdentifier] = 1,
-  [kExprNodeComma] = 2,
-  [kExprNodeColon] = 2,
-  [kExprNodeArrow] = 2,
-  [kExprNodeComparison] = 2,
-  [kExprNodeConcat] = 2,
-  [kExprNodeConcatOrSubscript] = 2,
-  [kExprNodeInteger] = 0,
-  [kExprNodeFloat] = 0,
-  [kExprNodeSingleQuotedString] = 0,
-  [kExprNodeDoubleQuotedString] = 0,
-  [kExprNodeOr] = 2,
-  [kExprNodeAnd] = 2,
-  [kExprNodeUnaryMinus] = 1,
-  [kExprNodeBinaryMinus] = 2,
-  [kExprNodeNot] = 1,
-  [kExprNodeMultiplication] = 2,
-  [kExprNodeDivision] = 2,
-  [kExprNodeMod] = 2,
-  [kExprNodeOption] = 0,
-  [kExprNodeEnvironment] = 0,
-  [kExprNodeAssignment] = 2,
-};
+// node_maxchildren: migrated to Rust (string_tables.rs)
 
 /// Free memory occupied by AST
 ///
