@@ -1509,69 +1509,7 @@ theend:
   return ret;
 }
 
-int call_simple_luafunc(const char *funcname, size_t len, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  rettv->v_type = VAR_NUMBER;  // default rettv is number zero
-  rettv->vval.v_number = 0;
-
-  typval_T argvars[1];
-  argvars[0].v_type = VAR_UNKNOWN;
-  nlua_typval_call(funcname, len, argvars, 0, rettv);
-  return OK;
-}
-
-/// Call a function without arguments, partial or dict.
-/// This is like call_func() when the call is only "FuncName()".
-/// To be used by "expr" options.
-/// Returns NOTDONE when the function could not be found.
-///
-/// @param funcname  name of the function
-/// @param len       length of "name"
-/// @param rettv     return value goes here
-int call_simple_func(const char *funcname, size_t len, typval_T *rettv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int ret = FAIL;
-
-  rettv->v_type = VAR_NUMBER;  // default rettv is number zero
-  rettv->vval.v_number = 0;
-
-  // Make a copy of the name, an option can be changed in the function.
-  char *name = xstrnsave(funcname, len);
-
-  int error = FCERR_NONE;
-  char *tofree = NULL;
-  char fname_buf[FLEN_FIXED + 1];
-  char *fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
-
-  // Skip "g:" before a function name.
-  bool is_global = fname[0] == 'g' && fname[1] == ':';
-  char *rfname = is_global ? fname + 2 : fname;
-
-  ufunc_T *fp = find_func(rfname);
-  if (fp == NULL) {
-    ret = NOTDONE;
-  } else if (fp != NULL && (fp->uf_flags & FC_DELETED)) {
-    error = FCERR_DELETED;
-  } else if (fp != NULL) {
-    typval_T argvars[1];
-    argvars[0].v_type = VAR_UNKNOWN;
-    funcexe_T funcexe = FUNCEXE_INIT;
-    funcexe.fe_evaluate = true;
-
-    error = call_user_func_check(fp, 0, argvars, rettv, &funcexe, NULL);
-    if (error == FCERR_NONE) {
-      ret = OK;
-    }
-  }
-
-  rs_user_func_error(error, name, 0);
-  xfree(tofree);
-  xfree(name);
-
-  return ret;
-}
+// call_simple_luafunc and call_simple_func migrated to Rust (Phase 16, funccal.rs)
 
 /// Get a function name, translating "<SID>" and "<SNR>".
 /// Also handles a Funcref in a List or Dict.
@@ -3598,3 +3536,11 @@ void nvim_fc_set_rettv(funccall_T *fc, typval_T *rettv) { if (fc) { fc->fc_rettv
 void nvim_fc_set_func(funccall_T *fc, ufunc_T *fp) { if (fc) { fc->fc_func = fp; } }
 size_t nvim_sizeof_funccall(void) { return sizeof(funccall_T); }
 void nvim_fc_set_caller(funccall_T *fc, funccall_T *caller) { if (fc) { fc->fc_caller = caller; } }
+
+// Phase 16: shim for call_simple_func migration (call_user_func_check is static)
+int nvim_call_user_func_check_simple(ufunc_T *fp, typval_T *argvars, typval_T *rettv)
+{
+  funcexe_T funcexe = FUNCEXE_INIT;
+  funcexe.fe_evaluate = true;
+  return call_user_func_check(fp, 0, argvars, rettv, &funcexe, NULL);
+}

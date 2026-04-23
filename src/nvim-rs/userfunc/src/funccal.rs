@@ -62,7 +62,42 @@ extern "C" {
     ) -> bool;
     fn tv_get_number_chk(tv: *const c_void, denote: *mut c_int) -> i64;
     fn tv_clear(tv: *mut c_void);
+
+    // Phase 16: For call_simple_luafunc and call_simple_func
+    fn nvim_tv_set_number(tv: *mut c_void, n: i64);
+    fn nlua_typval_call(
+        funcname: *const c_char,
+        len: usize,
+        argvars: *mut c_void,
+        argcount: c_int,
+        rettv: *mut c_void,
+    );
+    fn find_func(name: *const c_char) -> *mut c_void;
+    fn nvim_ufunc_get_flags(fp: *mut c_void) -> c_int;
+    fn nvim_call_user_func_check_simple(
+        fp: *mut c_void,
+        argvars: *mut c_void,
+        rettv: *mut c_void,
+    ) -> c_int;
+    fn rs_fname_trans_sid(
+        name: *const c_char,
+        fname_buf: *mut c_char,
+        tofree: *mut *mut c_char,
+        error: *mut c_int,
+    ) -> *mut c_char;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 }
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+const NOTDONE: c_int = 2;
+const FCERR_NONE: c_int = 5;
+const FC_DELETED_FLAG: c_int = 0x10;
+const FLEN_FIXED: usize = 40;
 
 // =============================================================================
 // free_funccal
@@ -291,4 +326,104 @@ pub unsafe extern "C" fn rs_callback_call_retnr(
     let retval = unsafe { tv_get_number_chk(rettv_ptr.cast_const(), std::ptr::null_mut()) };
     unsafe { tv_clear(rettv_ptr) };
     retval
+}
+
+// =============================================================================
+// call_simple_luafunc
+// =============================================================================
+//
+// Phase 16: Migrated from userfunc.c.
+
+/// Call a Lua function by name without arguments.
+///
+/// # Safety
+/// `funcname` must be a valid string pointer of at least `len` bytes.
+/// `rettv` must be a valid `typval_T *`.
+#[unsafe(export_name = "call_simple_luafunc")]
+pub unsafe extern "C" fn rs_call_simple_luafunc(
+    funcname: *const c_char,
+    len: usize,
+    rettv: *mut c_void,
+) -> c_int {
+    // Set default rettv to number zero.
+    unsafe { nvim_tv_set_number(rettv, 0) };
+    // typval_T argvars[1]; argvars[0].v_type = VAR_UNKNOWN (0)
+    let mut argvars = [0u8; 16];
+    unsafe {
+        nlua_typval_call(
+            funcname,
+            len,
+            argvars.as_mut_ptr().cast::<c_void>(),
+            0,
+            rettv,
+        );
+    };
+    OK
+}
+
+// =============================================================================
+// call_simple_func
+// =============================================================================
+//
+// Phase 16: Migrated from userfunc.c.
+
+/// Call a VimL function by name without arguments.
+/// Returns NOTDONE when the function could not be found.
+///
+/// # Safety
+/// `funcname` must be a valid string pointer of at least `len` bytes.
+/// `rettv` must be a valid `typval_T *`.
+#[unsafe(export_name = "call_simple_func")]
+pub unsafe extern "C" fn rs_call_simple_func(
+    funcname: *const c_char,
+    len: usize,
+    rettv: *mut c_void,
+) -> c_int {
+    let mut ret = FAIL;
+
+    // Set default rettv to number zero.
+    unsafe { nvim_tv_set_number(rettv, 0) };
+
+    // Make a copy of the name, an option can be changed in the function.
+    let name = unsafe { xstrnsave(funcname, len) };
+
+    let mut error: c_int = FCERR_NONE;
+    let mut tofree: *mut c_char = std::ptr::null_mut();
+    let mut fname_buf = [0u8; FLEN_FIXED + 1];
+    let fname = unsafe {
+        rs_fname_trans_sid(
+            name,
+            fname_buf.as_mut_ptr().cast::<c_char>(),
+            std::ptr::addr_of_mut!(tofree),
+            std::ptr::addr_of_mut!(error),
+        )
+    };
+
+    // Skip "g:" before a function name.
+    let is_global = unsafe { *fname.cast::<u8>() == b'g' && *fname.add(1).cast::<u8>() == b':' };
+    let rfname = if is_global {
+        unsafe { fname.add(2) }
+    } else {
+        fname
+    };
+
+    let fp = unsafe { find_func(rfname) };
+    if fp.is_null() {
+        ret = NOTDONE;
+    } else if unsafe { nvim_ufunc_get_flags(fp) } & FC_DELETED_FLAG != 0 {
+        error = FCERR_DELETED;
+    } else {
+        // typval_T argvars[1]; argvars[0].v_type = VAR_UNKNOWN (0)
+        let mut argvars = [0u8; 16];
+        let argvars_ptr = argvars.as_mut_ptr().cast::<c_void>();
+        error = unsafe { nvim_call_user_func_check_simple(fp, argvars_ptr, rettv) };
+        if error == FCERR_NONE {
+            ret = OK;
+        }
+    }
+
+    unsafe { rs_user_func_error(error, name, 0) };
+    unsafe { xfree(tofree.cast::<c_void>()) };
+    unsafe { xfree(name.cast::<c_void>()) };
+    ret
 }
