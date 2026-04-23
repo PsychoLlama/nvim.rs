@@ -46,8 +46,11 @@ extern "C" {
 
     // Buffer / memline
     fn nvim_spell_win_ml_line_count(wp: *mut c_void) -> c_int;
-    fn nvim_spell_ml_get_buf_win(wp: *mut c_void, lnum: c_int) -> *mut c_char;
-    fn nvim_spell_ml_get_buf_len_win(wp: *mut c_void, lnum: c_int) -> c_int;
+    fn nvim_win_get_w_buffer(wp: *mut c_void) -> *mut c_void;
+    #[link_name = "ml_get_buf"]
+    fn nvim_spell_ml_get_buf(buf: *mut c_void, lnum: c_int) -> *mut c_char;
+    #[link_name = "ml_get_buf_len"]
+    fn nvim_spell_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
 
     // Options
     fn nvim_get_p_ws() -> c_int;
@@ -65,13 +68,15 @@ extern "C" {
     ) -> c_int;
 
     // Syntax
+    #[link_name = "syntax_present"]
     fn nvim_spell_syntax_present(wp: *mut c_void) -> bool;
     fn nvim_spell_can_syn_spell(wp: *mut c_void, lnum: c_int, col: c_int) -> bool;
 
     // Misc
     fn nvim_shortmess_search() -> c_int;
     fn nvim_spell_give_wrap_warning(forward: bool);
-    fn nvim_spell_getwhitecols(p: *const c_char) -> c_int;
+    #[link_name = "getwhitecols"]
+    fn nvim_spell_getwhitecols_raw(p: *const c_char) -> isize;
     fn line_breakcheck();
 
     // got_int global
@@ -143,8 +148,9 @@ pub unsafe extern "C" fn rs_spell_move_to(
     nvim_spell_nav_start(wp, saved_decor);
 
     'outer: while !got_int {
-        let line = nvim_spell_ml_get_buf_win(wp, lnum);
-        let len = nvim_spell_ml_get_buf_len_win(wp, lnum) as usize;
+        let wbuf = nvim_win_get_w_buffer(wp);
+        let line = nvim_spell_ml_get_buf(wbuf, lnum);
+        let len = nvim_spell_ml_get_buf_len(wbuf, lnum) as usize;
 
         if buflen < len + MAXWLEN + 2 {
             xfree(buf.cast::<c_void>());
@@ -159,10 +165,10 @@ pub unsafe extern "C" fn rs_spell_move_to(
 
         // For checking first word with a capital skip white space.
         if capcol == 0 {
-            capcol = nvim_spell_getwhitecols(line);
+            capcol = nvim_spell_getwhitecols_raw(line) as c_int;
         } else if curline {
             // For spellbadword(): check if first word needs a capital.
-            let col = nvim_spell_getwhitecols(line);
+            let col = nvim_spell_getwhitecols_raw(line) as c_int;
             // Only check when wp is curwin (we don't have direct access to
             // curwin here, so we rely on the C check_need_cap which uses wp)
             if check_need_cap(wp, lnum, col) {
@@ -178,7 +184,7 @@ pub unsafe extern "C" fn rs_spell_move_to(
         strcpy(buf, line);
         let ml_count = nvim_spell_win_ml_line_count(wp);
         if lnum < ml_count {
-            let next_line = nvim_spell_ml_get_buf_win(wp, lnum + 1);
+            let next_line = nvim_spell_ml_get_buf(wbuf, lnum + 1);
             let buf_end_offset = strlen(buf);
             spell_cat_line(buf.add(buf_end_offset), next_line, MAXWLEN as c_int);
         }

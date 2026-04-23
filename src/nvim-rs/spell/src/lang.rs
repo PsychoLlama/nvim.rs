@@ -73,26 +73,42 @@ extern "C" {
     fn nvim_win_set_b_cjk(wp: *mut c_void, val: c_int);
     fn nvim_win_set_b_langp(wp: *mut c_void, ga: GArrayRaw);
     fn nvim_spell_ga_append_langp(ga: *mut GArrayRaw) -> *mut LangpT;
+    #[link_name = "set_bufref"]
     fn nvim_spell_set_bufref(bufref: *mut BufrefT, buf: *mut c_void);
-    fn nvim_spell_bufref_valid(bufref: *mut BufrefT) -> bool;
+    // bufref_valid is a static inline wrapper; call the underlying Rust impl directly
+    #[link_name = "rs_bufref_valid"]
+    fn nvim_spell_bufref_valid_raw(bufref: *mut BufrefT) -> c_int;
+    #[link_name = "copy_option_part"]
     fn nvim_spell_copy_option_part(
         pp: *mut *mut c_char,
         buf: *mut c_char,
         maxlen: usize,
         sep_chars: *const c_char,
     ) -> usize;
-    fn nvim_spell_path_full_compare(s1: *const c_char, s2: *const c_char) -> c_int;
+    #[link_name = "path_full_compare"]
+    fn nvim_spell_path_full_compare(
+        s1: *mut c_char,
+        s2: *mut c_char,
+        checkname: bool,
+        expandenv: bool,
+    ) -> c_int;
+    #[link_name = "path_fnamecmp"]
     fn nvim_spell_path_fnamecmp(s1: *const c_char, s2: *const c_char) -> c_int;
-    fn nvim_spell_path_tail(fname: *const c_char) -> *const c_char;
+    #[link_name = "path_tail"]
+    fn nvim_spell_path_tail(fname: *const c_char) -> *mut c_char;
+    #[link_name = "strcasecmp"]
     fn nvim_spell_stricmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn nvim_spell_redraw_later(wp: *mut c_void);
-    fn nvim_spell_ascii_isalpha(c: c_int) -> bool;
-    fn nvim_spell_get_starting() -> c_int;
+    // redraw_later(wp, UPD_NOT_VALID=40)
+    #[link_name = "redraw_later"]
+    fn nvim_spell_redraw_later_c(wp: *mut c_void, update_type: c_int);
     fn nvim_spell_int_wordlist_spl(fname: *mut c_char);
     fn nvim_spell_load_lang(lang: *mut c_char);
 
     // Warn about unsupported region
     fn nvim_spell_warn_region(region: *const c_char);
+
+    // starting global (non-zero while Nvim is starting)
+    static starting: c_int;
 
     // ismw accessors
     fn nvim_spell_win_get_ismw(wp: *mut c_void, c: c_int) -> bool;
@@ -218,9 +234,9 @@ pub unsafe extern "C" fn rs_parse_spelllang(wp: *mut c_void) -> *const c_char {
             let underscore = b'_' as c_int;
             let p = strchr(tail, underscore);
             if !p.is_null()
-                && nvim_spell_ascii_isalpha(*(p.add(1) as *const u8) as c_int)
-                && nvim_spell_ascii_isalpha(*(p.add(2) as *const u8) as c_int)
-                && !nvim_spell_ascii_isalpha(*(p.add(3) as *const u8) as c_int)
+                && (*(p.add(1) as *const u8)).is_ascii_alphabetic()
+                && (*(p.add(2) as *const u8)).is_ascii_alphabetic()
+                && !(*(p.add(3) as *const u8)).is_ascii_alphabetic()
             {
                 // Copy region to region_cp
                 region_cp[0] = *(p.add(1) as *const u8);
@@ -240,8 +256,12 @@ pub unsafe extern "C" fn rs_parse_spelllang(wp: *mut c_void) -> *const c_char {
             // Check if we loaded this language before.
             let mut slang = SlangHandle::first();
             while !slang.is_null() {
-                if nvim_spell_path_full_compare(lang.as_ptr().cast::<c_char>(), (*slang.0).sl_fname)
-                    == K_EQUAL_FILES
+                if nvim_spell_path_full_compare(
+                    lang.as_mut_ptr().cast::<c_char>(),
+                    (*slang.0).sl_fname,
+                    false,
+                    true,
+                ) == K_EQUAL_FILES
                 {
                     break;
                 }
@@ -276,8 +296,12 @@ pub unsafe extern "C" fn rs_parse_spelllang(wp: *mut c_void) -> *const c_char {
             // Loop over languages
             let mut sl = SlangHandle::first();
             while !sl.is_null() {
-                if nvim_spell_path_full_compare(lang.as_ptr().cast::<c_char>(), (*sl.0).sl_fname)
-                    == K_EQUAL_FILES
+                if nvim_spell_path_full_compare(
+                    lang.as_mut_ptr().cast::<c_char>(),
+                    (*sl.0).sl_fname,
+                    false,
+                    true,
+                ) == K_EQUAL_FILES
                 {
                     let region_mask = compute_region_mask_filename(sl, region);
                     if region_mask != 0 {
@@ -330,7 +354,7 @@ pub unsafe extern "C" fn rs_parse_spelllang(wp: *mut c_void) -> *const c_char {
             if slang_ptr.is_null() {
                 nvim_spell_load_lang(lang.as_mut_ptr().cast::<c_char>());
                 // SpellFileMissing autocommands may do anything
-                if !nvim_spell_bufref_valid(&mut bufref) || rs_win_valid_any_tab(wp) == 0 {
+                if nvim_spell_bufref_valid_raw(&mut bufref) == 0 || rs_win_valid_any_tab(wp) == 0 {
                     ret_msg = b"E797: SpellFileMissing autocommand deleted buffer\0"
                         .as_ptr()
                         .cast::<c_char>();
@@ -404,8 +428,10 @@ pub unsafe extern "C" fn rs_parse_spelllang(wp: *mut c_void) -> *const c_char {
                 if !p.is_null()
                     && !(*p).sl_fname.is_null()
                     && nvim_spell_path_full_compare(
-                        spf_name.as_ptr().cast::<c_char>(),
+                        spf_name.as_mut_ptr().cast::<c_char>(),
                         (*p).sl_fname,
+                        false,
+                        true,
                     ) == K_EQUAL_FILES
                 {
                     already_found = true;
@@ -421,8 +447,12 @@ pub unsafe extern "C" fn rs_parse_spelllang(wp: *mut c_void) -> *const c_char {
         // Check if it was loaded already.
         let mut slang = SlangHandle(first_lang_global);
         while !slang.is_null() {
-            if nvim_spell_path_full_compare(spf_name.as_ptr().cast::<c_char>(), (*slang.0).sl_fname)
-                == K_EQUAL_FILES
+            if nvim_spell_path_full_compare(
+                spf_name.as_mut_ptr().cast::<c_char>(),
+                (*slang.0).sl_fname,
+                false,
+                true,
+            ) == K_EQUAL_FILES
             {
                 break;
             }
@@ -530,7 +560,7 @@ pub unsafe extern "C" fn rs_parse_spelllang(wp: *mut c_void) -> *const c_char {
         }
     }
 
-    nvim_spell_redraw_later(wp);
+    nvim_spell_redraw_later_c(wp, 40); // UPD_NOT_VALID = 40
 
     xfree(spl_copy.cast::<c_void>());
     RECURSIVE.store(false, Ordering::SeqCst);

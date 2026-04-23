@@ -100,11 +100,7 @@ int nvim_spell_nav_decor_col(win_T *wp, int lnum, int *decor_lnum, int col)
 // Syntax helpers for spell navigation
 // =============================================================================
 
-/// Check if syntax is present in the window.
-bool nvim_spell_syntax_present(win_T *wp)
-{
-  return syntax_present(wp);
-}
+// Deleted: nvim_spell_syntax_present — Rust uses syntax_present directly via link_name.
 
 /// Check if syntax allows spell checking at a position.
 bool nvim_spell_can_syn_spell(win_T *wp, int lnum, int col)
@@ -118,11 +114,7 @@ bool nvim_spell_can_syn_spell(win_T *wp, int lnum, int col)
 // Misc accessors for spell navigation
 // =============================================================================
 
-/// Get the number of whitespace columns at the start of a line.
-int nvim_spell_getwhitecols(const char *p)
-{
-  return (int)getwhitecols(p);
-}
+// Deleted: nvim_spell_getwhitecols — Rust uses getwhitecols directly via link_name.
 
 /// Get the line count of a window's buffer.
 int nvim_spell_win_ml_line_count(win_T *wp)
@@ -130,17 +122,8 @@ int nvim_spell_win_ml_line_count(win_T *wp)
   return wp->w_buffer->b_ml.ml_line_count;
 }
 
-/// Get line content from a window's buffer.
-char *nvim_spell_ml_get_buf_win(win_T *wp, int lnum)
-{
-  return ml_get_buf(wp->w_buffer, (linenr_T)lnum);
-}
-
-/// Get line length from a window's buffer.
-int nvim_spell_ml_get_buf_len_win(win_T *wp, int lnum)
-{
-  return ml_get_buf_len(wp->w_buffer, (linenr_T)lnum);
-}
+// Deleted: nvim_spell_ml_get_buf_win — Rust uses nvim_win_get_w_buffer + ml_get_buf directly via link_name.
+// Deleted: nvim_spell_ml_get_buf_len_win — Rust uses nvim_win_get_w_buffer + ml_get_buf_len directly via link_name.
 
 /// Check if the 'noplainbuffer' spelloptions flag is set.
 bool nvim_spell_win_noplainbuffer(win_T *wp)
@@ -191,66 +174,16 @@ langp_T *nvim_spell_ga_append_langp(garray_T *ga)
   return GA_APPEND_VIA_PTR(langp_T, ga);
 }
 
-/// Initialize a bufref to the given buffer.
-void nvim_spell_set_bufref(bufref_T *bufref, buf_T *buf)
-{
-  set_bufref(bufref, buf);
-}
-
-/// Check if a bufref is still valid.
-bool nvim_spell_bufref_valid(bufref_T *bufref)
-{
-  return bufref_valid(bufref);
-}
-
-/// Wrapper for copy_option_part with a pointer-to-pointer interface.
-/// Advances *pp past the copied part. Returns the length of the copied part.
-size_t nvim_spell_copy_option_part(char **pp, char *buf, size_t maxlen, const char *sep_chars)
-{
-  return copy_option_part(pp, buf, maxlen, (char *)sep_chars);
-}
-
-/// Call path_full_compare(s1, s2, false, true). Returns 1 if equal files.
-int nvim_spell_path_full_compare(const char *s1, const char *s2)
-{
-  return (int)path_full_compare((char *)s1, (char *)s2, false, true);
-}
-
-/// Call path_fnamecmp(s1, s2).
-int nvim_spell_path_fnamecmp(const char *s1, const char *s2)
-{
-  return path_fnamecmp(s1, s2);
-}
-
-/// Return path_tail(fname).
-const char *nvim_spell_path_tail(const char *fname)
-{
-  return path_tail(fname);
-}
-
-/// Case-insensitive string compare (STRICMP).
-int nvim_spell_stricmp(const char *a, const char *b)
-{
-  return STRICMP(a, b);
-}
-
-/// Call redraw_later(wp, UPD_NOT_VALID).
-void nvim_spell_redraw_later(win_T *wp)
-{
-  redraw_later(wp, UPD_NOT_VALID);
-}
-
-/// Returns true if c is an ASCII alphabetic character.
-bool nvim_spell_ascii_isalpha(int c)
-{
-  return ASCII_ISALPHA(c);
-}
-
-/// Returns the starting global (non-zero while Nvim is starting).
-int nvim_spell_get_starting(void)
-{
-  return starting;
-}
+// Deleted: nvim_spell_set_bufref — Rust uses set_bufref directly via link_name.
+// Deleted: nvim_spell_bufref_valid — Rust calls rs_bufref_valid directly via link_name.
+// Deleted: nvim_spell_copy_option_part — Rust uses copy_option_part directly via link_name.
+// Deleted: nvim_spell_path_full_compare — Rust uses path_full_compare directly via link_name.
+// Deleted: nvim_spell_path_fnamecmp — Rust uses path_fnamecmp directly via link_name.
+// Deleted: nvim_spell_path_tail — Rust uses path_tail directly via link_name.
+// Deleted: nvim_spell_stricmp — Rust uses strcasecmp directly via link_name.
+// Deleted: nvim_spell_redraw_later — Rust uses redraw_later(wp, 40) directly via link_name.
+// Deleted: nvim_spell_ascii_isalpha — Rust uses is_ascii_alphabetic() inline.
+// Deleted: nvim_spell_get_starting — Rust imports starting directly as extern static.
 
 // Structure used for the cookie argument of do_in_runtimepath().
 // (Moved from spell.c)
@@ -393,14 +326,9 @@ void nvim_spell_win_clear_ismw(win_T *wp)
 
 #include "nvim/ex_cmds_defs.h"
 
-/// Get eap->arg for spell commands.
-char *nvim_spell_eap_get_arg(const exarg_T *eap) { return eap->arg; }
-
-/// Get eap->forceit for spell commands.
-bool nvim_spell_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
-
-/// Get eap->line2 as int for spell commands.
-int nvim_spell_eap_get_line2(const exarg_T *eap) { return (int)eap->line2; }
+// Deleted: nvim_spell_eap_get_arg — Rust uses ExargT.arg directly.
+// Deleted: nvim_spell_eap_get_forceit — Rust uses ExargT.forceit directly.
+// Deleted: nvim_spell_eap_get_line2 — Rust uses ExargT.line2 directly.
 
 #include "nvim/spell_defs.h"
 

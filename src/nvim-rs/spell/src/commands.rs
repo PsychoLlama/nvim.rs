@@ -1338,12 +1338,9 @@ extern "C" {
         over_write: bool,
         added_word: bool,
     );
-    // exarg_T field accessors (spell_shim.c)
-    fn nvim_spell_eap_get_arg(eap: *const c_void) -> *mut c_char;
-    fn nvim_spell_eap_get_forceit(eap: *const c_void) -> bool;
+    // exarg_T field accessors still in spell_shim.c (Phase 4 migration)
     fn nvim_spell_eap_get_add_type(eap: *const c_void) -> c_int;
     fn nvim_spell_eap_is_undo(eap: *const c_void) -> bool;
-    fn nvim_spell_eap_get_line2(eap: *const c_void) -> c_int;
     // spell_add_word is still in C (spellfile.c) at this point
     fn spell_add_word(word: *mut c_char, len: c_int, what: c_int, idx: c_int, undo: bool);
 }
@@ -1356,9 +1353,10 @@ extern "C" {
 /// Called from C with a valid exarg_T pointer.
 #[export_name = "ex_mkspell"]
 pub unsafe extern "C" fn rs_ex_mkspell(eap: *mut c_void) {
+    let eap = &*(eap.cast::<nvim_ex_eval::ExargT>());
     let mut fcount: c_int = 0;
     let mut fnames: *mut *mut c_char = std::ptr::null_mut();
-    let mut arg = nvim_spell_eap_get_arg(eap.cast_const());
+    let mut arg = eap.arg;
     let mut ascii = false;
 
     // Check for "-ascii" flag.
@@ -1372,7 +1370,7 @@ pub unsafe extern "C" fn rs_ex_mkspell(eap: *mut c_void) {
         return;
     }
 
-    let forceit = nvim_spell_eap_get_forceit(eap.cast_const());
+    let forceit = eap.forceit != 0;
     rs_mkspell(fcount, fnames, ascii, forceit, false);
     FreeWild(fcount, fnames);
 }
@@ -1384,13 +1382,14 @@ pub unsafe extern "C" fn rs_ex_mkspell(eap: *mut c_void) {
 /// # Safety
 /// Called from C with a valid exarg_T pointer.
 #[export_name = "ex_spell"]
-pub unsafe extern "C" fn rs_ex_spell(eap: *mut c_void) {
-    let arg = nvim_spell_eap_get_arg(eap.cast_const());
+pub unsafe extern "C" fn rs_ex_spell(eap_ptr: *mut c_void) {
+    let eap = &*(eap_ptr.cast::<nvim_ex_eval::ExargT>());
+    let arg = eap.arg;
     let len = libc::strlen(arg.cast::<libc::c_char>()) as c_int;
-    let what = nvim_spell_eap_get_add_type(eap.cast_const());
-    let undo = nvim_spell_eap_is_undo(eap.cast_const());
-    let forceit = nvim_spell_eap_get_forceit(eap.cast_const());
-    let line2 = nvim_spell_eap_get_line2(eap.cast_const());
+    let what = nvim_spell_eap_get_add_type(eap_ptr.cast_const());
+    let undo = nvim_spell_eap_is_undo(eap_ptr.cast_const());
+    let forceit = eap.forceit != 0;
+    let line2 = eap.line2;
     let idx = if forceit { 0 } else { line2 };
     spell_add_word(arg, len, what, idx, undo);
 }

@@ -11,6 +11,7 @@ libc = "0.2"
 nvim-strings = { path = "../strings" }
 nvim-window = { path = "../window" }
 nvim-buffer = { path = "../buffer" }
+nvim-ex-eval = { path = "../ex_eval" }
 
 [lints]
 workspace = true
