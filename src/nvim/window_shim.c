@@ -69,7 +69,7 @@ int nvim_win_folds_empty(win_T *wp) { return GA_EMPTY(&wp->w_folds); }
 const char *nvim_win_get_w_p_fdc(win_T *wp) { return wp->w_p_fdc; }
 linenr_T nvim_win_buf_line_count(win_T *wp) { return wp->w_buffer->b_ml.ml_line_count; }
 void nvim_win_config_float(win_T *wp) { win_config_float(wp, wp->w_config); }
-int nvim_win_is_cmdwin(win_T *wp) { return wp == cmdwin_win; }
+// nvim_win_is_cmdwin: exported from Rust (window crate, globals.rs)
 char *nvim_win_get_p_cc(win_T *wp) { return wp->w_p_cc; }
 int64_t nvim_win_get_buf_b_p_tw(win_T *wp) { return wp->w_buffer->b_p_tw; }
 int nvim_win_argcount(win_T *wp) { return WARGCOUNT(wp); }
@@ -333,12 +333,7 @@ wline_T *nvim_win_get_wl_entry(win_T *wp, int idx) { return (idx < 0 || idx >= w
 
 // Accessors for w_lines array management (used by rs_win_grid_alloc)
 // nvim_wline_T_size: exported from Rust (grid crate, lifecycle.rs)
-linenr_T nvim_wline_get_lnum(wline_T *wl) { return wl->wl_lnum; }
-linenr_T nvim_wline_get_foldend(wline_T *wl) { return wl->wl_foldend; }
-bool nvim_wline_get_valid(wline_T *wl) { return wl->wl_valid; }
-bool nvim_wline_get_folded(wline_T *wl) { return wl->wl_folded; }
-uint16_t nvim_wline_get_size(wline_T *wl) { return wl->wl_size; }
-linenr_T nvim_wline_get_lastlnum(wline_T *wl) { return wl->wl_lastlnum; }
+// nvim_wline_get_*: exported from Rust (grid crate, lifecycle.rs)
 // nvim_redrawing: exported from Rust (drawscreen crate, lib.rs)
 int nvim_win_rl_cursor_col(win_T *wp) { if (!wp) { return 0; } char *cursor = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) + wp->w_cursor.col; return wp->w_view_width - wp->w_wcol - ((utf_ptr2cells(cursor) == 2 && vim_isprintc(utf_ptr2char(cursor))) ? 2 : 1); }
 void nvim_grid_adjust_cursor_goto(win_T *wp, int row, int col) { ScreenGrid *grid = grid_adjust(&wp->w_grid, &row, &col); if (grid) { ui_grid_cursor_goto(grid->handle, row, col); } }

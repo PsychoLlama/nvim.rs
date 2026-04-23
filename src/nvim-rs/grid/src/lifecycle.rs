@@ -756,6 +756,73 @@ pub extern "C" fn wline_t_size() -> usize {
 }
 
 // =============================================================================
+// wline_T field accessors
+// =============================================================================
+//
+// These replace the C functions `nvim_wline_get_*` in window_shim.c.
+// The WlineHandle is an opaque pointer that points to a WlineT.
+
+/// Get wl_lnum from a wline_T pointer.
+///
+/// # Safety
+/// `wl` must be a valid non-null `wline_T*` pointer.
+#[must_use]
+#[unsafe(export_name = "nvim_wline_get_lnum")]
+pub unsafe extern "C" fn wline_get_lnum(wl: *mut std::ffi::c_void) -> i32 {
+    (*wl.cast::<WlineT>()).wl_lnum
+}
+
+/// Get wl_foldend from a wline_T pointer.
+///
+/// # Safety
+/// `wl` must be a valid non-null `wline_T*` pointer.
+#[must_use]
+#[unsafe(export_name = "nvim_wline_get_foldend")]
+pub unsafe extern "C" fn wline_get_foldend(wl: *mut std::ffi::c_void) -> i32 {
+    (*wl.cast::<WlineT>()).wl_foldend
+}
+
+/// Get wl_valid from a wline_T pointer.
+///
+/// # Safety
+/// `wl` must be a valid non-null `wline_T*` pointer.
+#[must_use]
+#[unsafe(export_name = "nvim_wline_get_valid")]
+pub unsafe extern "C" fn wline_get_valid(wl: *mut std::ffi::c_void) -> bool {
+    (*wl.cast::<WlineT>()).wl_valid
+}
+
+/// Get wl_folded from a wline_T pointer.
+///
+/// # Safety
+/// `wl` must be a valid non-null `wline_T*` pointer.
+#[must_use]
+#[unsafe(export_name = "nvim_wline_get_folded")]
+pub unsafe extern "C" fn wline_get_folded(wl: *mut std::ffi::c_void) -> bool {
+    (*wl.cast::<WlineT>()).wl_folded
+}
+
+/// Get wl_size from a wline_T pointer.
+///
+/// # Safety
+/// `wl` must be a valid non-null `wline_T*` pointer.
+#[must_use]
+#[unsafe(export_name = "nvim_wline_get_size")]
+pub unsafe extern "C" fn wline_get_size(wl: *mut std::ffi::c_void) -> u16 {
+    (*wl.cast::<WlineT>()).wl_size
+}
+
+/// Get wl_lastlnum from a wline_T pointer.
+///
+/// # Safety
+/// `wl` must be a valid non-null `wline_T*` pointer.
+#[must_use]
+#[unsafe(export_name = "nvim_wline_get_lastlnum")]
+pub unsafe extern "C" fn wline_get_lastlnum(wl: *mut std::ffi::c_void) -> i32 {
+    (*wl.cast::<WlineT>()).wl_lastlnum
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

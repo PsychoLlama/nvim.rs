@@ -1080,3 +1080,15 @@ pub unsafe extern "C" fn update_cmdline_row() {
         cmdline_row = Rows - p_ch as c_int;
     }
 }
+
+/// Check if wp is the cmdline window (== cmdline_win).
+///
+/// Replaces the C shim `nvim_win_is_cmdwin()` in window_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdline_win.
+#[must_use]
+#[export_name = "nvim_win_is_cmdwin"]
+pub unsafe extern "C" fn win_is_cmdwin(wp: WinHandle) -> c_int {
+    c_int::from(!wp.is_null() && wp.as_ptr() == cmdline_win.as_ptr())
+}
