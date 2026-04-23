@@ -129,6 +129,50 @@ static expr_asgn_type_tab: [CStrPtr; 4] = [
 // ---------------------------------------------------------------------------
 
 /// Array mapping ExprASTNodeType to maximum number of children a node may have.
+///
+/// Accessible from other Rust modules as `NODE_MAXCHILDREN`.
+pub const NODE_MAXCHILDREN: [u8; 39] = [
+    0, // kExprNodeMissing
+    2, // kExprNodeOpMissing
+    2, // kExprNodeTernary
+    2, // kExprNodeTernaryValue
+    0, // kExprNodeRegister
+    2, // kExprNodeSubscript
+    1, // kExprNodeListLiteral
+    1, // kExprNodeUnaryPlus
+    2, // kExprNodeBinaryPlus
+    1, // kExprNodeNested
+    2, // kExprNodeCall
+    0, // kExprNodePlainIdentifier
+    0, // kExprNodePlainKey
+    2, // kExprNodeComplexIdentifier
+    1, // kExprNodeUnknownFigure
+    2, // kExprNodeLambda
+    1, // kExprNodeDictLiteral
+    1, // kExprNodeCurlyBracesIdentifier
+    2, // kExprNodeComma
+    2, // kExprNodeColon
+    2, // kExprNodeArrow
+    2, // kExprNodeComparison
+    2, // kExprNodeConcat
+    2, // kExprNodeConcatOrSubscript
+    0, // kExprNodeInteger
+    0, // kExprNodeFloat
+    0, // kExprNodeSingleQuotedString
+    0, // kExprNodeDoubleQuotedString
+    2, // kExprNodeOr
+    2, // kExprNodeAnd
+    1, // kExprNodeUnaryMinus
+    2, // kExprNodeBinaryMinus
+    1, // kExprNodeNot
+    2, // kExprNodeMultiplication
+    2, // kExprNodeDivision
+    2, // kExprNodeMod
+    0, // kExprNodeOption
+    0, // kExprNodeEnvironment
+    2, // kExprNodeAssignment
+];
+
 #[no_mangle]
 static node_maxchildren: [u8; 39] = [
     0, // kExprNodeMissing

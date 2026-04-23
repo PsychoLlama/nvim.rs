@@ -19,8 +19,11 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::use_self)]
 
+pub mod ast;
 pub mod expr_types;
+pub mod lexer;
 pub mod literal;
+pub mod repr;
 pub mod string_tables;
 pub mod token;
 

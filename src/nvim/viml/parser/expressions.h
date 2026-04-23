@@ -386,4 +386,12 @@ extern const char *const ccs_tab[];
 /// Provided by Rust (string_tables.rs via libnvim_rs.a)
 extern const char *const expr_asgn_type_tab[];
 
+/// Provided by Rust (repr.rs via libnvim_rs.a)
+const char *viml_pexpr_repr_token(const ParserState *pstate, LexExprToken token,
+                                  size_t *ret_size)
+  FUNC_ATTR_WARN_UNUSED_RESULT;
+
+/// Provided by Rust (ast.rs via libnvim_rs.a)
+void viml_pexpr_free_ast(ExprAST ast);
+
 #include "viml/parser/expressions.h.generated.h"
