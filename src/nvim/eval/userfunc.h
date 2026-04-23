@@ -136,4 +136,13 @@ extern dict_T *get_current_funccal_dict(hashtab_T *ht);
 extern hashitem_T *find_hi_in_scoped_ht(const char *name, hashtab_T **pht);
 extern dictitem_T *find_var_in_scoped_ht(const char *name, size_t namelen, int no_autoload);
 
+// Phase 6: Functions migrated to Rust (lookup.rs)
+extern int get_func_arity(const char *name, int *required, int *optional, bool *varargs);
+extern int func_has_ended(void *cookie);
+extern int func_has_abort(void *cookie);
+extern char *func_name(void *cookie);
+extern linenr_T *func_breakpoint(void *cookie);
+extern int *func_dbg_tick(void *cookie);
+extern int func_level(void *cookie);
+
 #include "eval/userfunc.h.generated.h"

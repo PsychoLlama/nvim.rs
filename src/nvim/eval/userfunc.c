@@ -657,43 +657,7 @@ static inline bool eval_fname_sid(const char *const name)
 }
 
 
-int get_func_arity(const char *name, int *required, int *optional, bool *varargs)
-{
-  int argcount = 0;
-  int min_argcount = 0;
-
-  const EvalFuncDef *fdef = find_internal_func(name);
-  if (fdef != NULL) {
-    argcount = fdef->max_argc;
-    min_argcount = fdef->min_argc;
-    *varargs = false;
-  } else {
-    char fname_buf[FLEN_FIXED + 1];
-    char *tofree = NULL;
-    int error = FCERR_NONE;
-
-    // May need to translate <SNR>123_ to K_SNR.
-    char *fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
-    ufunc_T *ufunc = NULL;
-    if (error == FCERR_NONE) {
-      ufunc = find_func(fname);
-    }
-    xfree(tofree);
-
-    if (ufunc == NULL) {
-      return FAIL;
-    }
-
-    argcount = ufunc->uf_args.ga_len;
-    min_argcount = ufunc->uf_args.ga_len - ufunc->uf_def_args.ga_len;
-    *varargs = ufunc->uf_varargs;
-  }
-
-  *required = min_argcount;
-  *optional = argcount - min_argcount;
-
-  return OK;
-}
+// get_func_arity migrated to Rust (lookup.rs Phase 6)
 
 /// Find a function by name, return pointer to it in ufuncs.
 ///
@@ -3291,20 +3255,7 @@ char *get_func_line(int c, void *cookie, int indent, bool do_concat)
   return retval;
 }
 
-/// @return  true if the currently active function should be ended, because a
-///          return was encountered or an error occurred.  Used inside a ":while".
-int func_has_ended(void *cookie)
-{
-  funccall_T *fcp = (funccall_T *)cookie;
-
-  // Ignore the "abort" flag if the abortion behavior has been changed due to
-  // an error inside a try conditional.
-  return ((fcp->fc_func->uf_flags & FC_ABORT) && did_emsg && !aborted_in_try())
-         || fcp->fc_returned;
-}
-
-/// @return  true if cookie indicates a function which "abort"s on errors.
-int func_has_abort(void *cookie) { return ((funccall_T *)cookie)->fc_func->uf_flags & FC_ABORT; }
+// func_has_ended, func_has_abort migrated to Rust (lookup.rs Phase 6)
 
 /// Turn "dict.Func" into a partial for "Func" bound to "dict".
 /// Changes "rettv" in-place.
@@ -3365,17 +3316,7 @@ void make_partial(dict_T *const selfdict, typval_T *const rettv)
   }
 }
 
-/// @return  the name of the executed function.
-char *func_name(void *cookie) { return ((funccall_T *)cookie)->fc_func->uf_name; }
-
-/// @return  the address holding the next breakpoint line for a funccall cookie.
-linenr_T *func_breakpoint(void *cookie) { return &((funccall_T *)cookie)->fc_breakpoint; }
-
-/// @return  the address holding the debug tick for a funccall cookie.
-int *func_dbg_tick(void *cookie) { return &((funccall_T *)cookie)->fc_dbg_tick; }
-
-/// @return  the nesting level for a funccall cookie.
-int func_level(void *cookie) { return ((funccall_T *)cookie)->fc_level; }
+// func_name, func_breakpoint, func_dbg_tick, func_level migrated to Rust (lookup.rs Phase 6)
 
 // C accessor for current_funccal->fc_returned (used by Rust)
 int nvim_get_current_funccal_fc_returned(void) { return current_funccal->fc_returned; }
@@ -3931,3 +3872,22 @@ int nvim_ufunc_get_refcount(const ufunc_T *fp) { return fp ? fp->uf_refcount : 0
 int nvim_ufunc_decrement_refcount(ufunc_T *fp) { return fp ? --fp->uf_refcount : 0; }
 void nvim_ufunc_increment_refcount(ufunc_T *fp) { if (fp) { fp->uf_refcount++; } }
 int nvim_ufunc_get_calls(const ufunc_T *fp) { return fp ? fp->uf_calls : 0; }
+
+// Phase 6: Cookie Accessor Shims (funccall_T field access for Rust)
+int nvim_fc_get_returned(const funccall_T *fc) { return fc ? fc->fc_returned : 0; }
+int nvim_fc_get_level(const funccall_T *fc) { return fc ? fc->fc_level : 0; }
+linenr_T *nvim_fc_get_breakpoint_ptr(funccall_T *fc) { return fc ? &fc->fc_breakpoint : NULL; }
+int *nvim_fc_get_dbg_tick_ptr(funccall_T *fc) { return fc ? &fc->fc_dbg_tick : NULL; }
+
+// Phase 6: Internal function arity accessor for Rust get_func_arity
+// Returns 1 if found (sets *required and *optional), 0 if not a builtin.
+int nvim_get_internal_func_arity(const char *name, int *required, int *optional)
+{
+  const EvalFuncDef *fdef = find_internal_func(name);
+  if (fdef == NULL) {
+    return 0;
+  }
+  *required = fdef->min_argc;
+  *optional = fdef->max_argc - fdef->min_argc;
+  return 1;
+}
