@@ -52,7 +52,7 @@ extern "C" {
     fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char;
 
     /// function_exists: check if a function exists
-    fn function_exists(name: *const c_char, no_deref: bool) -> bool;
+    fn function_exists(name: *const c_char, no_deref: c_int) -> c_int;
 
     /// rs_eval_isnamec1: check if char can start a variable name (Rust export)
     fn rs_eval_isnamec1(c: c_int) -> bool;
@@ -214,7 +214,7 @@ pub unsafe extern "C" fn rs_var_wrong_func_name(name: *const c_char, new_var: bo
     }
 
     // Don't allow hiding a function.
-    if new_var && function_exists(name, false) {
+    if new_var && function_exists(name, 0) != 0 {
         semsg(E_FUNC_CONFLICT.as_ptr(), name);
         return true;
     }

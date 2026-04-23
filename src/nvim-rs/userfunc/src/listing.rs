@@ -113,7 +113,7 @@ const FC_CLOSURE: c_int = 0x08;
 ///
 /// # Safety
 /// `fp` must be a valid non-null ufunc_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "printable_func_name")]
 pub unsafe extern "C" fn rs_printable_func_name(fp: UfuncHandle) -> *const c_char {
     let exp = nvim_ufunc_get_name_exp(fp);
     if exp.is_null() {

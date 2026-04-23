@@ -40,7 +40,7 @@ pub unsafe extern "C" fn rs_can_free_funccal(fc: *mut c_void, copy_id: c_int) ->
 // free_unref_funccal
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "free_unref_funccal")]
 pub unsafe extern "C" fn rs_free_unref_funccal(copy_id: c_int, testing: c_int) -> c_int {
     unsafe { nvim_free_unref_funccal_impl(copy_id, testing) }
 }
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn rs_free_unref_funccal(copy_id: c_int, testing: c_int) -
 // set_ref_in_previous_funccal
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "set_ref_in_previous_funccal")]
 pub unsafe extern "C" fn rs_set_ref_in_previous_funccal(copy_id: c_int) -> c_int {
     unsafe { nvim_set_ref_in_previous_funccal_impl(copy_id) }
 }
@@ -67,7 +67,7 @@ pub unsafe extern "C" fn rs_set_ref_in_funccal(fc: *mut c_void, copy_id: c_int) 
 // set_ref_in_call_stack
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "set_ref_in_call_stack")]
 pub unsafe extern "C" fn rs_set_ref_in_call_stack(copy_id: c_int) -> c_int {
     unsafe { nvim_set_ref_in_call_stack_impl(copy_id) }
 }
@@ -76,7 +76,7 @@ pub unsafe extern "C" fn rs_set_ref_in_call_stack(copy_id: c_int) -> c_int {
 // set_ref_in_functions
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "set_ref_in_functions")]
 pub unsafe extern "C" fn rs_set_ref_in_functions(copy_id: c_int) -> c_int {
     unsafe { nvim_set_ref_in_functions_impl(copy_id) }
 }
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn rs_set_ref_in_functions(copy_id: c_int) -> c_int {
 // set_ref_in_func_args
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "set_ref_in_func_args")]
 pub unsafe extern "C" fn rs_set_ref_in_func_args(copy_id: c_int) -> c_int {
     unsafe { nvim_set_ref_in_func_args_impl(copy_id) }
 }
@@ -94,7 +94,7 @@ pub unsafe extern "C" fn rs_set_ref_in_func_args(copy_id: c_int) -> c_int {
 // set_ref_in_func
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "set_ref_in_func")]
 pub unsafe extern "C" fn rs_set_ref_in_func(
     name: *mut c_char,
     fp: *mut c_void,

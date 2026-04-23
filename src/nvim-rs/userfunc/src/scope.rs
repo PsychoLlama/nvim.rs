@@ -36,7 +36,7 @@ extern "C" {
 // get_funccal
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_funccal")]
 pub unsafe extern "C" fn rs_get_funccal() -> *mut c_void {
     unsafe { nvim_get_funccal_impl() }
 }
@@ -45,7 +45,7 @@ pub unsafe extern "C" fn rs_get_funccal() -> *mut c_void {
 // get_funccal_local_dict
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_funccal_local_dict")]
 pub unsafe extern "C" fn rs_get_funccal_local_dict() -> *mut c_void {
     unsafe { nvim_get_funccal_local_dict_impl() }
 }
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn rs_get_funccal_local_dict() -> *mut c_void {
 // get_funccal_local_ht
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_funccal_local_ht")]
 pub unsafe extern "C" fn rs_get_funccal_local_ht() -> *mut c_void {
     unsafe { nvim_get_funccal_local_ht_impl() }
 }
@@ -63,7 +63,7 @@ pub unsafe extern "C" fn rs_get_funccal_local_ht() -> *mut c_void {
 // get_funccal_local_var
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_funccal_local_var")]
 pub unsafe extern "C" fn rs_get_funccal_local_var() -> *mut c_void {
     unsafe { nvim_get_funccal_local_var_impl() }
 }
@@ -72,7 +72,7 @@ pub unsafe extern "C" fn rs_get_funccal_local_var() -> *mut c_void {
 // get_funccal_args_dict
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_funccal_args_dict")]
 pub unsafe extern "C" fn rs_get_funccal_args_dict() -> *mut c_void {
     unsafe { nvim_get_funccal_args_dict_impl() }
 }
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn rs_get_funccal_args_dict() -> *mut c_void {
 // get_funccal_args_ht
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_funccal_args_ht")]
 pub unsafe extern "C" fn rs_get_funccal_args_ht() -> *mut c_void {
     unsafe { nvim_get_funccal_args_ht_impl() }
 }
@@ -90,7 +90,7 @@ pub unsafe extern "C" fn rs_get_funccal_args_ht() -> *mut c_void {
 // get_funccal_args_var
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_funccal_args_var")]
 pub unsafe extern "C" fn rs_get_funccal_args_var() -> *mut c_void {
     unsafe { nvim_get_funccal_args_var_impl() }
 }
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn rs_get_funccal_args_var() -> *mut c_void {
 // list_func_vars
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "list_func_vars")]
 pub unsafe extern "C" fn rs_list_func_vars(first: *mut c_int) {
     unsafe { nvim_list_func_vars_impl(first) };
 }
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn rs_list_func_vars(first: *mut c_int) {
 // get_current_funccal_dict
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_current_funccal_dict")]
 pub unsafe extern "C" fn rs_get_current_funccal_dict(ht: *mut c_void) -> *mut c_void {
     unsafe { nvim_get_current_funccal_dict_impl(ht) }
 }
@@ -117,7 +117,7 @@ pub unsafe extern "C" fn rs_get_current_funccal_dict(ht: *mut c_void) -> *mut c_
 // find_hi_in_scoped_ht
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "find_hi_in_scoped_ht")]
 pub unsafe extern "C" fn rs_find_hi_in_scoped_ht(
     name: *const c_char,
     pht: *mut *mut c_void,
@@ -129,7 +129,7 @@ pub unsafe extern "C" fn rs_find_hi_in_scoped_ht(
 // find_var_in_scoped_ht
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "find_var_in_scoped_ht")]
 pub unsafe extern "C" fn rs_find_var_in_scoped_ht(
     name: *const c_char,
     namelen: usize,
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn rs_find_var_in_scoped_ht(
 // ex_return
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "ex_return")]
 pub unsafe extern "C" fn rs_ex_return(eap: *mut c_void) {
     unsafe { nvim_ex_return_impl(eap) };
 }
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn rs_ex_return(eap: *mut c_void) {
 // do_return
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "do_return")]
 pub unsafe extern "C" fn rs_do_return(
     eap: *mut c_void,
     reanimate: c_int,
@@ -165,7 +165,7 @@ pub unsafe extern "C" fn rs_do_return(
 // get_return_cmd
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "get_return_cmd")]
 pub unsafe extern "C" fn rs_get_return_cmd(rettv: *mut c_void) -> *mut c_char {
     unsafe { nvim_get_return_cmd_impl(rettv) }
 }

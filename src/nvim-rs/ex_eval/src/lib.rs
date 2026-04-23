@@ -1555,7 +1555,7 @@ unsafe fn libc_strncmp(a: *const c_char, b: *const c_char, n: usize) -> c_int {
 
 // C functions for do_return and do_finish (thin wrappers around Rust implementations)
 extern "C" {
-    fn do_return(eap: *mut ExargT, reanimate: bool, is_cmd: bool, rettv: *mut c_void) -> bool;
+    fn do_return(eap: *mut ExargT, reanimate: c_int, is_cmd: c_int, rettv: *mut c_void) -> c_int;
     fn do_finish(eap: *mut ExargT, reanimate: bool);
 }
 
@@ -1783,7 +1783,7 @@ pub unsafe extern "C" fn ex_endtry_impl(eap: *mut ExargT) {
             CSTP_CONTINUE => ex_continue_impl(eap),
             CSTP_BREAK => ex_break_impl(eap),
             CSTP_RETURN => {
-                do_return(eap, false, false, rettv);
+                do_return(eap, 0, 0, rettv);
             }
             CSTP_FINISH => {
                 do_finish(eap, false);

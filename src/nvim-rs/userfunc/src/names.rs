@@ -53,7 +53,7 @@ extern "C" {
 ///
 /// # Safety
 /// `p` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "eval_fname_script")]
 pub unsafe extern "C" fn rs_eval_fname_script(p: *const c_char) -> c_int {
     if p.is_null() {
         return 0;
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn rs_builtin_function(name: *const c_char, len: c_int) ->
 ///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "translated_function_exists")]
 pub unsafe extern "C" fn rs_translated_function_exists(name: *const c_char) -> c_int {
     if unsafe { rs_builtin_function(name, -1) } != 0 {
         c_int::from(!unsafe { find_internal_func(name) }.is_null())
@@ -282,7 +282,7 @@ const TFN_NO_DEREF: c_int = 8;
 ///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "function_exists")]
 pub unsafe extern "C" fn rs_function_exists(name: *const c_char, no_deref: c_int) -> c_int {
     let mut nm = name.cast_mut();
     let mut flag = TFN_INT | TFN_QUIET | TFN_NO_AUTOLOAD;
@@ -324,7 +324,7 @@ pub unsafe extern "C" fn rs_function_exists(name: *const c_char, no_deref: c_int
 ///
 /// # Safety
 /// `funcname` must be a valid NUL-terminated C string or NULL.
-#[no_mangle]
+#[unsafe(export_name = "get_scriptlocal_funcname")]
 pub unsafe extern "C" fn rs_get_scriptlocal_funcname(funcname: *const c_char) -> *mut c_char {
     if funcname.is_null() {
         return std::ptr::null_mut();
@@ -377,7 +377,7 @@ pub unsafe extern "C" fn rs_get_scriptlocal_funcname(funcname: *const c_char) ->
 ///
 /// # Safety
 /// `name` must point to a valid mutable C string pointer; `fudi` may be null.
-#[no_mangle]
+#[unsafe(export_name = "save_function_name")]
 pub unsafe extern "C" fn rs_save_function_name(
     name: *mut *mut c_char,
     skip: c_int,

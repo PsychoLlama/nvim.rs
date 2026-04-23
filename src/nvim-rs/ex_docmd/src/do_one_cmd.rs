@@ -186,7 +186,7 @@ extern "C" {
     // post-execute: rethrow/finish/return
     fn do_throw(cstack: CstackHandle);
     fn nvim_docmd_do_finish(eap: ExArgHandle);
-    fn do_return(eap: ExArgHandle, reanimate: bool, is_cmd: bool, rettv: *mut c_void) -> bool;
+    fn do_return(eap: ExArgHandle, reanimate: c_int, is_cmd: c_int, rettv: *mut c_void) -> c_int;
     fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool;
     fn current_func_returned() -> c_int;
     fn get_func_line(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
@@ -1029,7 +1029,7 @@ pub unsafe extern "C" fn do_one_cmd(
             Some(get_func_line as LineGetterFn),
         ) && current_func_returned() != 0
         {
-            do_return(eap, true, false, std::ptr::null_mut());
+            do_return(eap, 1, 0, std::ptr::null_mut());
         }
     }
     crate::need_rethrow = false;

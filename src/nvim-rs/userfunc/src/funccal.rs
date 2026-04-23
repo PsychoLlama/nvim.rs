@@ -60,7 +60,7 @@ pub unsafe extern "C" fn rs_funccal_unref(fc: *mut c_void, fp: *mut c_void, forc
 // create_funccal
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "create_funccal")]
 pub unsafe extern "C" fn rs_create_funccal(fp: *mut c_void, rettv: *mut c_void) -> *mut c_void {
     unsafe { nvim_create_funccal_impl(fp, rettv) }
 }
@@ -69,7 +69,7 @@ pub unsafe extern "C" fn rs_create_funccal(fp: *mut c_void, rettv: *mut c_void) 
 // remove_funccal
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "remove_funccal")]
 pub unsafe extern "C" fn rs_remove_funccal() {
     unsafe { nvim_remove_funccal_impl() };
 }
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn rs_remove_funccal() {
 // save_funccal
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "save_funccal")]
 pub unsafe extern "C" fn rs_save_funccal(entry: *mut c_void) {
     unsafe { nvim_save_funccal_impl(entry) };
 }
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn rs_save_funccal(entry: *mut c_void) {
 // restore_funccal
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "restore_funccal")]
 pub unsafe extern "C" fn rs_restore_funccal() {
     unsafe { nvim_restore_funccal_impl() };
 }
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn rs_restore_funccal() {
 // ex_delfunction
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "ex_delfunction")]
 pub unsafe extern "C" fn rs_ex_delfunction(eap: *mut c_void) {
     unsafe { nvim_ex_delfunction_impl(eap) };
 }
@@ -105,7 +105,7 @@ pub unsafe extern "C" fn rs_ex_delfunction(eap: *mut c_void) {
 // emsg_funcname
 // =============================================================================
 
-#[no_mangle]
+#[unsafe(export_name = "emsg_funcname")]
 pub unsafe extern "C" fn rs_emsg_funcname(errmsg: *const c_char, name: *const c_char) {
     unsafe { nvim_emsg_funcname_impl(errmsg, name) };
 }

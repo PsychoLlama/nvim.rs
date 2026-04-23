@@ -71,7 +71,6 @@ extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
 
 // Phase 1: Function Listing (implemented in Rust userfunc/src/listing.rs)
-extern const char *rs_printable_func_name(ufunc_T *fp);
 extern int rs_cat_func_name(char *buf, size_t bufsize, ufunc_T *fp);
 extern int rs_function_list_modified(int prev_ht_changed);
 extern int rs_list_func_head(ufunc_T *fp, int indent, int force);
@@ -80,27 +79,15 @@ extern char *rs_list_functions_matching_pat(exarg_T *eap);
 extern ufunc_T *rs_list_one_function(exarg_T *eap, const char *name, char *p);
 
 // Phase 2: Function Name Translation (implemented in Rust userfunc/src/names.rs)
-extern int rs_eval_fname_script(const char *p);
 extern char *rs_fname_trans_sid(const char *name, char *fname_buf, char **tofree, int *error);
 extern int rs_func_name_refcount(const char *name);
 extern int rs_builtin_function(const char *name, int len);
-extern int rs_translated_function_exists(const char *name);
-extern int rs_function_exists(const char *name, int no_deref);
-extern char *rs_get_scriptlocal_funcname(char *funcname);
-extern char *rs_save_function_name(char **name, int skip, int flags, funcdict_T *fudi);
 
 // Phase 3: Defer Infrastructure (implemented in Rust userfunc/src/defer.rs)
-extern int rs_can_add_defer(void);
-extern void rs_add_defer(char *name, int argcount, typval_T *argvars);
 extern void rs_handle_defer_one(funccall_T *funccal);
-extern void rs_invoke_all_defer(void);
 extern int rs_ex_defer_inner(char *name, char **arg, const partial_T *partial, evalarg_T *evalarg);
 
 // Phase 4: Function Reference Counting (implemented in Rust userfunc/src/refcount.rs)
-extern void rs_func_ptr_unref(ufunc_T *fp);
-extern void rs_func_ptr_ref(ufunc_T *fp);
-extern void rs_func_unref(char *name);
-extern void rs_func_ref(char *name);
 extern int rs_func_remove(ufunc_T *fp);
 extern void rs_func_clear_items(ufunc_T *fp);
 extern void rs_func_clear(ufunc_T *fp, int force);
@@ -110,41 +97,15 @@ extern void rs_func_clear_free(ufunc_T *fp, int force);
 // Phase 5: GC Support (implemented in Rust userfunc/src/gc.rs)
 extern int rs_fc_referenced(const funccall_T *fc);
 extern int rs_can_free_funccal(funccall_T *fc, int copyID);
-extern int rs_free_unref_funccal(int copyID, int testing);
-extern int rs_set_ref_in_previous_funccal(int copyID);
 extern int rs_set_ref_in_funccal(funccall_T *fc, int copyID);
-extern int rs_set_ref_in_call_stack(int copyID);
-extern int rs_set_ref_in_functions(int copyID);
-extern int rs_set_ref_in_func_args(int copyID);
-extern int rs_set_ref_in_func(char *name, ufunc_T *fp, int copyID);
 
 // Phase 6: Scope Accessors + ex_return (implemented in Rust userfunc/src/scope.rs)
-extern void *rs_get_funccal(void);
-extern void *rs_get_funccal_local_dict(void);
-extern void *rs_get_funccal_local_ht(void);
-extern void *rs_get_funccal_local_var(void);
-extern void *rs_get_funccal_args_dict(void);
-extern void *rs_get_funccal_args_ht(void);
-extern void *rs_get_funccal_args_var(void);
-extern void rs_list_func_vars(int *first);
-extern void *rs_get_current_funccal_dict(hashtab_T *ht);
-extern hashitem_T *rs_find_hi_in_scoped_ht(const char *name, void **pht);
-extern dictitem_T *rs_find_var_in_scoped_ht(const char *name, size_t namelen, int no_autoload);
-extern void rs_ex_return(exarg_T *eap);
-extern bool rs_do_return(exarg_T *eap, int reanimate, int is_cmd, void *rettv);
-extern char *rs_get_return_cmd(void *rettv);
 
 // Phase 7: Funccal Management + Helpers (implemented in Rust userfunc/src/funccal.rs)
 extern void rs_free_funccal(funccall_T *fc);
 extern void rs_free_funccal_contents(funccall_T *fc);
 extern void rs_cleanup_function_call(funccall_T *fc);
 extern void rs_funccal_unref(funccall_T *fc, ufunc_T *fp, int force);
-extern funccall_T *rs_create_funccal(ufunc_T *fp, typval_T *rettv);
-extern void rs_remove_funccal(void);
-extern void rs_save_funccal(funccal_entry_T *entry);
-extern void rs_restore_funccal(void);
-extern void rs_ex_delfunction(exarg_T *eap);
-extern void rs_emsg_funcname(const char *errmsg, const char *name);
 extern void rs_user_func_error(int error, const char *name, int found_var);
 
 #include "eval/userfunc.c.generated.h"
@@ -590,11 +551,6 @@ void nvim_emsg_funcname_impl(const char *errmsg, const char *name)
 ///
 /// @param errmsg must be passed without translation (use N_() instead of _()).
 /// @param name function name
-void emsg_funcname(const char *errmsg, const char *name)
-{
-  rs_emsg_funcname(errmsg, name);
-}
-
 /// Get function arguments at "*arg" and advance it.
 /// Return them in "*argvars[MAX_FUNC_ARGS + 1]" and the count in "argcount".
 /// On failure FAIL is returned but the "argvars[argcount]" are still set.
@@ -961,23 +917,12 @@ funccall_T *nvim_create_funccal_impl(ufunc_T *fp, typval_T *rettv)
 
 /// Allocate a funccall_T, link it in current_funccal and fill in "fp" and "rettv".
 /// Must be followed by one call to remove_funccal() or cleanup_function_call().
-funccall_T *create_funccal(ufunc_T *fp, typval_T *rettv)
-{
-  return rs_create_funccal(fp, rettv);
-}
-
 /// Phase 7: C implementation shim for remove_funccal (called from Rust).
 void nvim_remove_funccal_impl(void)
 {
   funccall_T *fc = current_funccal;
   current_funccal = fc->fc_caller;
   rs_free_funccal(fc);
-}
-
-/// Restore current_funccal.
-void remove_funccal(void)
-{
-  rs_remove_funccal();
 }
 
 /// Call a user function
@@ -1430,11 +1375,6 @@ void nvim_save_funccal_impl(funccal_entry_T *entry)
 
 /// Save the current function call pointer, and set it to NULL.
 /// Used when executing autocommands and for ":source".
-void save_funccal(funccal_entry_T *entry)
-{
-  rs_save_funccal(entry);
-}
-
 /// Phase 7: C implementation shim for restore_funccal (called from Rust).
 void nvim_restore_funccal_impl(void)
 {
@@ -1444,11 +1384,6 @@ void nvim_restore_funccal_impl(void)
     current_funccal = funccal_stack->top_funccal;
     funccal_stack = funccal_stack->next;
   }
-}
-
-void restore_funccal(void)
-{
-  rs_restore_funccal();
 }
 
 funccall_T *get_current_funccal(void) { return current_funccal; }
@@ -1858,9 +1793,6 @@ int call_simple_func(const char *funcname, size_t len, typval_T *rettv)
   return ret;
 }
 
-char *printable_func_name(ufunc_T *fp) { return (char *)rs_printable_func_name(fp); }
-
-
 /// Get a function name, translating "<SID>" and "<SNR>".
 /// Also handles a Funcref in a List or Dict.
 /// flags:
@@ -2075,18 +2007,6 @@ theend:
 
 /// If the "funcname" starts with "s:" or "<SID>", expands it to the current
 /// script ID. Thin wrapper — logic lives in Rust (names.rs).
-char *get_scriptlocal_funcname(char *funcname)
-{
-  return rs_get_scriptlocal_funcname(funcname);
-}
-
-/// Call trans_function_name(), except that a lambda is returned as-is.
-/// Thin wrapper — logic lives in Rust (names.rs).
-char *save_function_name(char **name, bool skip, int flags, funcdict_T *fudi)
-{
-  return rs_save_function_name(name, skip ? 1 : 0, flags, fudi);
-}
-
 /// List functions.
 ///
 /// @param regmatch  When NULL, all of them.
@@ -2777,23 +2697,6 @@ ret_free:
 /// @return  5 if "p" starts with "<SID>" or "<SNR>" (ignoring case).
 ///          2 if "p" starts with "s:".
 ///          0 otherwise.
-int eval_fname_script(const char *const p)
-{
-  return rs_eval_fname_script(p);
-}
-
-bool translated_function_exists(const char *name)
-{
-  return rs_translated_function_exists(name) != 0;
-}
-
-/// Check whether function with the given name exists.
-/// Thin wrapper — logic lives in Rust (names.rs).
-bool function_exists(const char *const name, bool no_deref)
-{
-  return rs_function_exists(name, no_deref ? 1 : 0) != 0;
-}
-
 /// Function given to ExpandGeneric() to obtain the list of user defined
 /// function names.
 char *get_user_func_name(expand_T *xp, int idx)
@@ -2920,36 +2823,6 @@ void nvim_ex_delfunction_impl(exarg_T *eap)
 }
 
 /// ":delfunction {name}"
-void ex_delfunction(exarg_T *eap)
-{
-  rs_ex_delfunction(eap);
-}
-
-/// Unreference a Function: decrement the reference count and free it when it
-/// becomes zero.
-void func_unref(char *name)
-{
-  rs_func_unref(name);
-}
-
-/// Unreference a Function by pointer. Thin wrapper — logic lives in Rust.
-void func_ptr_unref(ufunc_T *fp)
-{
-  rs_func_ptr_unref(fp);
-}
-
-/// Count a reference to a Function. Thin wrapper — logic lives in Rust.
-void func_ref(char *name)
-{
-  rs_func_ref(name);
-}
-
-/// Count a reference to a Function. Thin wrapper — logic lives in Rust.
-void func_ptr_ref(ufunc_T *fp)
-{
-  rs_func_ptr_ref(fp);
-}
-
 /// Check whether funccall is still referenced outside
 ///
 /// It is supposed to be referenced if either it is referenced itself or if l:,
@@ -3026,11 +2899,6 @@ void nvim_ex_return_impl(exarg_T *eap)
 }
 
 /// ":return [expr]"
-void ex_return(exarg_T *eap)
-{
-  rs_ex_return(eap);
-}
-
 /// Lower level implementation of "call".  Only called when not skipping.
 static int ex_call_inner(exarg_T *eap, char *name, char **arg, char *startarg,
                          const funcexe_T *const funcexe_init, evalarg_T *const evalarg)
@@ -3145,19 +3013,6 @@ int nvim_ex_defer_inner_impl(char *name, char **arg, const partial_T *const part
 
 /// Return true if currently inside a function call.
 /// Give an error message and return false when not.
-bool can_add_defer(void)
-{
-  return rs_can_add_defer() != 0;
-}
-
-/// Add a deferred call for "name" with arguments "argvars[argcount]".
-/// Consumes "argvars[]". Caller must check that current_funccal is not NULL.
-/// Thin wrapper — logic lives in Rust (defer.rs).
-void add_defer(char *name, int argcount_arg, typval_T *argvars)
-{
-  rs_add_defer(name, argcount_arg, argvars);
-}
-
 /// Phase 3: C implementation shim for handle_defer_one (called from Rust).
 void nvim_handle_defer_one_impl(funccall_T *funccal)
 {
@@ -3190,13 +3045,6 @@ void nvim_handle_defer_one_impl(funccall_T *funccal)
   ga_clear(&funccal->fc_defer);
 }
 
-
-/// Called when exiting: call all defer functions.
-/// Thin wrapper — logic lives in Rust (defer.rs).
-void invoke_all_defer(void)
-{
-  rs_invoke_all_defer();
-}
 
 /// ":1,25call func(arg1, arg2)" function call.
 /// ":defer func(arg1, arg2)"    deferred function call.
@@ -3365,11 +3213,6 @@ int nvim_do_return_impl(exarg_T *eap, int reanimate, int is_cmd, void *rettv)
   return idx < 0;
 }
 
-bool do_return(exarg_T *eap, bool reanimate, bool is_cmd, void *rettv)
-{
-  return (bool)rs_do_return(eap, (int)reanimate, (int)is_cmd, rettv);
-}
-
 /// Phase 6: C implementation shim for get_return_cmd (called from Rust).
 char *nvim_get_return_cmd_impl(void *rettv)
 {
@@ -3395,13 +3238,6 @@ char *nvim_get_return_cmd_impl(void *rettv)
   }
   xfree(tofree);
   return xstrnsave(IObuff, IObufflen);
-}
-
-/// Generate a return command for producing the value of "rettv".  The result
-/// is an allocated string.  Used by report_pending() for verbose messages.
-char *get_return_cmd(void *rettv)
-{
-  return rs_get_return_cmd(rettv);
 }
 
 /// Get next function line.
@@ -3569,11 +3405,6 @@ int nvim_free_unref_funccal_impl(int copyID, int testing)
   return did_free;
 }
 
-bool free_unref_funccal(int copyID, int testing)
-{
-  return rs_free_unref_funccal(copyID, testing) != 0;
-}
-
 /// Phase 6: C implementation shim for get_funccal.
 funccall_T *nvim_get_funccal_impl(void)
 {
@@ -3591,8 +3422,6 @@ funccall_T *nvim_get_funccal_impl(void)
   return funccal;
 }
 
-funccall_T *get_funccal(void) { return rs_get_funccal(); }
-
 /// Phase 6: C implementation shims for funccal scope accessors.
 dict_T *nvim_get_funccal_local_dict_impl(void)
 {
@@ -3602,15 +3431,11 @@ dict_T *nvim_get_funccal_local_dict_impl(void)
   return &get_funccal()->fc_l_vars;
 }
 
-dict_T *get_funccal_local_dict(void) { return rs_get_funccal_local_dict(); }
-
 hashtab_T *nvim_get_funccal_local_ht_impl(void)
 {
   dict_T *d = get_funccal_local_dict();
   return d != NULL ? &d->dv_hashtab : NULL;
 }
-
-hashtab_T *get_funccal_local_ht(void) { return rs_get_funccal_local_ht(); }
 
 dictitem_T *nvim_get_funccal_local_var_impl(void)
 {
@@ -3620,8 +3445,6 @@ dictitem_T *nvim_get_funccal_local_var_impl(void)
   return (dictitem_T *)&get_funccal()->fc_l_vars_var;
 }
 
-dictitem_T *get_funccal_local_var(void) { return rs_get_funccal_local_var(); }
-
 dict_T *nvim_get_funccal_args_dict_impl(void)
 {
   if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
@@ -3630,15 +3453,11 @@ dict_T *nvim_get_funccal_args_dict_impl(void)
   return &get_funccal()->fc_l_avars;
 }
 
-dict_T *get_funccal_args_dict(void) { return rs_get_funccal_args_dict(); }
-
 hashtab_T *nvim_get_funccal_args_ht_impl(void)
 {
   dict_T *d = get_funccal_args_dict();
   return d != NULL ? &d->dv_hashtab : NULL;
 }
-
-hashtab_T *get_funccal_args_ht(void) { return rs_get_funccal_args_ht(); }
 
 dictitem_T *nvim_get_funccal_args_var_impl(void)
 {
@@ -3648,16 +3467,12 @@ dictitem_T *nvim_get_funccal_args_var_impl(void)
   return (dictitem_T *)&get_funccal()->fc_l_avars_var;
 }
 
-dictitem_T *get_funccal_args_var(void) { return rs_get_funccal_args_var(); }
-
 void nvim_list_func_vars_impl(int *first)
 {
   if (current_funccal != NULL && current_funccal->fc_l_vars.dv_refcount > 0) {
     list_hashtable_vars(&current_funccal->fc_l_vars.dv_hashtab, "l:", false, first);
   }
 }
-
-void list_func_vars(int *first) { rs_list_func_vars(first); }
 
 dict_T *nvim_get_current_funccal_dict_impl(hashtab_T *ht)
 {
@@ -3666,8 +3481,6 @@ dict_T *nvim_get_current_funccal_dict_impl(hashtab_T *ht)
   }
   return NULL;
 }
-
-dict_T *get_current_funccal_dict(hashtab_T *ht) { return rs_get_current_funccal_dict(ht); }
 
 hashitem_T *nvim_find_hi_in_scoped_ht_impl(const char *name, hashtab_T **pht)
 {
@@ -3697,11 +3510,6 @@ hashitem_T *nvim_find_hi_in_scoped_ht_impl(const char *name, hashtab_T **pht)
   return hi;
 }
 
-hashitem_T *find_hi_in_scoped_ht(const char *name, hashtab_T **pht)
-{
-  return rs_find_hi_in_scoped_ht(name, (void **)pht);
-}
-
 dictitem_T *nvim_find_var_in_scoped_ht_impl(const char *name, const size_t namelen,
                                              int no_autoload)
 {
@@ -3729,11 +3537,6 @@ dictitem_T *nvim_find_var_in_scoped_ht_impl(const char *name, const size_t namel
   return v;
 }
 
-dictitem_T *find_var_in_scoped_ht(const char *name, const size_t namelen, int no_autoload)
-{
-  return rs_find_var_in_scoped_ht(name, namelen, no_autoload);
-}
-
 /// Set "copyID + 1" in previous_funccal and callers.
 /// Phase 5: C implementation shim for set_ref_in_previous_funccal.
 int nvim_set_ref_in_previous_funccal_impl(int copyID)
@@ -3747,11 +3550,6 @@ int nvim_set_ref_in_previous_funccal_impl(int copyID)
     }
   }
   return false;
-}
-
-bool set_ref_in_previous_funccal(int copyID)
-{
-  return rs_set_ref_in_previous_funccal(copyID) != 0;
 }
 
 /// Phase 5: C implementation shim for set_ref_in_funccal.
@@ -3788,11 +3586,6 @@ int nvim_set_ref_in_call_stack_impl(int copyID)
   return false;
 }
 
-bool set_ref_in_call_stack(int copyID)
-{
-  return rs_set_ref_in_call_stack(copyID) != 0;
-}
-
 /// Phase 5: C implementation shim for set_ref_in_functions.
 int nvim_set_ref_in_functions_impl(int copyID)
 {
@@ -3809,11 +3602,6 @@ int nvim_set_ref_in_functions_impl(int copyID)
   return false;
 }
 
-bool set_ref_in_functions(int copyID)
-{
-  return rs_set_ref_in_functions(copyID) != 0;
-}
-
 /// Phase 5: C implementation shim for set_ref_in_func_args.
 int nvim_set_ref_in_func_args_impl(int copyID)
 {
@@ -3823,11 +3611,6 @@ int nvim_set_ref_in_func_args_impl(int copyID)
     }
   }
   return false;
-}
-
-bool set_ref_in_func_args(int copyID)
-{
-  return rs_set_ref_in_func_args(copyID) != 0;
 }
 
 /// Phase 5: C implementation shim for set_ref_in_func.
@@ -3852,11 +3635,6 @@ int nvim_set_ref_in_func_impl(char *name, ufunc_T *fp_in, int copyID)
   }
   xfree(tofree);
   return abort;
-}
-
-bool set_ref_in_func(char *name, ufunc_T *fp_in, int copyID)
-{
-  return rs_set_ref_in_func(name, fp_in, copyID) != 0;
 }
 
 /// Registers a luaref as a lambda.

@@ -24,7 +24,7 @@ extern "C" {
 // =============================================================================
 
 /// Unreference a Function by pointer: decrement refcount and free if zero.
-#[no_mangle]
+#[unsafe(export_name = "func_ptr_unref")]
 pub unsafe extern "C" fn rs_func_ptr_unref(fp: *mut c_void) {
     if fp.is_null() {
         return;
@@ -43,7 +43,7 @@ pub unsafe extern "C" fn rs_func_ptr_unref(fp: *mut c_void) {
 // =============================================================================
 
 /// Increment the reference count of a function.
-#[no_mangle]
+#[unsafe(export_name = "func_ptr_ref")]
 pub unsafe extern "C" fn rs_func_ptr_ref(fp: *mut c_void) {
     if !fp.is_null() {
         unsafe { nvim_ufunc_increment_refcount(fp) };
@@ -58,7 +58,7 @@ pub unsafe extern "C" fn rs_func_ptr_ref(fp: *mut c_void) {
 ///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string or NULL.
-#[no_mangle]
+#[unsafe(export_name = "func_unref")]
 pub unsafe extern "C" fn rs_func_unref(name: *mut c_char) {
     if name.is_null() || unsafe { super::names::rs_func_name_refcount(name) } == 0 {
         return;
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn rs_func_unref(name: *mut c_char) {
 ///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string or NULL.
-#[no_mangle]
+#[unsafe(export_name = "func_ref")]
 pub unsafe extern "C" fn rs_func_ref(name: *mut c_char) {
     if name.is_null() || unsafe { super::names::rs_func_name_refcount(name) } == 0 {
         return;

@@ -93,4 +93,47 @@ typedef struct {
 // Functions implemented in Rust (nvim-eval crate)
 extern int current_func_returned(void);
 
+// Functions exported directly from Rust (nvim-rs userfunc crate)
+// These replaced C thin wrappers in Phase 5b.
+#include <stdbool.h>
+extern void emsg_funcname(const char *errmsg, const char *name);
+extern void func_unref(char *name);
+extern void func_ptr_unref(ufunc_T *fp);
+extern void func_ref(char *name);
+extern void func_ptr_ref(ufunc_T *fp);
+extern funccall_T *create_funccal(ufunc_T *fp, typval_T *rettv);
+extern void remove_funccal(void);
+extern void save_funccal(funccal_entry_T *entry);
+extern void restore_funccal(void);
+extern void ex_delfunction(exarg_T *eap);
+extern int eval_fname_script(const char *p);
+extern bool translated_function_exists(const char *name);
+extern bool function_exists(const char *name, bool no_deref);
+extern char *get_scriptlocal_funcname(char *funcname);
+extern char *save_function_name(char **name, bool skip, int flags, funcdict_T *fudi);
+extern char *printable_func_name(ufunc_T *fp);
+extern bool can_add_defer(void);
+extern void add_defer(char *name, int argcount, typval_T *argvars);
+extern void invoke_all_defer(void);
+extern void ex_return(exarg_T *eap);
+extern bool do_return(exarg_T *eap, bool reanimate, bool is_cmd, void *rettv);
+extern char *get_return_cmd(void *rettv);
+extern bool free_unref_funccal(int copyID, int testing);
+extern bool set_ref_in_previous_funccal(int copyID);
+extern bool set_ref_in_call_stack(int copyID);
+extern bool set_ref_in_functions(int copyID);
+extern bool set_ref_in_func_args(int copyID);
+extern bool set_ref_in_func(char *name, ufunc_T *fp_in, int copyID);
+extern funccall_T *get_funccal(void);
+extern dict_T *get_funccal_local_dict(void);
+extern hashtab_T *get_funccal_local_ht(void);
+extern dictitem_T *get_funccal_local_var(void);
+extern dict_T *get_funccal_args_dict(void);
+extern hashtab_T *get_funccal_args_ht(void);
+extern dictitem_T *get_funccal_args_var(void);
+extern void list_func_vars(int *first);
+extern dict_T *get_current_funccal_dict(hashtab_T *ht);
+extern hashitem_T *find_hi_in_scoped_ht(const char *name, hashtab_T **pht);
+extern dictitem_T *find_var_in_scoped_ht(const char *name, size_t namelen, int no_autoload);
+
 #include "eval/userfunc.h.generated.h"

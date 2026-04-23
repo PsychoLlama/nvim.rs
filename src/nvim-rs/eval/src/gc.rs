@@ -138,20 +138,20 @@ extern "C" {
     fn nvim_gc_verb_msg_abort();
 
     // C mark/collect functions called by garbage_collect
-    fn set_ref_in_previous_funccal(copy_id: c_int) -> bool;
+    fn set_ref_in_previous_funccal(copy_id: c_int) -> c_int;
     fn garbage_collect_scriptvars(copy_id: c_int) -> bool;
     fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool;
     fn set_ref_in_opfunc(copy_id: c_int) -> bool;
     fn rs_set_ref_in_tagfunc(copy_id: c_int) -> bool;
     fn nvim_docmd_set_ref_in_findfunc_impl(copy_id: c_int) -> bool;
     fn garbage_collect_globvars(copy_id: c_int) -> c_int;
-    fn set_ref_in_call_stack(copy_id: c_int) -> bool;
-    fn set_ref_in_functions(copy_id: c_int) -> bool;
-    fn set_ref_in_func_args(copy_id: c_int) -> bool;
+    fn set_ref_in_call_stack(copy_id: c_int) -> c_int;
+    fn set_ref_in_functions(copy_id: c_int) -> c_int;
+    fn set_ref_in_func_args(copy_id: c_int) -> c_int;
     fn garbage_collect_vimvars(copy_id: c_int) -> bool;
     #[link_name = "rs_set_ref_in_quickfix"]
     fn set_ref_in_quickfix(copy_id: c_int) -> bool;
-    fn free_unref_funccal(copy_id: c_int, testing: bool) -> bool;
+    fn free_unref_funccal(copy_id: c_int, testing: c_int) -> c_int;
 
     // Hashtab iteration: calls set_ref_in_item for each entry
     fn nvim_eval_ht_foreach_di_tv(
@@ -177,8 +177,8 @@ extern "C" {
         list_stack: *mut *mut c_void,
     );
 
-    // External: set_ref_in_func (remains in C)
-    fn set_ref_in_func(name: *mut std::ffi::c_char, fp: *mut c_void, copyid: c_int) -> bool;
+    // External: set_ref_in_func
+    fn set_ref_in_func(name: *mut std::ffi::c_char, fp: *mut c_void, copyid: c_int) -> c_int;
 
     // Free unreferenced items (in eval_exec crate)
     fn rs_free_unref_items(copy_id: c_int) -> c_int;
@@ -215,7 +215,7 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
     // Don't free variables in the previous_funccal list unless they are only
     // referenced through previous_funccal. This must be first, because if
     // the item is referenced elsewhere the funccal must not be freed.
-    let mut abort = set_ref_in_previous_funccal(copy_id);
+    let mut abort = set_ref_in_previous_funccal(copy_id) != 0;
 
     // script-local variables
     abort = abort || garbage_collect_scriptvars(copy_id);
@@ -245,10 +245,10 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
     abort = abort || (garbage_collect_globvars(copy_id) != 0);
 
     // function-local variables
-    abort = abort || set_ref_in_call_stack(copy_id);
+    abort = abort || (set_ref_in_call_stack(copy_id) != 0);
 
     // named functions (matters for closures)
-    abort = abort || set_ref_in_functions(copy_id);
+    abort = abort || (set_ref_in_functions(copy_id) != 0);
 
     // channels
     abort = nvim_gc_mark_channels(copy_id, abort);
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
     abort = nvim_gc_mark_timers(copy_id, abort);
 
     // function call arguments, if v:testing is set.
-    abort = abort || set_ref_in_func_args(copy_id);
+    abort = abort || (set_ref_in_func_args(copy_id) != 0);
 
     // v: vars
     abort = abort || garbage_collect_vimvars(copy_id);
@@ -274,7 +274,7 @@ pub unsafe extern "C" fn rs_garbage_collect(testing: bool) -> bool {
 
         // 3. Check if any funccal can be freed now.
         //    This may call us back recursively.
-        did_free = free_unref_funccal(copy_id, testing) || did_free;
+        did_free = (free_unref_funccal(copy_id, c_int::from(testing)) != 0) || did_free;
     }
 
     did_free
@@ -405,7 +405,7 @@ unsafe fn set_ref_in_item_partial(
     // Didn't see this partial yet.
     pt_ref.pt_copyID = copy_id;
 
-    let mut abort = set_ref_in_func(pt_ref.pt_name, pt_ref.pt_func, copy_id);
+    let mut abort = set_ref_in_func(pt_ref.pt_name, pt_ref.pt_func, copy_id) != 0;
 
     let dict = pt_ref.pt_dict;
     if !dict.is_null() {
@@ -444,7 +444,7 @@ pub unsafe extern "C" fn rs_set_ref_in_item(
     match v_type {
         VAR_DICT => set_ref_in_item_dict(tv_ref.vval.v_dict, copy_id, ht_stack, list_stack),
         VAR_LIST => set_ref_in_item_list(tv_ref.vval.v_list, copy_id, ht_stack, list_stack),
-        VAR_FUNC => set_ref_in_func(tv_ref.vval.v_string, std::ptr::null_mut(), copy_id),
+        VAR_FUNC => set_ref_in_func(tv_ref.vval.v_string, std::ptr::null_mut(), copy_id) != 0,
         VAR_PARTIAL => {
             set_ref_in_item_partial(tv_ref.vval.v_partial, copy_id, ht_stack, list_stack)
         }

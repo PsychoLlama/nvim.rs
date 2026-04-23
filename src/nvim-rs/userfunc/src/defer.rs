@@ -35,7 +35,7 @@ extern "C" {
 
 /// Return true if currently inside a function call.
 /// Gives an error message and returns false when not.
-#[no_mangle]
+#[unsafe(export_name = "can_add_defer")]
 pub unsafe extern "C" fn rs_can_add_defer() -> c_int {
     if unsafe { get_current_funccal() }.is_null() {
         unsafe { nvim_emsg_defer_not_in_function() };
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn rs_can_add_defer() -> c_int {
 /// # Safety
 /// `name` must be a valid NUL-terminated C string; `argvars` must be a valid
 /// typval_T array of at least `argcount` elements.
-#[no_mangle]
+#[unsafe(export_name = "add_defer")]
 pub unsafe extern "C" fn rs_add_defer(name: *mut c_char, argcount: c_int, argvars: *mut c_void) {
     let fc = unsafe { get_current_funccal() };
     let saved_name = unsafe { xstrdup(name) };
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn rs_handle_defer_one(funccal: *mut c_void) {
 // =============================================================================
 
 /// Called when exiting: call all defer functions.
-#[no_mangle]
+#[unsafe(export_name = "invoke_all_defer")]
 pub unsafe extern "C" fn rs_invoke_all_defer() {
     // Walk current_funccal chain
     let mut fc = unsafe { get_current_funccal() };

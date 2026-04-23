@@ -2122,7 +2122,7 @@ extern "C" {
     fn os_env_exists(name: *const c_char, case_sensitive: bool) -> bool;
     fn expand_env_save(src: *const c_char) -> *mut c_char;
     fn eval_option(arg: *mut *const c_char, rettv: *mut c_void, evaluate: bool) -> c_int;
-    fn function_exists(name: *const c_char, no_deref: bool) -> c_int;
+    fn function_exists(name: *const c_char, no_deref: c_int) -> c_int;
     fn nlua_func_exists(funcname: *const c_char) -> c_int;
     fn cmd_exists(name: *const c_char) -> c_int;
     fn autocmd_supported(event: *const c_char) -> c_int;
@@ -2245,7 +2245,7 @@ pub unsafe extern "C" fn rs_f_exists(
         n = if strnequal(p_raw, c"*v:lua.".as_ptr(), 7) {
             nlua_func_exists(p_raw.add(7))
         } else {
-            function_exists(p_raw.add(1), false)
+            function_exists(p_raw.add(1), 0)
         };
     } else if first == b':' {
         n = cmd_exists(p_raw.add(1));
