@@ -52,27 +52,6 @@ extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
 extern bool tv2bool(const typval_T *tv);
 
 
-/// struct storing information about current sort
-typedef struct {
-  int item_compare_ic;
-  bool item_compare_lc;
-  bool item_compare_numeric;
-  bool item_compare_numbers;
-  bool item_compare_float;
-  const char *item_compare_func;
-  partial_T *item_compare_partial;
-  dict_T *item_compare_selfdict;
-  bool item_compare_func_err;
-} sortinfo_T;
-
-/// Structure representing one list item, used for sort array.
-typedef struct {
-  listitem_T *item;  ///< Sorted list item.
-  int idx;  ///< Sorted list item index.
-} ListSortItem;
-
-typedef int (*ListSorter)(const void *, const void *);
-
 /// Type for tv_dict2list() function
 typedef enum {
   kDict2ListKeys,    ///< List dictionary keys.
@@ -131,9 +110,6 @@ const char *const tv_empty_string = "";
 //{{{2 List item
 
 /// Allocate a list item
-///
-/// @warning Allocated item is not initialized, do not forget to initialize it
-///          and specifically set lv_lock.
 ///
 /// @return [allocated] new list item.
 static listitem_T *tv_list_item_alloc(void)
@@ -334,407 +310,14 @@ int tv_list_join(garray_T *const gap, list_T *const l, const char *const sep)
   return retval;
 }
 
-/// "join()" function
-void f_join(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (argvars[0].v_type != VAR_LIST) {
-    emsg(_(e_listreq));
-    return;
-  }
-  const char *const sep = (argvars[1].v_type == VAR_UNKNOWN
-                           ? " "
-                           : tv_get_string_chk(&argvars[1]));
-
-  rettv->v_type = VAR_STRING;
-
-  if (sep != NULL) {
-    garray_T ga;
-    ga_init(&ga, (int)sizeof(char), 80);
-    tv_list_join(&ga, argvars[0].vval.v_list, sep);
-    ga_append(&ga, NUL);
-    rettv->vval.v_string = ga.ga_data;
-  } else {
-    rettv->vval.v_string = NULL;
-  }
-}
-
-/// "list2str()" function
-void f_list2str(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  garray_T ga;
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-  if (argvars[0].v_type != VAR_LIST) {
-    emsg(_(e_invarg));
-    return;
-  }
-
-  list_T *const l = argvars[0].vval.v_list;
-  if (l == NULL) {
-    return;  // empty list results in empty string
-  }
-
-  ga_init(&ga, 1, 80);
-  char buf[MB_MAXBYTES + 1];
-
-  TV_LIST_ITER_CONST(l, li, {
-    buf[utf_char2bytes((int)tv_get_number(TV_LIST_ITEM_TV(li)), buf)] = NUL;
-    ga_concat(&ga, buf);
-  });
-  ga_append(&ga, NUL);
-
-  rettv->vval.v_string = ga.ga_data;
-}
+// f_join migrated to Rust (Phase 6)
+// f_list2str migrated to Rust (Phase 6)
 
 // tv_list_remove migrated to Rust (Phase 6c)
 
-static sortinfo_T *sortinfo = NULL;
-
-#define ITEM_COMPARE_FAIL 999
-
-/// Compare functions for f_sort() and f_uniq() below.
-static int item_compare(const void *s1, const void *s2, bool keep_zero)
-{
-  ListSortItem *const si1 = (ListSortItem *)s1;
-  ListSortItem *const si2 = (ListSortItem *)s2;
-
-  typval_T *const tv1 = TV_LIST_ITEM_TV(si1->item);
-  typval_T *const tv2 = TV_LIST_ITEM_TV(si2->item);
-
-  int res;
-
-  if (sortinfo->item_compare_numbers) {
-    const varnumber_T v1 = tv_get_number(tv1);
-    const varnumber_T v2 = tv_get_number(tv2);
-
-    res = v1 == v2 ? 0 : v1 > v2 ? 1 : -1;
-    goto item_compare_end;
-  }
-
-  if (sortinfo->item_compare_float) {
-    const float_T v1 = tv_get_float(tv1);
-    const float_T v2 = tv_get_float(tv2);
-
-    res = v1 == v2 ? 0 : v1 > v2 ? 1 : -1;
-    goto item_compare_end;
-  }
-
-  char *tofree1 = NULL;
-  char *tofree2 = NULL;
-  char *p1;
-  char *p2;
-
-  // encode_tv2string() puts quotes around a string and allocates memory.  Don't
-  // do that for string variables. Use a single quote when comparing with
-  // a non-string to do what the docs promise.
-  if (tv1->v_type == VAR_STRING) {
-    if (tv2->v_type != VAR_STRING || sortinfo->item_compare_numeric) {
-      p1 = "'";
-    } else {
-      p1 = tv1->vval.v_string;
-    }
-  } else {
-    tofree1 = p1 = encode_tv2string(tv1, NULL);
-  }
-  if (tv2->v_type == VAR_STRING) {
-    if (tv1->v_type != VAR_STRING || sortinfo->item_compare_numeric) {
-      p2 = "'";
-    } else {
-      p2 = tv2->vval.v_string;
-    }
-  } else {
-    tofree2 = p2 = encode_tv2string(tv2, NULL);
-  }
-  if (p1 == NULL) {
-    p1 = "";
-  }
-  if (p2 == NULL) {
-    p2 = "";
-  }
-  if (!sortinfo->item_compare_numeric) {
-    if (sortinfo->item_compare_lc) {
-      res = strcoll(p1, p2);
-    } else {
-      res = sortinfo->item_compare_ic ? STRICMP(p1, p2) : strcmp(p1, p2);
-    }
-  } else {
-    double n1 = strtod(p1, &p1);
-    double n2 = strtod(p2, &p2);
-    res = n1 == n2 ? 0 : n1 > n2 ? 1 : -1;
-  }
-
-  xfree(tofree1);
-  xfree(tofree2);
-
-item_compare_end:
-  // When the result would be zero, compare the item indexes.  Makes the
-  // sort stable.
-  if (res == 0 && !keep_zero) {
-    // WARNING: When using uniq si1 and si2 are actually listitem_T **, no
-    // indexes are there.
-    res = si1->idx > si2->idx ? 1 : -1;
-  }
-  return res;
-}
-
-static int item_compare_keeping_zero(const void *s1, const void *s2) { return item_compare(s1, s2, true); }
-
-static int item_compare_not_keeping_zero(const void *s1, const void *s2) { return item_compare(s1, s2, false); }
-
-static int item_compare2(const void *s1, const void *s2, bool keep_zero)
-{
-  typval_T rettv;
-  typval_T argv[3];
-  const char *func_name;
-  partial_T *partial = sortinfo->item_compare_partial;
-
-  // shortcut after failure in previous call; compare all items equal
-  if (sortinfo->item_compare_func_err) {
-    return 0;
-  }
-
-  ListSortItem *si1 = (ListSortItem *)s1;
-  ListSortItem *si2 = (ListSortItem *)s2;
-
-  if (partial == NULL) {
-    func_name = sortinfo->item_compare_func;
-  } else {
-    func_name = rs_partial_name(partial);
-  }
-
-  // Copy the values.  This is needed to be able to set v_lock to VAR_FIXED
-  // in the copy without changing the original list items.
-  tv_copy(TV_LIST_ITEM_TV(si1->item), &argv[0]);
-  tv_copy(TV_LIST_ITEM_TV(si2->item), &argv[1]);
-
-  rettv.v_type = VAR_UNKNOWN;  // tv_clear() uses this
-  funcexe_T funcexe = FUNCEXE_INIT;
-  funcexe.fe_evaluate = true;
-  funcexe.fe_partial = partial;
-  funcexe.fe_selfdict = sortinfo->item_compare_selfdict;
-  int res = call_func(func_name, -1, &rettv, 2, argv, &funcexe);
-  tv_clear(&argv[0]);
-  tv_clear(&argv[1]);
-
-  if (res == FAIL) {
-    // XXX: ITEM_COMPARE_FAIL is unused
-    res = ITEM_COMPARE_FAIL;
-    sortinfo->item_compare_func_err = true;
-  } else {
-    res = (int)tv_get_number_chk(&rettv, &sortinfo->item_compare_func_err);
-    if (res > 0) {
-      res = 1;
-    } else if (res < 0) {
-      res = -1;
-    }
-  }
-  if (sortinfo->item_compare_func_err) {
-    res = ITEM_COMPARE_FAIL;  // return value has wrong type
-  }
-  tv_clear(&rettv);
-
-  // When the result would be zero, compare the pointers themselves.  Makes
-  // the sort stable.
-  if (res == 0 && !keep_zero) {
-    // WARNING: When using uniq si1 and si2 are actually listitem_T **, no
-    // indexes are there.
-    res = si1->idx > si2->idx ? 1 : -1;
-  }
-
-  return res;
-}
-
-static int item_compare2_keeping_zero(const void *s1, const void *s2) { return item_compare2(s1, s2, true); }
-
-static int item_compare2_not_keeping_zero(const void *s1, const void *s2) { return item_compare2(s1, s2, false); }
-
-/// sort() List "l"
-static void do_sort(list_T *l, sortinfo_T *info)
-{
-  const int len = tv_list_len(l);
-
-  // Make an array with each entry pointing to an item in the List.
-  ListSortItem *ptrs = xmalloc((size_t)((unsigned)len * sizeof(ListSortItem)));
-
-  // f_sort(): ptrs will be the list to sort
-  int i = 0;
-  TV_LIST_ITER(l, li, {
-    ptrs[i].item = li;
-    ptrs[i].idx = i;
-    i++;
-  });
-
-  info->item_compare_func_err = false;
-  ListSorter item_compare_func = ((info->item_compare_func == NULL
-                                   && info->item_compare_partial == NULL)
-                                  ? item_compare_not_keeping_zero
-                                  : item_compare2_not_keeping_zero);
-
-  // Sort the array with item pointers.
-  qsort(ptrs, (size_t)len, sizeof(ListSortItem), item_compare_func);
-  if (!info->item_compare_func_err) {
-    // Clear the list and append the items in the sorted order.
-    l->lv_first = NULL;
-    l->lv_last = NULL;
-    l->lv_idx_item = NULL;
-    l->lv_len = 0;
-    for (i = 0; i < len; i++) {
-      tv_list_append(l, ptrs[i].item);
-    }
-  }
-  if (info->item_compare_func_err) {
-    emsg(_("E702: Sort compare function failed"));
-  }
-
-  xfree(ptrs);
-}
-
-/// uniq() List "l"
-static void do_uniq(list_T *l, sortinfo_T *info)
-{
-  const int len = tv_list_len(l);
-
-  // Make an array with each entry pointing to an item in the List.
-  ListSortItem *ptrs = xmalloc((size_t)((unsigned)len * sizeof(ListSortItem)));
-
-  // f_uniq(): ptrs will be a stack of items to remove.
-
-  info->item_compare_func_err = false;
-  ListSorter item_compare_func = ((info->item_compare_func == NULL
-                                   && info->item_compare_partial == NULL)
-                                  ? item_compare_keeping_zero
-                                  : item_compare2_keeping_zero);
-
-  for (listitem_T *li = TV_LIST_ITEM_NEXT(l, tv_list_first(l)); li != NULL;) {
-    listitem_T *const prev_li = TV_LIST_ITEM_PREV(l, li);
-    if (item_compare_func(&prev_li, &li) == 0) {
-      li = tv_list_item_remove(l, li);
-    } else {
-      li = TV_LIST_ITEM_NEXT(l, li);
-    }
-    if (info->item_compare_func_err) {
-      emsg(_("E882: Uniq compare function failed"));
-      break;
-    }
-  }
-
-  xfree(ptrs);
-}
-
-/// Parse the optional arguments to sort() and uniq() and return the values in "info".
-static int parse_sort_uniq_args(typval_T *argvars, sortinfo_T *info)
-{
-  info->item_compare_ic = false;
-  info->item_compare_lc = false;
-  info->item_compare_numeric = false;
-  info->item_compare_numbers = false;
-  info->item_compare_float = false;
-  info->item_compare_func = NULL;
-  info->item_compare_partial = NULL;
-  info->item_compare_selfdict = NULL;
-
-  if (argvars[1].v_type == VAR_UNKNOWN) {
-    return OK;
-  }
-
-  // optional second argument: {func}
-  if (argvars[1].v_type == VAR_FUNC) {
-    info->item_compare_func = argvars[1].vval.v_string;
-  } else if (argvars[1].v_type == VAR_PARTIAL) {
-    info->item_compare_partial = argvars[1].vval.v_partial;
-  } else {
-    bool error = false;
-    int nr = (int)tv_get_number_chk(&argvars[1], &error);
-    if (error) {
-      return FAIL;  // type error; errmsg already given
-    }
-    if (nr == 1) {
-      info->item_compare_ic = true;
-    } else if (argvars[1].v_type != VAR_NUMBER) {
-      info->item_compare_func = tv_get_string(&argvars[1]);
-    } else if (nr != 0) {
-      emsg(_(e_invarg));
-      return FAIL;
-    }
-    if (info->item_compare_func != NULL) {
-      if (*info->item_compare_func == NUL) {
-        // empty string means default sort
-        info->item_compare_func = NULL;
-      } else if (strcmp(info->item_compare_func, "n") == 0) {
-        info->item_compare_func = NULL;
-        info->item_compare_numeric = true;
-      } else if (strcmp(info->item_compare_func, "N") == 0) {
-        info->item_compare_func = NULL;
-        info->item_compare_numbers = true;
-      } else if (strcmp(info->item_compare_func, "f") == 0) {
-        info->item_compare_func = NULL;
-        info->item_compare_float = true;
-      } else if (strcmp(info->item_compare_func, "i") == 0) {
-        info->item_compare_func = NULL;
-        info->item_compare_ic = true;
-      } else if (strcmp(info->item_compare_func, "l") == 0) {
-        info->item_compare_func = NULL;
-        info->item_compare_lc = true;
-      }
-    }
-  }
-
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    // optional third argument: {dict}
-    if (tv_check_for_dict_arg(argvars, 2) == FAIL) {
-      return FAIL;
-    }
-    info->item_compare_selfdict = argvars[2].vval.v_dict;
-  }
-
-  return OK;
-}
-
-/// "sort()" or "uniq()" function
-static void do_sort_uniq(typval_T *argvars, typval_T *rettv, bool sort)
-{
-  if (argvars[0].v_type != VAR_LIST) {
-    semsg(_(e_listarg), sort ? "sort()" : "uniq()");
-    return;
-  }
-
-  // Pointer to current info struct used in compare function. Save and restore
-  // the current one for nested calls.
-  sortinfo_T info;
-  sortinfo_T *old_sortinfo = sortinfo;
-  sortinfo = &info;
-
-  const char *const arg_errmsg = (sort ? N_("sort() argument") : N_("uniq() argument"));
-  list_T *const l = argvars[0].vval.v_list;
-  if (value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE)) {
-    goto theend;
-  }
-  tv_list_set_ret(rettv, l);
-
-  const int len = tv_list_len(l);
-  if (len <= 1) {
-    goto theend;  // short list sorts pretty quickly
-  }
-  if (parse_sort_uniq_args(argvars, &info) == FAIL) {
-    goto theend;
-  }
-
-  if (sort) {
-    do_sort(l, &info);
-  } else {
-    do_uniq(l, &info);
-  }
-
-theend:
-  sortinfo = old_sortinfo;
-}
-
-/// "sort({list})" function
-void f_sort(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { do_sort_uniq(argvars, rettv, true); }
-
-/// "uniq({list})" function
-void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { do_sort_uniq(argvars, rettv, false); }
+// sortinfo_T, ListSortItem, ListSorter, sortinfo, item_compare, item_compare2,
+// do_sort, do_uniq, parse_sort_uniq_args, do_sort_uniq, f_sort, f_uniq
+// migrated to Rust (Phase 6)
 
 // tv_list_equal, tv_list_find_nr, tv_list_find_str migrated to Rust (Phase 2)
 
@@ -2515,4 +2098,98 @@ bool nvim_callback_from_typval_impl(Callback *result, typval_T *tv)
 {
   return rs_callback_from_typval(result, tv);
 }
+
+// Phase 6 (typval migration): sort/uniq, join, list2str, tv_list_init_static10 accessors
+
+/// Emit E702 sort compare function failed (accessor for Rust do_sort).
+void nvim_emsg_sort_failed(void) { emsg(_("E702: Sort compare function failed")); }
+
+/// Emit E882 uniq compare function failed (accessor for Rust do_uniq).
+void nvim_emsg_uniq_failed(void) { emsg(_("E882: Uniq compare function failed")); }
+
+/// semsg(_(e_listarg), fname) wrapper for Rust do_sort_uniq.
+void nvim_emsg_listarg(const char *fname) { semsg(_(e_listarg), fname); }
+
+/// emsg(_(e_invarg)) wrapper for Rust (accessor for parse_sort_uniq_args, f_list2str).
+void nvim_emsg_invarg(void) { emsg(_(e_invarg)); }
+
+/// tv_check_for_dict_arg wrapper: returns OK (1) or FAIL (0) (accessor for Rust).
+int nvim_tv_check_for_dict_arg(typval_T *argvars, int idx)
+{
+  return tv_check_for_dict_arg(argvars, idx);
+}
+
+/// tv_get_string_chk wrapper: returns NULL if type error (accessor for Rust parse_sort_uniq_args).
+const char *nvim_tv_get_string_checked(const typval_T *tv)
+{
+  return tv_get_string_chk(tv);
+}
+
+/// emsg(_(e_listreq)) wrapper for Rust f_join.
+void nvim_emsg_e_listreq(void) { emsg(_(e_listreq)); }
+
+/// Join list into a newly allocated NUL-terminated string.
+/// Returns "" for empty lists, NULL if encoding any item fails.
+/// Caller must xfree the result.
+char *nvim_list_join_to_string(list_T *l, const char *sep)
+{
+  if (!tv_list_len(l)) {
+    return xstrdup("");
+  }
+
+  // Stringify each item via encode_tv2echo, accumulate in a per-item array.
+  typedef struct { char *s; char *tofree; } JoinItem;
+  size_t nitems = (size_t)tv_list_len(l);
+  JoinItem *items = xmalloc(nitems * sizeof(JoinItem));
+  size_t sumlen = 0;
+  size_t i = 0;
+  bool failed = false;
+
+  TV_LIST_ITER(l, item, {
+    if (got_int) { break; }
+    size_t len;
+    char *s = encode_tv2echo(TV_LIST_ITEM_TV(item), &len);
+    if (s == NULL) { failed = true; break; }
+    sumlen += len;
+    items[i].s = items[i].tofree = s;
+    i++;
+    line_breakcheck();
+  });
+
+  if (failed || got_int) {
+    for (size_t j = 0; j < i; j++) { xfree(items[j].tofree); }
+    xfree(items);
+    return NULL;
+  }
+
+  // Build result.
+  size_t seplen = strlen(sep);
+  if (i >= 2) { sumlen += seplen * (i - 1); }
+  char *result = xmalloc(sumlen + 1);
+  char *p = result;
+  for (size_t j = 0; j < i; j++) {
+    if (j > 0) { memcpy(p, sep, seplen); p += seplen; }
+    if (items[j].s != NULL) { size_t slen = strlen(items[j].s); memcpy(p, items[j].s, slen); p += slen; }
+    xfree(items[j].tofree);
+  }
+  *p = NUL;
+  xfree(items);
+  return result;
+}
+
+/// list2str: convert list of codepoints to UTF-8 string.
+/// Returns allocated string. Caller must xfree.
+char *nvim_f_list2str_from_list(list_T *l)
+{
+  garray_T ga;
+  ga_init(&ga, 1, 80);
+  char buf[MB_MAXBYTES + 1];
+  TV_LIST_ITER_CONST(l, li, {
+    buf[utf_char2bytes((int)tv_get_number(TV_LIST_ITEM_TV(li)), buf)] = NUL;
+    ga_concat(&ga, buf);
+  });
+  ga_append(&ga, NUL);
+  return ga.ga_data;
+}
+
 

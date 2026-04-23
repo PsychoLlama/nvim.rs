@@ -6034,6 +6034,561 @@ pub unsafe extern "C" fn rs_tv_dict_get_callback(
     ok
 }
 
+// =============================================================================
+// Phase 6 (typval migration): sort/uniq, f_join, f_list2str
+// =============================================================================
+
+extern "C" {
+    // Phase 6 sort/uniq accessors
+    fn encode_tv2string(tv: TypevalHandle, len: *mut usize) -> *mut c_char;
+    fn nvim_emsg_sort_failed();
+    fn nvim_emsg_uniq_failed();
+    fn nvim_emsg_listarg(fname: *const c_char);
+    fn nvim_emsg_invarg();
+    fn nvim_tv_check_for_dict_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
+    fn nvim_tv_get_string_checked(tv: TypevalHandle) -> *const c_char;
+    // call_func for sort/uniq item_compare2
+    fn call_func(
+        funcname: *const c_char,
+        len: c_int,
+        rettv: *mut c_void,
+        argcount: c_int,
+        argvars: *mut c_void,
+        funcexe: *mut c_void,
+    ) -> c_int;
+    fn rs_partial_name(pt: *mut c_void) -> *const c_char;
+    fn strcasecmp(s1: *const c_char, s2: *const c_char) -> c_int;
+    fn strcoll(s1: *const c_char, s2: *const c_char) -> c_int;
+    fn strtod(s: *const c_char, endptr: *mut *mut c_char) -> f64;
+    // Phase 6 join/list2str accessors
+    fn nvim_list_join_to_string(l: ListHandle, sep: *const c_char) -> *mut c_char;
+    fn nvim_f_list2str_from_list(l: ListHandle) -> *mut c_char;
+    // tv_get_number / tv_get_float for sort (C exported versions)
+    fn tv_get_number(tv: TypevalHandle) -> i64;
+    fn tv_get_float(tv: TypevalHandle) -> f64;
+    fn nvim_emsg_e_listreq();
+    // argvars[i] indexing
+    fn nvim_tv_idx(argvars: *mut c_void, i: c_int) -> TypevalHandle;
+}
+
+/// Rust mirror of funcexe_T (Phase 6 sort).
+///
+/// Must match C definition in src/nvim/eval/userfunc.h exactly. Size = 64.
+#[repr(C)]
+struct SortFuncExe {
+    fe_argv_func: *mut c_void,
+    fe_firstline: i32,
+    fe_lastline: i32,
+    fe_doesrange: *mut c_void,
+    fe_evaluate: bool,
+    _pad: [u8; 7],
+    fe_partial: *mut c_void,
+    fe_selfdict: *mut c_void,
+    fe_basetv: *mut c_void,
+    fe_found_var: bool,
+    _pad2: [u8; 7],
+}
+
+impl SortFuncExe {
+    fn new() -> Self {
+        // Safety: All-zero is valid for this repr(C) struct (NULL ptrs, false bools).
+        unsafe { std::mem::zeroed() }
+    }
+}
+
+/// Captures sort parameters, replacing C's global `sortinfo_T`.
+#[allow(clippy::struct_excessive_bools)]
+struct SortInfo {
+    ic: bool,
+    lc: bool,
+    numeric: bool,
+    numbers: bool,
+    float_cmp: bool,
+    func: *const c_char,   // borrowed from argvars, NULL if none
+    partial: *mut c_void,  // partial_T*, NULL if none
+    selfdict: *mut c_void, // dict_T*, NULL if none
+    func_err: bool,
+}
+
+/// A sort element: list item pointer + original index (for stable sort).
+struct SortItem {
+    item: ListItemHandle,
+    idx: i32,
+}
+
+/// Comparison logic for sort (no user function).
+/// When `keep_zero` is false, ties are broken by index (stable sort).
+unsafe fn item_compare_builtin(
+    si1: &SortItem,
+    si2: &SortItem,
+    info: &SortInfo,
+    keep_zero: bool,
+) -> std::cmp::Ordering {
+    let tv1 = nvim_listitem_get_tv(si1.item);
+    let tv2 = nvim_listitem_get_tv(si2.item);
+
+    let res: i32 = if info.numbers {
+        let v1 = tv_get_number(tv1);
+        let v2 = tv_get_number(tv2);
+        match v1.cmp(&v2) {
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+            std::cmp::Ordering::Less => -1,
+        }
+    } else if info.float_cmp {
+        let v1 = tv_get_float(tv1);
+        let v2 = tv_get_float(tv2);
+        match v1.total_cmp(&v2) {
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+            std::cmp::Ordering::Less => -1,
+        }
+    } else {
+        let t1 = nvim_tv_get_type(tv1);
+        let t2 = nvim_tv_get_type(tv2);
+        let var_string = VarType::String as c_int;
+
+        let mut tofree1: *mut c_char = std::ptr::null_mut();
+        let mut tofree2: *mut c_char = std::ptr::null_mut();
+
+        let single_quote = b"'\0".as_ptr().cast::<c_char>();
+
+        let p1: *const c_char = if t1 == var_string {
+            if t2 != var_string || info.numeric {
+                single_quote
+            } else {
+                let s = nvim_tv_get_string_mutable(tv1);
+                if s.is_null() {
+                    b"\0".as_ptr().cast::<c_char>()
+                } else {
+                    s
+                }
+            }
+        } else {
+            tofree1 = encode_tv2string(tv1, std::ptr::null_mut());
+            if tofree1.is_null() {
+                b"\0".as_ptr().cast::<c_char>()
+            } else {
+                tofree1
+            }
+        };
+
+        let p2: *const c_char = if t2 == var_string {
+            if t1 != var_string || info.numeric {
+                single_quote
+            } else {
+                let s = nvim_tv_get_string_mutable(tv2);
+                if s.is_null() {
+                    b"\0".as_ptr().cast::<c_char>()
+                } else {
+                    s
+                }
+            }
+        } else {
+            tofree2 = encode_tv2string(tv2, std::ptr::null_mut());
+            if tofree2.is_null() {
+                b"\0".as_ptr().cast::<c_char>()
+            } else {
+                tofree2
+            }
+        };
+
+        let cmp = if !info.numeric {
+            if info.lc {
+                strcoll(p1, p2)
+            } else if info.ic {
+                strcasecmp(p1, p2)
+            } else {
+                strcmp(p1, p2)
+            }
+        } else {
+            let n1 = strtod(p1, std::ptr::null_mut());
+            let n2 = strtod(p2, std::ptr::null_mut());
+            match n1.total_cmp(&n2) {
+                std::cmp::Ordering::Equal => 0,
+                std::cmp::Ordering::Greater => 1,
+                std::cmp::Ordering::Less => -1,
+            }
+        };
+
+        if !tofree1.is_null() {
+            nvim_xfree(tofree1.cast::<c_void>());
+        }
+        if !tofree2.is_null() {
+            nvim_xfree(tofree2.cast::<c_void>());
+        }
+        cmp
+    };
+
+    if res == 0 && !keep_zero {
+        si1.idx.cmp(&si2.idx)
+    } else {
+        res.cmp(&0)
+    }
+}
+
+/// Comparison with user function.
+/// Sets info.func_err on failure.
+unsafe fn item_compare_userfunc(
+    si1: &SortItem,
+    si2: &SortItem,
+    info: &mut SortInfo,
+    keep_zero: bool,
+) -> std::cmp::Ordering {
+    if info.func_err {
+        return std::cmp::Ordering::Equal;
+    }
+
+    let partial = info.partial;
+    let func_name: *const c_char = if partial.is_null() {
+        info.func
+    } else {
+        rs_partial_name(partial)
+    };
+
+    // Stack-allocate two typval_T (16 bytes each) for argv and one for rettv.
+    let mut argv_buf = [0u8; 32]; // 2 * sizeof(typval_T)
+    let mut rettv_buf = [0u8; 16]; // 1 * sizeof(typval_T)
+
+    let argv_ptr = argv_buf.as_mut_ptr().cast::<c_void>();
+    let rettv_ptr = rettv_buf.as_mut_ptr().cast::<c_void>();
+
+    let argv0 = TypevalHandle::from_ptr(argv_ptr);
+    let argv1 = TypevalHandle::from_ptr(argv_ptr.add(16));
+    let rettv_handle = TypevalHandle::from_ptr(rettv_ptr);
+
+    rs_tv_copy(nvim_listitem_get_tv(si1.item), argv0);
+    rs_tv_copy(nvim_listitem_get_tv(si2.item), argv1);
+
+    let mut funcexe = SortFuncExe::new();
+    funcexe.fe_evaluate = true;
+    funcexe.fe_partial = partial;
+    funcexe.fe_selfdict = info.selfdict;
+
+    let res = call_func(
+        func_name,
+        -1,
+        rettv_ptr,
+        2,
+        argv_ptr,
+        std::ptr::addr_of_mut!(funcexe).cast::<c_void>(),
+    );
+
+    tv_clear(argv0);
+    tv_clear(argv1);
+
+    let ordering = if res == 0 {
+        // FAIL
+        info.func_err = true;
+        std::cmp::Ordering::Equal
+    } else {
+        let mut func_err = false;
+        let n = tv_get_number_chk(rettv_handle, std::ptr::addr_of_mut!(func_err));
+        if func_err {
+            info.func_err = true;
+            std::cmp::Ordering::Equal
+        } else if n > 0 {
+            std::cmp::Ordering::Greater
+        } else if n < 0 {
+            std::cmp::Ordering::Less
+        } else if keep_zero {
+            std::cmp::Ordering::Equal
+        } else {
+            si1.idx.cmp(&si2.idx)
+        }
+    };
+
+    tv_clear(rettv_handle);
+    ordering
+}
+
+/// Sort a list in-place, rebuilding its internal linked list.
+unsafe fn do_sort_impl(l: ListHandle, info: &mut SortInfo) {
+    let len = tv_list_len_impl(l) as usize;
+    if len == 0 {
+        return;
+    }
+
+    let mut ptrs: Vec<SortItem> = Vec::with_capacity(len);
+    let mut li = nvim_list_get_first(l);
+    let mut idx = 0i32;
+    while !li.is_null() {
+        ptrs.push(SortItem { item: li, idx });
+        li = nvim_listitem_get_next(li);
+        idx += 1;
+    }
+
+    info.func_err = false;
+
+    if !info.func.is_null() || !info.partial.is_null() {
+        let info_ptr: *mut SortInfo = info;
+        ptrs.sort_by(|a, b| item_compare_userfunc(a, b, &mut *info_ptr, false));
+    } else {
+        ptrs.sort_by(|a, b| item_compare_builtin(a, b, info, false));
+    }
+
+    if !info.func_err {
+        // Rebuild the linked list in sorted order.
+        nvim_list_set_first(l, ListItemHandle::null());
+        nvim_list_set_last(l, ListItemHandle::null());
+        nvim_list_set_len(l, 0);
+        for si in &ptrs {
+            rs_tv_list_append(l, si.item);
+        }
+    }
+    if info.func_err {
+        nvim_emsg_sort_failed();
+    }
+}
+
+/// Remove adjacent duplicates from a list (uniq).
+unsafe fn do_uniq_impl(l: ListHandle, info: &mut SortInfo) {
+    info.func_err = false;
+    let use_func = !info.func.is_null() || !info.partial.is_null();
+
+    let mut li = nvim_list_get_first(l);
+    if li.is_null() {
+        return;
+    }
+    li = nvim_listitem_get_next(li);
+
+    while !li.is_null() {
+        let prev_li = nvim_listitem_get_prev(li);
+        let si_prev = SortItem {
+            item: prev_li,
+            idx: 0,
+        };
+        let si_curr = SortItem { item: li, idx: 0 };
+
+        let equal = if use_func {
+            let info_ptr: *mut SortInfo = info;
+            item_compare_userfunc(&si_prev, &si_curr, &mut *info_ptr, true)
+                == std::cmp::Ordering::Equal
+        } else {
+            item_compare_builtin(&si_prev, &si_curr, info, true) == std::cmp::Ordering::Equal
+        };
+
+        if equal {
+            li = rs_tv_list_item_remove(l, li);
+        } else {
+            li = nvim_listitem_get_next(li);
+        }
+
+        if info.func_err {
+            nvim_emsg_uniq_failed();
+            break;
+        }
+    }
+}
+
+/// Parse sort/uniq optional arguments into a `SortInfo`.
+/// Returns true on success, false on error (emsg already emitted).
+unsafe fn parse_sort_uniq_args_impl(argvars: TypevalHandle, info: &mut SortInfo) -> bool {
+    info.ic = false;
+    info.lc = false;
+    info.numeric = false;
+    info.numbers = false;
+    info.float_cmp = false;
+    info.func = std::ptr::null();
+    info.partial = std::ptr::null_mut();
+    info.selfdict = std::ptr::null_mut();
+
+    let arg1 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 1);
+    if nvim_tv_get_type(arg1) == VarType::Unknown as c_int {
+        return true;
+    }
+
+    if nvim_tv_get_type(arg1) == VarType::Func as c_int {
+        info.func = nvim_tv_get_string_mutable(arg1);
+    } else if nvim_tv_get_type(arg1) == VarType::Partial as c_int {
+        info.partial = nvim_tv_get_partial(arg1);
+    } else {
+        let mut error = false;
+        let nr = tv_get_number_chk(arg1, std::ptr::addr_of_mut!(error)) as i32;
+        if error {
+            return false;
+        }
+        if nr == 1 {
+            info.ic = true;
+        } else if nvim_tv_get_type(arg1) != VarType::Number as c_int {
+            let s = nvim_tv_get_string_checked(arg1);
+            if s.is_null() {
+                return false;
+            }
+            info.func = s;
+        } else if nr != 0 {
+            nvim_emsg_invarg();
+            return false;
+        }
+
+        if !info.func.is_null() {
+            if *info.func as u8 == 0 {
+                info.func = std::ptr::null();
+            } else if strcmp(info.func, b"n\0".as_ptr().cast::<c_char>()) == 0 {
+                info.func = std::ptr::null();
+                info.numeric = true;
+            } else if strcmp(info.func, b"N\0".as_ptr().cast::<c_char>()) == 0 {
+                info.func = std::ptr::null();
+                info.numbers = true;
+            } else if strcmp(info.func, b"f\0".as_ptr().cast::<c_char>()) == 0 {
+                info.func = std::ptr::null();
+                info.float_cmp = true;
+            } else if strcmp(info.func, b"i\0".as_ptr().cast::<c_char>()) == 0 {
+                info.func = std::ptr::null();
+                info.ic = true;
+            } else if strcmp(info.func, b"l\0".as_ptr().cast::<c_char>()) == 0 {
+                info.func = std::ptr::null();
+                info.lc = true;
+            }
+        }
+    }
+
+    let arg2 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 2);
+    if nvim_tv_get_type(arg2) != VarType::Unknown as c_int {
+        if nvim_tv_check_for_dict_arg(argvars, 2) == 0 {
+            return false;
+        }
+        info.selfdict = nvim_tv_get_dict(arg2).as_ptr().cast_mut();
+    }
+
+    true
+}
+
+/// Shared sort/uniq driver (replaces C `do_sort_uniq`).
+unsafe fn do_sort_uniq_impl(argvars: TypevalHandle, rettv: TypevalHandle, sort: bool) {
+    let arg0 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 0);
+    if nvim_tv_get_type(arg0) != VarType::List as c_int {
+        let fname = if sort {
+            b"sort()\0".as_ptr().cast::<c_char>()
+        } else {
+            b"uniq()\0".as_ptr().cast::<c_char>()
+        };
+        nvim_emsg_listarg(fname);
+        return;
+    }
+
+    let l = nvim_tv_get_list(arg0);
+    let arg_errmsg = if sort {
+        b"sort() argument\0".as_ptr().cast::<c_char>()
+    } else {
+        b"uniq() argument\0".as_ptr().cast::<c_char>()
+    };
+
+    let lock = tv_list_locked_impl(l);
+    if value_check_lock_impl(lock, arg_errmsg, TV_TRANSLATE) {
+        return;
+    }
+
+    // tv_list_set_ret(rettv, l) - sets rettv as the list return value
+    nvim_tv_list_set_ret(rettv, l);
+
+    let len = tv_list_len_impl(l);
+    if len <= 1 {
+        return;
+    }
+
+    let mut info = SortInfo {
+        ic: false,
+        lc: false,
+        numeric: false,
+        numbers: false,
+        float_cmp: false,
+        func: std::ptr::null(),
+        partial: std::ptr::null_mut(),
+        selfdict: std::ptr::null_mut(),
+        func_err: false,
+    };
+
+    if !parse_sort_uniq_args_impl(argvars, &mut info) {
+        return;
+    }
+
+    if sort {
+        do_sort_impl(l, &mut info);
+    } else {
+        do_uniq_impl(l, &mut info);
+    }
+}
+
+/// "sort({list})" VimL function.
+#[export_name = "f_sort"]
+pub unsafe extern "C" fn rs_f_sort(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *mut c_void,
+) {
+    do_sort_uniq_impl(argvars, rettv, true);
+}
+
+/// "uniq({list})" VimL function.
+#[export_name = "f_uniq"]
+pub unsafe extern "C" fn rs_f_uniq(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *mut c_void,
+) {
+    do_sort_uniq_impl(argvars, rettv, false);
+}
+
+/// "join({list})" VimL function.
+#[export_name = "f_join"]
+pub unsafe extern "C" fn rs_f_join(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *mut c_void,
+) {
+    let arg0 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 0);
+    if nvim_tv_get_type(arg0) != VarType::List as c_int {
+        nvim_emsg_e_listreq();
+        return;
+    }
+
+    nvim_tv_set_type(rettv, VarType::String as c_int);
+
+    let arg1 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 1);
+    let sep: *const c_char = if nvim_tv_get_type(arg1) == VarType::Unknown as c_int {
+        b" \0".as_ptr().cast::<c_char>()
+    } else {
+        let s = nvim_tv_get_string_checked(arg1);
+        if s.is_null() {
+            nvim_tv_set_string(rettv, std::ptr::null_mut());
+            return;
+        }
+        s
+    };
+
+    let l = nvim_tv_get_list(arg0);
+    let result = nvim_list_join_to_string(l, sep);
+    nvim_tv_set_string(rettv, result);
+}
+
+/// "list2str({list})" VimL function.
+#[export_name = "f_list2str"]
+pub unsafe extern "C" fn rs_f_list2str(
+    argvars: TypevalHandle,
+    rettv: TypevalHandle,
+    _fptr: *mut c_void,
+) {
+    nvim_tv_set_type(rettv, VarType::String as c_int);
+    nvim_tv_set_string(rettv, std::ptr::null_mut());
+
+    let arg0 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 0);
+    if nvim_tv_get_type(arg0) != VarType::List as c_int {
+        nvim_emsg_invarg();
+        return;
+    }
+
+    let l = nvim_tv_get_list(arg0);
+    if l.is_null() {
+        return;
+    }
+
+    let result = nvim_f_list2str_from_list(l);
+    nvim_tv_set_string(rettv, result);
+}
+
+// tv_list_append_owned_tv remains in C (by-value struct ABI not compatible with TypevalHandle).
+
 #[cfg(test)]
 mod tests {
     use super::*;

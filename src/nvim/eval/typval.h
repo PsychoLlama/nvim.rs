@@ -636,4 +636,10 @@ extern void tv_free(typval_T *tv);
 extern void tv_copy(const typval_T *from, typval_T *to);
 extern bool tv_equal(typval_T *tv1, typval_T *tv2, bool ic);
 
+// Sort/uniq/join/list2str VimL functions (migrated to Rust, Phase 6)
+extern void f_sort(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_join(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_list2str(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 #include "eval/typval.h.generated.h"
