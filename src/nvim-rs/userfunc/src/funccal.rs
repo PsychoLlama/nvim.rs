@@ -12,7 +12,8 @@ extern "C" {
     fn nvim_cleanup_function_call_impl(fc: *mut c_void);
     fn nvim_funccal_unref_impl(fc: *mut c_void, fp: *mut c_void, force: c_int);
     fn nvim_ex_delfunction_impl(eap: *mut c_void);
-    fn nvim_user_func_error_impl(error: c_int, name: *const c_char, found_var: c_int);
+    // Phase 14: For inlining nvim_user_func_error_impl:
+    fn nvim_semsg_not_callable(name: *const c_char);
 
     // current_funccal access (for inlining remove_funccal and create_funccal)
     fn get_current_funccal() -> *mut c_void;
@@ -198,8 +199,55 @@ pub unsafe extern "C" fn rs_emsg_funcname(errmsg: *const c_char, name: *const c_
 // =============================================================================
 // user_func_error
 // =============================================================================
+//
+// Phase 14: inlined from nvim_user_func_error_impl.
+// FCERR constants must match userfunc.h
+
+const FCERR_UNKNOWN: c_int = 0;
+const FCERR_NOTMETHOD: c_int = 8;
+const FCERR_DELETED: c_int = 7;
+const FCERR_TOOMANY: c_int = 1;
+const FCERR_TOOFEW: c_int = 2;
+const FCERR_SCRIPT: c_int = 3;
+const FCERR_DICT: c_int = 4;
 
 #[no_mangle]
 pub unsafe extern "C" fn rs_user_func_error(error: c_int, name: *const c_char, found_var: c_int) {
-    unsafe { nvim_user_func_error_impl(error, name, found_var) };
+    match error {
+        FCERR_UNKNOWN => {
+            if found_var != 0 {
+                unsafe { nvim_semsg_not_callable(name) };
+            } else {
+                unsafe { rs_emsg_funcname(c"E117: Unknown function: %s".as_ptr(), name) };
+            }
+        }
+        FCERR_NOTMETHOD => unsafe {
+            rs_emsg_funcname(c"E276: Cannot use function as a method: %s".as_ptr(), name);
+        },
+        FCERR_DELETED => unsafe {
+            rs_emsg_funcname(c"E933: Function was deleted: %s".as_ptr(), name);
+        },
+        FCERR_TOOMANY => unsafe {
+            rs_emsg_funcname(c"E118: Too many arguments for function: %s".as_ptr(), name);
+        },
+        FCERR_TOOFEW => unsafe {
+            rs_emsg_funcname(
+                c"E119: Not enough arguments for function: %s".as_ptr(),
+                name,
+            );
+        },
+        FCERR_SCRIPT => unsafe {
+            rs_emsg_funcname(
+                c"E120: Using <SID> not in a script context: %s".as_ptr(),
+                name,
+            );
+        },
+        FCERR_DICT => unsafe {
+            rs_emsg_funcname(
+                c"E725: Calling dict function without Dictionary: %s".as_ptr(),
+                name,
+            );
+        },
+        _ => {}
+    }
 }

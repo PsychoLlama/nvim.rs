@@ -11,8 +11,15 @@ extern "C" {
     fn nvim_ufunc_decrement_refcount(fp: *mut c_void) -> c_int;
     fn nvim_ufunc_increment_refcount(fp: *mut c_void);
     fn nvim_ufunc_get_calls(fp: *mut c_void) -> c_int;
-    fn nvim_func_clear_items_impl(fp: *mut c_void);
     fn nvim_func_remove_impl(fp: *mut c_void) -> c_int;
+
+    // Phase 14: For inlining nvim_func_clear_items_impl
+    fn nvim_ufunc_get_args_ga(fp: *mut c_void) -> *mut c_void;
+    fn nvim_ufunc_get_def_args_ga(fp: *mut c_void) -> *mut c_void;
+    fn nvim_ufunc_get_lines_ga(fp: *mut c_void) -> *mut c_void;
+    fn nvim_ga_clear_strings_wrapper(ga: *mut c_void);
+    fn nvim_ufunc_clear_luaref(fp: *mut c_void);
+    fn nvim_ufunc_xfree_tml(fp: *mut c_void);
     fn internal_error(msg: *const c_char);
 
     // Phase 9: Accessors for inlining nvim_func_clear_impl
@@ -123,9 +130,15 @@ pub unsafe extern "C" fn rs_func_remove(fp: *mut c_void) -> c_int {
 // =============================================================================
 
 /// Clear all items a function contains (garrays, profiling, lua refs).
+///
+/// Phase 14: inlined from nvim_func_clear_items_impl.
 #[no_mangle]
 pub unsafe extern "C" fn rs_func_clear_items(fp: *mut c_void) {
-    unsafe { nvim_func_clear_items_impl(fp) };
+    unsafe { nvim_ga_clear_strings_wrapper(nvim_ufunc_get_args_ga(fp)) };
+    unsafe { nvim_ga_clear_strings_wrapper(nvim_ufunc_get_def_args_ga(fp)) };
+    unsafe { nvim_ga_clear_strings_wrapper(nvim_ufunc_get_lines_ga(fp)) };
+    unsafe { nvim_ufunc_clear_luaref(fp) };
+    unsafe { nvim_ufunc_xfree_tml(fp) };
 }
 
 // =============================================================================

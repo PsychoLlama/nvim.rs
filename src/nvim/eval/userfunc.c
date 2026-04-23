@@ -754,19 +754,7 @@ int nvim_func_remove_impl(ufunc_T *fp)
 }
 
 /// Phase 4: C implementation shim for func_clear_items.
-void nvim_func_clear_items_impl(ufunc_T *fp)
-{
-  ga_clear_strings(&(fp->uf_args));
-  ga_clear_strings(&(fp->uf_def_args));
-  ga_clear_strings(&(fp->uf_lines));
-  if (fp->uf_flags & FC_LUAREF) {
-    api_free_luaref(fp->uf_luaref);
-    fp->uf_luaref = LUA_NOREF;
-  }
-  XFREE_CLEAR(fp->uf_tml_count);
-  XFREE_CLEAR(fp->uf_tml_total);
-  XFREE_CLEAR(fp->uf_tml_self);
-}
+// nvim_func_clear_items_impl inlined into rs_func_clear_items (Rust, Phase 14)
 
 // nvim_func_clear_impl inlined into rs_func_clear (Rust, Phase 9)
 
@@ -1351,36 +1339,7 @@ varnumber_T callback_call_retnr(Callback *callback, int argcount, typval_T *argv
 }
 
 /// Phase 7: C implementation shim for user_func_error (called from Rust).
-void nvim_user_func_error_impl(int error, const char *name, int found_var)
-{
-  switch (error) {
-  case FCERR_UNKNOWN:
-    if (found_var) {
-      semsg(_(e_not_callable_type_str), name);
-    } else {
-      emsg_funcname(e_unknown_function_str, name);
-    }
-    break;
-  case FCERR_NOTMETHOD:
-    emsg_funcname(N_("E276: Cannot use function as a method: %s"), name);
-    break;
-  case FCERR_DELETED:
-    emsg_funcname(N_("E933: Function was deleted: %s"), name);
-    break;
-  case FCERR_TOOMANY:
-    emsg_funcname(_(e_toomanyarg), name);
-    break;
-  case FCERR_TOOFEW:
-    emsg_funcname(_(e_toofewarg), name);
-    break;
-  case FCERR_SCRIPT:
-    emsg_funcname(N_("E120: Using <SID> not in a script context: %s"), name);
-    break;
-  case FCERR_DICT:
-    emsg_funcname(N_("E725: Calling dict function without Dictionary: %s"), name);
-    break;
-  }
-}
+// nvim_user_func_error_impl inlined into rs_user_func_error (Rust, Phase 14)
 
 
 /// Used by call_func to add a method base (if any) to a function argument list
@@ -3652,6 +3611,16 @@ char *nvim_emsg_funcname_mk_snr(const char *name)
 }
 void nvim_semsg_with_name(const char *errmsg, const char *name) { semsg(_(errmsg), name); }
 void nvim_iemsg(const char *msg) { iemsg(msg); }
+// Phase 14: func_clear_items helpers for Rust refcount.rs
+void nvim_ga_clear_strings_wrapper(garray_T *ga) { ga_clear_strings(ga); }
+void nvim_ufunc_xfree_tml(ufunc_T *fp)
+{
+  XFREE_CLEAR(fp->uf_tml_count);
+  XFREE_CLEAR(fp->uf_tml_total);
+  XFREE_CLEAR(fp->uf_tml_self);
+}
+// Phase 14: user_func_error semsg helper (for FCERR_UNKNOWN case)
+void nvim_semsg_not_callable(const char *name) { semsg(_(e_not_callable_type_str), name); }
 // set_current_funccal is already done above; add fc_rettv accessor for create_funccal
 typval_T **nvim_fc_get_rettv_ptr(funccall_T *fc) { return fc ? &fc->fc_rettv : NULL; }
 void nvim_fc_set_rettv(funccall_T *fc, typval_T *rettv) { if (fc) { fc->fc_rettv = rettv; } }
