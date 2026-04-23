@@ -108,6 +108,58 @@ extern "C" {
     fn nvim_funcexe_get_doesrange(fe: *mut c_void) -> *mut bool;
     fn nvim_funcexe_get_firstline(fe: *mut c_void) -> i32;
     fn nvim_funcexe_get_lastline(fe: *mut c_void) -> i32;
+
+    // Phase 22: For call_func migration
+    fn nvim_funcexe_get_selfdict(fe: *const c_void) -> *mut c_void;
+    fn nvim_funcexe_get_partial(fe: *const c_void) -> *mut c_void;
+    fn nvim_funcexe_get_evaluate(fe: *const c_void) -> bool;
+    fn nvim_funcexe_get_basetv(fe: *const c_void) -> *mut c_void;
+    fn nvim_funcexe_get_found_var(fe: *const c_void) -> bool;
+    fn nvim_funcexe_call_argv_func(
+        fe: *mut c_void,
+        argcount: c_int,
+        argvars: *mut c_void,
+        argv_clear: c_int,
+        fp: *mut c_void,
+    ) -> c_int;
+    fn nvim_partial_get_auto(pt: *const c_void) -> bool;
+    fn nvim_partial_get_func(pt: *const c_void) -> *mut c_void;
+    fn nvim_partial_get_argc(pt: *const c_void) -> c_int;
+    fn nvim_partial_get_dict(pt: *const c_void) -> *mut c_void;
+    fn nvim_partial_get_argv(pt: *const c_void) -> *mut c_void;
+
+    fn apply_autocmds_for_funcundefined(name: *const c_char) -> c_int;
+    fn script_autoload(name: *const c_char, name_len: usize, reload: bool) -> bool;
+    fn aborting() -> bool;
+    fn update_force_abort();
+    fn call_internal_func(
+        fname: *const c_char,
+        argcount: c_int,
+        argvars: *mut c_void,
+        rettv: *mut c_void,
+    ) -> c_int;
+    fn call_internal_method(
+        fname: *const c_char,
+        argcount: c_int,
+        argvars: *mut c_void,
+        rettv: *mut c_void,
+        basetv: *mut c_void,
+    ) -> c_int;
+    fn xmemdupz(src: *const c_void, len: usize) -> *mut c_void;
+    fn tv_copy(from: *const c_void, to: *mut c_void);
+    fn nvim_tv_set_unknown(tv: *mut c_void);
+    fn rs_is_luafunc(partial: *mut c_void) -> bool;
+    fn rs_builtin_function(name: *const c_char, len: c_int) -> c_int;
+    // argv_add_base is Rust (lookup.rs), exported as "argv_add_base"
+    fn argv_add_base(
+        basetv: *const c_void,
+        argvars: *mut *mut c_void,
+        argcount: *mut c_int,
+        new_argvars: *mut c_void,
+        argv_base: *mut c_int,
+    );
+    // call_user_func_check is Rust (funccal.rs), exported as "call_user_func_check"
+    // Already declared above as "call_user_func_check" -- using that one.
 }
 
 // =============================================================================
@@ -124,6 +176,8 @@ const FC_LUAREF: c_int = 0x800;
 const FC_RANGE: c_int = 0x02;
 const FC_DICT: c_int = 0x04;
 const FLEN_FIXED: usize = 40;
+const MAX_FUNC_ARGS: usize = 20;
+const SIZEOF_TYPVAL: usize = 16;
 
 // =============================================================================
 // free_funccal
@@ -524,4 +578,264 @@ pub unsafe extern "C" fn rs_call_user_func_check(
     };
 
     FCERR_NONE
+}
+
+// =============================================================================
+// call_func
+// =============================================================================
+//
+// Phase 22: Migrated from userfunc.c.
+
+/// strlen for a *const c_char (NUL-terminated).
+fn call_func_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    while unsafe { *s.add(len) } != 0 {
+        len += 1;
+    }
+    len
+}
+
+/// Central function call dispatcher for VimL.
+///
+/// Calls user-defined functions, built-in functions, Lua functions, or
+/// method functions depending on `funcname` and `funcexe`.
+///
+/// # Safety
+/// All pointer arguments must be valid. `funcname` must be a valid C string.
+/// `rettv`, `argvars_in`, `funcexe` must be non-null.
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::nonminimal_bool)]
+#[unsafe(export_name = "call_func")]
+pub unsafe extern "C" fn rs_call_func(
+    funcname: *const c_char,
+    len: c_int,
+    rettv: *mut c_void,
+    argcount_in: c_int,
+    argvars_in: *mut c_void,
+    funcexe: *mut c_void,
+) -> c_int {
+    let mut ret = FAIL;
+    let mut error = FCERR_NONE;
+    let mut fp: *mut c_void = std::ptr::null_mut();
+    let mut fname_buf = [0u8; FLEN_FIXED + 1];
+    let mut tofree: *mut c_char = std::ptr::null_mut();
+    let mut fname: *mut c_char = std::ptr::null_mut();
+    let mut name: *mut c_char = std::ptr::null_mut();
+    let mut argcount = argcount_in;
+    let mut argvars = argvars_in;
+
+    // argv stack buffer: (MAX_FUNC_ARGS + 1) * SIZEOF_TYPVAL bytes
+    let mut argv_buf = [0u8; (MAX_FUNC_ARGS + 1) * SIZEOF_TYPVAL];
+    let argv = argv_buf.as_mut_ptr().cast::<c_void>();
+    let mut argv_clear: c_int = 0;
+    let mut argv_base: c_int = 0;
+
+    let selfdict = unsafe { nvim_funcexe_get_selfdict(funcexe.cast_const()) };
+    let partial = unsafe { nvim_funcexe_get_partial(funcexe.cast_const()) };
+
+    // Initialize rettv so caller can safely tv_clear(rettv) even on FAIL.
+    unsafe { nvim_tv_set_unknown(rettv) };
+
+    let len = if len <= 0 {
+        call_func_strlen(funcname) as c_int
+    } else {
+        len
+    };
+
+    if !partial.is_null() {
+        fp = unsafe { nvim_partial_get_func(partial.cast_const()) };
+    }
+
+    if fp.is_null() {
+        // Copy the name so it won't be changed by the called function.
+        name = unsafe { xmemdupz(funcname.cast::<c_void>(), len as usize) }.cast::<c_char>();
+        fname = unsafe {
+            rs_fname_trans_sid(
+                name,
+                fname_buf.as_mut_ptr().cast::<c_char>(),
+                std::ptr::addr_of_mut!(tofree),
+                std::ptr::addr_of_mut!(error),
+            )
+        };
+    }
+
+    // Clear doesrange flag
+    let doesrange_ptr = unsafe { nvim_funcexe_get_doesrange(funcexe) };
+    if !doesrange_ptr.is_null() {
+        unsafe { *doesrange_ptr = false };
+    }
+
+    // Compute effective selfdict from partial
+    let selfdict = if partial.is_null() {
+        selfdict
+    } else {
+        let pt_dict = unsafe { nvim_partial_get_dict(partial.cast_const()) };
+        let pt_auto = unsafe { nvim_partial_get_auto(partial.cast_const()) };
+        if !pt_dict.is_null() && (selfdict.is_null() || !pt_auto) {
+            pt_dict
+        } else {
+            selfdict
+        }
+    };
+
+    // Prepend partial args to argv, then append caller args
+    let mut toomany = false;
+    if !partial.is_null() && error == FCERR_NONE {
+        let pt_argc = unsafe { nvim_partial_get_argc(partial.cast_const()) };
+        if pt_argc > 0 {
+            while argv_clear < pt_argc {
+                if argv_clear + argcount_in >= MAX_FUNC_ARGS as c_int {
+                    toomany = true;
+                    break;
+                }
+                let src = unsafe {
+                    nvim_partial_get_argv(partial.cast_const())
+                        .cast::<u8>()
+                        .add(argv_clear as usize * SIZEOF_TYPVAL)
+                        .cast::<c_void>()
+                };
+                let dst = unsafe {
+                    argv.cast::<u8>()
+                        .add(argv_clear as usize * SIZEOF_TYPVAL)
+                        .cast::<c_void>()
+                };
+                unsafe { tv_copy(src.cast_const(), dst) };
+                argv_clear += 1;
+            }
+            if !toomany {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        argvars_in.cast::<u8>(),
+                        argv.cast::<u8>().add(argv_clear as usize * SIZEOF_TYPVAL),
+                        argcount_in as usize * SIZEOF_TYPVAL,
+                    );
+                }
+                argvars = argv;
+                argcount = pt_argc + argcount_in;
+            }
+        }
+    }
+
+    // If partial args overflowed, skip evaluation (matches C `goto theend`)
+    if !toomany && error == FCERR_NONE && unsafe { nvim_funcexe_get_evaluate(funcexe.cast_const()) }
+    {
+        // Skip "g:" prefix
+        let is_global = fp.is_null()
+            && !fname.is_null()
+            && unsafe { *fname.cast::<u8>() == b'g' && *fname.add(1).cast::<u8>() == b':' };
+        let rfname = if is_global {
+            unsafe { fname.add(2) }
+        } else {
+            fname
+        };
+
+        // Set rettv default: number 0
+        unsafe { nvim_tv_set_number(rettv, 0) };
+        error = FCERR_UNKNOWN;
+
+        if unsafe { rs_is_luafunc(partial) } {
+            if len > 0 {
+                error = FCERR_NONE;
+                unsafe {
+                    argv_add_base(
+                        nvim_funcexe_get_basetv(funcexe.cast_const()).cast_const(),
+                        std::ptr::addr_of_mut!(argvars),
+                        std::ptr::addr_of_mut!(argcount),
+                        argv,
+                        std::ptr::addr_of_mut!(argv_base),
+                    );
+                }
+                unsafe { nlua_typval_call(funcname, len as usize, argvars, argcount, rettv) };
+            } else {
+                // v:lua called directly; funcname is already "v:lua" for error
+                unsafe { xfree(name.cast::<c_void>()) };
+                name = std::ptr::null_mut();
+            }
+        } else if fp.is_null() && unsafe { rs_builtin_function(rfname, -1) } != 0 {
+            // Built-in or method function
+            let basetv = unsafe { nvim_funcexe_get_basetv(funcexe.cast_const()) };
+            if basetv.is_null() {
+                error = unsafe { call_internal_func(fname, argcount, argvars, rettv) };
+            } else {
+                error = unsafe { call_internal_method(fname, argcount, argvars, rettv, basetv) };
+            }
+        } else {
+            // User defined function
+            if fp.is_null() {
+                fp = unsafe { find_func(rfname) };
+            }
+
+            // Trigger FuncUndefined autocommand
+            if fp.is_null()
+                && unsafe { apply_autocmds_for_funcundefined(rfname) } != 0
+                && !unsafe { aborting() }
+            {
+                fp = unsafe { find_func(rfname) };
+            }
+
+            // Try loading a package
+            if fp.is_null() {
+                let rlen = call_func_strlen(rfname);
+                if unsafe { script_autoload(rfname, rlen, true) && !aborting() } {
+                    fp = unsafe { find_func(rfname) };
+                }
+            }
+
+            if !fp.is_null() && unsafe { nvim_ufunc_get_flags(fp) } & FC_DELETED_FLAG != 0 {
+                error = FCERR_DELETED;
+            } else if !fp.is_null() {
+                argcount = unsafe {
+                    nvim_funcexe_call_argv_func(funcexe, argcount, argvars, argv_clear, fp)
+                };
+                unsafe {
+                    argv_add_base(
+                        nvim_funcexe_get_basetv(funcexe.cast_const()).cast_const(),
+                        std::ptr::addr_of_mut!(argvars),
+                        std::ptr::addr_of_mut!(argcount),
+                        argv,
+                        std::ptr::addr_of_mut!(argv_base),
+                    );
+                }
+                error = unsafe {
+                    rs_call_user_func_check(fp, argcount, argvars, rettv, funcexe, selfdict)
+                };
+            }
+        }
+        // Update force_abort flag for reliable aborting() detection
+        unsafe { update_force_abort() };
+    }
+
+    if error == FCERR_NONE {
+        ret = OK;
+    }
+
+    // Report error unless call was aborted
+    if !unsafe { aborting() } {
+        let err_name = if name.is_null() {
+            funcname
+        } else {
+            name.cast_const()
+        };
+        let found_var = unsafe { nvim_funcexe_get_found_var(funcexe.cast_const()) };
+        unsafe { rs_user_func_error(error, err_name, c_int::from(found_var)) };
+    }
+
+    // Clear partial arg copies
+    while argv_clear > 0 {
+        argv_clear -= 1;
+        let slot = unsafe {
+            argv.cast::<u8>()
+                .add((argv_clear + argv_base) as usize * SIZEOF_TYPVAL)
+                .cast::<c_void>()
+        };
+        unsafe { tv_clear(slot) };
+    }
+
+    unsafe { xfree(tofree.cast::<c_void>()) };
+    unsafe { xfree(name.cast::<c_void>()) };
+
+    ret
 }

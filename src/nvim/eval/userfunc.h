@@ -149,4 +149,8 @@ extern linenr_T *func_breakpoint(void *cookie);
 extern int *func_dbg_tick(void *cookie);
 extern int func_level(void *cookie);
 
+// Phase 22: call_func migrated to Rust (funccal.rs)
+extern int call_func(const char *funcname, int len, typval_T *rettv, int argcount_in,
+                     typval_T *argvars_in, funcexe_T *funcexe);
+
 #include "eval/userfunc.h.generated.h"

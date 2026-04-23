@@ -1138,160 +1138,9 @@ extern void argv_add_base(typval_T *const basetv, typval_T **const argvars, int 
 /// @return FAIL if function cannot be called, else OK (even if an error
 ///         occurred while executing the function! Set `msg_list` to capture
 ///         the error, see do_cmdline()).
-int call_func(const char *funcname, int len, typval_T *rettv, int argcount_in, typval_T *argvars_in,
-              funcexe_T *funcexe)
-  FUNC_ATTR_NONNULL_ARG(1, 3, 5, 6)
-{
-  int ret = FAIL;
-  int error = FCERR_NONE;
-  ufunc_T *fp = NULL;
-  char fname_buf[FLEN_FIXED + 1];
-  char *tofree = NULL;
-  char *fname = NULL;
-  char *name = NULL;
-  int argcount = argcount_in;
-  typval_T *argvars = argvars_in;
-  dict_T *selfdict = funcexe->fe_selfdict;
-  typval_T argv[MAX_FUNC_ARGS + 1];  // used when "partial" or
-                                     // "funcexe->fe_basetv" is not NULL
-  int argv_clear = 0;
-  int argv_base = 0;
-  partial_T *partial = funcexe->fe_partial;
-
-  // Initialize rettv so that it is safe for caller to invoke tv_clear(rettv)
-  // even when call_func() returns FAIL.
-  rettv->v_type = VAR_UNKNOWN;
-
-  if (len <= 0) {
-    len = (int)strlen(funcname);
-  }
-  if (partial != NULL) {
-    fp = partial->pt_func;
-  }
-  if (fp == NULL) {
-    // Make a copy of the name, if it comes from a funcref variable it could
-    // be changed or deleted in the called function.
-    name = xmemdupz(funcname, (size_t)len);
-    fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
-  }
-
-  if (funcexe->fe_doesrange != NULL) {
-    *funcexe->fe_doesrange = false;
-  }
-
-  if (partial != NULL) {
-    // When the function has a partial with a dict and there is a dict
-    // argument, use the dict argument. That is backwards compatible.
-    // When the dict was bound explicitly use the one from the partial.
-    if (partial->pt_dict != NULL && (selfdict == NULL || !partial->pt_auto)) {
-      selfdict = partial->pt_dict;
-    }
-    if (error == FCERR_NONE && partial->pt_argc > 0) {
-      for (argv_clear = 0; argv_clear < partial->pt_argc; argv_clear++) {
-        if (argv_clear + argcount_in >= MAX_FUNC_ARGS) {
-          error = FCERR_TOOMANY;
-          goto theend;
-        }
-        tv_copy(&partial->pt_argv[argv_clear], &argv[argv_clear]);
-      }
-      for (int i = 0; i < argcount_in; i++) {
-        argv[i + argv_clear] = argvars_in[i];
-      }
-      argvars = argv;
-      argcount = partial->pt_argc + argcount_in;
-    }
-  }
-
-  if (error == FCERR_NONE && funcexe->fe_evaluate) {
-    // Skip "g:" before a function name.
-    bool is_global = fp == NULL && fname[0] == 'g' && fname[1] == ':';
-    char *rfname = is_global ? fname + 2 : fname;
-
-    rettv->v_type = VAR_NUMBER;         // default rettv is number zero
-    rettv->vval.v_number = 0;
-    error = FCERR_UNKNOWN;
-
-    if (rs_is_luafunc(partial)) {
-      if (len > 0) {
-        error = FCERR_NONE;
-        argv_add_base(funcexe->fe_basetv, &argvars, &argcount, argv, &argv_base);
-        nlua_typval_call(funcname, (size_t)len, argvars, argcount, rettv);
-      } else {
-        // v:lua was called directly; show its name in the emsg
-        XFREE_CLEAR(name);
-        funcname = "v:lua";
-      }
-    } else if (fp != NULL || !rs_builtin_function(rfname, -1)) {
-      // User defined function.
-      if (fp == NULL) {
-        fp = find_func(rfname);
-      }
-
-      // Trigger FuncUndefined event, may load the function.
-      if (fp == NULL
-          && apply_autocmds(EVENT_FUNCUNDEFINED, rfname, rfname, true, NULL)
-          && !aborting()) {
-        // executed an autocommand, search for the function again
-        fp = find_func(rfname);
-      }
-      // Try loading a package.
-      if (fp == NULL && script_autoload(rfname, strlen(rfname), true) && !aborting()) {
-        // Loaded a package, search for the function again.
-        fp = find_func(rfname);
-      }
-
-      if (fp != NULL && (fp->uf_flags & FC_DELETED)) {
-        error = FCERR_DELETED;
-      } else if (fp != NULL) {
-        if (funcexe->fe_argv_func != NULL) {
-          // postponed filling in the arguments, do it now
-          argcount = funcexe->fe_argv_func(argcount, argvars, argv_clear, fp);
-        }
-
-        argv_add_base(funcexe->fe_basetv, &argvars, &argcount, argv, &argv_base);
-
-        error = call_user_func_check(fp, argcount, argvars, rettv, funcexe, selfdict);
-      }
-    } else if (funcexe->fe_basetv != NULL) {
-      // expr->method(): Find the method name in the table, call its
-      // implementation with the base as one of the arguments.
-      error = call_internal_method(fname, argcount, argvars, rettv,
-                                   funcexe->fe_basetv);
-    } else {
-      // Find the function name in the table, call its implementation.
-      error = call_internal_func(fname, argcount, argvars, rettv);
-    }
-    // The function call (or "FuncUndefined" autocommand sequence) might
-    // have been aborted by an error, an interrupt, or an explicitly thrown
-    // exception that has not been caught so far.  This situation can be
-    // tested for by calling aborting().  For an error in an internal
-    // function or for the "E132" error in call_user_func(), however, the
-    // throw point at which the "force_abort" flag (temporarily reset by
-    // emsg()) is normally updated has not been reached yet. We need to
-    // update that flag first to make aborting() reliable.
-    update_force_abort();
-  }
-  if (error == FCERR_NONE) {
-    ret = OK;
-  }
-
-theend:
-  // Report an error unless the argument evaluation or function call has been
-  // cancelled due to an aborting error, an interrupt, or an exception.
-  if (!aborting()) {
-    rs_user_func_error(error, (name != NULL) ? name : funcname, funcexe->fe_found_var ? 1 : 0);
-  }
-
-  // clear the copies made from the partial
-  while (argv_clear > 0) {
-    tv_clear(&argv[--argv_clear + argv_base]);
-  }
-
-  xfree(tofree);
-  xfree(name);
-
-  return ret;
-}
+// call_func migrated to Rust (Phase 22, funccal.rs)
+extern int call_func(const char *funcname, int len, typval_T *rettv, int argcount_in,
+                     typval_T *argvars_in, funcexe_T *funcexe);
 
 // call_simple_luafunc and call_simple_func migrated to Rust (Phase 16, funccal.rs)
 
@@ -3333,3 +3182,21 @@ void nvim_semsg_no_white_before_comma(const char *p)
 bool *nvim_funcexe_get_doesrange(funcexe_T *fe) { return fe ? fe->fe_doesrange : NULL; }
 linenr_T nvim_funcexe_get_firstline(const funcexe_T *fe) { return fe ? fe->fe_firstline : 0; }
 linenr_T nvim_funcexe_get_lastline(const funcexe_T *fe) { return fe ? fe->fe_lastline : 0; }
+
+// Phase 22: accessors for call_func migration (funccal.rs)
+void nvim_tv_set_unknown(typval_T *tv) { tv->v_type = VAR_UNKNOWN; }
+dict_T *nvim_funcexe_get_selfdict(const funcexe_T *fe) { return fe ? fe->fe_selfdict : NULL; }
+partial_T *nvim_funcexe_get_partial(const funcexe_T *fe) { return fe ? fe->fe_partial : NULL; }
+bool nvim_funcexe_get_evaluate(const funcexe_T *fe) { return fe ? fe->fe_evaluate : false; }
+typval_T *nvim_funcexe_get_basetv(const funcexe_T *fe) { return fe ? fe->fe_basetv : NULL; }
+bool nvim_funcexe_get_found_var(const funcexe_T *fe) { return fe ? fe->fe_found_var : false; }
+/// Call fe_argv_func if non-null; returns unchanged argcount otherwise.
+int nvim_funcexe_call_argv_func(funcexe_T *fe, int argcount, typval_T *argvars,
+                                int argv_clear, ufunc_T *fp)
+{
+  if (fe && fe->fe_argv_func) {
+    return fe->fe_argv_func(argcount, argvars, argv_clear, fp);
+  }
+  return argcount;
+}
+bool nvim_partial_get_auto(const partial_T *pt) { return pt ? pt->pt_auto : false; }
