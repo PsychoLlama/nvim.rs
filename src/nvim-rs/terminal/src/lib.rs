@@ -1478,7 +1478,7 @@ extern "C" {
     fn nvim_parse_shape_opt(scope: c_int) -> *const i8;
     #[link_name = "show_cursor_info_later"]
     fn nvim_show_cursor_info_later(force: bool);
-    fn nvim_refresh_cursor_c(term: *mut c_void, cursor_visible: *mut c_int);
+    // rs_refresh_cursor is defined in this Rust crate -- no extern needed
     #[link_name = "validate_cursor"]
     fn nvim_validate_cursor_cw(wp: *mut c_void);
     #[link_name = "update_screen"]
@@ -1524,11 +1524,13 @@ extern "C" {
     fn nvim_terminal_set_winopts(s: *mut c_void);
     #[link_name = "rs_unset_terminal_winopts"]
     fn nvim_terminal_unset_winopts(s: *mut c_void);
-    fn nvim_terminal_check_cursor_c();
+    // rs_terminal_check_cursor is defined in this crate -- call directly
     // Mouse event accessors (Phase 3)
     static mouse_row: c_int;
     static mouse_col: c_int;
     static mouse_grid: c_int;
+    // nvim_wf_mouse_find_win_inner is the same function in window_shim.c
+    #[link_name = "nvim_wf_mouse_find_win_inner"]
     fn nvim_mouse_find_win_inner(grid: *mut c_int, row: *mut c_int, col: *mut c_int)
         -> *mut c_void;
     #[link_name = "win_col_off"]
@@ -3200,11 +3202,15 @@ extern "C" {
     #[link_name = "xrealloc"]
     fn nvim_term_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
     // Phase 6: termrequest / OSC / DCS / APC
-    fn nvim_term_treqbuf_printf_osc(term: *mut c_void, command: c_int);
-    fn nvim_term_treqbuf_printf_dcs(term: *mut c_void, command: *const i8, cmdlen: c_int);
-    fn nvim_term_treqbuf_printf_apc(term: *mut c_void);
     // has_event is declared globally above
-    fn nvim_term_set_osc8_attr(vt: *mut c_void, attr: c_int);
+    // vterm_state_set_penattr replaces nvim_term_set_osc8_attr
+    // VTERM_ATTR_URI=13, VTERM_VALUETYPE_INT=2
+    fn vterm_state_set_penattr(
+        state: *mut c_void,
+        attr: c_int,
+        vtype: c_int,
+        val: *mut c_void,
+    ) -> c_int;
     // Phase 16: term_selection_set / term_clipboard_set migration
     fn nvim_terminal_clipboard_queue(mask: c_long, data: *mut i8);
     fn rs_eval_call_provider(
@@ -3251,6 +3257,8 @@ extern "C" {
     fn xmemdupz(src: *const c_void, len: usize) -> *mut c_void;
     // Phase 7: refresh pipeline
     fn rs_buf_valid(buf: *mut c_void) -> c_int;
+    // nvim_handle_get_buffer is in buffer_shim.c - same as nvim_terminal_get_buffer
+    #[link_name = "nvim_handle_get_buffer"]
     fn nvim_terminal_get_buffer(buf_handle: c_int) -> *mut c_void;
     // ml_append_buf(buf, lnum, line, len, newfile) -- len=0 means NUL-terminated
     #[link_name = "ml_append_buf"]
@@ -3273,19 +3281,38 @@ extern "C" {
     // ml_delete_buf(buf, lnum, message)
     #[link_name = "ml_delete_buf"]
     fn nvim_ml_delete_buf_term(buf: *mut c_void, lnum: c_int, message: bool) -> c_int;
+    // mark_adjust_buf(buf, line1, line2, amount, amount_after, adjust_folds, mode, op)
+    // kMarkAdjustTerm=2, kExtmarkUndo=1
+    #[link_name = "mark_adjust_buf"]
     fn nvim_mark_adjust_buf_term(
         buf: *mut c_void,
         line1: c_int,
         line2: c_int,
         amount: c_int,
         amount_after: c_int,
+        adjust_folds: bool,
+        mode: c_int,
+        op: c_int,
     );
     #[link_name = "appended_lines_buf"]
     fn nvim_appended_lines_buf_term(buf: *mut c_void, lnum: c_int, count: c_int);
     #[link_name = "deleted_lines_buf"]
     fn nvim_deleted_lines_buf_term(buf: *mut c_void, lnum: c_int, count: c_int);
-    fn nvim_changed_lines_term(buf: *mut c_void, first: c_int, last: c_int, added: c_int);
-    fn nvim_multiqueue_move_events_term(term: *mut c_void);
+    // changed_lines(buf, lnum, col, lnume, xtra, do_buf_event)
+    #[link_name = "changed_lines"]
+    fn nvim_changed_lines_term(
+        buf: *mut c_void,
+        lnum: c_int,
+        col: c_int,
+        lnume: c_int,
+        xtra: c_int,
+        do_buf_event: bool,
+    );
+    // For replacing nvim_multiqueue_move_events_term
+    fn nvim_get_main_loop() -> *mut c_void;
+    #[link_name = "rs_loop_get_events"]
+    fn nvim_term_loop_get_events(lp: *mut c_void) -> *mut c_void;
+    fn multiqueue_move_events(dest: *mut c_void, src: *mut c_void);
     #[link_name = "ui_busy_start"]
     fn nvim_ui_busy_start();
     #[link_name = "ui_busy_stop"]
@@ -3909,7 +3936,9 @@ pub unsafe extern "C" fn rs_on_osc(
 
     if initial != 0 {
         unsafe { sb_mut(treq_buf).size = 0 };
-        unsafe { nvim_term_treqbuf_printf_osc(user, command) };
+        // kv_printf(treqbuf, "\x1b]%d;", command) - write OSC prefix
+        let osc_prefix = format!("\x1b]{command};");
+        unsafe { sb_concat_len(treq_buf, osc_prefix.as_ptr().cast(), osc_prefix.len()) };
     }
     unsafe { sb_concat_len(treq_buf, str_ptr, len) };
 
@@ -3923,7 +3952,10 @@ pub unsafe extern "C" fn rs_on_osc(
             let osc8_start = unsafe { t.termrequest_buffer.items.add(4) };
             let mut attr: c_int = 0;
             if unsafe { rs_terminal_parse_osc8(osc8_start, &raw mut attr) } != 0 {
-                unsafe { nvim_term_set_osc8_attr(t.vt, attr) };
+                // vterm_state_set_penattr(state, VTERM_ATTR_URI=13, VTERM_VALUETYPE_INT=2, &val)
+                let mut v = nvim_vterm::VTermValue { number: attr };
+                let state = unsafe { vterm_obtain_state(t.vt) };
+                unsafe { vterm_state_set_penattr(state, 13, 2, std::ptr::addr_of_mut!(v).cast()) };
             }
         }
     }
@@ -3961,10 +3993,9 @@ pub unsafe extern "C" fn rs_on_dcs(
 
     if initial != 0 {
         unsafe { sb_mut(treq_buf).size = 0 };
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        unsafe {
-            nvim_term_treqbuf_printf_dcs(user, command, commandlen as c_int);
-        };
+        // kv_printf(treqbuf, "\x1bP%*s", cmdlen, command) -- write DCS prefix + command bytes
+        unsafe { sb_concat_len(treq_buf, b"\x1bP".as_ptr().cast(), 2) };
+        unsafe { sb_concat_len(treq_buf, command, commandlen) };
     }
     unsafe { sb_concat_len(treq_buf, str_ptr, len) };
     if is_final != 0 {
@@ -4002,7 +4033,8 @@ pub unsafe extern "C" fn rs_on_apc(
 
     if initial != 0 {
         unsafe { sb_mut(treq_buf).size = 0 };
-        unsafe { nvim_term_treqbuf_printf_apc(user) };
+        // kv_printf(treqbuf, "\x1b_") -- write APC prefix
+        unsafe { sb_concat_len(treq_buf, b"\x1b_".as_ptr().cast(), 2) };
     }
     unsafe { sb_concat_len(treq_buf, str_ptr, len) };
     if is_final != 0 {
@@ -4248,7 +4280,8 @@ unsafe fn rs_refresh_screen(term: TerminalHandle, buf: *mut c_void) {
 
     let change_start = rs_terminal_row_to_linenr(row_start, t.sb_current);
     let change_end = change_start + changed;
-    unsafe { nvim_changed_lines_term(buf, change_start, change_end, added) };
+    // changed_lines(buf, lnum, col=0, lnume, xtra, do_buf_event=true)
+    unsafe { nvim_changed_lines_term(buf, change_start, 0, change_end, added, true) };
     t.invalid_start = c_int::MAX;
     t.invalid_end = -1;
 }
@@ -4287,7 +4320,17 @@ unsafe fn rs_adjust_scrollback(term: TerminalHandle, buf: *mut c_void) {
         }
         #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
         unsafe {
-            nvim_mark_adjust_buf_term(buf, 1, diff as c_int, i32::MAX, -(diff as c_int));
+            // mark_adjust_buf(buf, 1, diff, MAXLNUM, -diff, adjust_folds=true, kMarkAdjustTerm=2, kExtmarkUndo=1)
+            nvim_mark_adjust_buf_term(
+                buf,
+                1,
+                diff as c_int,
+                i32::MAX,
+                -(diff as c_int),
+                true,
+                2,
+                1,
+            );
             nvim_deleted_lines_buf_term(buf, 1, diff as c_int);
         }
     }
@@ -4318,7 +4361,17 @@ unsafe fn rs_refresh_scrollback(term: TerminalHandle, buf: *mut c_void) {
         (t.sb_deleted - t.sb_deleted_last).min(unsafe { bref_raw(buf).ml_line_count } as usize);
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     unsafe {
-        nvim_mark_adjust_buf_term(buf, 1, deleted as c_int, i32::MAX, -(deleted as c_int));
+        // mark_adjust_buf(buf, 1, deleted, MAXLNUM, -deleted, adjust_folds=true, kMarkAdjustTerm=2, kExtmarkUndo=1)
+        nvim_mark_adjust_buf_term(
+            buf,
+            1,
+            deleted as c_int,
+            i32::MAX,
+            -(deleted as c_int),
+            true,
+            2,
+            1,
+        );
     }
     t.sb_deleted_last = t.sb_deleted;
 
@@ -4438,7 +4491,12 @@ pub unsafe extern "C" fn rs_refresh_terminal(term: TerminalHandle) {
     unsafe { rs_adjust_topline_cursor(term.as_ptr(), buf, ml_added) };
 
     // Copy pending events back to the main event queue
-    unsafe { nvim_multiqueue_move_events_term(term.as_ptr()) };
+    unsafe {
+        let main_loop = nvim_get_main_loop();
+        let main_events = nvim_term_loop_get_events(main_loop);
+        let t = term.as_mut();
+        multiqueue_move_events(main_events, t.pending.events);
+    };
 }
 
 /// Public C-callable wrapper for `rs_refresh_screen`.
@@ -4625,9 +4683,10 @@ pub unsafe extern "C" fn rs_terminal_check_size(term: TerminalHandle) {
 // Phase 17: Migrate set_terminal_winopts / unset_terminal_winopts
 
 extern "C" {
-    fn nvim_curwin_ptr() -> *mut c_void;
-    fn nvim_win_redraw_later_some_valid(wp: *mut c_void);
-    fn nvim_win_redraw_later_valid(wp: *mut c_void);
+    // nvim_curwin_ptr: use c_curwin static instead
+    #[link_name = "redraw_later"]
+    fn nvim_win_redraw_later(wp: *mut c_void, kind: c_int);
+    // UPD_SOME_VALID = 2, UPD_VALID = 3, UPD_NOT_VALID = 4
     #[link_name = "free_string_option"]
     fn nvim_free_string_option(str: *mut i8);
     fn nvim_win_set_p_culopt(wp: *mut c_void, s: *mut i8);
@@ -4661,7 +4720,7 @@ pub unsafe extern "C" fn rs_set_terminal_winopts(s: *mut c_void) {
     let s = unsafe { &mut *s.cast::<TerminalStateRust>() };
     assert!(s.save_curwin_handle == 0);
 
-    let curwin = unsafe { nvim_curwin_ptr() };
+    let curwin = unsafe { c_curwin };
     // Disable these options in terminal-mode. They are nonsense because cursor is
     // placed at end of buffer to "follow" output. #11072
     s.save_curwin_handle = unsafe { win_ref_raw(curwin).handle };
@@ -4699,11 +4758,11 @@ pub unsafe extern "C" fn rs_set_terminal_winopts(s: *mut c_void) {
     let result_cul = unsafe { win_ref_raw(curwin).w_p_cul() } != 0;
     let result_culopt_flags = unsafe { win_ref_raw(curwin).w_p_culopt_flags };
     if result_cuc != (s.save_w_p_cuc != 0) {
-        unsafe { nvim_win_redraw_later_some_valid(curwin) };
+        unsafe { nvim_win_redraw_later(curwin, 35) };
     } else if result_cul != s.save_w_p_cul
         || (result_cul && result_culopt_flags != s.save_w_p_culopt_flags)
     {
-        unsafe { nvim_win_redraw_later_valid(curwin) };
+        unsafe { nvim_win_redraw_later(curwin, 10) };
     }
 }
 
@@ -4739,11 +4798,11 @@ pub unsafe extern "C" fn rs_unset_terminal_winopts(s: *mut c_void) {
         let wp_has_cul = unsafe { win_ref_raw(wp).w_p_cul() } != 0;
         let wp_culopt_flags = unsafe { win_ref_raw(wp).w_p_culopt_flags };
         if (s.save_w_p_cuc != 0) != wp_has_cuc {
-            unsafe { nvim_win_redraw_later_some_valid(wp) };
+            unsafe { nvim_win_redraw_later(wp, 35) };
         } else if s.save_w_p_cul != wp_has_cul
             || (s.save_w_p_cul && s.save_w_p_culopt_flags != wp_culopt_flags)
         {
-            unsafe { nvim_win_redraw_later_valid(wp) };
+            unsafe { nvim_win_redraw_later(wp, 10) };
         }
     }
 
@@ -4915,7 +4974,7 @@ pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
     }
 
     // Validate topline and cursor position for autocommands.
-    unsafe { nvim_terminal_check_cursor_c() };
+    unsafe { rs_terminal_check_cursor() };
     unsafe { nvim_validate_cursor_cw(c_curwin) };
 
     // Don't let autocommands free the terminal from under our fingers.
@@ -4950,7 +5009,7 @@ pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
     if !rs_terminal_check_focus_impl(s) {
         return 0;
     }
-    unsafe { nvim_terminal_check_cursor_c() };
+    unsafe { rs_terminal_check_cursor() };
     unsafe { nvim_validate_cursor_cw(c_curwin) };
 
     unsafe { nvim_show_cursor_info_later(false) };
@@ -4964,9 +5023,9 @@ pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
     }
 
     unsafe { nvim_setcursor() };
-    let mut cv = c_int::from(s.cursor_visible);
-    unsafe { nvim_refresh_cursor_c(s.term, &raw mut cv) };
-    s.cursor_visible = cv != 0;
+    let mut cv = s.cursor_visible;
+    unsafe { rs_refresh_cursor(TerminalHandle(s.term), &raw mut cv) };
+    s.cursor_visible = cv;
     unsafe { nvim_ui_flush() };
     1
 }
@@ -5106,7 +5165,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
     let cur_terminal = unsafe { bref_raw(curbuf).terminal };
     let same_term = cur_terminal == s.term;
     if same_term && !s.close {
-        unsafe { nvim_terminal_check_cursor_c() };
+        unsafe { rs_terminal_check_cursor() };
     }
     if unsafe { nvim_get_restart_edit() } != 0 {
         unsafe { showmode() };
@@ -5170,18 +5229,28 @@ extern "C" {
     );
     fn vterm_state_set_termprop(state: *mut c_void, prop: c_int, val: *mut c_void) -> c_int;
     fn nvim_terminal_vterm_set_callbacks(term: *mut c_void);
-    fn nvim_shape_table_get_shape() -> c_int;
-    fn nvim_shape_table_get_blinkon() -> c_int;
-    fn nvim_shape_table_get_blinkoff() -> c_int;
+    // nvim_get_shape_table_* from cursor_shape shim -- pass SHAPE_IDX_TERM=17
+    #[link_name = "nvim_get_shape_table_shape"]
+    fn nvim_shape_table_get_shape(idx: c_int) -> c_int;
+    #[link_name = "nvim_get_shape_table_blinkon"]
+    fn nvim_shape_table_get_blinkon(idx: c_int) -> c_int;
+    #[link_name = "nvim_get_shape_table_blinkoff"]
+    fn nvim_shape_table_get_blinkoff(idx: c_int) -> c_int;
     fn nvim_set_option_value_buftype_terminal();
     fn nvim_aucmd_prepbuf_alloc(buf: *mut c_void) -> *mut c_void;
-    fn nvim_aucmd_restbuf_free(aco: *mut c_void);
+    // aucmd_restbuf + xfree replaces nvim_aucmd_restbuf_free
+    #[link_name = "aucmd_restbuf"]
+    fn nvim_aucmd_restbuf(aco: *mut c_void);
     // apply_autocmds declared above; EVENT_TERMOPEN = 118
     fn nvim_reset_binding_curwin();
 
-    fn nvim_multiqueue_new_standalone() -> *mut c_void;
+    // multiqueue_new(on_put, data) - pass NULL for standalone queue
+    #[link_name = "multiqueue_new"]
+    fn nvim_multiqueue_new_standalone(on_put: *const c_void, data: *mut c_void) -> *mut c_void;
     fn nvim_get_config_string(key: *const i8) -> *mut i8;
-    fn nvim_name_to_color_int(name: *const i8) -> c_int;
+    // name_to_color(name, idx) - idx is an out param we discard
+    #[link_name = "name_to_color"]
+    fn nvim_name_to_color_int(name: *const i8, idx: *mut c_int) -> c_int;
     fn nvim_terminal_vterm_set_palette(state: *mut c_void, i: c_int, r: c_int, g: c_int, b: c_int);
 }
 
@@ -5213,7 +5282,8 @@ unsafe fn rs_terminal_open_init_vterm(
     unsafe {
         vterm_output_set_callback(term.vt, rs_term_output_callback_trampoline, term_ptr.cast());
     };
-    let shape = unsafe { nvim_shape_table_get_shape() };
+    // SHAPE_IDX_TERM = 17
+    let shape = unsafe { nvim_shape_table_get_shape(17) };
     let cursor_shape_num = match shape {
         SHAPE_BLOCK => VTERM_PROP_CURSORSHAPE_BLOCK,
         SHAPE_HOR => VTERM_PROP_CURSORSHAPE_UNDERLINE,
@@ -5226,8 +5296,8 @@ unsafe fn rs_terminal_open_init_vterm(
     unsafe {
         vterm_state_set_termprop(state, VTERM_PROP_CURSORSHAPE, (&raw mut val_shape).cast());
     };
-    let blinkon = unsafe { nvim_shape_table_get_blinkon() };
-    let blinkoff = unsafe { nvim_shape_table_get_blinkoff() };
+    let blinkon = unsafe { nvim_shape_table_get_blinkon(17) };
+    let blinkoff = unsafe { nvim_shape_table_get_blinkoff(17) };
     let mut val_blink = VTermValue {
         boolean: c_int::from(blinkon != 0 && blinkoff != 0),
     };
@@ -5273,7 +5343,8 @@ pub unsafe extern "C" fn rs_terminal_open(
     term.invalid_end = c_int::from(height);
 
     // Pending events queue: deferred until next terminal refresh (#32753).
-    term.pending.events = unsafe { nvim_multiqueue_new_standalone() };
+    term.pending.events =
+        unsafe { nvim_multiqueue_new_standalone(std::ptr::null(), std::ptr::null_mut()) };
 
     // Run TermOpen autocmd in the context of the terminal buffer.
     let aco = unsafe { nvim_aucmd_prepbuf_alloc(buf) };
@@ -5297,7 +5368,9 @@ pub unsafe extern "C" fn rs_terminal_open(
     term.sb_buffer = std::ptr::null_mut(); // check if TermOpen autocmd allocates it
                                            // EVENT_TERMOPEN = 118
     unsafe { apply_autocmds(118, std::ptr::null_mut(), std::ptr::null_mut(), false, buf) };
-    unsafe { nvim_aucmd_restbuf_free(aco) };
+    // aucmd_restbuf + xfree (was: nvim_aucmd_restbuf_free)
+    unsafe { nvim_aucmd_restbuf(aco) };
+    unsafe { xfree(aco) };
 
     // Check if terminal was already destroyed during TermOpen autocmd.
     if unsafe { *termpp }.is_null() {
@@ -5330,7 +5403,10 @@ pub unsafe extern "C" fn rs_terminal_open(
         if name.is_null() {
             continue;
         }
-        let color_val = unsafe { nvim_name_to_color_int(name) };
+        let color_val = unsafe {
+            let mut dummy: c_int = 0;
+            nvim_name_to_color_int(name, &raw mut dummy)
+        };
         if color_val == -1 {
             continue;
         }
@@ -5352,7 +5428,9 @@ pub unsafe extern "C" fn rs_terminal_open(
 extern "C" {
     fn nvim_terminal_init_timer();
     fn nvim_terminal_teardown_timer();
-    fn nvim_set_topline_curwin(lnum: c_int);
+    // set_topline(wp, lnum) - use c_curwin static
+    #[link_name = "set_topline"]
+    fn nvim_set_topline_curwin(wp: *mut c_void, lnum: c_int);
     static mut curbuf: *mut std::ffi::c_void;
     fn nvim_curwin_get_view_height() -> c_int;
     fn nvim_curwin_get_w_p_rl() -> c_int;
@@ -5396,8 +5474,8 @@ pub unsafe extern "C" fn rs_terminal_check_cursor() {
     unsafe { nvim_curwin_set_cursor_lnum(lnum) };
     let view_height = unsafe { nvim_curwin_get_view_height() };
     let topline = (ml_line_count - view_height + 1).max(1);
-    if topline != unsafe { win_ref_raw(nvim_curwin_ptr()).w_topline } {
-        unsafe { nvim_set_topline_curwin(topline) };
+    if topline != unsafe { win_ref_raw(c_curwin).w_topline } {
+        unsafe { nvim_set_topline_curwin(c_curwin, topline) };
     }
     let state = unsafe { nvim_get_state() };
     let off = if (state & MODE_TERMINAL) != 0
