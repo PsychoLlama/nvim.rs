@@ -15,7 +15,7 @@ extern "C" {
         namelen: usize,
         no_autoload: c_int,
     ) -> *mut c_void;
-    fn nvim_ex_return_impl(eap: *mut c_void);
+    // nvim_ex_return_impl moved to Rust (funccal.rs Phase 28)
     fn nvim_do_return_impl(
         eap: *mut c_void,
         reanimate: c_int,
@@ -228,7 +228,8 @@ pub unsafe extern "C" fn rs_find_var_in_scoped_ht(
 
 #[unsafe(export_name = "ex_return")]
 pub unsafe extern "C" fn rs_ex_return(eap: *mut c_void) {
-    unsafe { nvim_ex_return_impl(eap) };
+    // Phase 28: calls Rust implementation in funccal.rs
+    unsafe { crate::funccal::nvim_ex_return_impl(eap) };
 }
 
 // =============================================================================

@@ -194,6 +194,20 @@ extern "C" {
     fn nvim_handle_subscript_eval_evaluate(arg: *mut *mut c_char, rettv: *mut c_void) -> c_int;
     fn nvim_emsg_invrange();
     // get_func_tv is Rust (funccal.rs), linked by name -- already declared above
+
+    // Phase 28: for nvim_ex_return_impl migration
+    fn nvim_eap_get_arg(eap: *const c_void) -> *mut c_char;
+    fn nvim_eap_get_skip(eap: *const c_void) -> c_int;
+    fn nvim_eap_set_nextcmd(eap: *mut c_void, val: *mut c_char);
+    fn nvim_eap_get_nextcmd(eap: *const c_void) -> *mut c_char;
+    fn nvim_emsg_return_not_in_func();
+    fn nvim_syn_emsg_skip_inc();
+    fn nvim_syn_emsg_skip_dec();
+    fn eval0(arg: *mut c_char, rettv: *mut c_void, eap: *mut c_void, evalarg: *mut c_void)
+        -> c_int;
+    fn do_return(eap: *mut c_void, reanimate: c_int, is_cmd: c_int, rettv: *mut c_void) -> c_int;
+    fn check_nextcmd(p: *const c_char) -> *mut c_char;
+    fn clear_evalarg(evalarg: *mut c_void, eap: *mut c_void);
 }
 
 // =============================================================================
@@ -1110,4 +1124,97 @@ pub unsafe extern "C" fn rs_ex_call_inner(
     }
 
     c_int::from(failed)
+}
+
+// =============================================================================
+// nvim_ex_return_impl
+// =============================================================================
+//
+// Phase 28: inlined from nvim_ex_return_impl.
+// Called via rs_ex_return in scope.rs.
+
+// evalarg_T layout:
+//   eval_flags   (int)        offset 0,  size 4
+//   [padding]                 offset 4,  size 4
+//   eval_getline (fn ptr)     offset 8,  size 8
+//   eval_cookie  (void*)      offset 16, size 8
+//   eval_tofree  (char*)      offset 24, size 8
+// Total: 32 bytes (verified by eval_struct_check.c static assert)
+const SIZEOF_EVALARG: usize = 32;
+const EVAL_EVALUATE: u32 = 1; // matches C's EVAL_EVALUATE enum value
+
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn nvim_ex_return_impl(eap: *mut c_void) {
+    let arg = unsafe { nvim_eap_get_arg(eap) };
+
+    if unsafe { get_current_funccal() }.is_null() {
+        unsafe { nvim_emsg_return_not_in_func() };
+        return;
+    }
+
+    let skip = unsafe { nvim_eap_get_skip(eap) };
+
+    // evalarg_T evalarg = { .eval_flags = eap->skip ? 0 : EVAL_EVALUATE };
+    let mut evalarg = [0u8; SIZEOF_EVALARG];
+    if skip == 0 {
+        // write EVAL_EVALUATE (1) as u32 at offset 0 (eval_flags field)
+        unsafe {
+            std::ptr::write_unaligned(evalarg.as_mut_ptr().cast::<u32>(), EVAL_EVALUATE);
+        }
+    }
+    let evalarg_ptr = evalarg.as_mut_ptr().cast::<c_void>();
+
+    if skip != 0 {
+        unsafe { nvim_syn_emsg_skip_inc() };
+    }
+
+    unsafe { nvim_eap_set_nextcmd(eap, std::ptr::null_mut()) };
+
+    // Build a local rettv buffer (typval_T, 16 bytes)
+    let mut rettv = [0u8; SIZEOF_TYPVAL];
+    let rettv_ptr = rettv.as_mut_ptr().cast::<c_void>();
+    unsafe { nvim_tv_set_unknown(rettv_ptr) };
+
+    // (*arg != NUL && *arg != '|' && *arg != '\n')
+    let first_char = unsafe { *arg.cast::<u8>() };
+    let mut returning = false;
+
+    if first_char != 0
+        && first_char != b'|'
+        && first_char != b'\n'
+        && unsafe { eval0(arg, rettv_ptr, eap, evalarg_ptr) } != FAIL
+    {
+        if skip == 0 {
+            returning = unsafe { do_return(eap, 0, 1, rettv_ptr) } != 0;
+        } else {
+            unsafe { tv_clear(rettv_ptr) };
+        }
+    } else if skip == 0 {
+        // It's safer to return also on error.
+        // In return statement, cause_abort should be force_abort.
+        unsafe { update_force_abort() };
+
+        // Return unless the expression evaluation has been cancelled due to an
+        // aborting error, an interrupt, or an exception.
+        if !unsafe { aborting() } {
+            returning = unsafe { do_return(eap, 0, 1, std::ptr::null_mut()) } != 0;
+        }
+    }
+
+    // When skipping or the return gets pending, advance to the next command
+    // in this line (!returning).  Otherwise, ignore the rest of the line.
+    // Following lines will be ignored by get_func_line().
+    if returning {
+        unsafe { nvim_eap_set_nextcmd(eap, std::ptr::null_mut()) };
+    } else if unsafe { nvim_eap_get_nextcmd(eap) }.is_null() {
+        // no argument: check for nextcmd
+        let next = unsafe { check_nextcmd(arg) };
+        unsafe { nvim_eap_set_nextcmd(eap, next) };
+    }
+
+    if skip != 0 {
+        unsafe { nvim_syn_emsg_skip_dec() };
+    }
+    unsafe { clear_evalarg(evalarg_ptr, eap) };
 }

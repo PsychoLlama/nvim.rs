@@ -2118,57 +2118,8 @@ void nvim_ex_delfunction_impl(exarg_T *eap)
 
 // nvim_can_free_funccal_impl inlined into rs_can_free_funccal (Rust, Phase 12)
 
-/// Phase 6: C implementation shim for ex_return (called from Rust).
-void nvim_ex_return_impl(exarg_T *eap)
-{
-  char *arg = eap->arg;
-  typval_T rettv;
-  bool returning = false;
-
-  if (current_funccal == NULL) {
-    emsg(_("E133: :return not inside a function"));
-    return;
-  }
-
-  evalarg_T evalarg = { .eval_flags = eap->skip ? 0 : EVAL_EVALUATE };
-
-  if (eap->skip) {
-    emsg_skip++;
-  }
-
-  eap->nextcmd = NULL;
-  if ((*arg != NUL && *arg != '|' && *arg != '\n')
-      && eval0(arg, &rettv, eap, &evalarg) != FAIL) {
-    if (!eap->skip) {
-      returning = do_return(eap, false, true, &rettv);
-    } else {
-      tv_clear(&rettv);
-    }
-  } else if (!eap->skip) {  // It's safer to return also on error.
-    // In return statement, cause_abort should be force_abort.
-    update_force_abort();
-
-    // Return unless the expression evaluation has been cancelled due to an
-    // aborting error, an interrupt, or an exception.
-    if (!aborting()) {
-      returning = do_return(eap, false, true, NULL);
-    }
-  }
-
-  // When skipping or the return gets pending, advance to the next command
-  // in this line (!returning).  Otherwise, ignore the rest of the line.
-  // Following lines will be ignored by get_func_line().
-  if (returning) {
-    eap->nextcmd = NULL;
-  } else if (eap->nextcmd == NULL) {          // no argument
-    eap->nextcmd = check_nextcmd(arg);
-  }
-
-  if (eap->skip) {
-    emsg_skip--;
-  }
-  clear_evalarg(&evalarg, eap);
-}
+// nvim_ex_return_impl migrated to Rust (funccal.rs Phase 28).
+// rs_ex_return_impl now implements the logic directly.
 
 /// ":return [expr]"
 /// Lower level implementation of "call".  Only called when not skipping.
@@ -3079,3 +3030,10 @@ int nvim_handle_subscript_eval_evaluate(char **arg, typval_T *rettv)
 {
   return handle_subscript((const char **)arg, rettv, &EVALARG_EVALUATE, true);
 }
+
+// Phase 28: accessors for nvim_ex_return_impl migration (funccal.rs)
+char *nvim_eap_get_arg(const exarg_T *eap) { return eap ? eap->arg : NULL; }
+int nvim_eap_get_skip(const exarg_T *eap) { return eap ? eap->skip : 0; }
+void nvim_eap_set_nextcmd(exarg_T *eap, char *val) { if (eap) { eap->nextcmd = val; } }
+char *nvim_eap_get_nextcmd(const exarg_T *eap) { return eap ? eap->nextcmd : NULL; }
+void nvim_emsg_return_not_in_func(void) { emsg(_("E133: :return not inside a function")); }
