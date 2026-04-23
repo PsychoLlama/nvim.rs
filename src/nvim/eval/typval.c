@@ -52,12 +52,7 @@ extern bool tv_list_equal(list_T *l1, list_T *l2, bool ic);
 extern bool tv2bool(const typval_T *tv);
 
 
-/// Type for tv_dict2list() function
-typedef enum {
-  kDict2ListKeys,    ///< List dictionary keys.
-  kDict2ListValues,  ///< List dictionary values.
-  kDict2ListItems,   ///< List dictionary contents: [keys, values].
-} DictListType;
+// DictListType enum deleted (Phase 8): tv_dict2list migrated to Rust
 
 #include "eval/typval.c.generated.h"
 
@@ -109,14 +104,7 @@ const char *const tv_empty_string = "";
 //{{{1 Lists
 //{{{2 List item
 
-/// Allocate a list item
-///
-/// @return [allocated] new list item.
-static listitem_T *tv_list_item_alloc(void)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC
-{
-  return xmalloc(sizeof(listitem_T));
-}
+// tv_list_item_alloc deleted (Phase 8): replaced by nvim_list_item_alloc C accessor
 
 // tv_list_item_remove, tv_list_watch_add, tv_list_watch_remove, tv_list_watch_fix
 // migrated to Rust (Phase 5)
@@ -175,7 +163,7 @@ void tv_list_init_static10(staticList10_T *const sl)
 typval_T *tv_list_append_owned_tv(list_T *const l, typval_T tv)
   FUNC_ATTR_NONNULL_ALL
 {
-  listitem_T *const li = tv_list_item_alloc();
+  listitem_T *const li = nvim_list_item_alloc();
   *TV_LIST_ITEM_TV(li) = tv;
   tv_list_append(l, li);
   return TV_LIST_ITEM_TV(li);
@@ -405,58 +393,11 @@ extern int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name);
 
 // tv_dict_alloc_lock, tv_dict_alloc_ret migrated to Rust (Phase 3)
 
-/// Turn a dictionary into a list
-///
-/// @param[in] argvars Arguments to items(). The first argument is check for being
-///                    a dictionary, will give an error if not.
-/// @param[out] rettv  Location where result will be saved.
-/// @param[in] what    What to save in rettv.
-static void tv_dict2list(typval_T *const argvars, typval_T *const rettv, const DictListType what)
-{
-  if ((what == kDict2ListItems
-       ? tv_check_for_string_or_list_or_dict_arg(argvars, 0)
-       : tv_check_for_dict_arg(argvars, 0)) == FAIL) {
-    tv_list_alloc_ret(rettv, 0);
-    return;
-  }
-
-  dict_T *d = argvars[0].vval.v_dict;
-  tv_list_alloc_ret(rettv, tv_dict_len(d));
-  if (d == NULL) {
-    // NULL dict behaves like an empty dict
-    return;
-  }
-
-  TV_DICT_ITER(d, di, {
-    typval_T tv_item = { .v_lock = VAR_UNLOCKED };
-
-    switch (what) {
-      case kDict2ListKeys:
-        tv_item.v_type = VAR_STRING;
-        tv_item.vval.v_string = xstrdup(di->di_key);
-        break;
-      case kDict2ListValues:
-        tv_copy(&di->di_tv, &tv_item);
-        break;
-      case kDict2ListItems: {
-        // items()
-        list_T *const sub_l = tv_list_alloc(2);
-        tv_item.v_type = VAR_LIST;
-        tv_item.vval.v_list = sub_l;
-        tv_list_ref(sub_l);
-        tv_list_append_string(sub_l, di->di_key, -1);
-        tv_list_append_tv(sub_l, &di->di_tv);
-        break;
-      }
-    }
-
-    tv_list_append_owned_tv(rettv->vval.v_list, tv_item);
-  });
-}
+// tv_dict2list migrated to Rust (Phase 8)
 
 // f_items migrated to Rust (Phase 6e)
 
-// f_keys, f_values migrated to Rust (Phase 6g)
+// f_keys, f_values migrated to Rust (Phase 6g; Phase 8: dict case inlined into Rust)
 
 // f_has_key migrated to Rust (Phase 6)
 
@@ -1782,12 +1723,7 @@ void nvim_emsg_list_not_enough_items(void) { emsg(_("E711: List value has not en
 int nvim_listitem_get_v_lock(const listitem_T *li) { return TV_LIST_ITEM_TV(li)->v_lock; }
 
 // Phase 6e: tv_list_copy, f_items accessors
-
-/// Call tv_dict2list(argvars, rettv, kDict2ListItems) (accessor for Rust f_items dict case).
-void nvim_tv_dict2list_items(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict2list(argvars, rettv, kDict2ListItems);
-}
+// nvim_tv_dict2list_items deleted (Phase 8): tv_dict2list migrated to Rust
 
 // Phase 4 additional accessors
 
@@ -1803,19 +1739,8 @@ int nvim_dict_get_len_impl(const dict_T *d) { return tv_dict_len(d); }
 /// Get dv_scope from a dict (accessor for Rust tv_dict_extend).
 int nvim_dict_get_scope_impl(const dict_T *d) { return (int)d->dv_scope; }
 
-// Phase 6g: f_keys, f_values accessors
-
-/// Call tv_dict2list(argvars, rettv, kDict2ListKeys) (accessor for Rust f_keys).
-void nvim_tv_dict2list_keys(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict2list(argvars, rettv, kDict2ListKeys);
-}
-
-/// Call tv_dict2list(argvars, rettv, kDict2ListValues) (accessor for Rust f_values).
-void nvim_tv_dict2list_values(typval_T *argvars, typval_T *rettv)
-{
-  tv_dict2list(argvars, rettv, kDict2ListValues);
-}
+// Phase 6g / Phase 8: f_keys, f_values, f_items (dict case) accessor wrappers deleted;
+// tv_dict2list logic now implemented directly in Rust tv_dict2list_impl().
 
 // Phase 6j: tv_dict_to_env accessor
 

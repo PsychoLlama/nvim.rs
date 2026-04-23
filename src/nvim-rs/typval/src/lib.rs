@@ -1264,8 +1264,6 @@ extern "C" {
     fn nvim_list_set_copyid(l: ListHandle, copyid: c_int);
     fn nvim_list_set_copylist(l: ListHandle, copy: ListHandle);
     fn utfc_ptr2len(p: *const c_char) -> c_int;
-    fn nvim_tv_dict2list_items(argvars: TypevalHandle, rettv: TypevalHandle);
-
     // Phase 6f: tv_dict_remove
     // nvim_di_check_fixed_translate inlined: var_check_fixed(di_flags at offset 16, name, TV_TRANSLATE)
     fn var_check_fixed(flags: c_int, name: *const c_char, name_len: usize) -> bool;
@@ -1274,10 +1272,6 @@ extern "C" {
     // nvim_dictitem_move_tv_to_rettv inlined: memcpy(rettv, di_tv@offset0, 16); zero di_tv
     fn nvim_semsg_dictkey(key: *const c_char);
     fn nvim_semsg_toomanyarg(fname: *const c_char);
-    // Phase 6g: f_keys, f_values
-    fn nvim_tv_dict2list_keys(argvars: TypevalHandle, rettv: TypevalHandle);
-    fn nvim_tv_dict2list_values(argvars: TypevalHandle, rettv: TypevalHandle);
-
     // Phase 6h: tv_dict_set_keys_readonly hashtab iteration
     fn nvim_dict_get_ht_array(d: DictHandle) -> HashItemHandle;
     fn nvim_hashitem_get_key(hi: HashItemHandle) -> *const c_char;
@@ -2573,7 +2567,7 @@ pub unsafe extern "C" fn rs_f_items(
     match v_type {
         VarType::String => unsafe { tv_string2items_impl(argvars, rettv) },
         VarType::List => unsafe { tv_list2items_impl(argvars, rettv) },
-        _ => unsafe { nvim_tv_dict2list_items(argvars, rettv) },
+        _ => unsafe { tv_dict2list_impl(argvars, rettv, 2) },
     }
 }
 
@@ -2640,8 +2634,68 @@ pub unsafe extern "C" fn rs_tv_dict_remove(
 }
 
 // =============================================================================
-// Phase 6g: f_keys, f_values
+// Phase 6g / Phase 8: f_keys, f_values, and tv_dict2list in Rust
 // =============================================================================
+
+/// Enumerate dict entries into a list (replaces C tv_dict2list, Phase 8).
+///
+/// mode: 0 = keys, 1 = values, 2 = items ([key, value] pairs)
+///
+/// # Safety
+/// argvars and rettv must be valid non-null pointers to typval_T arrays.
+unsafe fn tv_dict2list_impl(argvars: TypevalHandle, rettv: TypevalHandle, mode: u8) {
+    let check_result = if mode == 2 {
+        tv_check_for_string_or_list_or_dict_arg_impl(argvars, 0)
+    } else {
+        tv_check_for_dict_arg_impl(argvars, 0)
+    };
+    if check_result == FAIL {
+        unsafe { nvim_tv_list_alloc_ret(rettv, 0) };
+        return;
+    }
+    let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
+    let d = unsafe { nvim_tv_get_dict(arg0) };
+    let ht_used: usize = if d.is_null() {
+        0
+    } else {
+        unsafe { nvim_dict_get_ht_used(d) }
+    };
+    let ret_list = unsafe { nvim_tv_list_alloc_ret(rettv, ht_used as isize) };
+    if d.is_null() || ht_used == 0 {
+        return;
+    }
+    let mut hi = unsafe { nvim_dict_get_ht_array(d) };
+    let mut seen = 0usize;
+    while seen < ht_used {
+        let key = unsafe { nvim_hashitem_get_key(hi) };
+        // Empty slots have null key; deleted slots have key starting with '@'.
+        if !key.is_null() && unsafe { *key } != b'@' as c_char {
+            seen += 1;
+            let di = unsafe { nvim_hashitem_to_dictitem(hi) };
+            match mode {
+                0 => {
+                    // keys: append key string
+                    unsafe { rs_tv_list_append_string(ret_list, key, -1) };
+                }
+                1 => {
+                    // values: append copy of dict value
+                    let di_tv = unsafe { nvim_dictitem_get_tv(di) };
+                    unsafe { rs_tv_list_append_tv(ret_list, di_tv) };
+                }
+                _ => {
+                    // items: append [key, value] two-element sub-list
+                    let sub_l = unsafe { nvim_list_alloc_impl() };
+                    unsafe { rs_tv_list_append_string(sub_l, key, -1) };
+                    let di_tv = unsafe { nvim_dictitem_get_tv(di) };
+                    unsafe { rs_tv_list_append_tv(sub_l, di_tv) };
+                    // rs_tv_list_append_list increments sub_l refcount from 0 to 1
+                    unsafe { rs_tv_list_append_list(ret_list, sub_l) };
+                }
+            }
+        }
+        hi = unsafe { nvim_hashitem_next(hi) };
+    }
+}
 
 /// FFI export: f_keys - VimL keys() function.
 #[export_name = "f_keys"]
@@ -2650,7 +2704,7 @@ pub unsafe extern "C" fn rs_f_keys(
     rettv: TypevalHandle,
     _fptr: *const std::ffi::c_void,
 ) {
-    unsafe { nvim_tv_dict2list_keys(argvars, rettv) };
+    unsafe { tv_dict2list_impl(argvars, rettv, 0) };
 }
 
 /// FFI export: f_values - VimL values() function.
@@ -2660,7 +2714,7 @@ pub unsafe extern "C" fn rs_f_values(
     rettv: TypevalHandle,
     _fptr: *const std::ffi::c_void,
 ) {
-    unsafe { nvim_tv_dict2list_values(argvars, rettv) };
+    unsafe { tv_dict2list_impl(argvars, rettv, 1) };
 }
 
 // =============================================================================
