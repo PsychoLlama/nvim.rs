@@ -579,55 +579,6 @@ int nvim_open_buffer_read_file(void *eap, int flags, int silent, int *read_fifo_
   return retval;
 }
 
-/// Read stdin for open_buffer (binary pre-read then retry).
-/// @param eap  exarg pointer
-/// @param flags  read flags
-/// @param silent  shortmess result
-/// @return readfile()/rs_read_buffer() result
-int nvim_open_buffer_read_stdin(void *eap, int flags, int silent)
-{
-  int save_bin = curbuf->b_p_bin;
-  curbuf->b_p_bin = true;
-  int retval = readfile(NULL, NULL, 0, 0, (linenr_T)MAXLNUM, NULL,
-                        flags | (READ_NEW + READ_STDIN), silent != 0);
-  curbuf->b_p_bin = save_bin;
-  if (retval == OK) {
-    retval = rs_read_buffer(true, eap, flags);
-  }
-  return retval;
-}
-
-/// Handle first-time load of curbuf: buf_init_chartab + parse_cino.
-void nvim_curbuf_init_first_load(void)
-{
-  if (curbuf->b_flags & BF_NEVERLOADED) {
-    buf_init_chartab(curbuf, false);
-    parse_cino(curbuf);
-  }
-}
-
-/// Decide changed/unchanged state and save file format for open_buffer.
-/// @param retval  current readfile result (non-zero = OK)
-/// @param read_stdin  was reading from stdin
-/// @param read_fifo  was reading from fifo
-void nvim_open_buffer_set_changed(int retval, int read_stdin, int read_fifo)
-{
-  int fail_val = 0;  // FAIL == 0
-  if ((got_int && vim_strchr(p_cpo, CPO_INTMOD) != NULL)
-      || curbuf->b_modified_was_set
-      || (aborting() && vim_strchr(p_cpo, CPO_INTMOD) != NULL)) {
-    changed(curbuf);
-  } else if (retval != fail_val && !read_stdin && !read_fifo) {
-    unchanged(curbuf, false, true);
-  }
-  save_file_ff(curbuf);
-  curbuf->b_last_changedtick = buf_get_changedtick(curbuf);
-  curbuf->b_last_changedtick_i = buf_get_changedtick(curbuf);
-  curbuf->b_last_changedtick_pum = buf_get_changedtick(curbuf);
-  if (aborting()) {
-    curbuf->b_flags |= BF_READERR;
-  }
-}
 
 /// Execute the post-BUFENTER section of open_buffer:
 /// - validates old_curbuf is still alive with memfile

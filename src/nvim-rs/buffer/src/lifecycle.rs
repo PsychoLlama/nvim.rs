@@ -2244,9 +2244,6 @@ extern "C" {
         silent: c_int,
         read_fifo_out: *mut c_int,
     ) -> c_int;
-    fn nvim_open_buffer_read_stdin(eap: *mut ExArg, flags: c_int, silent: c_int) -> c_int;
-    fn nvim_curbuf_init_first_load();
-    fn nvim_open_buffer_set_changed(retval: c_int, read_stdin: c_int, read_fifo: c_int);
     fn nvim_open_buffer_post_autocmd(
         old_curbuf: *mut crate::misc::BufRef,
         flags: c_int,
@@ -2270,6 +2267,33 @@ extern "C" {
     fn ml_open(buf: BufHandle) -> c_int;
     /// Exit with the given exit value.
     fn getout(exitval: c_int) -> !;
+    /// Initialize chartab for buffer.
+    fn buf_init_chartab(buf: BufHandle, global: bool) -> c_int;
+    /// Parse 'cino' option for buffer.
+    fn parse_cino(buf: BufHandle);
+    /// Read file into buffer.
+    fn readfile(
+        fname: *const c_char,
+        sfname: *const c_char,
+        from: c_int,
+        lines_to_skip: c_int,
+        lines_to_read: c_int,
+        eap: *mut c_void,
+        flags: c_int,
+        silent: bool,
+    ) -> c_int;
+    /// Mark buffer as changed.
+    fn changed(buf: BufHandle);
+    /// Mark buffer as unchanged.
+    fn unchanged(buf: BufHandle, ff: bool, always_inc_changedtick: bool);
+    /// Save file format.
+    fn save_file_ff(buf: BufHandle);
+    /// Get changedtick directly.
+    fn nvim_buf_get_changedtick_direct(buf: BufHandle) -> i64;
+    /// Search for character in string.
+    fn vim_strchr(str_: *const c_char, c: c_int) -> *const c_char;
+    /// 'cpo' option string.
+    static p_cpo: *const c_char;
 }
 
 extern "C" {
@@ -2289,6 +2313,14 @@ const MF_DIRTY_YES_NOSYNC: c_int = 2;
 const MF_DIRTY_YES: c_int = 1;
 /// `VALID_TOPLINE` flag (from `window_defs.h`).
 const VALID_TOPLINE_FLAG: c_int = 0x80;
+/// `CPO_INTMOD`: 'i' flag in 'cpoptions' (modified on interrupt).
+const CPO_INTMOD: c_int = b'i' as c_int;
+/// `READ_NEW`: first read of this file.
+const READ_NEW: c_int = 0x01;
+/// `READ_STDIN`: reading from stdin.
+const READ_STDIN: c_int = 0x04;
+/// `MAXLNUM`: maximum line number.
+const MAXLNUM: c_int = 0x7fff_ffff;
 
 /// Open memfile for the current buffer, handling the fallback path on failure.
 ///
@@ -2360,6 +2392,7 @@ unsafe fn open_buffer_ml_init_impl(old_tw: i64) -> c_int {
 ///
 /// # Safety
 /// Accesses global Neovim state. Must be called on the main thread.
+#[allow(clippy::too_many_lines)]
 #[unsafe(export_name = "open_buffer")]
 pub unsafe extern "C" fn rs_open_buffer(
     read_stdin: bool,
@@ -2414,7 +2447,26 @@ pub unsafe extern "C" fn rs_open_buffer(
     if !buf_ref(nvim_get_curbuf()).b_ffname.is_null() {
         retval = nvim_open_buffer_read_file(eap, flags, silent_int, &raw mut read_fifo);
     } else if read_stdin {
-        retval = nvim_open_buffer_read_stdin(eap, flags, silent_int);
+        // Read from stdin: binary pre-read, then rs_read_buffer for encoding retry.
+        let curbuf = nvim_get_curbuf();
+        let save_bin = buf_ref(curbuf).b_p_bin;
+        buf_mut(curbuf).b_p_bin = 1;
+        let rf = readfile(
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            0,
+            MAXLNUM,
+            std::ptr::null_mut(),
+            flags | (READ_NEW + READ_STDIN),
+            silent,
+        );
+        buf_mut(curbuf).b_p_bin = save_bin;
+        retval = if rf != 0 {
+            crate::misc::rs_read_buffer(true, eap.cast(), flags)
+        } else {
+            rf
+        };
     }
     // If neither, retval stays OK and read_fifo stays 0.
 
@@ -2425,8 +2477,35 @@ pub unsafe extern "C" fn rs_open_buffer(
             nvim_mf_set_dirty(mfp, MF_DIRTY_YES);
         }
     }
-    nvim_curbuf_init_first_load();
-    nvim_open_buffer_set_changed(retval, c_int::from(read_stdin), read_fifo);
+    // Handle first-time load: initialize chartab and cino if BF_NEVERLOADED.
+    {
+        let curbuf = nvim_get_curbuf();
+        if (buf_ref(curbuf).b_flags & buf_flags::BF_NEVERLOADED) != 0 {
+            buf_init_chartab(curbuf, false);
+            parse_cino(curbuf);
+        }
+    }
+    // Decide changed/unchanged state and save file format.
+    {
+        let curbuf = nvim_get_curbuf();
+        let fail_val: c_int = 0;
+        if (ex_buffer_got_int && !vim_strchr(p_cpo, CPO_INTMOD).is_null())
+            || buf_ref(curbuf).b_modified_was_set != 0
+            || (aborting() != 0 && !vim_strchr(p_cpo, CPO_INTMOD).is_null())
+        {
+            changed(curbuf);
+        } else if retval != fail_val && !read_stdin && read_fifo == 0 {
+            unchanged(curbuf, false, true);
+        }
+        save_file_ff(curbuf);
+        let tick = nvim_buf_get_changedtick_direct(curbuf);
+        buf_mut(curbuf).b_last_changedtick = tick;
+        buf_mut(curbuf).b_last_changedtick_i = tick;
+        buf_mut(curbuf).b_last_changedtick_pum = tick;
+        if aborting() != 0 {
+            buf_mut(curbuf).b_flags |= buf_flags::BF_READERR;
+        }
+    }
     rs_foldUpdateAll(nvim_get_curwin());
     {
         let wp = win_mut_raw(nvim_get_curwin());
