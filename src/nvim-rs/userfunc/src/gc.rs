@@ -19,7 +19,12 @@ const DO_NOT_FREE_CNT: c_int = c_int::MAX / 2;
 
 extern "C" {
     fn nvim_set_ref_in_functions_impl(copy_id: c_int) -> c_int;
-    fn nvim_free_unref_funccal_impl(copy_id: c_int, testing: c_int) -> c_int;
+
+    // Phase 26: for free_unref_funccal inlining
+    fn nvim_set_previous_funccal(fc: *mut c_void);
+    fn garbage_collect(testing: c_int) -> bool;
+    fn rs_free_funccal_contents(fc: *mut c_void);
+    fn nvim_fc_set_caller(fc: *mut c_void, caller: *mut c_void);
 
     // Phase 11: For inlining nvim_set_ref_in_func_impl:
     fn nvim_ufunc_get_scoped(fp: *mut c_void) -> *mut c_void;
@@ -107,13 +112,40 @@ pub unsafe extern "C" fn rs_can_free_funccal(fc: *mut c_void, copy_id: c_int) ->
 // free_unref_funccal
 // =============================================================================
 //
-// Cannot inline: requires modifying previous_funccal static and fc_caller
-// pointers (pointer-to-pointer linked list surgery) which is not safe to do
-// from Rust without dedicated C setters. Remains as thin wrapper.
+// Phase 26: inlined from nvim_free_unref_funccal_impl.
+// Iterates previous_funccal linked list, freeing entries that can be freed.
 
 #[unsafe(export_name = "free_unref_funccal")]
 pub unsafe extern "C" fn rs_free_unref_funccal(copy_id: c_int, testing: c_int) -> c_int {
-    unsafe { nvim_free_unref_funccal_impl(copy_id, testing) }
+    let mut did_free = false;
+    let mut did_free_funccal = false;
+
+    // Walk the previous_funccal linked list, deleting freeable entries.
+    let mut prev: *mut c_void = std::ptr::null_mut(); // previous fc (or null for head)
+    let mut current = unsafe { nvim_get_previous_funccal() };
+    while !current.is_null() {
+        let next = unsafe { nvim_fc_get_caller(current) };
+        if unsafe { rs_can_free_funccal(current, copy_id) } != 0 {
+            // Remove from linked list.
+            if prev.is_null() {
+                unsafe { nvim_set_previous_funccal(next) };
+            } else {
+                unsafe { nvim_fc_set_caller(prev, next) };
+            }
+            unsafe { rs_free_funccal_contents(current) };
+            did_free = true;
+            did_free_funccal = true;
+            // Don't advance prev; next entry takes current's position.
+        } else {
+            prev = current;
+        }
+        current = next;
+    }
+
+    if did_free_funccal {
+        unsafe { garbage_collect(testing) };
+    }
+    c_int::from(did_free)
 }
 
 // =============================================================================

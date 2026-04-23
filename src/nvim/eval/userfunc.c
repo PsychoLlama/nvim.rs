@@ -2493,27 +2493,8 @@ int nvim_get_current_funccal_fc_returned(void) { return current_funccal->fc_retu
 // Implemented in Rust (nvim-eval crate)
 extern int current_func_returned(void);
 
-/// Phase 5: C implementation shim for free_unref_funccal.
-int nvim_free_unref_funccal_impl(int copyID, int testing)
-{
-  bool did_free = false;
-  bool did_free_funccal = false;
-  for (funccall_T **pfc = &previous_funccal; *pfc != NULL;) {
-    if (rs_can_free_funccal(*pfc, copyID)) {
-      funccall_T *fc = *pfc;
-      *pfc = fc->fc_caller;
-      rs_free_funccal_contents(fc);
-      did_free = true;
-      did_free_funccal = true;
-    } else {
-      pfc = &(*pfc)->fc_caller;
-    }
-  }
-  if (did_free_funccal) {
-    garbage_collect(testing);
-  }
-  return did_free;
-}
+// nvim_free_unref_funccal_impl migrated to Rust (gc.rs Phase 26).
+// rs_free_unref_funccal now implements the logic directly.
 
 // nvim_get_funccal_impl inlined into rs_get_funccal (Rust, Phase 13)
 // nvim_get_funccal_local_dict_impl inlined into rs_get_funccal_local_dict (Rust, Phase 13)
@@ -3080,6 +3061,9 @@ int nvim_check_defer_builtin(const char *name, int argcount)
   }
   return check_internal_func(fdef, argcount);
 }
+
+// Phase 26: accessor for free_unref_funccal migration (gc.rs)
+void nvim_set_previous_funccal(funccall_T *fc) { previous_funccal = fc; }
 
 // Phase 25: accessors for ex_call_inner migration (funccal.rs)
 linenr_T nvim_eap_get_line1(const exarg_T *eap) { return eap ? eap->line1 : 0; }
