@@ -778,130 +778,8 @@ void tv_dict_watcher_add(dict_T *const dict, const char *const key_pattern,
   QUEUE_INSERT_TAIL(&dict->watchers, &watcher->node);
 }
 
-/// Check whether two callbacks are equal
-///
-/// @param[in]  cb1  First callback to check.
-/// @param[in]  cb2  Second callback to check.
-///
-/// @return True if they are equal, false otherwise.
-bool tv_callback_equal(const Callback *cb1, const Callback *cb2)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (cb1->type != cb2->type) {
-    return false;
-  }
-  switch (cb1->type) {
-  case kCallbackFuncref:
-    return strcmp(cb1->data.funcref, cb2->data.funcref) == 0;
-  case kCallbackPartial:
-    // FIXME: this is inconsistent with tv_equal but is needed for precision
-    // maybe change dictwatcheradd to return a watcher id instead?
-    return cb1->data.partial == cb2->data.partial;
-  case kCallbackLua:
-    return cb1->data.luaref == cb2->data.luaref;
-  case kCallbackNone:
-    return true;
-  }
-  abort();
-  return false;
-}
-
-/// Unref/free callback
-void callback_free(Callback *callback)
-  FUNC_ATTR_NONNULL_ALL
-{
-  switch (callback->type) {
-  case kCallbackFuncref:
-    func_unref(callback->data.funcref);
-    xfree(callback->data.funcref);
-    break;
-  case kCallbackPartial:
-    partial_unref(callback->data.partial);
-    break;
-  case kCallbackLua:
-    NLUA_CLEAR_REF(callback->data.luaref);
-    break;
-  case kCallbackNone:
-    break;
-  }
-  callback->type = kCallbackNone;
-  callback->data.funcref = NULL;
-}
-
-/// Copy a callback into a typval_T.
-void callback_put(Callback *cb, typval_T *tv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  switch (cb->type) {
-  case kCallbackPartial:
-    tv->v_type = VAR_PARTIAL;
-    tv->vval.v_partial = cb->data.partial;
-    cb->data.partial->pt_refcount++;
-    break;
-  case kCallbackFuncref:
-    tv->v_type = VAR_FUNC;
-    tv->vval.v_string = xstrdup(cb->data.funcref);
-    func_ref(cb->data.funcref);
-    break;
-  case kCallbackLua:
-  // TODO(tjdevries): Unified Callback.
-  // At this point this isn't possible, but it'd be nice to put
-  // these handled more neatly in one place.
-  // So instead, we just do the default and put nil
-  default:
-    tv->v_type = VAR_SPECIAL;
-    tv->vval.v_special = kSpecialVarNull;
-    break;
-  }
-}
-
-// Copy callback from "src" to "dest", incrementing the refcounts.
-void callback_copy(Callback *dest, Callback *src)
-  FUNC_ATTR_NONNULL_ALL
-{
-  dest->type = src->type;
-  switch (src->type) {
-  case kCallbackPartial:
-    dest->data.partial = src->data.partial;
-    dest->data.partial->pt_refcount++;
-    break;
-  case kCallbackFuncref:
-    dest->data.funcref = xstrdup(src->data.funcref);
-    func_ref(src->data.funcref);
-    break;
-  case kCallbackLua:
-    dest->data.luaref = api_new_luaref(src->data.luaref);
-    break;
-  default:
-    dest->data.funcref = NULL;
-    break;
-  }
-}
-
-/// Generate a string description of a callback
-char *callback_to_string(Callback *cb, Arena *arena)
-{
-  if (cb->type == kCallbackLua) {
-    return nlua_funcref_str(cb->data.luaref, arena);
-  }
-
-  const size_t msglen = 100;
-  char *msg = xmallocz(msglen);
-
-  switch (cb->type) {
-  case kCallbackFuncref:
-    // TODO(tjdevries): Is this enough space for this?
-    snprintf(msg, msglen, "<vim function: %s>", cb->data.funcref);
-    break;
-  case kCallbackPartial:
-    snprintf(msg, msglen, "<vim partial: %s>", cb->data.partial->pt_name);
-    break;
-  default:
-    *msg = NUL;
-    break;
-  }
-  return msg;
-}
+// tv_callback_equal, callback_free, callback_put, callback_copy, callback_to_string
+// migrated to Rust (Phase 1)
 
 /// Remove watcher from a dictionary
 ///
@@ -3002,3 +2880,38 @@ hashitem_T *nvim_hashitem_next(hashitem_T *hi) { return hi + 1; }
 
 /// Convert hashitem to dictitem via TV_DICT_HI2DI (accessor for Rust dict iteration).
 dictitem_T *nvim_hashitem_to_dictitem(hashitem_T *hi) { return TV_DICT_HI2DI(hi); }
+
+// Phase 1 (typval migration): C accessor wrappers for callback Lua operations.
+// These allow Rust to call Lua-specific functions without depending on lua headers.
+
+/// Clear the luaref in a Callback (NLUA_CLEAR_REF equivalent for Rust).
+/// Sets the type back to kCallbackNone.
+void nvim_callback_clear_luaref(Callback *cb)
+{
+  NLUA_CLEAR_REF(cb->data.luaref);
+  cb->type = kCallbackNone;
+  cb->data.funcref = NULL;
+}
+
+/// Duplicate a LuaRef (api_new_luaref wrapper for Rust).
+int nvim_callback_new_luaref(int ref) { return (int)api_new_luaref((LuaRef)ref); }
+
+/// Format a luaref callback as a string (nlua_funcref_str wrapper for Rust).
+/// Returns allocated string; caller must free.
+char *nvim_callback_funcref_str(int luaref, Arena *arena)
+{
+  return nlua_funcref_str((LuaRef)luaref, arena);
+}
+
+/// Get partial_T refcount (accessor for Rust).
+int nvim_partial_get_refcount(const partial_T *pt) { return pt->pt_refcount; }
+
+/// Increment partial_T refcount (accessor for Rust).
+void nvim_partial_inc_refcount(partial_T *pt) { pt->pt_refcount++; }
+
+// nvim_partial_get_name: already defined in eval/userfunc.c
+
+// nvim_tv_set_partial, nvim_tv_set_special: already defined in eval/vars.c
+
+/// Set vval.v_string (takes ownership) on a typval without changing type (accessor for Rust).
+void nvim_tv_set_vstring_owned(typval_T *tv, char *s) { tv->vval.v_string = s; }

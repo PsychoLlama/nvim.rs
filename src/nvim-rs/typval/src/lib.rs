@@ -4862,6 +4862,242 @@ unsafe fn nvim_tv_get_special(tv: TypevalHandle) -> c_int {
     unsafe { nvim_tv_get_bool(tv) }
 }
 
+// =============================================================================
+// Phase 1: Callback Operations (migrated from typval.c)
+// =============================================================================
+//
+// The Callback struct layout (16 bytes):
+//   offset 0: data union (8 bytes) - funcref (*mut c_char) / partial (*mut c_void) / luaref (c_int)
+//   offset 8: type (c_int, CallbackType enum)
+//   offset 12: 4 bytes padding
+//
+// CallbackType enum values:
+//   kCallbackNone    = 0
+//   kCallbackFuncref = 1
+//   kCallbackPartial = 2
+//   kCallbackLua     = 3
+
+use std::ffi::c_void;
+
+const K_CALLBACK_NONE: c_int = 0;
+const K_CALLBACK_FUNCREF: c_int = 1;
+const K_CALLBACK_PARTIAL: c_int = 2;
+const K_CALLBACK_LUA: c_int = 3;
+
+/// Callback struct mirror (16 bytes, layout verified by _Static_assert in eval_shim.c).
+#[repr(C)]
+struct CbData {
+    /// Data union: funcref (*mut c_char), partial (*mut c_void), or luaref (c_int).
+    data: CbUnion,
+    /// Type discriminant (CallbackType enum value).
+    cb_type: c_int,
+    _pad: [u8; 4],
+}
+
+/// Union for callback data field (8 bytes).
+#[repr(C)]
+union CbUnion {
+    funcref: *mut c_char,
+    partial: *mut c_void,
+    luaref: c_int,
+}
+
+extern "C" {
+    // Callback Lua accessors (defined in typval.c Phase 1 section)
+    fn nvim_callback_clear_luaref(cb: *mut c_void);
+    fn nvim_callback_new_luaref(ref_: c_int) -> c_int;
+    fn nvim_callback_funcref_str(luaref: c_int, arena: *mut c_void) -> *mut c_char;
+
+    // Partial accessors
+    fn nvim_partial_inc_refcount(pt: *mut c_void);
+    fn nvim_partial_get_name(pt: *mut c_void) -> *mut c_char;
+
+    // Memory and string functions
+    #[link_name = "xmallocz"]
+    fn cb_xmallocz(size: usize) -> *mut c_char;
+    fn func_unref(name: *mut c_char);
+    fn func_ref(name: *const c_char);
+    // partial_unref is exported by the eval crate
+    fn partial_unref(pt: *mut c_void);
+    fn snprintf(buf: *mut c_char, size: usize, fmt: *const c_char, ...) -> c_int;
+    fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
+}
+
+// Additional setters for callback_put
+extern "C" {
+    fn nvim_tv_set_partial(tv: *mut c_void, pt: *mut c_void);
+    fn nvim_tv_set_vstring_owned(tv: *mut c_void, s: *mut c_char);
+    fn nvim_tv_set_special(tv: *mut c_void, val: c_int);
+}
+
+/// Compare two Callback structs for equality.
+///
+/// Migrated from C `tv_callback_equal`.
+///
+/// # Safety
+///
+/// Both `cb1` and `cb2` must be valid non-null pointers to `Callback` structs.
+#[export_name = "tv_callback_equal"]
+pub unsafe extern "C" fn rs_tv_callback_equal(cb1: *const c_void, cb2: *const c_void) -> bool {
+    let cb1 = &*cb1.cast::<CbData>();
+    let cb2 = &*cb2.cast::<CbData>();
+
+    if cb1.cb_type != cb2.cb_type {
+        return false;
+    }
+    match cb1.cb_type {
+        K_CALLBACK_FUNCREF => {
+            // Compare funcref strings
+            let s1 = cb1.data.funcref;
+            let s2 = cb2.data.funcref;
+            if s1.is_null() && s2.is_null() {
+                return true;
+            }
+            if s1.is_null() || s2.is_null() {
+                return false;
+            }
+            strcmp(s1, s2) == 0
+        }
+        K_CALLBACK_PARTIAL => {
+            // Compare partial pointers (pointer identity, not deep equality)
+            cb1.data.partial == cb2.data.partial
+        }
+        K_CALLBACK_LUA => {
+            // Compare luarefs
+            cb1.data.luaref == cb2.data.luaref
+        }
+        K_CALLBACK_NONE => true,
+        _ => false,
+    }
+}
+
+/// Free callback resources and reset to kCallbackNone.
+///
+/// Migrated from C `callback_free`.
+///
+/// # Safety
+///
+/// `callback` must be a valid non-null pointer to a `Callback` struct.
+#[export_name = "callback_free"]
+pub unsafe extern "C" fn rs_callback_free(callback: *mut c_void) {
+    let cb = &mut *callback.cast::<CbData>();
+    match cb.cb_type {
+        K_CALLBACK_FUNCREF => {
+            func_unref(cb.data.funcref);
+            nvim_xfree(cb.data.funcref.cast());
+        }
+        K_CALLBACK_PARTIAL => {
+            partial_unref(cb.data.partial);
+        }
+        K_CALLBACK_LUA => {
+            nvim_callback_clear_luaref(callback);
+            return; // nvim_callback_clear_luaref already resets type and data
+        }
+        _ => {}
+    }
+    cb.cb_type = K_CALLBACK_NONE;
+    cb.data.funcref = std::ptr::null_mut();
+}
+
+/// Copy a Callback into a typval_T.
+///
+/// Migrated from C `callback_put`.
+///
+/// # Safety
+///
+/// `cb` must be a valid non-null pointer to a `Callback` struct.
+/// `tv` must be a valid non-null pointer to a `typval_T` struct.
+#[export_name = "callback_put"]
+pub unsafe extern "C" fn rs_callback_put(cb: *mut c_void, tv: TypevalHandle) {
+    let cb = &*cb.cast::<CbData>();
+    match cb.cb_type {
+        K_CALLBACK_PARTIAL => {
+            // tv->v_type = VAR_PARTIAL; tv->vval.v_partial = cb->data.partial; refcount++
+            nvim_tv_set_partial(tv.as_ptr().cast_mut(), cb.data.partial);
+            nvim_partial_inc_refcount(cb.data.partial);
+        }
+        K_CALLBACK_FUNCREF => {
+            // tv->v_type = VAR_FUNC; tv->vval.v_string = xstrdup(cb->data.funcref)
+            nvim_tv_set_type(tv, VarType::Func as c_int);
+            let s = nvim_xstrdup(cb.data.funcref);
+            nvim_tv_set_vstring_owned(tv.as_ptr().cast_mut(), s);
+            func_ref(cb.data.funcref);
+        }
+        _ => {
+            // Lua and None: set to v:null (VAR_SPECIAL, kSpecialVarNull=0)
+            nvim_tv_set_special(tv.as_ptr().cast_mut(), 0);
+        }
+    }
+}
+
+/// Deep-copy a Callback with refcount bumps.
+///
+/// Migrated from C `callback_copy`.
+///
+/// # Safety
+///
+/// `dest` and `src` must be valid non-null pointers to `Callback` structs.
+#[export_name = "callback_copy"]
+pub unsafe extern "C" fn rs_callback_copy(dest: *mut c_void, src: *mut c_void) {
+    let src = &*src.cast::<CbData>();
+    let dest = &mut *dest.cast::<CbData>();
+    dest.cb_type = src.cb_type;
+    match src.cb_type {
+        K_CALLBACK_PARTIAL => {
+            dest.data.partial = src.data.partial;
+            nvim_partial_inc_refcount(src.data.partial);
+        }
+        K_CALLBACK_FUNCREF => {
+            dest.data.funcref = nvim_xstrdup(src.data.funcref);
+            func_ref(src.data.funcref);
+        }
+        K_CALLBACK_LUA => {
+            dest.data.luaref = nvim_callback_new_luaref(src.data.luaref);
+        }
+        _ => {
+            dest.data.funcref = std::ptr::null_mut();
+        }
+    }
+}
+
+/// Format a Callback as a display string.
+///
+/// Migrated from C `callback_to_string`.
+///
+/// # Safety
+///
+/// `cb` must be a valid non-null pointer to a `Callback` struct.
+/// `arena` may be null (heap allocation used).
+#[export_name = "callback_to_string"]
+pub unsafe extern "C" fn rs_callback_to_string(cb: *mut c_void, arena: *mut c_void) -> *mut c_char {
+    let cb = &*cb.cast::<CbData>();
+    if cb.cb_type == K_CALLBACK_LUA {
+        return nvim_callback_funcref_str(cb.data.luaref, arena);
+    }
+
+    let msglen: usize = 100;
+    let msg = cb_xmallocz(msglen);
+    if msg.is_null() {
+        return msg;
+    }
+
+    match cb.cb_type {
+        K_CALLBACK_FUNCREF => {
+            let fmt = b"<vim function: %s>\0".as_ptr().cast::<c_char>();
+            snprintf(msg, msglen, fmt, cb.data.funcref);
+        }
+        K_CALLBACK_PARTIAL => {
+            let name: *mut c_char = nvim_partial_get_name(cb.data.partial);
+            let fmt = b"<vim partial: %s>\0".as_ptr().cast::<c_char>();
+            snprintf(msg, msglen, fmt, name);
+        }
+        _ => {
+            *msg = 0; // NUL-terminate: empty string
+        }
+    }
+    msg
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

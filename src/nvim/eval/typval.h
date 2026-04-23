@@ -606,4 +606,11 @@ extern const char *tv_dict_get_string_buf(const dict_T *d, const char *key, char
 extern const char *tv_dict_get_string_buf_chk(const dict_T *d, const char *key, ptrdiff_t key_len,
                                               char *numbuf, const char *def);
 
+// Callback operations (migrated to Rust, Phase 1 of typval.c migration)
+extern bool tv_callback_equal(const Callback *cb1, const Callback *cb2);
+extern void callback_free(Callback *callback);
+extern void callback_put(Callback *cb, typval_T *tv);
+extern void callback_copy(Callback *dest, Callback *src);
+extern char *callback_to_string(Callback *cb, Arena *arena);
+
 #include "eval/typval.h.generated.h"
