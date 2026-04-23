@@ -94,8 +94,8 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_set_cursor_col(col: c_int);
 
-    // VIsual state
-    fn nvim_dpo_get_VIsual_active() -> bool;
+    // VIsual state (direct global)
+    static mut VIsual_active: bool;
 
     // curbuf global
     static mut curbuf: *mut c_void;
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn rs_op_addsub(oap: *mut OpargT, prenum1: c_int, g_cmd: b
     // Postpone fold updates until after changed_lines()
     nvim_inc_disable_fold_update();
 
-    if nvim_dpo_get_VIsual_active() {
+    if VIsual_active {
         // Visual mode: iterate over lines
         if u_save((*oap).start.lnum - 1, (*oap).end.lnum + 1) == FAIL {
             nvim_dec_disable_fold_update();

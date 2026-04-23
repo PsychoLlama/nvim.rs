@@ -111,8 +111,7 @@ extern "C" {
     // Buffer empty check
     fn nvim_curbuf_ml_empty() -> bool;
 
-    // curwin pointer for check_cursor
-    fn nvim_dpo_get_curwin() -> *mut c_void;
+    // curwin pointer for check_cursor (use global directly)
 }
 
 // -----------------------------------------------------------------------
@@ -311,7 +310,7 @@ pub unsafe extern "C" fn rs_op_change(oap: *mut c_void) -> c_int {
                 }
                 linenr += 1;
             }
-            check_cursor(nvim_dpo_get_curwin());
+            check_cursor(curwin);
             changed_lines(
                 curbuf,
                 (*oap_t).start.lnum + 1,

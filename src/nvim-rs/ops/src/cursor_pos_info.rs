@@ -46,7 +46,7 @@ extern "C" {
     fn nvim_get_VIsual_col() -> c_int;
     fn nvim_get_cursor_lnum() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
-    fn nvim_p_sel_is_exclusive() -> bool;
+    static mut p_sel: *const std::ffi::c_char;
     fn nvim_curwin_get_w_curswant() -> c_int;
 
     // Block visual
@@ -712,7 +712,8 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     let visual_col = nvim_get_VIsual_col();
     let cursor_lnum = nvim_get_cursor_lnum();
     let cursor_col = nvim_get_cursor_col();
-    let sel_exclusive = c_int::from(nvim_p_sel_is_exclusive());
+    #[allow(clippy::cast_sign_loss)]
+    let sel_exclusive = c_int::from(*p_sel as u8 == b'e');
     let curswant = nvim_curwin_get_w_curswant();
 
     let visual_active = VIsual_active;

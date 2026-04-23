@@ -109,8 +109,8 @@ extern "C" {
 
     // restart_edit
     static mut restart_edit: c_int;
-    // p_sol
-    fn nvim_dpo_get_p_sol() -> bool;
+    // p_sol (direct global linkage)
+    static mut p_sol: c_int;
 
     // curwin->w_p_lbr
     fn nvim_curwin_get_p_lbr() -> c_int;
@@ -184,7 +184,6 @@ extern "C" {
     // p_cpo / p_sel / options
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
     static mut p_sel: *const std::ffi::c_char;
-    fn nvim_p_sel_is_old() -> bool;
 
     // redraw
     fn nvim_redraw_curbuf_inverted();
@@ -283,8 +282,8 @@ extern "C" {
     fn nvim_use_indentexpr_for_lisp() -> bool;
     #[link_name = "has_format_option"]
     fn nvim_has_format_option(opt: c_int) -> bool;
-    // curwin handle for fold calls
-    fn nvim_dpo_get_curwin() -> *mut c_void;
+    // curwin handle (direct global linkage)
+    static mut curwin: *mut c_void;
 }
 
 // =============================================================================
@@ -323,6 +322,13 @@ unsafe fn restore_lbr(saved: c_int) {
 #[inline]
 unsafe fn sel_is_exclusive() -> bool {
     *p_sel as u8 == b'e'
+}
+
+/// Returns true if `p_sel` is "old" (`'o'`).
+#[allow(clippy::cast_sign_loss)]
+#[inline]
+unsafe fn sel_is_old() -> bool {
+    *p_sel as u8 == b'o'
 }
 
 unsafe fn get_op_vcol(oap: *mut OpargT, redo_vcol: c_int, initial: bool) {
@@ -506,7 +512,7 @@ unsafe fn dpo_preamble(cap: *mut c_void, gui_yank: bool) {
         if rv_vcol == MAXCOL || rv_mode == c_int::from(b'v') {
             if rv_mode == c_int::from(b'v') {
                 if rv_line_count <= 1 {
-                    validate_virtcol(nvim_dpo_get_curwin());
+                    validate_virtcol(curwin);
                     let new_curswant = nvim_get_curwin_w_virtcol() + rv_vcol - 1;
                     nvim_set_curswant(new_curswant);
                 } else {
@@ -601,7 +607,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
     nvim_check_pos_oap_end(oap);
     let line_count = (*oap.cast::<OpargT>()).end.lnum - (*oap.cast::<OpargT>()).start.lnum + 1;
     (*oap.cast::<OpargT>()).line_count = line_count;
-    virtual_op = c_int::from(virtual_active(nvim_dpo_get_curwin()));
+    virtual_op = c_int::from(virtual_active(curwin));
 
     let vis_active = VIsual_active;
     let redo_busy = redo_VIsual_busy;
@@ -724,7 +730,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
             if nvim_oap_end_is_NUL(oap) && (include_line_break || virtual_op == 0) {
                 (*oap.cast::<OpargT>()).inclusive = false;
                 let op_type2 = (*oap.cast::<OpargT>()).op_type;
-                if !nvim_p_sel_is_old()
+                if !sel_is_old()
                     && op_on_lines(op_type2) == 0
                     && (*oap.cast::<OpargT>()).end.lnum < nvim_curbuf_get_ml_line_count()
                 {
@@ -802,7 +808,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
         && !inclusive2
         && (retval & CA_NO_ADJ_OP_END) == 0
         && end_col == 0
-        && (!is_visual2 || nvim_p_sel_is_old())
+        && (!is_visual2 || sel_is_old())
         && line_count3 > 1
     {
         (*oap.cast::<OpargT>()).end_adjusted = true;
@@ -891,7 +897,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 (*oap.cast::<OpargT>()).excl_tr_ws = cmdchar == c_int::from(b'z');
                 op_yank(oap, !gui_yank);
             }
-            check_cursor_col(nvim_dpo_get_curwin());
+            check_cursor_col(curwin);
         }
 
         OP_CHANGE => {
@@ -937,7 +943,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
             } else {
                 op_tilde(oap);
             }
-            check_cursor_col(nvim_dpo_get_curwin());
+            check_cursor_col(curwin);
         }
 
         OP_FORMAT => {
@@ -1001,7 +1007,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
         OP_FOLD => {
             VIsual_reselect = false;
             rs_foldCreate(
-                nvim_dpo_get_curwin(),
+                curwin,
                 (*oap.cast::<OpargT>()).start.lnum,
                 (*oap.cast::<OpargT>()).end.lnum,
             );
@@ -1021,7 +1027,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
         OP_FOLDDEL | OP_FOLDDELREC => {
             VIsual_reselect = false;
             rs_deleteFold(
-                nvim_dpo_get_curwin(),
+                curwin,
                 (*oap.cast::<OpargT>()).start.lnum,
                 (*oap.cast::<OpargT>()).end.lnum,
                 op_type == OP_FOLDDELREC,
@@ -1041,7 +1047,7 @@ unsafe fn dpo_dispatch_operator(cap: *mut c_void, gui_yank: bool) {
                 op_addsub(oap, count1, rv_arg != 0);
                 VIsual_active = false;
             }
-            check_cursor_col(nvim_dpo_get_curwin());
+            check_cursor_col(curwin);
         }
 
         _ => {
@@ -1094,7 +1100,7 @@ unsafe fn dpo_postamble(cap: *mut c_void, old_col: c_int, gui_yank: bool) {
         let op_type = (*oap.cast::<OpargT>()).op_type;
         let mt = (*oap.cast::<OpargT>()).motion_type;
         let end_adjusted = (*oap.cast::<OpargT>()).end_adjusted;
-        if !nvim_dpo_get_p_sol()
+        if p_sol == 0
             && mt == K_MT_LINE_WISE
             && !end_adjusted
             && (op_type == OP_LSHIFT || op_type == OP_RSHIFT || op_type == OP_DELETE)
