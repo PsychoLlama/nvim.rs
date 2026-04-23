@@ -11,8 +11,13 @@ use std::ffi::{c_char, c_int, c_void};
 extern "C" {
     fn nvim_free_funccal_contents_impl(fc: *mut c_void);
     fn nvim_cleanup_function_call_impl(fc: *mut c_void);
-    fn nvim_funccal_unref_impl(fc: *mut c_void, fp: *mut c_void, force: c_int);
     fn nvim_ex_delfunction_impl(eap: *mut c_void);
+
+    // Phase 27: for rs_funccal_unref inlining
+    fn nvim_get_previous_funccal() -> *mut c_void;
+    fn nvim_set_previous_funccal(fc: *mut c_void);
+    fn nvim_fc_decrement_refcount(fc: *mut c_void) -> c_int;
+    fn nvim_fc_ufuncs_null_matching(fc: *mut c_void, fp: *mut c_void);
     // Phase 14: For inlining nvim_user_func_error_impl:
     fn nvim_semsg_not_callable(name: *const c_char);
 
@@ -250,10 +255,46 @@ pub unsafe extern "C" fn rs_cleanup_function_call(fc: *mut c_void) {
 // =============================================================================
 // funccal_unref
 // =============================================================================
+//
+// Phase 27: inlined from nvim_funccal_unref_impl.
 
 #[no_mangle]
 pub unsafe extern "C" fn rs_funccal_unref(fc: *mut c_void, fp: *mut c_void, force: c_int) {
-    unsafe { nvim_funccal_unref_impl(fc, fp, force) };
+    if fc.is_null() {
+        return;
+    }
+
+    let refcount = unsafe { nvim_fc_decrement_refcount(fc) };
+    let should_free = if force != 0 {
+        refcount <= 0
+    } else {
+        let referenced = unsafe { crate::gc::rs_fc_referenced(fc.cast_const()) };
+        referenced == 0
+    };
+
+    if should_free {
+        // Search previous_funccal list and remove fc if found.
+        let mut prev: *mut c_void = std::ptr::null_mut();
+        let mut cur = unsafe { nvim_get_previous_funccal() };
+        while !cur.is_null() {
+            let next = unsafe { nvim_fc_get_caller(cur) };
+            if cur == fc {
+                // Remove from linked list.
+                if prev.is_null() {
+                    unsafe { nvim_set_previous_funccal(next) };
+                } else {
+                    unsafe { nvim_fc_set_caller(prev, next) };
+                }
+                unsafe { rs_free_funccal_contents(fc) };
+                return;
+            }
+            prev = cur;
+            cur = next;
+        }
+    }
+
+    // Not freed: null out matching ufuncs entries.
+    unsafe { nvim_fc_ufuncs_null_matching(fc, fp) };
 }
 
 // =============================================================================

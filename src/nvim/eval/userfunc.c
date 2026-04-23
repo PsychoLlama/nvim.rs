@@ -503,29 +503,8 @@ void nvim_cleanup_function_call_impl(funccall_T *fc)
 }
 
 
-/// Phase 7: C implementation shim for funccal_unref (called from Rust).
-void nvim_funccal_unref_impl(funccall_T *fc, ufunc_T *fp, int force)
-{
-  if (fc == NULL) {
-    return;
-  }
-
-  fc->fc_refcount--;
-  if (force ? fc->fc_refcount <= 0 : !rs_fc_referenced(fc)) {
-    for (funccall_T **pfc = &previous_funccal; *pfc != NULL; pfc = &(*pfc)->fc_caller) {
-      if (fc == *pfc) {
-        *pfc = fc->fc_caller;
-        rs_free_funccal_contents(fc);
-        return;
-      }
-    }
-  }
-  for (int i = 0; i < fc->fc_ufuncs.ga_len; i++) {
-    if (((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] == fp) {
-      ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] = NULL;
-    }
-  }
-}
+// nvim_funccal_unref_impl migrated to Rust (funccal.rs Phase 27).
+// rs_funccal_unref now implements the logic directly.
 
 
 /// Phase 4: C implementation shim for func_remove (called from Rust).
@@ -3064,6 +3043,20 @@ int nvim_check_defer_builtin(const char *name, int argcount)
 
 // Phase 26: accessor for free_unref_funccal migration (gc.rs)
 void nvim_set_previous_funccal(funccall_T *fc) { previous_funccal = fc; }
+
+// Phase 27: accessors for funccal_unref migration (funccal.rs)
+int nvim_fc_decrement_refcount(funccall_T *fc) { return fc ? --fc->fc_refcount : 0; }
+void nvim_fc_ufuncs_null_matching(funccall_T *fc, ufunc_T *fp)
+{
+  if (fc == NULL) {
+    return;
+  }
+  for (int i = 0; i < fc->fc_ufuncs.ga_len; i++) {
+    if (((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] == fp) {
+      ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] = NULL;
+    }
+  }
+}
 
 // Phase 25: accessors for ex_call_inner migration (funccal.rs)
 linenr_T nvim_eap_get_line1(const exarg_T *eap) { return eap ? eap->line1 : 0; }
