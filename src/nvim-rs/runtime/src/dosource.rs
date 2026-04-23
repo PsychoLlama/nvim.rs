@@ -24,6 +24,7 @@ use crate::constants::{
 use crate::doso;
 use crate::globals;
 use crate::globals::ScriptitemT;
+use nvim_ex_eval::ExargT;
 
 // =============================================================================
 // Type aliases
@@ -187,9 +188,8 @@ extern "C" {
     fn nvim_rt_curbuf_get_fname() -> *const c_char;
     fn nvim_rt_curbuf_get_ft() -> *const c_char;
     // snprintf_source_buffer_name implemented inline in Rust
+    #[link_name = "ml_get"]
     fn nvim_rt_ml_get(lnum: c_int) -> *const c_char;
-    fn nvim_rt_exarg_get_line1(eap: *mut c_void) -> c_int;
-    fn nvim_rt_exarg_get_line2(eap: *mut c_void) -> LinenrT;
     #[link_name = "skip_to_newline"]
     fn nvim_rt_skip_to_newline(s: *const c_char) -> *const c_char;
     #[link_name = "xmemdupz"]
@@ -197,11 +197,6 @@ extern "C" {
 
     // cmd_source helpers (emsg/semsg called inline)
     fn openscript(fname: *const c_char, directly: bool);
-    fn nvim_rt_exarg_get_nextcmd(eap: *mut c_void) -> *const c_char;
-    fn nvim_rt_exarg_get_cstack_idx(eap: *mut c_void) -> c_int;
-    fn nvim_rt_exarg_get_forceit(eap: *mut c_void) -> bool;
-    fn nvim_rt_exarg_get_addr_count(eap: *mut c_void) -> c_int;
-    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
 
     // ex_options helpers
     fn nvim_rt_add_win_cmd_modifiers(buf: *mut c_char, multi_mods: *mut bool);
@@ -365,8 +360,9 @@ unsafe fn do_source_buffer_init(
     let ga = nvim_rt_cookie_get_buflines_ga(cookie);
     globals::ga_init_strptrs(ga);
 
-    let line1 = nvim_rt_exarg_get_line1(eap.cast_mut());
-    let line2 = nvim_rt_exarg_get_line2(eap.cast_mut());
+    let eap_ref = &*eap.cast::<ExargT>();
+    let line1 = eap_ref.line1;
+    let line2 = eap_ref.line2;
     let mut curr_lnum = line1;
     while curr_lnum <= line2 {
         let line = nvim_rt_ml_get(curr_lnum);
@@ -841,7 +837,7 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
     let addr_count = if eap.is_null() {
         0
     } else {
-        nvim_rt_exarg_get_addr_count(eap)
+        (*eap.cast::<ExargT>()).addr_count
     };
     if !fname.is_null() && *fname != 0 && !eap.is_null() && addr_count > 0 {
         emsg(gettext(e_norange.as_ptr()));
@@ -849,17 +845,18 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
     }
 
     if !eap.is_null() && (fname.is_null() || *fname == 0) {
-        if nvim_rt_exarg_get_forceit(eap) {
+        if (*eap.cast::<ExargT>()).forceit != 0 {
             emsg(gettext(e_argreq.as_ptr()));
         } else {
             rs_cmd_source_buffer(eap, false);
         }
-    } else if !eap.is_null() && nvim_rt_exarg_get_forceit(eap) {
+    } else if !eap.is_null() && (*eap.cast::<ExargT>()).forceit != 0 {
         // ":source!": read Normal mode commands
+        let eap_ref = &*eap.cast::<ExargT>();
         let directly = globals::global_busy != 0
             || globals::listcmd_busy
-            || !nvim_rt_exarg_get_nextcmd(eap).is_null()
-            || nvim_rt_exarg_get_cstack_idx(eap) >= 0;
+            || !eap_ref.nextcmd.is_null()
+            || (*eap_ref.cstack).cs_idx >= 0;
         openscript(fname, directly);
     } else if rs_do_source(fname, false, doso::NONE, ptr::null_mut()) == FAIL {
         semsg(gettext(e_notopen.as_ptr()), fname);
@@ -872,7 +869,7 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
 /// eap must be a valid exarg_T pointer.
 #[unsafe(export_name = "ex_source")]
 pub unsafe extern "C" fn rs_ex_source(eap: *mut c_void) {
-    rs_cmd_source(nvim_rt_exarg_get_arg(eap), eap);
+    rs_cmd_source((*eap.cast::<ExargT>()).arg, eap);
 }
 
 /// `:options` command.

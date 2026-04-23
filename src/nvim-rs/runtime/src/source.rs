@@ -6,6 +6,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 use crate::constants::CSTP_FINISH;
 use crate::{doso, LinenrT, ScidT};
+use nvim_ex_eval::ExargT;
 
 // =============================================================================
 // C FFI for Phase 2 functions
@@ -25,7 +26,7 @@ extern "C" {
     fn nvim_rt_getline_is_sourcing(fgetline: *mut c_void, cookie: *mut c_void) -> bool;
     fn nvim_rt_getline_get_source_cookie(fgetline: *mut c_void, cookie: *mut c_void)
         -> *mut c_void;
-    fn nvim_rt_exarg_get_cstack(eap: *mut c_void) -> *mut c_void;
+    // (nvim_rt_exarg_get_cstack replaced by ExargT.cstack direct access)
 
     // Encoding functions
     #[link_name = "enc_canonize"]
@@ -36,6 +37,7 @@ extern "C" {
     // p_enc is a global
 
     // Conditional cleanup
+    #[link_name = "cleanup_conditionals"]
     fn nvim_rt_cleanup_conditionals(
         cstack: *mut c_void,
         searched_cond: c_int,
@@ -49,8 +51,7 @@ extern "C" {
     fn emsg(s: *const c_char);
     fn gettext(msgid: *const c_char) -> *const c_char;
 
-    // exarg_T helpers
-    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
+    // (nvim_rt_exarg_get_arg replaced by ExargT.arg direct access)
 
     // Memory management
     fn xfree(ptr: *mut c_void);
@@ -114,7 +115,7 @@ pub unsafe extern "C" fn rs_ex_scriptencoding(eap: *mut c_void) {
         return;
     }
 
-    let arg = nvim_rt_exarg_get_arg(eap);
+    let arg = (*eap.cast::<ExargT>()).arg;
     let name = if !arg.is_null() && *arg != 0 {
         nvim_rt_enc_canonize(arg)
     } else {
@@ -157,7 +158,7 @@ pub unsafe extern "C" fn rs_do_finish(eap: *mut c_void, reanimate: bool) {
         nvim_rt_cookie_set_finished(sp, false);
     }
 
-    let cstack = nvim_rt_exarg_get_cstack(eap);
+    let cstack = (*eap.cast::<ExargT>()).cstack.cast::<c_void>();
     let idx = nvim_rt_cleanup_conditionals(cstack, 0, 1);
     if idx >= 0 {
         nvim_rt_cstack_set_pending(cstack, idx, CSTP_FINISH);

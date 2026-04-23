@@ -15,3 +15,4 @@ workspace = true
 [dependencies]
 libc = "0.2"
 nvim-memory = { path = "../memory" }
+nvim-ex-eval = { path = "../ex_eval" }

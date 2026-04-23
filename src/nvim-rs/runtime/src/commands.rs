@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering;
 use crate::dip;
 use crate::expand::RUNTIME_EXPAND_FLAGS;
 use crate::pathsearch::rs_source_runtime;
+use nvim_ex_eval::ExargT;
 
 // =============================================================================
 // Command Types
@@ -168,9 +169,7 @@ extern "C" {
     #[link_name = "skiptowhite_esc"]
     fn rs_skiptowhite_esc(s: *const c_char) -> *mut c_char;
 
-    // exarg_T accessors (already in runtime_ffi.c)
-    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
-    fn nvim_rt_pkg_exarg_get_forceit(eap: *mut c_void) -> bool;
+    // (exarg_T fields accessed directly via nvim_ex_eval::ExargT)
 
     // expand_T accessor (in runtime_ffi.c)
     fn nvim_rt_cmd_expand_set_context(xp: *mut c_void, context: c_int, pattern: *const c_char);
@@ -220,8 +219,9 @@ pub unsafe extern "C" fn rs_get_runtime_cmd_flags(
 /// `eap` must be a valid pointer to an exarg_T.
 #[export_name = "ex_runtime"]
 pub unsafe extern "C" fn rs_ex_runtime(eap: *mut c_void) {
-    let mut arg = nvim_rt_exarg_get_arg(eap);
-    let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
+    let eap_ref = &*eap.cast::<ExargT>();
+    let mut arg = eap_ref.arg;
+    let forceit = eap_ref.forceit != 0;
     let mut flags: c_int = if forceit { dip::ALL } else { 0 };
     let p = rs_skiptowhite(arg);
     let where_len = p.offset_from(arg) as usize;

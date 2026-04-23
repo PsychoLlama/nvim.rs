@@ -9,6 +9,7 @@ use crate::constants::MAXPATHL;
 use crate::dip;
 use crate::do_in_path::rs_do_in_path;
 use crate::globals;
+use nvim_ex_eval::ExargT;
 
 // =============================================================================
 // External C functions
@@ -77,7 +78,7 @@ extern "C" {
     fn xstrlcat(dst: *mut c_char, src: *const c_char, maxlen: usize) -> usize;
 
     // Package management accessors (in runtime_ffi.c)
-    fn nvim_rt_pkg_exarg_get_forceit(eap: *mut c_void) -> bool;
+    // (nvim_rt_pkg_exarg_get_forceit replaced by ExargT.forceit direct access)
     #[link_name = "fix_fname"]
     fn nvim_rt_pkg_fix_fname(fname: *const c_char) -> *mut c_char;
     fn nvim_rt_pkg_snprintf(
@@ -93,8 +94,7 @@ extern "C" {
     #[link_name = "time_msg"]
     fn nvim_rt_pkg_time_msg_inner(msg: *const c_char, start: *const c_void);
 
-    // exarg_T field accessors (already in runtime_ffi.c)
-    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
+    // (nvim_rt_exarg_get_arg replaced by ExargT.arg direct access)
 }
 
 extern "C" {
@@ -761,7 +761,7 @@ pub unsafe extern "C" fn rs_load_start_packages() {
 #[export_name = "ex_packloadall"]
 pub unsafe extern "C" fn rs_ex_packloadall(eap: *mut c_void) {
     let did_source = globals::did_source_packages;
-    let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
+    let forceit = (*eap.cast::<ExargT>()).forceit != 0;
 
     if !did_source || forceit {
         // First do a round to add all directories to 'runtimepath', then load
@@ -818,8 +818,9 @@ pub unsafe extern "C" fn rs_load_plugins() {
 pub unsafe extern "C" fn rs_ex_packadd(eap: *mut c_void) {
     let mut res = OK;
 
-    let arg = nvim_rt_exarg_get_arg(eap);
-    let forceit = nvim_rt_pkg_exarg_get_forceit(eap);
+    let eap_ref = &*eap.cast::<ExargT>();
+    let arg = eap_ref.arg;
+    let forceit = eap_ref.forceit != 0;
 
     // "pack/*/start/" + arg + NUL, with room for "start" or "opt"
     let arg_len = strlen(arg);

@@ -118,6 +118,7 @@ extern "C" {
     fn tv_dict_add_nr_c(d: *mut c_void, key: *const c_char, keylen: usize, nr: i64);
     #[link_name = "tv_list_append_dict"]
     fn tv_list_append_dict_c(l: *mut c_void, d: *mut c_void);
+    #[link_name = "nvim_tv_list_set_ret"]
     fn nvim_rt_list_set_ret(rettv: *mut c_void, l: ListHandle);
 
     // get_scriptname wrappers

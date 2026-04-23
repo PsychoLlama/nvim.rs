@@ -227,7 +227,7 @@ char *nvim_estack_get_def_script_name(estack_T *entry)
 // Deleted: nvim_rt_dict_add_filepath — Rust uses tv_dict_add_str directly via link_name.
 // Deleted: nvim_rt_list_append_dict — Rust uses tv_list_append_dict directly via link_name.
 
-void nvim_rt_list_set_ret(void *rettv, list_T *l) { tv_list_set_ret((typval_T *)rettv, l); }
+// Deleted: nvim_rt_list_set_ret — Rust uses nvim_tv_list_set_ret directly via link_name.
 
 /// Call get_scriptname for a ufunc's script context.
 const char *nvim_ufunc_get_scriptname(ufunc_T *fp)
@@ -274,15 +274,11 @@ char *nvim_rt_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
   return get_scriptname(ctx, should_free);
 }
 
-int nvim_rt_exarg_get_addr_count(void *eap) { return ((exarg_T *)eap)->addr_count; }
-
-linenr_T nvim_rt_exarg_get_line2(void *eap) { return ((exarg_T *)eap)->line2; }
-
-char *nvim_rt_exarg_get_arg(void *eap) { return ((exarg_T *)eap)->arg; }
-
-void nvim_rt_exarg_set_arg(void *eap, char *arg) { ((exarg_T *)eap)->arg = arg; }
-
-bool nvim_exarg_arg_is_nul(void *eap) { return *((exarg_T *)eap)->arg == NUL; }
+// Deleted: nvim_rt_exarg_get_addr_count — Rust uses ExargT.addr_count directly.
+// Deleted: nvim_rt_exarg_get_line2 — Rust uses ExargT.line2 directly.
+// Deleted: nvim_rt_exarg_get_arg — Rust uses ExargT.arg directly.
+// Deleted: nvim_rt_exarg_set_arg — Rust uses ExargT.arg directly.
+// Deleted: nvim_exarg_arg_is_nul — Rust checks ExargT.arg directly.
 
 // Deleted: nvim_rt_do_exedit — Rust calls do_exedit(eap, NULL) directly via link_name.
 
@@ -300,7 +296,7 @@ void nvim_rt_home_replace(const char *name, char *buf, size_t len) { home_replac
 
 /// Allocate a list and set it as the return value.
 
-bool nvim_rt_check_for_opt_dict_arg(void *argvars) { return tv_check_for_opt_dict_arg((typval_T *)argvars, 0) != FAIL; }
+// Deleted: nvim_rt_check_for_opt_dict_arg — Rust uses tv_check_for_opt_dict_arg directly via link_name.
 
 list_T *nvim_rt_get_rettv_list(void *rettv) { return ((typval_T *)rettv)->vval.v_list; }
 
@@ -423,7 +419,7 @@ const void *nvim_rt_vim_env_iter_rev(const char *val, const void *iter,
 _Static_assert(EW_DIR == 0x01, "EW_DIR must be 0x01");
 _Static_assert(EW_FILE == 0x02, "EW_FILE must be 0x02");
 
-bool nvim_rt_pkg_exarg_get_forceit(void *eap) { return ((exarg_T *)eap)->forceit; }
+// Deleted: nvim_rt_pkg_exarg_get_forceit — Rust uses ExargT.forceit directly.
 
 /// Call vim_snprintf.
 int nvim_rt_pkg_snprintf(char *buf, size_t len, const char *fmt, const char *arg)
@@ -476,11 +472,7 @@ void *nvim_rt_getline_get_source_cookie(void *fgetline, void *cookie) { return g
 
 // Deleted: nvim_rt_get_p_enc — Rust imports p_enc directly as extern static.
 
-/// cleanup_conditionals wrapper.
-int nvim_rt_cleanup_conditionals(void *cstack, int searched_cond, int inclusive)
-{
-  return cleanup_conditionals((cstack_T *)cstack, searched_cond, inclusive);
-}
+// Deleted: nvim_rt_cleanup_conditionals — Rust uses cleanup_conditionals directly via link_name.
 
 /// Set cs_pending at index.
 void nvim_rt_cstack_set_pending(void *cstack, int idx, int val)
@@ -607,22 +599,11 @@ void nvim_rt_add_win_cmd_modifiers(char *buf, bool *multi_mods)
 
 // nvim_rt_openscript deleted: openscript now exported directly from Rust (typebuf.rs, Phase 2)
 
-/// exarg_T: get eap->nextcmd.
-const char *nvim_rt_exarg_get_nextcmd(const void *eap) { return ((exarg_T *)eap)->nextcmd; }
-
-/// exarg_T: get eap->cstack->cs_idx.
-int nvim_rt_exarg_get_cstack_idx(const void *eap) { return ((exarg_T *)eap)->cstack->cs_idx; }
-
-/// eap->forceit accessor.
-bool nvim_rt_exarg_get_forceit(const void *eap) { return ((exarg_T *)eap)->forceit; }
-
-/// eap->line1 accessor.
-int nvim_rt_exarg_get_line1(const void *eap) { return (int)((exarg_T *)eap)->line1; }
-
-/// eap->line2 accessor (already exists as nvim_rt_exarg_get_line2 for linenr_T).
-
-/// ml_get wrapper.
-const char *nvim_rt_ml_get(int lnum) { return ml_get((linenr_T)lnum); }
+// Deleted: nvim_rt_exarg_get_nextcmd — Rust uses ExargT.nextcmd directly.
+// Deleted: nvim_rt_exarg_get_cstack_idx — Rust uses (*ExargT.cstack).cs_idx directly.
+// Deleted: nvim_rt_exarg_get_forceit — Rust uses ExargT.forceit directly.
+// Deleted: nvim_rt_exarg_get_line1 — Rust uses ExargT.line1 directly.
+// Deleted: nvim_rt_ml_get — Rust uses ml_get directly via link_name.
 
 // Deleted: nvim_rt_snprintf_source_buffer_name — reimplemented in Rust (dosource.rs).
 

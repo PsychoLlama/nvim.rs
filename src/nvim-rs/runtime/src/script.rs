@@ -9,6 +9,7 @@ use std::ptr;
 use crate::constants::{IOSIZE, MAXPATHL};
 use crate::globals::{self, ScriptitemT};
 use crate::{LinenrT, ScidT, ScriptItemHandle};
+use nvim_ex_eval::ExargT;
 
 // =============================================================================
 // SID Constants (verified by _Static_assert in runtime_ffi.c)
@@ -33,12 +34,7 @@ extern "C" {
     // get_scriptname delegate
     fn nvim_rt_get_scriptname(sc_sid: c_int, sc_chan: u64, should_free: *mut bool) -> *mut c_char;
 
-    // ex_scriptnames helpers
-    fn nvim_rt_exarg_get_addr_count(eap: *mut c_void) -> c_int;
-    fn nvim_rt_exarg_get_line2(eap: *mut c_void) -> LinenrT;
-    fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
-    fn nvim_rt_exarg_set_arg(eap: *mut c_void, arg: *mut c_char);
-    fn nvim_exarg_arg_is_nul(eap: *mut c_void) -> bool;
+    // (exarg_T fields accessed directly via nvim_ex_eval::ExargT)
     #[link_name = "expand_env"]
     fn nvim_rt_expand_env(src: *mut c_char, dst: *mut c_char, dstlen: c_int);
     #[link_name = "do_exedit"]
@@ -71,7 +67,8 @@ extern "C" {
     // f_getscriptinfo helpers
     #[link_name = "tv_list_alloc_ret"]
     fn nvim_rt_list_alloc_ret(rettv: *mut c_void, count: c_int);
-    fn nvim_rt_check_for_opt_dict_arg(argvars: *mut c_void) -> bool;
+    #[link_name = "tv_check_for_opt_dict_arg"]
+    fn nvim_rt_check_for_opt_dict_arg(argvars: *const c_void, idx: c_int) -> c_int;
     fn nvim_rt_get_rettv_list(rettv: *mut c_void) -> *mut c_void;
     fn nvim_rt_argvars_is_dict(argvars: *mut c_void) -> bool;
     fn nvim_rt_dict_find_sid(argvars: *mut c_void) -> i64;
@@ -314,25 +311,26 @@ pub unsafe extern "C" fn rs_get_scriptname(
 /// Otherwise, list all loaded scripts.
 #[export_name = "ex_scriptnames"]
 pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
-    let addr_count = nvim_rt_exarg_get_addr_count(eap);
-    let arg_is_nul = nvim_exarg_arg_is_nul(eap);
+    let eap_ref = &mut *eap.cast::<ExargT>();
+    let addr_count = eap_ref.addr_count;
+    let arg_is_nul = eap_ref.arg.is_null() || *eap_ref.arg == 0;
 
     if addr_count > 0 || !arg_is_nul {
         // :script {scriptId}: edit the script
         if addr_count > 0 {
-            let line2 = nvim_rt_exarg_get_line2(eap);
+            let line2 = eap_ref.line2;
             if !rs_script_id_is_valid(line2) {
                 emsg(gettext(e_invarg.as_ptr()));
                 return;
             }
             let si = globals::script_item_get(line2);
             let sn_name = (*si).sn_name.cast_const();
-            nvim_rt_exarg_set_arg(eap, sn_name.cast_mut());
+            eap_ref.arg = sn_name.cast_mut();
         } else {
-            let arg = nvim_rt_exarg_get_arg(eap);
+            let arg = eap_ref.arg;
             let namebuff = nvim_rt_namebuff.as_ptr().cast_mut();
             nvim_rt_expand_env(arg, namebuff, MAXPATHL as c_int);
-            nvim_rt_exarg_set_arg(eap, namebuff);
+            eap_ref.arg = namebuff;
         }
         do_exedit_c(eap, std::ptr::null_mut());
         return;
@@ -429,7 +427,8 @@ pub unsafe extern "C" fn rs_f_getscriptinfo(
     let count = globals::script_items_get_len();
     nvim_rt_list_alloc_ret(rettv, count);
 
-    if !nvim_rt_check_for_opt_dict_arg(argvars) {
+    // FAIL == 0, OK == 1
+    if nvim_rt_check_for_opt_dict_arg(argvars.cast_const(), 0) == 0 {
         return;
     }
 
