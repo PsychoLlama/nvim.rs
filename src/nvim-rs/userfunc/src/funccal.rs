@@ -1,36 +1,76 @@
 //! Funccal management, ex_delfunction, and helper functions for VimL.
 //!
 //! Migrated from `src/nvim/eval/userfunc.c` Phase 7.
+//! Phase 13: Several impl shims inlined directly.
 
 #![allow(clippy::missing_safety_doc)]
 
 use std::ffi::{c_char, c_int, c_void};
 
 extern "C" {
-    fn nvim_free_funccal_impl(fc: *mut c_void);
     fn nvim_free_funccal_contents_impl(fc: *mut c_void);
     fn nvim_cleanup_function_call_impl(fc: *mut c_void);
     fn nvim_funccal_unref_impl(fc: *mut c_void, fp: *mut c_void, force: c_int);
-    fn nvim_create_funccal_impl(fp: *mut c_void, rettv: *mut c_void) -> *mut c_void;
-    fn nvim_save_funccal_impl(entry: *mut c_void);
-    fn nvim_restore_funccal_impl();
     fn nvim_ex_delfunction_impl(eap: *mut c_void);
-    fn nvim_emsg_funcname_impl(errmsg: *const c_char, name: *const c_char);
     fn nvim_user_func_error_impl(error: c_int, name: *const c_char, found_var: c_int);
 
-    // current_funccal access (for inlining remove_funccal)
+    // current_funccal access (for inlining remove_funccal and create_funccal)
     fn get_current_funccal() -> *mut c_void;
     fn set_current_funccal(fc: *mut c_void);
+    fn nvim_set_current_funccal(fc: *mut c_void);
     fn nvim_fc_get_caller(fc: *mut c_void) -> *mut c_void;
+    fn nvim_fc_get_func(fc: *mut c_void) -> *mut c_void;
+
+    // Phase 13: For inlining nvim_free_funccal_impl:
+    fn nvim_fc_ufuncs_len(fc: *const c_void) -> c_int;
+    fn nvim_fc_ufuncs_item(fc: *const c_void, i: c_int) -> *mut c_void;
+    fn nvim_fc_ufuncs_ga_clear(fc: *mut c_void);
+    fn nvim_ufunc_get_scoped(fp: *mut c_void) -> *mut c_void;
+    fn nvim_ufunc_set_scoped(fp: *mut c_void, fc: *mut c_void);
+    fn func_ptr_unref(fp: *mut c_void);
+    fn xfree(ptr: *mut c_void);
+
+    // Phase 13: For inlining nvim_emsg_funcname_impl:
+    fn nvim_emsg_funcname_mk_snr(name: *const c_char) -> *mut c_char;
+    fn nvim_semsg_with_name(errmsg: *const c_char, name: *const c_char);
+
+    // Phase 13: For inlining nvim_save_funccal_impl and nvim_restore_funccal_impl:
+    fn nvim_funccal_stack_head_mut() -> *mut c_void;
+    fn nvim_set_funccal_stack(entry: *mut c_void);
+    fn nvim_fc_entry_set_top(fce: *mut c_void, fc: *mut c_void);
+    fn nvim_fc_entry_set_next(fce: *mut c_void, next: *mut c_void);
+    fn nvim_funccal_entry_top(fce: *mut c_void) -> *mut c_void;
+    fn nvim_funccal_entry_next(fce: *mut c_void) -> *mut c_void;
+    fn nvim_iemsg(msg: *const c_char);
+
+    // Phase 13: For inlining nvim_create_funccal_impl:
+    fn xcalloc(count: usize, size: usize) -> *mut c_void;
+    fn nvim_sizeof_funccall() -> usize;
+    fn func_ptr_ref(fp: *mut c_void);
+    fn nvim_fc_set_func(fc: *mut c_void, fp: *mut c_void);
+    fn nvim_fc_set_rettv(fc: *mut c_void, rettv: *mut c_void);
+    fn nvim_fc_set_caller(fc: *mut c_void, caller: *mut c_void);
 }
 
 // =============================================================================
 // free_funccal
 // =============================================================================
+//
+// Phase 13: inlined from nvim_free_funccal_impl.
 
 #[no_mangle]
 pub unsafe extern "C" fn rs_free_funccal(fc: *mut c_void) {
-    unsafe { nvim_free_funccal_impl(fc) };
+    let len = unsafe { nvim_fc_ufuncs_len(fc) };
+    for i in 0..len {
+        let fp = unsafe { nvim_fc_ufuncs_item(fc, i) };
+        if !fp.is_null() && unsafe { nvim_ufunc_get_scoped(fp) } == fc {
+            unsafe { nvim_ufunc_set_scoped(fp, std::ptr::null_mut()) };
+        }
+    }
+    unsafe { nvim_fc_ufuncs_ga_clear(fc) };
+    let func = unsafe { nvim_fc_get_func(fc) };
+    unsafe { func_ptr_unref(func) };
+    unsafe { xfree(fc) };
 }
 
 // =============================================================================
@@ -63,10 +103,20 @@ pub unsafe extern "C" fn rs_funccal_unref(fc: *mut c_void, fp: *mut c_void, forc
 // =============================================================================
 // create_funccal
 // =============================================================================
+//
+// Phase 13: inlined from nvim_create_funccal_impl.
 
 #[unsafe(export_name = "create_funccal")]
 pub unsafe extern "C" fn rs_create_funccal(fp: *mut c_void, rettv: *mut c_void) -> *mut c_void {
-    unsafe { nvim_create_funccal_impl(fp, rettv) }
+    let size = unsafe { nvim_sizeof_funccall() };
+    let fc = unsafe { xcalloc(1, size) };
+    let caller = unsafe { get_current_funccal() };
+    unsafe { nvim_fc_set_caller(fc, caller) };
+    unsafe { nvim_set_current_funccal(fc) };
+    unsafe { nvim_fc_set_func(fc, fp) };
+    unsafe { func_ptr_ref(fp) };
+    unsafe { nvim_fc_set_rettv(fc, rettv) };
+    fc
 }
 
 // =============================================================================
@@ -84,19 +134,36 @@ pub unsafe extern "C" fn rs_remove_funccal() {
 // =============================================================================
 // save_funccal
 // =============================================================================
+//
+// Phase 13: inlined from nvim_save_funccal_impl.
 
 #[unsafe(export_name = "save_funccal")]
 pub unsafe extern "C" fn rs_save_funccal(entry: *mut c_void) {
-    unsafe { nvim_save_funccal_impl(entry) };
+    let cur = unsafe { get_current_funccal() };
+    let stack = unsafe { nvim_funccal_stack_head_mut() };
+    unsafe { nvim_fc_entry_set_top(entry, cur) };
+    unsafe { nvim_fc_entry_set_next(entry, stack) };
+    unsafe { nvim_set_funccal_stack(entry) };
+    unsafe { nvim_set_current_funccal(std::ptr::null_mut()) };
 }
 
 // =============================================================================
 // restore_funccal
 // =============================================================================
+//
+// Phase 13: inlined from nvim_restore_funccal_impl.
 
 #[unsafe(export_name = "restore_funccal")]
 pub unsafe extern "C" fn rs_restore_funccal() {
-    unsafe { nvim_restore_funccal_impl() };
+    let stack = unsafe { nvim_funccal_stack_head_mut() };
+    if stack.is_null() {
+        unsafe { nvim_iemsg(c"INTERNAL: restore_funccal()".as_ptr()) };
+    } else {
+        let top = unsafe { nvim_funccal_entry_top(stack) };
+        let next = unsafe { nvim_funccal_entry_next(stack) };
+        unsafe { nvim_set_current_funccal(top) };
+        unsafe { nvim_set_funccal_stack(next) };
+    }
 }
 
 // =============================================================================
@@ -111,10 +178,21 @@ pub unsafe extern "C" fn rs_ex_delfunction(eap: *mut c_void) {
 // =============================================================================
 // emsg_funcname
 // =============================================================================
+//
+// Phase 13: inlined from nvim_emsg_funcname_impl.
 
 #[unsafe(export_name = "emsg_funcname")]
 pub unsafe extern "C" fn rs_emsg_funcname(errmsg: *const c_char, name: *const c_char) {
-    unsafe { nvim_emsg_funcname_impl(errmsg, name) };
+    let snr = unsafe { nvim_emsg_funcname_mk_snr(name) };
+    let display = if snr.is_null() {
+        name
+    } else {
+        snr.cast_const()
+    };
+    unsafe { nvim_semsg_with_name(errmsg, display) };
+    if !snr.is_null() {
+        unsafe { xfree(snr.cast::<c_void>()) };
+    }
 }
 
 // =============================================================================

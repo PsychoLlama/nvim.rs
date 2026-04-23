@@ -491,20 +491,7 @@ errret:
 // deref_func_name migrated to Rust (lookup.rs Phase 7)
 
 /// Phase 7: C implementation shim for emsg_funcname (called from Rust).
-void nvim_emsg_funcname_impl(const char *errmsg, const char *name)
-{
-  char *p = (char *)name;
-
-  if ((uint8_t)name[0] == K_SPECIAL && name[1] != NUL && name[2] != NUL) {
-    p = concat_str("<SNR>", name + 3);
-  }
-
-  semsg(_(errmsg), p);
-
-  if (p != name) {
-    xfree(p);
-  }
-}
+// nvim_emsg_funcname_impl inlined into rs_emsg_funcname (Rust, Phase 13)
 
 /// Give an error message with a function name.  Handle <SNR> things.
 ///
@@ -643,24 +630,7 @@ static void add_nr_var(dict_T *dp, dictitem_T *v, char *name, varnumber_T nr)
 }
 
 /// Phase 7: C implementation shim for free_funccal (called from Rust).
-void nvim_free_funccal_impl(funccall_T *fc)
-{
-  for (int i = 0; i < fc->fc_ufuncs.ga_len; i++) {
-    ufunc_T *fp = ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i];
-
-    // When garbage collecting a funccall_T may be freed before the
-    // function that references it, clear its uf_scoped field.
-    // The function may have been redefined and point to another
-    // funccal_T, don't clear it then.
-    if (fp != NULL && fp->uf_scoped == fc) {
-      fp->uf_scoped = NULL;
-    }
-  }
-  ga_clear(&fc->fc_ufuncs);
-
-  func_ptr_unref(fc->fc_func);
-  xfree(fc);
-}
+// nvim_free_funccal_impl inlined into rs_free_funccal (Rust, Phase 13)
 
 
 /// Phase 7: C implementation shim for free_funccal_contents (called from Rust).
@@ -805,16 +775,7 @@ void nvim_func_clear_items_impl(ufunc_T *fp)
 // nvim_func_clear_free_impl inlined into rs_func_clear_free (Rust, Phase 8)
 
 /// Phase 7: C implementation shim for create_funccal (called from Rust).
-funccall_T *nvim_create_funccal_impl(ufunc_T *fp, typval_T *rettv)
-{
-  funccall_T *fc = xcalloc(1, sizeof(funccall_T));
-  fc->fc_caller = current_funccal;
-  current_funccal = fc;
-  fc->fc_func = fp;
-  func_ptr_ref(fp);
-  fc->fc_rettv = rettv;
-  return fc;
-}
+// nvim_create_funccal_impl inlined into rs_create_funccal (Rust, Phase 13)
 
 // nvim_remove_funccal_impl inlined into rs_remove_funccal (Rust, Phase 8)
 
@@ -1258,26 +1219,9 @@ static int call_user_func_check(ufunc_T *fp, int argcount, typval_T *argvars, ty
 static funccal_entry_T *funccal_stack = NULL;
 
 /// Phase 7: C implementation shim for save_funccal (called from Rust).
-void nvim_save_funccal_impl(funccal_entry_T *entry)
-{
-  entry->top_funccal = current_funccal;
-  entry->next = funccal_stack;
-  funccal_stack = entry;
-  current_funccal = NULL;
-}
+// nvim_save_funccal_impl inlined into rs_save_funccal (Rust, Phase 13)
 
-/// Save the current function call pointer, and set it to NULL.
-/// Used when executing autocommands and for ":source".
-/// Phase 7: C implementation shim for restore_funccal (called from Rust).
-void nvim_restore_funccal_impl(void)
-{
-  if (funccal_stack == NULL) {
-    iemsg("INTERNAL: restore_funccal()");
-  } else {
-    current_funccal = funccal_stack->top_funccal;
-    funccal_stack = funccal_stack->next;
-  }
-}
+// nvim_restore_funccal_impl inlined into rs_restore_funccal (Rust, Phase 13)
 
 funccall_T *get_current_funccal(void) { return current_funccal; }
 
@@ -3204,82 +3148,15 @@ int nvim_free_unref_funccal_impl(int copyID, int testing)
   return did_free;
 }
 
-/// Phase 6: C implementation shim for get_funccal.
-funccall_T *nvim_get_funccal_impl(void)
-{
-  funccall_T *funccal = current_funccal;
-  if (debug_backtrace_level > 0) {
-    for (int i = 0; i < debug_backtrace_level; i++) {
-      funccall_T *temp_funccal = funccal->fc_caller;
-      if (temp_funccal) {
-        funccal = temp_funccal;
-      } else {
-        debug_backtrace_level = i;
-      }
-    }
-  }
-  return funccal;
-}
-
-/// Phase 6: C implementation shims for funccal scope accessors.
-dict_T *nvim_get_funccal_local_dict_impl(void)
-{
-  if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
-    return NULL;
-  }
-  return &get_funccal()->fc_l_vars;
-}
-
-hashtab_T *nvim_get_funccal_local_ht_impl(void)
-{
-  dict_T *d = get_funccal_local_dict();
-  return d != NULL ? &d->dv_hashtab : NULL;
-}
-
-dictitem_T *nvim_get_funccal_local_var_impl(void)
-{
-  if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
-    return NULL;
-  }
-  return (dictitem_T *)&get_funccal()->fc_l_vars_var;
-}
-
-dict_T *nvim_get_funccal_args_dict_impl(void)
-{
-  if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
-    return NULL;
-  }
-  return &get_funccal()->fc_l_avars;
-}
-
-hashtab_T *nvim_get_funccal_args_ht_impl(void)
-{
-  dict_T *d = get_funccal_args_dict();
-  return d != NULL ? &d->dv_hashtab : NULL;
-}
-
-dictitem_T *nvim_get_funccal_args_var_impl(void)
-{
-  if (current_funccal == NULL || current_funccal->fc_l_vars.dv_refcount == 0) {
-    return NULL;
-  }
-  return (dictitem_T *)&get_funccal()->fc_l_avars_var;
-}
-
-void nvim_list_func_vars_impl(int *first)
-{
-  if (current_funccal != NULL && current_funccal->fc_l_vars.dv_refcount > 0) {
-    list_hashtable_vars(&current_funccal->fc_l_vars.dv_hashtab, "l:", false, first);
-  }
-}
-
-dict_T *nvim_get_current_funccal_dict_impl(hashtab_T *ht)
-{
-  if (current_funccal != NULL && ht == &current_funccal->fc_l_vars.dv_hashtab) {
-    return &current_funccal->fc_l_vars;
-  }
-  return NULL;
-}
+// nvim_get_funccal_impl inlined into rs_get_funccal (Rust, Phase 13)
+// nvim_get_funccal_local_dict_impl inlined into rs_get_funccal_local_dict (Rust, Phase 13)
+// nvim_get_funccal_local_ht_impl inlined into rs_get_funccal_local_ht (Rust, Phase 13)
+// nvim_get_funccal_local_var_impl inlined into rs_get_funccal_local_var (Rust, Phase 13)
+// nvim_get_funccal_args_dict_impl inlined into rs_get_funccal_args_dict (Rust, Phase 13)
+// nvim_get_funccal_args_ht_impl inlined into rs_get_funccal_args_ht (Rust, Phase 13)
+// nvim_get_funccal_args_var_impl inlined into rs_get_funccal_args_var (Rust, Phase 13)
+// nvim_list_func_vars_impl inlined into rs_list_func_vars (Rust, Phase 13)
+// nvim_get_current_funccal_dict_impl inlined into rs_get_current_funccal_dict (Rust, Phase 13)
 
 hashitem_T *nvim_find_hi_in_scoped_ht_impl(const char *name, hashtab_T **pht)
 {
@@ -3717,3 +3594,67 @@ list_T *nvim_fc_l_varlist(funccall_T *fc) { return fc ? &fc->fc_l_varlist : NULL
 // funcargs garray accessors for set_ref_in_func_args
 int nvim_funcargs_len(void) { return funcargs.ga_len; }
 typval_T *nvim_funcargs_item(int i) { return ((typval_T **)funcargs.ga_data)[i]; }
+
+// Phase 13: C accessors for inlining more impl shims into Rust
+// funccal_T sub-struct pointers (for scope and funccal shims)
+dict_T *nvim_fc_l_vars_dict(funccall_T *fc) { return fc ? &fc->fc_l_vars : NULL; }
+dict_T *nvim_fc_l_avars_dict(funccall_T *fc) { return fc ? &fc->fc_l_avars : NULL; }
+ScopeDictDictItem *nvim_fc_l_vars_var_ptr(funccall_T *fc) { return fc ? &fc->fc_l_vars_var : NULL; }
+ScopeDictDictItem *nvim_fc_l_avars_var_ptr(funccall_T *fc) { return fc ? &fc->fc_l_avars_var : NULL; }
+void nvim_list_hashtable_vars(hashtab_T *ht, const char *prefix, int *first)
+{
+  list_hashtable_vars(ht, prefix, false, first);
+}
+// funccall_T setter for current_funccal
+void nvim_set_current_funccal(funccall_T *fc) { current_funccal = fc; }
+// funccal_entry_T setters
+void nvim_fc_entry_set_top(funccal_entry_T *fce, funccall_T *fc) { if (fce) { fce->top_funccal = fc; } }
+void nvim_fc_entry_set_next(funccal_entry_T *fce, funccal_entry_T *next) { if (fce) { fce->next = next; } }
+funccal_entry_T *nvim_funccal_stack_head_mut(void) { return funccal_stack; }
+void nvim_set_funccal_stack(funccal_entry_T *entry) { funccal_stack = entry; }
+// fc_ufuncs garray accessors for free_funccal
+int nvim_fc_ufuncs_len(const funccall_T *fc) { return fc ? fc->fc_ufuncs.ga_len : 0; }
+ufunc_T *nvim_fc_ufuncs_item(const funccall_T *fc, int i)
+{
+  return fc ? ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] : NULL;
+}
+void nvim_fc_ufuncs_clear_item(funccall_T *fc, int i)
+{
+  if (fc) { ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] = NULL; }
+}
+void nvim_fc_ufuncs_ga_clear(funccall_T *fc) { if (fc) { ga_clear(&fc->fc_ufuncs); } }
+void nvim_ufunc_set_scoped(ufunc_T *fp, funccall_T *fc) { if (fp) { fp->uf_scoped = fc; } }
+// ufunc profiling / lua accessors for func_clear_items
+garray_T *nvim_ufunc_get_args_ga(ufunc_T *fp) { return fp ? &fp->uf_args : NULL; }
+garray_T *nvim_ufunc_get_def_args_ga(ufunc_T *fp) { return fp ? &fp->uf_def_args : NULL; }
+garray_T *nvim_ufunc_get_lines_ga(ufunc_T *fp) { return fp ? &fp->uf_lines : NULL; }
+// nvim_ufunc_get_luaref is defined in mapping.c
+void nvim_ufunc_clear_luaref(ufunc_T *fp)
+{
+  if (fp && (fp->uf_flags & FC_LUAREF)) {
+    api_free_luaref(fp->uf_luaref);
+    fp->uf_luaref = LUA_NOREF;
+  }
+}
+int **nvim_ufunc_tml_count_ptr(ufunc_T *fp) { return fp ? &fp->uf_tml_count : NULL; }
+proftime_T **nvim_ufunc_tml_total_ptr(ufunc_T *fp) { return fp ? &fp->uf_tml_total : NULL; }
+proftime_T **nvim_ufunc_tml_self_ptr(ufunc_T *fp) { return fp ? &fp->uf_tml_self : NULL; }
+// debug_backtrace_level accessor for inlining nvim_get_funccal_impl
+int nvim_get_debug_backtrace_level(void) { return debug_backtrace_level; }
+void nvim_set_debug_backtrace_level(int v) { debug_backtrace_level = v; }
+// emsg_funcname helper for Rust: concat "<SNR>" + name+3 if K_SPECIAL
+char *nvim_emsg_funcname_mk_snr(const char *name)
+{
+  if ((uint8_t)name[0] == K_SPECIAL && name[1] != NUL && name[2] != NUL) {
+    return concat_str("<SNR>", name + 3);
+  }
+  return NULL;
+}
+void nvim_semsg_with_name(const char *errmsg, const char *name) { semsg(_(errmsg), name); }
+void nvim_iemsg(const char *msg) { iemsg(msg); }
+// set_current_funccal is already done above; add fc_rettv accessor for create_funccal
+typval_T **nvim_fc_get_rettv_ptr(funccall_T *fc) { return fc ? &fc->fc_rettv : NULL; }
+void nvim_fc_set_rettv(funccall_T *fc, typval_T *rettv) { if (fc) { fc->fc_rettv = rettv; } }
+void nvim_fc_set_func(funccall_T *fc, ufunc_T *fp) { if (fc) { fc->fc_func = fp; } }
+size_t nvim_sizeof_funccall(void) { return sizeof(funccall_T); }
+void nvim_fc_set_caller(funccall_T *fc, funccall_T *caller) { if (fc) { fc->fc_caller = caller; } }
