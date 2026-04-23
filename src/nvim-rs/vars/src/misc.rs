@@ -1,10 +1,14 @@
 //! Miscellaneous variable utility functions for VimL.
 //!
 //! Phase 9: Migrated from `src/nvim/eval/vars.c`.
+//! Phase 11: Migrated eval_charconvert, eval_diff, eval_patch.
 //!
 //! Functions:
 //! - `rs_garbage_collect_scriptvars`: GC mark pass for script variables
 //! - `rs_set_internal_string_var`: Set an internal string variable by name
+//! - `rs_eval_charconvert`: Evaluate charconvert expression
+//! - `rs_eval_diff`: Evaluate diffexpr
+//! - `rs_eval_patch`: Evaluate patchexpr
 
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::ptr_as_ptr)]
@@ -18,6 +22,18 @@ const VAR_STRING: c_int = 1;
 
 // Typval size in bytes (must match sizeof(typval_T) = 24)
 const TYPVAL_SIZE: usize = 24;
+
+// OK / FAIL return codes
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// VimVarIndex constants for charconvert/diff/patch/spell vimvars
+const VV_CC_FROM: c_int = 16;
+const VV_CC_TO: c_int = 17;
+const VV_FNAME_IN: c_int = 18;
+const VV_FNAME_OUT: c_int = 19;
+const VV_FNAME_NEW: c_int = 20;
+const VV_FNAME_DIFF: c_int = 21;
 
 // =============================================================================
 // C extern declarations
@@ -37,6 +53,25 @@ extern "C" {
 
     // --- GC ---
     fn rs_set_ref_in_ht(ht: *mut c_void, copy_id: c_int, list_stack: *mut *mut c_void) -> bool;
+
+    // (rs_set_vim_var_string is called directly as crate::vimvar_accessors::rs_set_vim_var_string)
+
+    // --- sctx save/restore/apply (Phase 11) ---
+    // nvim_save_current_sctx: defined in vars.c, returns heap-allocated sctx_T*
+    fn nvim_save_current_sctx() -> *mut c_void;
+    // nvim_restore_current_sctx: defined in eval_shim.c, takes sctx_T*, frees it
+    fn nvim_restore_current_sctx(s: *mut c_void);
+    fn nvim_apply_option_sctx(opt: c_int);
+
+    // --- option constants (Phase 11) ---
+    fn nvim_kopt_charconvert() -> c_int;
+    fn nvim_kopt_diffexpr() -> c_int;
+    fn nvim_kopt_patchexpr() -> c_int;
+
+    // --- eval expressions (Phase 11) ---
+    fn nvim_eval_charconvert_expr() -> bool;
+    fn nvim_eval_diffexpr();
+    fn nvim_eval_patchexpr();
 }
 
 /// Mark all script variable hashtabs as referenced for garbage collection.
@@ -85,4 +120,98 @@ pub unsafe extern "C" fn rs_set_internal_string_var(name: *const c_char, value: 
 
     let name_len = strlen(name);
     set_var(name, name_len, tv, true);
+}
+
+/// Evaluate the 'charconvert' expression.
+///
+/// Matches C `eval_charconvert`. Returns OK (1) on success, FAIL (0) on error.
+///
+/// # Safety
+/// All string arguments must be valid NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_charconvert(
+    enc_from: *const c_char,
+    enc_to: *const c_char,
+    fname_from: *const c_char,
+    fname_to: *const c_char,
+) -> c_int {
+    let saved_sctx = nvim_save_current_sctx();
+
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_CC_FROM, enc_from, -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_CC_TO, enc_to, -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_IN, fname_from, -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_OUT, fname_to, -1);
+
+    nvim_apply_option_sctx(nvim_kopt_charconvert());
+
+    let err = nvim_eval_charconvert_expr();
+
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_CC_FROM, std::ptr::null(), -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_CC_TO, std::ptr::null(), -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_IN, std::ptr::null(), -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_OUT, std::ptr::null(), -1);
+
+    nvim_restore_current_sctx(saved_sctx);
+
+    if err {
+        FAIL
+    } else {
+        OK
+    }
+}
+
+/// Evaluate the 'diffexpr' expression.
+///
+/// Matches C `eval_diff`. Errors are ignored.
+///
+/// # Safety
+/// All string arguments must be valid NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_diff(
+    origfile: *const c_char,
+    newfile: *const c_char,
+    outfile: *const c_char,
+) {
+    let saved_sctx = nvim_save_current_sctx();
+
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_IN, origfile, -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_NEW, newfile, -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_OUT, outfile, -1);
+
+    nvim_apply_option_sctx(nvim_kopt_diffexpr());
+    nvim_eval_diffexpr();
+
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_IN, std::ptr::null(), -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_NEW, std::ptr::null(), -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_OUT, std::ptr::null(), -1);
+
+    nvim_restore_current_sctx(saved_sctx);
+}
+
+/// Evaluate the 'patchexpr' expression.
+///
+/// Matches C `eval_patch`. Errors are ignored.
+///
+/// # Safety
+/// All string arguments must be valid NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_patch(
+    origfile: *const c_char,
+    difffile: *const c_char,
+    outfile: *const c_char,
+) {
+    let saved_sctx = nvim_save_current_sctx();
+
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_IN, origfile, -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_DIFF, difffile, -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_OUT, outfile, -1);
+
+    nvim_apply_option_sctx(nvim_kopt_patchexpr());
+    nvim_eval_patchexpr();
+
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_IN, std::ptr::null(), -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_DIFF, std::ptr::null(), -1);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_OUT, std::ptr::null(), -1);
+
+    nvim_restore_current_sctx(saved_sctx);
 }

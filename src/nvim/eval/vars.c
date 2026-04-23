@@ -96,6 +96,12 @@ extern char *rs_ex_let_one(char *arg, typval_T *tv, bool copy, bool is_const,
 extern int rs_ex_let_vars(char *arg_start, typval_T *tv, int copy, int semicolon,
                            int var_count, int is_const, char *op);
 
+// Phase 11: eval_charconvert, eval_diff, eval_patch migrated to Rust
+extern int rs_eval_charconvert(const char *enc_from, const char *enc_to,
+                                const char *fname_from, const char *fname_to);
+extern void rs_eval_diff(const char *origfile, const char *newfile, const char *outfile);
+extern void rs_eval_patch(const char *origfile, const char *difffile, const char *outfile);
+
 // Phase 1: variable validation/check functions migrated to Rust
 extern bool rs_var_check_ro(int flags, const char *name, size_t name_len);
 extern bool rs_var_check_lock(int flags, const char *name, size_t name_len);
@@ -508,78 +514,13 @@ void set_internal_string_var(const char *name, char *value)  // NOLINT(readabili
 
 int eval_charconvert(const char *const enc_from, const char *const enc_to,
                      const char *const fname_from, const char *const fname_to)
-{
-  const sctx_T saved_sctx = current_sctx;
-
-  set_vim_var_string(VV_CC_FROM, enc_from, -1);
-  set_vim_var_string(VV_CC_TO, enc_to, -1);
-  set_vim_var_string(VV_FNAME_IN, fname_from, -1);
-  set_vim_var_string(VV_FNAME_OUT, fname_to, -1);
-  sctx_T *ctx = get_option_sctx(kOptCharconvert);
-  if (ctx != NULL) {
-    current_sctx = *ctx;
-  }
-
-  bool err = false;
-  if (eval_to_bool(p_ccv, &err, NULL, false, true)) {
-    err = true;
-  }
-
-  set_vim_var_string(VV_CC_FROM, NULL, -1);
-  set_vim_var_string(VV_CC_TO, NULL, -1);
-  set_vim_var_string(VV_FNAME_IN, NULL, -1);
-  set_vim_var_string(VV_FNAME_OUT, NULL, -1);
-  current_sctx = saved_sctx;
-
-  if (err) {
-    return FAIL;
-  }
-  return OK;
-}
+{ return rs_eval_charconvert(enc_from, enc_to, fname_from, fname_to); }
 
 void eval_diff(const char *const origfile, const char *const newfile, const char *const outfile)
-{
-  const sctx_T saved_sctx = current_sctx;
-  set_vim_var_string(VV_FNAME_IN, origfile, -1);
-  set_vim_var_string(VV_FNAME_NEW, newfile, -1);
-  set_vim_var_string(VV_FNAME_OUT, outfile, -1);
-
-  sctx_T *ctx = get_option_sctx(kOptDiffexpr);
-  if (ctx != NULL) {
-    current_sctx = *ctx;
-  }
-
-  // errors are ignored
-  typval_T *tv = eval_expr_ext(p_dex, NULL, true);
-  tv_free(tv);
-
-  set_vim_var_string(VV_FNAME_IN, NULL, -1);
-  set_vim_var_string(VV_FNAME_NEW, NULL, -1);
-  set_vim_var_string(VV_FNAME_OUT, NULL, -1);
-  current_sctx = saved_sctx;
-}
+{ rs_eval_diff(origfile, newfile, outfile); }
 
 void eval_patch(const char *const origfile, const char *const difffile, const char *const outfile)
-{
-  const sctx_T saved_sctx = current_sctx;
-  set_vim_var_string(VV_FNAME_IN, origfile, -1);
-  set_vim_var_string(VV_FNAME_DIFF, difffile, -1);
-  set_vim_var_string(VV_FNAME_OUT, outfile, -1);
-
-  sctx_T *ctx = get_option_sctx(kOptPatchexpr);
-  if (ctx != NULL) {
-    current_sctx = *ctx;
-  }
-
-  // errors are ignored
-  typval_T *tv = eval_expr_ext(p_pex, NULL, true);
-  tv_free(tv);
-
-  set_vim_var_string(VV_FNAME_IN, NULL, -1);
-  set_vim_var_string(VV_FNAME_DIFF, NULL, -1);
-  set_vim_var_string(VV_FNAME_OUT, NULL, -1);
-  current_sctx = saved_sctx;
-}
+{ rs_eval_patch(origfile, difffile, outfile); }
 
 /// Evaluate an expression to a list with suggestions.
 /// For the "expr:" part of 'spellsuggest'.
@@ -2128,6 +2069,59 @@ int nvim_var_dict(void) { return VAR_DICT; }
 
 /// VAR_LIST constant.
 int nvim_var_list(void) { return VAR_LIST; }
+
+// Phase 11: eval_charconvert / eval_diff / eval_patch accessor shims.
+
+/// Save current_sctx to a heap-allocated sctx_T and return pointer.
+/// Caller must pass returned pointer to nvim_restore_current_sctx() to free it.
+sctx_T *nvim_save_current_sctx(void)
+{
+  sctx_T *s = xmalloc(sizeof(sctx_T));
+  *s = current_sctx;
+  return s;
+}
+
+/// Apply option sctx to current_sctx if non-NULL.
+void nvim_apply_option_sctx(int opt)
+{
+  sctx_T *ctx = get_option_sctx((OptIndex)opt);
+  if (ctx != NULL) {
+    current_sctx = *ctx;
+  }
+}
+
+/// kOptCharconvert constant.
+int nvim_kopt_charconvert(void) { return (int)kOptCharconvert; }
+
+/// kOptDiffexpr constant.
+int nvim_kopt_diffexpr(void) { return (int)kOptDiffexpr; }
+
+/// kOptPatchexpr constant.
+int nvim_kopt_patchexpr(void) { return (int)kOptPatchexpr; }
+
+/// Evaluate p_ccv for charconvert. Returns true if error occurred.
+bool nvim_eval_charconvert_expr(void)
+{
+  bool err = false;
+  if (eval_to_bool(p_ccv, &err, NULL, false, true)) {
+    err = true;
+  }
+  return err;
+}
+
+/// Evaluate p_dex (diffexpr). Errors are ignored.
+void nvim_eval_diffexpr(void)
+{
+  typval_T *tv = eval_expr_ext(p_dex, NULL, true);
+  tv_free(tv);
+}
+
+/// Evaluate p_pex (patchexpr). Errors are ignored.
+void nvim_eval_patchexpr(void)
+{
+  typval_T *tv = eval_expr_ext(p_pex, NULL, true);
+  tv_free(tv);
+}
 
 // Phase 10: ex_let_one / ex_let_vars accessor shims.
 
