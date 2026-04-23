@@ -3186,64 +3186,7 @@ char *get_func_line(int c, void *cookie, int indent, bool do_concat)
 
 // func_has_ended, func_has_abort migrated to Rust (lookup.rs Phase 6)
 
-/// Turn "dict.Func" into a partial for "Func" bound to "dict".
-/// Changes "rettv" in-place.
-void make_partial(dict_T *const selfdict, typval_T *const rettv)
-{
-  char *tofree = NULL;
-  ufunc_T *fp;
-  char fname_buf[FLEN_FIXED + 1];
-  int error;
-
-  if (rettv->v_type == VAR_PARTIAL && rettv->vval.v_partial->pt_func != NULL) {
-    fp = rettv->vval.v_partial->pt_func;
-  } else {
-    char *fname = rettv->v_type == VAR_FUNC || rettv->v_type == VAR_STRING
-                  ? rettv->vval.v_string
-                  : rettv->vval.v_partial->pt_name;
-    // Translate "s:func" to the stored function name.
-    fname = rs_fname_trans_sid(fname, fname_buf, &tofree, &error);
-    fp = find_func(fname);
-    xfree(tofree);
-  }
-
-  // Turn "dict.Func" into a partial for "Func" with "dict".
-  if (fp != NULL && (fp->uf_flags & FC_DICT)) {
-    partial_T *pt = (partial_T *)xcalloc(1, sizeof(partial_T));
-    pt->pt_refcount = 1;
-    pt->pt_dict = selfdict;
-    (selfdict->dv_refcount)++;
-    pt->pt_auto = true;
-    if (rettv->v_type == VAR_FUNC || rettv->v_type == VAR_STRING) {
-      // Just a function: Take over the function name and use selfdict.
-      pt->pt_name = rettv->vval.v_string;
-    } else {
-      partial_T *ret_pt = rettv->vval.v_partial;
-
-      // Partial: copy the function name, use selfdict and copy
-      // args. Can't take over name or args, the partial might
-      // be referenced elsewhere.
-      if (ret_pt->pt_name != NULL) {
-        pt->pt_name = xstrdup(ret_pt->pt_name);
-        func_ref(pt->pt_name);
-      } else {
-        pt->pt_func = ret_pt->pt_func;
-        func_ptr_ref(pt->pt_func);
-      }
-      if (ret_pt->pt_argc > 0) {
-        size_t arg_size = sizeof(typval_T) * (size_t)ret_pt->pt_argc;
-        pt->pt_argv = (typval_T *)xmalloc(arg_size);
-        pt->pt_argc = ret_pt->pt_argc;
-        for (int i = 0; i < pt->pt_argc; i++) {
-          tv_copy(&ret_pt->pt_argv[i], &pt->pt_argv[i]);
-        }
-      }
-      partial_unref(ret_pt);
-    }
-    rettv->v_type = VAR_PARTIAL;
-    rettv->vval.v_partial = pt;
-  }
-}
+// make_partial migrated to Rust (partial.rs Phase 10)
 
 // func_name, func_breakpoint, func_dbg_tick, func_level migrated to Rust (lookup.rs Phase 6)
 
@@ -3829,3 +3772,15 @@ int nvim_get_internal_func_arity(const char *name, int *required, int *optional)
   *optional = fdef->max_argc - fdef->min_argc;
   return 1;
 }
+
+// Phase 10: partial_T accessor shims for Rust make_partial
+char *nvim_partial_get_name(const partial_T *pt) { return pt ? pt->pt_name : NULL; }
+typval_T *nvim_partial_get_argv(const partial_T *pt) { return pt ? pt->pt_argv : NULL; }
+void nvim_partial_set_refcount(partial_T *pt, int v) { if (pt) { pt->pt_refcount = v; } }
+void nvim_partial_set_dict(partial_T *pt, dict_T *d) { if (pt) { pt->pt_dict = d; } }
+void nvim_partial_set_auto(partial_T *pt, int v) { if (pt) { pt->pt_auto = (bool)v; } }
+void nvim_partial_set_name(partial_T *pt, char *name) { if (pt) { pt->pt_name = name; } }
+void nvim_partial_set_func(partial_T *pt, ufunc_T *fp) { if (pt) { pt->pt_func = fp; } }
+void nvim_partial_set_argv(partial_T *pt, typval_T *argv) { if (pt) { pt->pt_argv = argv; } }
+void nvim_partial_set_argc(partial_T *pt, int argc) { if (pt) { pt->pt_argc = argc; } }
+char *nvim_tv_get_vstring_mut(typval_T *tv) { return tv ? tv->vval.v_string : NULL; }
