@@ -133,6 +133,11 @@ extern void rs_ex_unlet(exarg_T *eap);
 extern void rs_ex_lockvar(exarg_T *eap);
 extern int rs_do_unlet(const char *name, size_t name_len, int forceit);
 
+// Phase 6: var_exists and var_redir functions migrated to Rust
+extern bool rs_var_exists(const char *var);
+extern int rs_var_redir_start(char *name, bool append);
+extern void rs_var_redir_stop(void);
+
 // Phase 3: listing and redirection functions migrated to Rust
 extern char *rs_cat_prefix_varname(int prefix, const char *name);
 extern char *rs_get_user_var_name(expand_T *xp, int idx);
@@ -2103,33 +2108,7 @@ void assert_error(garray_T *gap) { rs_assert_error(gap->ga_data, gap->ga_len); }
 bool var_exists(const char *var)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *tofree;
-  bool n = false;
-
-  // get_name_len() takes care of expanding curly braces
-  const char *name = var;
-  const int len = get_name_len(&var, &tofree, true, false);
-  if (len > 0) {
-    typval_T tv;
-
-    if (tofree != NULL) {
-      name = tofree;
-    }
-    n = eval_variable(name, len, &tv, NULL, false, true) == OK;
-    if (n) {
-      // Handle d.key, l[idx], f(expr).
-      n = handle_subscript(&var, &tv, &EVALARG_EVALUATE, false) == OK;
-      if (n) {
-        tv_clear(&tv);
-      }
-    }
-  }
-  if (*var != NUL) {
-    n = false;
-  }
-
-  xfree(tofree);
-  return n;
+  return rs_var_exists(var);
 }
 
 static lval_T *redir_lval = NULL;
@@ -2144,57 +2123,7 @@ static char *redir_varname = NULL;
 /// @return  OK if successfully completed the setup.  FAIL otherwise.
 int var_redir_start(char *name, bool append)
 {
-  // Catch a bad name early.
-  if (!rs_eval_isnamec1(*name)) {
-    emsg(_(e_invarg));
-    return FAIL;
-  }
-
-  // Make a copy of the name, it is used in redir_lval until redir ends.
-  redir_varname = xstrdup(name);
-
-  redir_lval = xcalloc(1, sizeof(lval_T));
-
-  // The output is stored in growarray "redir_ga" until redirection ends.
-  ga_init(&redir_ga, (int)sizeof(char), 500);
-
-  // Parse the variable name (can be a dict or list entry).
-  redir_endp = get_lval(redir_varname, NULL, redir_lval, false, false,
-                        0, FNE_CHECK_START);
-  if (redir_endp == NULL || redir_lval->ll_name == NULL
-      || *redir_endp != NUL) {
-    clear_lval(redir_lval);
-    if (redir_endp != NULL && *redir_endp != NUL) {
-      // Trailing characters are present after the variable name
-      semsg(_(e_trailing_arg), redir_endp);
-    } else {
-      semsg(_(e_invarg2), name);
-    }
-    redir_endp = NULL;      // don't store a value, only cleanup
-    var_redir_stop();
-    return FAIL;
-  }
-
-  // check if we can write to the variable: set it to or append an empty
-  // string
-  const int called_emsg_before = called_emsg;
-  did_emsg = false;
-  typval_T tv;
-  tv.v_type = VAR_STRING;
-  tv.vval.v_string = "";
-  if (append) {
-    set_var_lval(redir_lval, redir_endp, &tv, true, false, ".");
-  } else {
-    set_var_lval(redir_lval, redir_endp, &tv, true, false, "=");
-  }
-  clear_lval(redir_lval);
-  if (called_emsg > called_emsg_before) {
-    redir_endp = NULL;      // don't store a value, only cleanup
-    var_redir_stop();
-    return FAIL;
-  }
-
-  return OK;
+  return rs_var_redir_start(name, append);
 }
 
 /// Append "value[value_len]" to the variable set by var_redir_start().
@@ -2211,29 +2140,7 @@ void var_redir_str(const char *value, int value_len)
 /// Frees the allocated memory.
 void var_redir_stop(void)
 {
-  if (redir_lval != NULL) {
-    // If there was no error: assign the text to the variable.
-    if (redir_endp != NULL) {
-      ga_append(&redir_ga, NUL);        // Append the trailing NUL.
-      typval_T tv;
-      tv.v_type = VAR_STRING;
-      tv.vval.v_string = redir_ga.ga_data;
-      // Call get_lval() again, if it's inside a Dict or List it may
-      // have changed.
-      redir_endp = get_lval(redir_varname, NULL, redir_lval,
-                            false, false, 0, FNE_CHECK_START);
-      if (redir_endp != NULL && redir_lval->ll_name != NULL) {
-        set_var_lval(redir_lval, redir_endp, &tv, false, false, ".");
-      }
-      clear_lval(redir_lval);
-    }
-
-    // free the collected output
-    XFREE_CLEAR(redir_ga.ga_data);
-
-    XFREE_CLEAR(redir_lval);
-  }
-  XFREE_CLEAR(redir_varname);
+  rs_var_redir_stop();
 }
 
 /// "gettabvar()" function
@@ -2573,3 +2480,70 @@ char *script_get(exarg_T *const eap, size_t *const lenp)
 {
   return rs_script_get(eap, lenp);
 }
+
+// Phase 6: var_exists, var_redir_start, var_redir_stop accessors for Rust FFI.
+
+/// Get ll_name from lval_T pointer.
+const char *nvim_lval_get_name(void *lv) { return ((lval_T *)lv)->ll_name; }
+
+/// Wrapper for get_lval() with no rettv, no unlet, no skip, no extra flags.
+char *nvim_vars_get_lval(char *name, void *lv)
+{ return get_lval(name, NULL, (lval_T *)lv, false, false, 0, FNE_CHECK_START); }
+
+/// Wrapper for set_var_lval() for redir use.
+void nvim_vars_set_var_lval(void *lv, char *endp, void *tv, bool copy, bool is_const,
+                             const char *op)
+{ set_var_lval((lval_T *)lv, endp, (typval_T *)tv, copy, is_const, op); }
+
+/// Wrapper for clear_lval().
+void nvim_vars_clear_lval(void *lv) { clear_lval((lval_T *)lv); }
+
+/// Allocate a zeroed lval_T on the heap; returns void* for Rust.
+void *nvim_vars_alloc_lval(void) { return xcalloc(1, sizeof(lval_T)); }
+
+/// Initialize the redir growing-array.
+void nvim_vars_redir_ga_init(void) { ga_init(&redir_ga, (int)sizeof(char), 500); }
+
+/// Append a single NUL byte to redir_ga.
+void nvim_vars_redir_ga_append_nul(void) { ga_append(&redir_ga, NUL); }
+
+/// Get redir_ga.ga_data pointer.
+void *nvim_vars_redir_ga_data(void) { return redir_ga.ga_data; }
+
+/// Get redir_ga.ga_len.
+int nvim_vars_redir_ga_len(void) { return redir_ga.ga_len; }
+
+/// Free redir_ga.ga_data and set to NULL.
+void nvim_vars_redir_ga_data_clear(void) { XFREE_CLEAR(redir_ga.ga_data); }
+
+/// Free redir_lval and set to NULL.
+void nvim_vars_redir_lval_free(void) { XFREE_CLEAR(redir_lval); }
+
+/// Set redir_lval.
+void nvim_vars_set_redir_lval(void *lv) { redir_lval = (lval_T *)lv; }
+
+/// Set redir_varname.
+void nvim_vars_set_redir_varname(char *n) { redir_varname = n; }
+
+/// Set redir_endp.
+void nvim_vars_set_redir_endp(char *e) { redir_endp = e; }
+
+/// Get redir_endp.
+char *nvim_vars_get_redir_endp(void) { return redir_endp; }
+
+/// Get called_emsg.
+int nvim_vars_get_called_emsg(void) { return called_emsg; }
+
+/// Get did_emsg.
+int nvim_vars_get_did_emsg(void) { return (int)did_emsg; }
+
+/// Set did_emsg.
+void nvim_vars_set_did_emsg(int v) { did_emsg = (bool)v; }
+
+/// eval_variable wrapper for Rust (passes NULL for dip, verbose=false, no_autoload=true).
+int nvim_vars_eval_variable(const char *name, int len, void *tv)
+{ return eval_variable(name, len, (typval_T *)tv, NULL, false, true); }
+
+/// handle_subscript wrapper for Rust (EVALARG_EVALUATE, verbose=false).
+int nvim_vars_handle_subscript_check(const char **arg, void *tv)
+{ return handle_subscript(arg, (typval_T *)tv, &EVALARG_EVALUATE, false); }
