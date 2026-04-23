@@ -401,5 +401,3 @@ LexExprToken viml_pexpr_next_token(ParserState *pstate, int flags)
 /// Provided by Rust (parser.rs via libnvim_rs.a)
 ExprAST viml_pexpr_parse(ParserState *pstate, int flags)
   FUNC_ATTR_WARN_UNUSED_RESULT;
-
-#include "viml/parser/expressions.h.generated.h"
