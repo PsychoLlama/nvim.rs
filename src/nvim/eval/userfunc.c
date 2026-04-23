@@ -500,38 +500,9 @@ errret:
 /// Get function arguments at "*arg" and advance it.
 /// Return them in "*argvars[MAX_FUNC_ARGS + 1]" and the count in "argcount".
 /// On failure FAIL is returned but the "argvars[argcount]" are still set.
-static int get_func_arguments(char **arg, evalarg_T *const evalarg, int partial_argc,
-                              typval_T *argvars, int *argcount)
-{
-  char *argp = *arg;
-  int ret = OK;
-
-  // Get the arguments.
-  while (*argcount < MAX_FUNC_ARGS - partial_argc) {
-    argp = skipwhite(argp + 1);             // skip the '(' or ','
-
-    if (*argp == ')' || *argp == ',' || *argp == NUL) {
-      break;
-    }
-    if (eval1(&argp, &argvars[*argcount], evalarg) == FAIL) {
-      ret = FAIL;
-      break;
-    }
-    (*argcount)++;
-    if (*argp != ',') {
-      break;
-    }
-  }
-
-  argp = skipwhite(argp);
-  if (*argp == ')') {
-    argp++;
-  } else {
-    ret = FAIL;
-  }
-  *arg = argp;
-  return ret;
-}
+// get_func_arguments migrated to Rust (parsing.rs Phase 19)
+extern int get_func_arguments(char **arg, evalarg_T *const evalarg, int partial_argc,
+                              typval_T *argvars, int *argcount);
 
 /// Call a function and put the result in "rettv".
 ///
