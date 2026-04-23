@@ -1320,23 +1320,7 @@ func_call_skip_call:
   return r;
 }
 
-/// call the 'callback' function and return the result as a number.
-/// Returns -2 when calling the function fails.  Uses argv[0] to argv[argc - 1]
-/// for the function arguments. argv[argc] should have type VAR_UNKNOWN.
-///
-/// @param argcount  number of "argvars"
-/// @param argvars   vars for arguments, must have "argcount" PLUS ONE elements!
-varnumber_T callback_call_retnr(Callback *callback, int argcount, typval_T *argvars)
-{
-  typval_T rettv;
-  if (!callback_call(callback, argcount, argvars, &rettv)) {
-    return -2;
-  }
-
-  varnumber_T retval = tv_get_number_chk(&rettv, NULL);
-  tv_clear(&rettv);
-  return retval;
-}
+// callback_call_retnr migrated to Rust (funccal.rs Phase 15)
 
 /// Phase 7: C implementation shim for user_func_error (called from Rust).
 // nvim_user_func_error_impl inlined into rs_user_func_error (Rust, Phase 14)
@@ -3410,8 +3394,6 @@ const char *nvim_ufunc_get_funcline(const ufunc_T *fp, int i)
   return FUNCLINE(fp, i);
 }
 
-size_t nvim_func_ht_used(void) { return func_hashtab.ht_used; }
-
 const hashitem_T *nvim_func_ht_array(void) { return func_hashtab.ht_array; }
 
 int nvim_func_ht_changed(void) { return func_hashtab.ht_changed; }
@@ -3489,7 +3471,6 @@ void nvim_emsg_defer_not_in_function(void)
 }
 
 // Phase 4: Function Reference Counting Accessors
-int nvim_ufunc_get_refcount(const ufunc_T *fp) { return fp ? fp->uf_refcount : 0; }
 int nvim_ufunc_decrement_refcount(ufunc_T *fp) { return fp ? --fp->uf_refcount : 0; }
 void nvim_ufunc_increment_refcount(ufunc_T *fp) { if (fp) { fp->uf_refcount++; } }
 int nvim_ufunc_get_calls(const ufunc_T *fp) { return fp ? fp->uf_calls : 0; }
@@ -3506,7 +3487,6 @@ void nvim_ufunc_set_cleared(ufunc_T *fp, int v) { if (fp) { fp->uf_cleared = v; 
 funccall_T *nvim_ufunc_get_scoped(const ufunc_T *fp) { return fp ? fp->uf_scoped : NULL; }
 
 // Phase 9: ufunc_T accessor for inlining nvim_func_free_impl
-char *nvim_ufunc_get_name_exp_mut(ufunc_T *fp) { return fp ? fp->uf_name_exp : NULL; }
 void nvim_ufunc_clear_name_exp(ufunc_T *fp) { if (fp) { XFREE_CLEAR(fp->uf_name_exp); } }
 
 // Phase 6: Internal function arity accessor for Rust get_func_arity
@@ -3577,10 +3557,6 @@ ufunc_T *nvim_fc_ufuncs_item(const funccall_T *fc, int i)
 {
   return fc ? ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] : NULL;
 }
-void nvim_fc_ufuncs_clear_item(funccall_T *fc, int i)
-{
-  if (fc) { ((ufunc_T **)(fc->fc_ufuncs.ga_data))[i] = NULL; }
-}
 void nvim_fc_ufuncs_ga_clear(funccall_T *fc) { if (fc) { ga_clear(&fc->fc_ufuncs); } }
 void nvim_ufunc_set_scoped(ufunc_T *fp, funccall_T *fc) { if (fp) { fp->uf_scoped = fc; } }
 // ufunc profiling / lua accessors for func_clear_items
@@ -3595,9 +3571,6 @@ void nvim_ufunc_clear_luaref(ufunc_T *fp)
     fp->uf_luaref = LUA_NOREF;
   }
 }
-int **nvim_ufunc_tml_count_ptr(ufunc_T *fp) { return fp ? &fp->uf_tml_count : NULL; }
-proftime_T **nvim_ufunc_tml_total_ptr(ufunc_T *fp) { return fp ? &fp->uf_tml_total : NULL; }
-proftime_T **nvim_ufunc_tml_self_ptr(ufunc_T *fp) { return fp ? &fp->uf_tml_self : NULL; }
 // debug_backtrace_level accessor for inlining nvim_get_funccal_impl
 int nvim_get_debug_backtrace_level(void) { return debug_backtrace_level; }
 void nvim_set_debug_backtrace_level(int v) { debug_backtrace_level = v; }
@@ -3621,8 +3594,6 @@ void nvim_ufunc_xfree_tml(ufunc_T *fp)
 }
 // Phase 14: user_func_error semsg helper (for FCERR_UNKNOWN case)
 void nvim_semsg_not_callable(const char *name) { semsg(_(e_not_callable_type_str), name); }
-// set_current_funccal is already done above; add fc_rettv accessor for create_funccal
-typval_T **nvim_fc_get_rettv_ptr(funccall_T *fc) { return fc ? &fc->fc_rettv : NULL; }
 void nvim_fc_set_rettv(funccall_T *fc, typval_T *rettv) { if (fc) { fc->fc_rettv = rettv; } }
 void nvim_fc_set_func(funccall_T *fc, ufunc_T *fp) { if (fc) { fc->fc_func = fp; } }
 size_t nvim_sizeof_funccall(void) { return sizeof(funccall_T); }

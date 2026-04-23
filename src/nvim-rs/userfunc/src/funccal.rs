@@ -2,6 +2,7 @@
 //!
 //! Migrated from `src/nvim/eval/userfunc.c` Phase 7.
 //! Phase 13: Several impl shims inlined directly.
+//! Phase 15: callback_call_retnr migrated.
 
 #![allow(clippy::missing_safety_doc)]
 
@@ -51,6 +52,16 @@ extern "C" {
     fn nvim_fc_set_func(fc: *mut c_void, fp: *mut c_void);
     fn nvim_fc_set_rettv(fc: *mut c_void, rettv: *mut c_void);
     fn nvim_fc_set_caller(fc: *mut c_void, caller: *mut c_void);
+
+    // Phase 15: For callback_call_retnr
+    fn callback_call(
+        callback: *mut c_void,
+        argcount: c_int,
+        argvars: *mut c_void,
+        rettv: *mut c_void,
+    ) -> bool;
+    fn tv_get_number_chk(tv: *const c_void, denote: *mut c_int) -> i64;
+    fn tv_clear(tv: *mut c_void);
 }
 
 // =============================================================================
@@ -250,4 +261,34 @@ pub unsafe extern "C" fn rs_user_func_error(error: c_int, name: *const c_char, f
         },
         _ => {}
     }
+}
+
+// =============================================================================
+// callback_call_retnr
+// =============================================================================
+//
+// Phase 15: Migrated from userfunc.c.
+
+/// Call a callback and return the result as a number.
+/// Returns -2 when calling the function fails.
+///
+/// # Safety
+/// `callback` must be a valid `Callback *` pointer.
+/// `argvars` must be a valid `typval_T *` array of at least `argcount` + 1 elements.
+#[unsafe(export_name = "callback_call_retnr")]
+pub unsafe extern "C" fn rs_callback_call_retnr(
+    callback: *mut c_void,
+    argcount: c_int,
+    argvars: *mut c_void,
+) -> i64 {
+    // typval_T is 16 bytes (i32 v_type, i32 v_lock, 8-byte union vval).
+    // Zero-initializing gives VAR_UNKNOWN (v_type = 0), which is safe.
+    let mut rettv = [0u8; 16];
+    let rettv_ptr = rettv.as_mut_ptr().cast::<c_void>();
+    if !unsafe { callback_call(callback, argcount, argvars, rettv_ptr) } {
+        return -2;
+    }
+    let retval = unsafe { tv_get_number_chk(rettv_ptr.cast_const(), std::ptr::null_mut()) };
+    unsafe { tv_clear(rettv_ptr) };
+    retval
 }

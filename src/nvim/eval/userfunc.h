@@ -138,6 +138,8 @@ extern dictitem_T *find_var_in_scoped_ht(const char *name, size_t namelen, int n
 
 // Phase 6/7: Functions migrated to Rust (lookup.rs)
 extern int get_func_arity(const char *name, int *required, int *optional, bool *varargs);
+// Phase 15: callback_call_retnr migrated to Rust (funccal.rs)
+extern varnumber_T callback_call_retnr(Callback *callback, int argcount, typval_T *argvars);
 extern char *deref_func_name(const char *name, int *lenp, partial_T **const partialp,
                              bool no_autoload, bool *found_var);
 extern int func_has_ended(void *cookie);
