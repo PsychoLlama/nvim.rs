@@ -90,6 +90,12 @@ extern char *rs_ex_let_env(char *arg, typval_T *tv, bool is_const,
 extern char *rs_ex_let_register(char *arg, typval_T *tv, bool is_const,
                                  const char *endchars, const char *op);
 
+// Phase 10: ex_let_one, ex_let_vars migrated to Rust
+extern char *rs_ex_let_one(char *arg, typval_T *tv, bool copy, bool is_const,
+                            const char *endchars, const char *op);
+extern int rs_ex_let_vars(char *arg_start, typval_T *tv, int copy, int semicolon,
+                           int var_count, int is_const, char *op);
+
 // Phase 1: variable validation/check functions migrated to Rust
 extern bool rs_var_check_ro(int flags, const char *name, size_t name_len);
 extern bool rs_var_check_lock(int flags, const char *name, size_t name_len);
@@ -799,78 +805,7 @@ void ex_let(exarg_T *eap)
 /// @return  OK or FAIL;
 int ex_let_vars(char *arg_start, typval_T *tv, int copy, int semicolon, int var_count, int is_const,
                 char *op)
-{
-  char *arg = arg_start;
-  typval_T ltv;
-
-  if (*arg != '[') {
-    // ":let var = expr" or ":for var in list"
-    if (ex_let_one(arg, tv, copy, is_const, op, op) == NULL) {
-      return FAIL;
-    }
-    return OK;
-  }
-
-  // ":let [v1, v2] = list" or ":for [v1, v2] in listlist"
-  if (tv->v_type != VAR_LIST) {
-    emsg(_(e_listreq));
-    return FAIL;
-  }
-  list_T *const l = tv->vval.v_list;
-
-  const int len = tv_list_len(l);
-  if (semicolon == 0 && var_count < len) {
-    emsg(_("E687: Less targets than List items"));
-    return FAIL;
-  }
-  if (var_count - semicolon > len) {
-    emsg(_("E688: More targets than List items"));
-    return FAIL;
-  }
-  // List l may actually be NULL, but it should fail with E688 or even earlier
-  // if you try to do ":let [] = v:_null_list".
-  assert(l != NULL);
-
-  listitem_T *item = tv_list_first(l);
-  size_t rest_len = (size_t)tv_list_len(l);
-  while (*arg != ']') {
-    arg = skipwhite(arg + 1);
-    arg = ex_let_one(arg, TV_LIST_ITEM_TV(item), true, is_const, ",;]", op);
-    if (arg == NULL) {
-      return FAIL;
-    }
-    rest_len--;
-
-    item = TV_LIST_ITEM_NEXT(l, item);
-    arg = skipwhite(arg);
-    if (*arg == ';') {
-      // Put the rest of the list (may be empty) in the var after ';'.
-      // Create a new list for this.
-      list_T *const rest_list = tv_list_alloc((ptrdiff_t)rest_len);
-      while (item != NULL) {
-        tv_list_append_tv(rest_list, TV_LIST_ITEM_TV(item));
-        item = TV_LIST_ITEM_NEXT(l, item);
-      }
-
-      ltv.v_type = VAR_LIST;
-      ltv.v_lock = VAR_UNLOCKED;
-      ltv.vval.v_list = rest_list;
-      tv_list_ref(rest_list);
-
-      arg = ex_let_one(skipwhite(arg + 1), &ltv, false, is_const, "]", op);
-      tv_clear(&ltv);
-      if (arg == NULL) {
-        return FAIL;
-      }
-      break;
-    } else if (*arg != ',' && *arg != ']') {
-      internal_error("ex_let_vars()");
-      return FAIL;
-    }
-  }
-
-  return OK;
-}
+{ return rs_ex_let_vars(arg_start, tv, copy, semicolon, var_count, is_const, op); }
 
 /// Skip over assignable variable "var" or list of variables "[var, var]".
 /// Used for ":let varvar = expr" and ":for varvar in expr".
@@ -993,78 +928,6 @@ static const char *list_arg_vars(exarg_T *eap, const char *arg, int *first)
   return arg;
 }
 
-/// Set an environment variable, part of ex_let_one().
-static char *ex_let_env(char *arg, typval_T *const tv, const bool is_const,
-                        const char *const endchars, const char *const op)
-  FUNC_ATTR_NONNULL_ARG(1, 2) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_ex_let_env(arg, tv, is_const, endchars, op);
-}
-
-/// Set an option, part of ex_let_one().
-static char *ex_let_option(char *arg, typval_T *const tv, const bool is_const,
-                           const char *const endchars, const char *const op)
-  FUNC_ATTR_NONNULL_ARG(1, 2) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_ex_let_option(arg, tv, is_const, endchars, op);
-}
-
-/// Set a register, part of ex_let_one().
-static char *ex_let_register(char *arg, typval_T *const tv, const bool is_const,
-                             const char *const endchars, const char *const op)
-  FUNC_ATTR_NONNULL_ARG(1, 2) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_ex_let_register(arg, tv, is_const, endchars, op);
-}
-
-/// Set one item of `:let var = expr` or `:let [v1, v2] = list` to its value
-///
-/// @param[in]  arg  Start of the variable name.
-/// @param[in]  tv  Value to assign to the variable.
-/// @param[in]  copy  If true, copy value from `tv`.
-/// @param[in]  endchars  Valid characters after variable name or NULL.
-/// @param[in]  op  Operation performed: *op is `+`, `-`, `.` for `+=`, etc.
-///                 NULL for `=`.
-///
-/// @return a pointer to the char just after the var name or NULL in case of
-///         error.
-static char *ex_let_one(char *arg, typval_T *const tv, const bool copy, const bool is_const,
-                        const char *const endchars, const char *const op)
-  FUNC_ATTR_NONNULL_ARG(1, 2) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  char *arg_end = NULL;
-
-  if (*arg == '$') {
-    // ":let $VAR = expr": Set environment variable.
-    return ex_let_env(arg, tv, is_const, endchars, op);
-  } else if (*arg == '&') {
-    // ":let &option = expr": Set option value.
-    // ":let &l:option = expr": Set local option value.
-    // ":let &g:option = expr": Set global option value.
-    return ex_let_option(arg, tv, is_const, endchars, op);
-  } else if (*arg == '@') {
-    // ":let @r = expr": Set register contents.
-    return ex_let_register(arg, tv, is_const, endchars, op);
-  } else if (rs_eval_isnamec1(*arg) || *arg == '{') {
-    // ":let var = expr": Set internal variable.
-    // ":let {expr} = expr": Idem, name made with curly braces
-    lval_T lv;
-    char *const p = get_lval(arg, tv, &lv, false, false, 0, FNE_CHECK_START);
-    if (p != NULL && lv.ll_name != NULL) {
-      if (endchars != NULL && vim_strchr(endchars, (uint8_t)(*skipwhite(p))) == NULL) {
-        emsg(_(e_letunexp));
-      } else {
-        set_var_lval(&lv, p, tv, copy, is_const, op);
-        arg_end = p;
-      }
-    }
-    clear_lval(&lv);
-  } else {
-    semsg(_(e_invarg2), arg);
-  }
-
-  return arg_end;
-}
 
 /// ":unlet[!] var1 ... " command.
 void ex_unlet(exarg_T *eap) { rs_ex_unlet(eap); }
@@ -2265,3 +2128,29 @@ int nvim_var_dict(void) { return VAR_DICT; }
 
 /// VAR_LIST constant.
 int nvim_var_list(void) { return VAR_LIST; }
+
+// Phase 10: ex_let_one / ex_let_vars accessor shims.
+
+/// get_lval() with tv argument (for ex_let_one name case).
+char *nvim_vars_get_lval_with_tv(char *name, void *tv, void *lv)
+{ return get_lval(name, (typval_T *)tv, (lval_T *)lv, false, false, 0, FNE_CHECK_START); }
+
+/// Emit E18 "Unexpected characters in :let" error.
+void nvim_vars_emsg_letunexp(void) { emsg(_(e_letunexp)); }
+
+/// Build a VAR_LIST typval from the remaining list items starting at "item".
+/// Appends all items to a new list, sets ltv fields, refs the list.
+void nvim_vars_build_rest_list(void *item, void *ltv, size_t rest_len)
+{
+  list_T *const rest_list = tv_list_alloc((ptrdiff_t)rest_len);
+  listitem_T *li = (listitem_T *)item;
+  while (li != NULL) {
+    tv_list_append_tv(rest_list, TV_LIST_ITEM_TV(li));
+    li = TV_LIST_ITEM_NEXT(NULL, li);
+  }
+  typval_T *tv = (typval_T *)ltv;
+  tv->v_type = VAR_LIST;
+  tv->v_lock = VAR_UNLOCKED;
+  tv->vval.v_list = rest_list;
+  tv_list_ref(rest_list);
+}

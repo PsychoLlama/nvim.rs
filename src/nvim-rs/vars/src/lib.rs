@@ -41,6 +41,7 @@ use std::ffi::{c_char, c_int};
 pub mod checks;
 pub mod eval_helpers;
 pub mod heredoc;
+pub mod let_one;
 pub mod listing;
 pub mod lookup;
 pub mod misc;
