@@ -40,16 +40,15 @@ extern "C" {
     // cmdarg_T accessors
     // oparg_T accessors
 
-    // Global accessors
-    fn nvim_get_finish_op() -> c_int;
-    fn nvim_set_finish_op(val: bool);
+    // Global accessors (direct linkage)
+    static mut finish_op: bool;
     static mut VIsual_active: bool;
+    static mut VIsual_select: bool;
     static mut msg_nowait: bool;
     static mut restart_edit: c_int;
-    fn nvim_set_VIsual_select(val: bool);
+    static mut opcount: c_int;
     static mut VIsual_select_reg: c_int;
     static mut restart_VIsual_select: c_int;
-    fn nvim_set_opcount(val: c_int);
     fn stuff_empty() -> bool;
 
     // Phase 3 wrappers
@@ -102,7 +101,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         // If we didn't start or finish an operator, reset oap->regname,
         // unless we need it later.
         let idx = (*sp).idx;
-        if nvim_get_finish_op() == 0
+        if !finish_op
             && (*oa).op_type == 0
             && (idx < 0 || (crate::dispatch::table::rs_table_get_cmd_flags(idx) & NV_KEEPREG == 0))
         {
@@ -134,14 +133,14 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
 
     msg_nowait = false;
 
-    if nvim_get_finish_op() != 0 || did_visual_op {
+    if finish_op || did_visual_op {
         set_reg_var(get_default_register_name());
     }
 
-    let prev_finish_op = nvim_get_finish_op() != 0;
+    let prev_finish_op = finish_op;
     if (*oa).op_type == OP_NOP {
         // Reset finish_op, in case it was set.
-        nvim_set_finish_op(false);
+        finish_op = false;
         may_trigger_modechanged();
     }
 
@@ -189,7 +188,7 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
         && (*oa).regname == 0
     {
         if restart_VIsual_select == 1 {
-            nvim_set_VIsual_select(true);
+            VIsual_select = true;
             VIsual_select_reg = 0;
             may_trigger_modechanged();
             showmode();
@@ -205,5 +204,5 @@ pub unsafe extern "C" fn rs_normal_finish_command(s: NormalStateHandle) {
     }
 
     // Save count before an operator for next time.
-    nvim_set_opcount((*ca.cast::<CmdargT>()).opcount);
+    opcount = (*ca.cast::<CmdargT>()).opcount;
 }

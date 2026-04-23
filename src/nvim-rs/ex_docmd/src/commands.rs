@@ -192,7 +192,7 @@ extern "C" {
 
     // Global state accessors
     static cmdwin_type: c_int;
-    fn nvim_set_cmdwin_result(val: c_int);
+    static mut cmdwin_result: c_int;
     fn nvim_curbuf_locked() -> c_int;
 
     // Redir globals (in globals.h via EXTERN)
@@ -325,7 +325,7 @@ extern "C" {
 
     // Phase 10: ex_operators helpers
     fn nvim_set_virtual_op_false();
-    fn nvim_set_virtual_op_none();
+    static mut virtual_op: c_int;
     fn setpcmark();
     fn beginline(flags: c_int);
     fn end_visual_mode();
@@ -1183,7 +1183,7 @@ pub unsafe extern "C" fn rs_ex_quit(eap: ExArgHandle) {
     }
 
     if cmdwin_type != 0 {
-        nvim_set_cmdwin_result(CTRL_C);
+        cmdwin_result = CTRL_C;
         return;
     }
 
@@ -2362,7 +2362,7 @@ pub unsafe extern "C" fn rs_ex_only(eap: ExArgHandle) {
 #[export_name = "ex_close"]
 pub unsafe extern "C" fn rs_ex_close(eap: ExArgHandle) {
     if cmdwin_type != 0 {
-        nvim_set_cmdwin_result(CTRL_C);
+        cmdwin_result = CTRL_C;
         return;
     }
     if text_locked() || nvim_curbuf_locked() != 0 {
@@ -2391,7 +2391,7 @@ pub unsafe extern "C" fn rs_check_more(message: c_int, forceit: c_int) -> c_int 
 pub unsafe extern "C" fn rs_before_quit_all(eap: ExArgHandle) -> c_int {
     if cmdwin_type != 0 {
         let forceit = (*eap).forceit != 0;
-        nvim_set_cmdwin_result(if forceit { K_XF1 } else { K_XF2 });
+        cmdwin_result = if forceit { K_XF1 } else { K_XF2 };
         return 0; // FAIL
     }
     if text_locked() {
@@ -2564,7 +2564,7 @@ pub unsafe extern "C" fn rs_ex_range_without_command(eap: ExArgHandle) -> *mut c
 pub unsafe extern "C" fn rs_ex_tabclose(eap: ExArgHandle) {
     const K_IGNORE: c_int = -13821;
     if cmdwin_type != 0 {
-        nvim_set_cmdwin_result(K_IGNORE);
+        cmdwin_result = K_IGNORE;
         return;
     }
 
@@ -2616,7 +2616,7 @@ pub unsafe extern "C" fn rs_ex_exit(eap: ExArgHandle) {
     const OK: c_int = 1;
 
     if cmdwin_type != 0 {
-        nvim_set_cmdwin_result(CTRL_C);
+        cmdwin_result = CTRL_C;
         return;
     }
     if text_locked() {
@@ -3452,7 +3452,7 @@ pub unsafe extern "C" fn rs_ex_operators(eap: ExArgHandle) {
         }
         op_shift(&raw mut oa, false, (*eap).amount);
     }
-    nvim_set_virtual_op_none();
+    virtual_op = 0;
     nvim_docmd_ex_may_print_impl(eap);
 }
 

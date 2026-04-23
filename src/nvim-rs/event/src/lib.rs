@@ -3279,7 +3279,7 @@ extern "C" {
     fn nvim_get_state() -> c_int;
     static mut VIsual_active: bool;
     fn nvim_get_visual_select() -> c_int;
-    fn nvim_get_finish_op() -> c_int;
+    static mut finish_op: bool;
 }
 
 // Mode constants (from state_defs.h)
@@ -3314,7 +3314,7 @@ fn get_real_state_impl() -> c_int {
                     return MODE_SELECT;
                 }
                 return MODE_VISUAL;
-            } else if nvim_get_finish_op() != 0 {
+            } else if finish_op {
                 return MODE_OP_PENDING;
             }
         }

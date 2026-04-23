@@ -88,7 +88,7 @@ extern "C" {
     fn nvim_get_cmdwin_old_curwin() -> WinHandle;
 
     /// Set cmdwin_result to val.
-    fn nvim_set_cmdwin_result(val: c_int);
+    static mut cmdwin_result: c_int;
 
     /// Set api_error for cmdwin.
     fn nvim_api_set_error_e_cmdwin(err: *mut std::ffi::c_void);
@@ -304,12 +304,9 @@ extern "C" {
     /// Get the restart_edit global.
     static mut restart_edit: c_int;
 
-    /// Set the restart_edit global.
-    /// Get the mode_displayed global (returns bool from C).
-    fn nvim_get_mode_displayed() -> bool;
-
-    /// Set clear_cmdline global (takes bool in C).
-    fn nvim_set_clear_cmdline(val: bool);
+    /// Direct global access.
+    static mut mode_displayed: bool;
+    static mut clear_cmdline: bool;
 
     /// Get stop_insert_mode global.
     fn nvim_get_stop_insert_mode() -> c_int;
@@ -338,8 +335,8 @@ unsafe fn leaving_window_impl(win: WinHandle) {
     nvim_buf_set_prompt_insert(buf, restart_edit);
 
     // If we were showing Insert mode, unshow it later.
-    if restart_edit != NUL && nvim_get_mode_displayed() {
-        nvim_set_clear_cmdline(true);
+    if restart_edit != NUL && mode_displayed {
+        clear_cmdline = true;
     }
     restart_edit = NUL;
 
@@ -492,7 +489,7 @@ unsafe fn can_close_in_cmdwin_impl(win: WinHandle, err: *mut std::ffi::c_void) -
         let cmdwin_win = nvim_get_cmdwin_win();
         if win == cmdwin_win {
             // Ctrl-C (3) closes the cmdwin itself
-            nvim_set_cmdwin_result(3); // Ctrl_C
+            cmdwin_result = 3; // Ctrl_C
             return false;
         }
         let cmdwin_old = nvim_get_cmdwin_old_curwin();

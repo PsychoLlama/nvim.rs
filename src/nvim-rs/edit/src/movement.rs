@@ -93,7 +93,7 @@ extern "C" {
 
     // State / option globals
     fn nvim_get_p_sol() -> c_int;
-    fn nvim_get_fdo_flags() -> c_uint;
+    static mut fdo_flags: c_uint;
 
     // Topline
     fn update_topline(wp: WinHandle);
@@ -329,9 +329,7 @@ unsafe fn cursor_up_inner_impl(wp: WinHandle, mut n: LinenrT, skip_conceal: bool
             // If we entered a fold, move to the beginning, unless in
             // Insert mode or when 'foldopen' contains "all": it will open
             // in a moment.
-            if n > 0
-                || !((State & MODE_INSERT) != 0 || (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_ALL) != 0)
-            {
+            if n > 0 || !((State & MODE_INSERT) != 0 || (fdo_flags & K_OPT_FDO_FLAG_ALL) != 0) {
                 let mut fold_first: LinenrT = 0;
                 if nvim_hasFolding(
                     wp,

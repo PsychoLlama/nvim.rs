@@ -175,7 +175,7 @@ extern "C" {
     fn nvim_docmd_cursor_correct(wp: WinHandle);
     fn setpcmark();
     fn checkpcmark();
-    fn nvim_set_did_syncbind(val: bool);
+    static mut did_syncbind: bool;
     // scrollup/scrolldown (Rust exports)
     #[link_name = "scrollup"]
     fn scrollup(wp: WinHandle, line_count: LinenrT, byfold: c_int) -> c_int;
@@ -207,7 +207,7 @@ extern "C" {
     fn goto_tabpage(n: c_int);
     #[link_name = "rs_valid_tabpage"]
     fn rs_valid_tabpage(tp: *mut c_void) -> c_int;
-    fn nvim_set_cmdwin_result(val: c_int);
+    static mut cmdwin_result: c_int;
 }
 
 /// Ends-excmd check (inline, same as in lib.rs)
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn rs_ex_syncbind_impl(_eap: ExArgHandle) {
     }
 
     if win_ref_raw(curwin).w_p_scb() != 0 {
-        nvim_set_did_syncbind(true);
+        did_syncbind = true;
         checkpcmark();
         if old_linenr != win_ref_raw(curwin).w_cursor.lnum {
             let ctrl_o = [b'\x0f' as c_char, 0i8];
@@ -680,7 +680,7 @@ pub unsafe extern "C" fn rs_ex_tabonly(eap: ExArgHandle) {
     const K_IGNORE: c_int = -13821;
 
     if cmdwin_type != 0 {
-        nvim_set_cmdwin_result(K_IGNORE);
+        cmdwin_result = K_IGNORE;
         return;
     }
 
@@ -930,7 +930,7 @@ extern "C" {
         nottyped: bool,
         silent: bool,
     ) -> c_int;
-    fn nvim_set_finish_op(val: bool);
+    static mut finish_op: bool;
     #[link_name = "stuff_empty"]
     fn nvim_docmd_stuff_empty() -> c_int;
     #[link_name = "typebuf_typed"]
@@ -955,7 +955,7 @@ extern "C" {
     fn xstrdup(s: *const c_char) -> *mut c_char;
     #[link_name = "free_string_option"]
     fn nvim_free_string_option(p: *mut c_char);
-    fn nvim_did_emsg_check() -> c_int;
+    static mut did_emsg: c_int;
     fn redirecting() -> c_int;
     static mut msg_col: c_int;
 }
@@ -1006,9 +1006,8 @@ extern "C" {
     static mut msg_didout: bool;
     fn nvim_get_current_State() -> c_int;
     fn nvim_set_current_State(val: c_int);
-    fn nvim_get_finish_op() -> c_int;
-    fn nvim_get_opcount() -> c_int;
-    fn nvim_set_opcount(val: c_int);
+    // finish_op declared earlier in this module
+    static mut opcount: c_int;
     fn nvim_get_reg_executing() -> c_int;
     static mut reg_executing: c_int;
     static mut pending_end_reg_executing: bool;
@@ -1031,8 +1030,8 @@ pub unsafe extern "C" fn rs_save_current_state_impl(sst: SstHandle) -> bool {
     (*sst).save_restart_edit = crate::restart_edit;
     (*sst).save_msg_didout = msg_didout;
     (*sst).save_state = nvim_get_current_State();
-    (*sst).save_finish_op = nvim_get_finish_op() != 0;
-    (*sst).save_opcount = nvim_get_opcount();
+    (*sst).save_finish_op = finish_op;
+    (*sst).save_opcount = opcount;
     (*sst).save_reg_executing = nvim_get_reg_executing();
     (*sst).save_pending_end_reg_executing = pending_end_reg_executing;
 
@@ -1058,8 +1057,8 @@ pub unsafe extern "C" fn rs_restore_current_state_impl(sst: SstHandle) {
         // Some function (terminal_enter()) may have overridden restart_edit.
         crate::restart_edit = (*sst).save_restart_edit;
     }
-    nvim_set_finish_op((*sst).save_finish_op);
-    nvim_set_opcount((*sst).save_opcount);
+    finish_op = (*sst).save_finish_op;
+    opcount = (*sst).save_opcount;
     reg_executing = (*sst).save_reg_executing;
     pending_end_reg_executing = (*sst).save_pending_end_reg_executing;
 
@@ -1173,7 +1172,7 @@ pub unsafe extern "C" fn rs_ex_find(eap: ExArgHandle) {
 #[export_name = "exec_normal"]
 pub unsafe extern "C" fn rs_exec_normal_impl(was_typed: bool, use_vpeekc: bool) {
     let mut oa = OpargT::default();
-    nvim_set_finish_op(false);
+    finish_op = false;
     // Ctrl_C = 3
     const CTRL_C: c_int = 3;
     loop {
@@ -1976,7 +1975,7 @@ pub unsafe extern "C" fn rs_undo_cmdmod_impl(cmod: CmodHandle) {
     if save_msg_silent > 0 {
         // Prevent counters from going negative if a serious error enabled messages.
         let cur_msg_silent = msg_silent;
-        if nvim_did_emsg_check() == 0 || cur_msg_silent > save_msg_silent - 1 {
+        if did_emsg == 0 || cur_msg_silent > save_msg_silent - 1 {
             msg_silent = save_msg_silent - 1;
         }
         let did_esilent = (*cmod).cmod_did_esilent;

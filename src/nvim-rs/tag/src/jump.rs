@@ -562,7 +562,7 @@ extern "C" {
     // Post-jump helpers (Phase 3 — migrated to Rust inline)
     fn nvim_curbuf_is_help() -> c_int;
     fn nvim_tag_set_topline_curwin();
-    fn nvim_get_fdo_flags() -> u32;
+    static mut fdo_flags: u32;
     fn rs_foldOpenCursor();
     fn rs_win_valid(win: *const c_void) -> bool;
     fn nvim_validate_cursor();
@@ -896,7 +896,7 @@ pub unsafe extern "C" fn rs_tag_jumpto_execute(
                 nvim_tag_set_topline_curwin();
             }
             // kOptFdoFlagTag = 0x80 (verified by _Static_assert in tag_shim.c)
-            if (nvim_get_fdo_flags() & 0x80) != 0 && old_key_typed {
+            if (fdo_flags & 0x80) != 0 && old_key_typed {
                 rs_foldOpenCursor();
             }
             if l_g_do_tagpreview != 0 {

@@ -480,7 +480,7 @@ extern "C" {
     /// Returns the `did_check_timestamps` flag.
     fn nvim_get_did_check_timestamps() -> bool;
     /// Sets the `did_check_timestamps` flag.
-    fn nvim_set_did_check_timestamps(val: bool);
+    static mut did_check_timestamps: bool;
     /// Sets `need_check_timestamps`.
     fn nvim_set_need_check_timestamps(val: c_int);
     /// Returns non-zero if the stuff buffer is empty.
@@ -495,15 +495,13 @@ extern "C" {
     /// Returns `curbuf->b_ro_locked`.
     fn nvim_get_curbuf_b_ro_locked() -> c_int;
     /// Returns `allbuf_lock`.
-    fn nvim_get_allbuf_lock() -> c_int;
+    static mut allbuf_lock: c_int;
     /// Sets `allbuf_lock`.
     fn nvim_set_allbuf_lock(val: c_int);
-    /// Returns `no_wait_return`.
-    fn nvim_get_no_wait_return() -> c_int;
-    /// Sets `no_wait_return`.
-    fn nvim_set_no_wait_return(val: c_int);
+    /// `no_wait_return` global.
+    static mut no_wait_return: c_int;
     /// Returns `need_wait_return`.
-    fn nvim_get_need_wait_return() -> bool;
+    static mut need_wait_return: bool;
     /// Returns the first buffer (firstbuf).
     fn nvim_get_firstbuf() -> *mut c_void;
     /// Initializes a bufref_T (opaque) to point to buf.
@@ -549,13 +547,13 @@ pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
         || nvim_typebuf_typed() == 0
         || nvim_get_autocmd_busy()
         || nvim_get_curbuf_b_ro_locked() > 0
-        || nvim_get_allbuf_lock() > 0
+        || allbuf_lock > 0
     {
         // Check later when conditions are safe.
         nvim_set_need_check_timestamps(1);
     } else {
-        nvim_set_no_wait_return(nvim_get_no_wait_return() + 1);
-        nvim_set_did_check_timestamps(true);
+        no_wait_return += 1;
+        did_check_timestamps = true;
         ALREADY_WARNED.store(false, Ordering::Relaxed);
 
         // bufref_T is { buf_T*, int, int } = 16 bytes. We use [u64; 2]
@@ -582,9 +580,9 @@ pub unsafe extern "C" fn rs_check_timestamps(focus: c_int) -> c_int {
             buf = unsafe { bref_void(buf as *const c_void).b_next };
         }
 
-        nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
+        no_wait_return -= 1;
         nvim_set_need_check_timestamps(0);
-        if nvim_get_need_wait_return() && didit == 2 {
+        if need_wait_return && didit == 2 {
             // make sure msg isn't overwritten
             msg_puts(c"\n".as_ptr());
             ui_flush();
@@ -676,7 +674,7 @@ extern "C" {
     /// Returns emsg_silent global.
     fn nvim_get_emsg_silent() -> c_int;
     /// Returns in_assert_fails global.
-    fn nvim_get_in_assert_fails() -> bool;
+    static in_assert_fails: bool;
     /// Returns 1 if UI has messages capability.
     fn nvim_ui_has_messages() -> c_int;
     /// os_delay(ms, ignoreinput).
@@ -882,7 +880,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 //  allbuf_lock here to match C behavior.)
                 nvim_set_vim_var_fcs_reason(reason);
                 nvim_set_vim_var_fcs_choice_empty();
-                let old_allbuf_lock = nvim_get_allbuf_lock();
+                let old_allbuf_lock = allbuf_lock;
                 nvim_set_allbuf_lock(old_allbuf_lock + 1);
                 let n = apply_autocmds(EVENT_FILECHANGEDSHELL, b_fname, b_fname, false, buf);
                 nvim_set_allbuf_lock(old_allbuf_lock);
@@ -1000,10 +998,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 }
                 msg_clr_eos();
                 nvim_msg_end_wrap();
-                if nvim_get_emsg_silent() == 0
-                    && !nvim_get_in_assert_fails()
-                    && nvim_ui_has_messages() == 0
-                {
+                if nvim_get_emsg_silent() == 0 && !in_assert_fails && nvim_ui_has_messages() == 0 {
                     ui_flush();
                     nvim_os_delay(1004, 1);
                     nvim_set_redraw_cmdline(false);

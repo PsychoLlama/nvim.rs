@@ -133,7 +133,7 @@ extern "C" {
     fn nvim_set_cursor_col(col: c_int);
     fn nvim_curwin_set_curswant(val: bool);
     fn nvim_check_cursor();
-    fn nvim_get_fdo_flags() -> u32;
+    static mut fdo_flags: u32;
     fn rs_foldOpenCursor();
     fn nvim_tag_set_msg_scroll(val: c_int);
     fn nvim_tag_get_msg_scrolled() -> c_int;
@@ -884,7 +884,7 @@ pub unsafe extern "C" fn rs_do_tag(
                 nvim_set_cursor_col(pop_colnum);
                 nvim_curwin_set_curswant(true);
                 nvim_check_cursor();
-                if (nvim_get_fdo_flags() & FDO_FLAG_TAG) != 0 && old_key_typed {
+                if (fdo_flags & FDO_FLAG_TAG) != 0 && old_key_typed {
                     rs_foldOpenCursor();
                 }
 

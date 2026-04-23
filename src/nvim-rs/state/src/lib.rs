@@ -259,9 +259,9 @@ extern "C" {
     /// `VIsual_active` global (visual mode active).
     static mut VIsual_active: bool;
     /// Get `VIsual_mode` global.
-    fn nvim_get_VIsual_mode() -> c_int;
+    static mut VIsual_mode: c_int;
     /// Get `virtual_op` `TriState`.
-    fn nvim_get_virtual_op() -> c_int;
+    static mut virtual_op: c_int;
     /// Get `ve_flags` for a window.
     #[link_name = "get_ve_flags"]
     fn nvim_state_get_ve_flags(wp: WinHandle) -> c_uint;
@@ -306,7 +306,6 @@ unsafe fn is_safe_now() -> bool {
 pub unsafe extern "C" fn rs_virtual_active(wp: WinHandle) -> bool {
     // While an operator is being executed we return virtual_op, because
     // VIsual_active has already been reset.
-    let virtual_op = nvim_get_virtual_op();
     if virtual_op != K_NONE {
         return virtual_op != 0;
     }
@@ -319,9 +318,7 @@ pub unsafe extern "C" fn rs_virtual_active(wp: WinHandle) -> bool {
     let cur_ve_flags = nvim_state_get_ve_flags(wp);
 
     cur_ve_flags == K_OPT_VE_FLAG_ALL
-        || ((cur_ve_flags & K_OPT_VE_FLAG_BLOCK) != 0
-            && VIsual_active
-            && nvim_get_VIsual_mode() == CTRL_V)
+        || ((cur_ve_flags & K_OPT_VE_FLAG_BLOCK) != 0 && VIsual_active && VIsual_mode == CTRL_V)
         || ((cur_ve_flags & K_OPT_VE_FLAG_INSERT) != 0 && (State & MODE_INSERT) != 0)
 }
 
@@ -382,11 +379,11 @@ extern "C" {
     /// `VIsual_select` global.
     fn nvim_get_VIsual_select() -> bool;
     /// `restart_VIsual_select` global.
-    fn nvim_get_restart_VIsual_select() -> c_int;
+    static mut restart_VIsual_select: c_int;
     /// `finish_op` global.
-    fn nvim_get_finish_op() -> c_int;
+    static mut finish_op: bool;
     /// `motion_force` global.
-    fn nvim_get_motion_force() -> c_int;
+    static mut motion_force: c_int;
     /// `restart_edit` global.
     fn nvim_get_restart_edit() -> c_int;
     /// `exmode_active` global.
@@ -401,8 +398,7 @@ extern "C" {
     fn nvim_cmdline_overstrike() -> c_int;
     /// Returns `ccline.one_key`.
     fn nvim_get_ccline_one_key() -> c_int;
-    /// Returns `got_int` (for `ModeChanged` check).
-    fn nvim_state_got_int() -> c_int;
+    // got_int is declared in the second extern block below
     /// Returns true if `EVENT_MODECHANGED` has any autocmds.
     fn nvim_has_event_modechanged() -> c_int;
     /// `get_v_event` opaque accessor.
@@ -497,14 +493,14 @@ pub unsafe extern "C" fn rs_get_mode(buf: *mut c_char) {
         buf[i] = b't';
         i += 1;
     } else if VIsual_active {
-        let visual_mode = nvim_get_VIsual_mode();
+        let visual_mode = VIsual_mode;
         if nvim_get_VIsual_select() {
             buf[i] = (visual_mode as u8).wrapping_add(b's').wrapping_sub(b'v');
             i += 1;
         } else {
             buf[i] = visual_mode as u8;
             i += 1;
-            if nvim_get_restart_VIsual_select() != 0 {
+            if restart_VIsual_select != 0 {
                 buf[i] = b's';
                 i += 1;
             }
@@ -512,10 +508,10 @@ pub unsafe extern "C" fn rs_get_mode(buf: *mut c_char) {
     } else {
         buf[i] = b'n';
         i += 1;
-        if nvim_get_finish_op() != 0 {
+        if finish_op {
             buf[i] = b'o';
             i += 1;
-            buf[i] = nvim_get_motion_force() as u8;
+            buf[i] = motion_force as u8;
             i += 1;
         } else if nvim_get_curbuf_terminal() {
             buf[i] = b't';
@@ -545,7 +541,7 @@ pub unsafe extern "C" fn rs_get_mode(buf: *mut c_char) {
 #[unsafe(export_name = "may_trigger_modechanged")]
 pub unsafe extern "C" fn rs_may_trigger_modechanged() {
     // Skip this when got_int is set, the autocommand will not be executed.
-    if nvim_has_event_modechanged() == 0 || nvim_state_got_int() != 0 {
+    if nvim_has_event_modechanged() == 0 || c_int::from(got_int) != 0 {
         return;
     }
 
@@ -617,7 +613,7 @@ extern "C" {
     /// `must_redraw` -- nonzero if screen needs redraw.
     fn nvim_must_redraw() -> c_int;
     /// `need_wait_return` -- true if waiting for user to press Enter.
-    fn nvim_get_need_wait_return() -> bool;
+    static mut need_wait_return: bool;
     /// `update_screen()` -- update the screen.
     #[link_name = "update_screen"]
     fn nvim_update_screen_c();
@@ -705,10 +701,7 @@ pub unsafe extern "C" fn rs_state_enter(s: *mut VimState) {
                     break 'getkey K_EVENT;
                 }
                 // No input available. Ensure screen is updated before blocking.
-                if nvim_must_redraw() != 0
-                    && !nvim_get_need_wait_return()
-                    && (State & MODE_CMDLINE) == 0
-                {
+                if nvim_must_redraw() != 0 && !need_wait_return && (State & MODE_CMDLINE) == 0 {
                     nvim_update_screen_c();
                     nvim_setcursor();
                 }

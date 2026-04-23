@@ -146,7 +146,7 @@ extern "C" {
     static mut curbuf: *mut c_void;
     static mut curwin: *mut c_void;
     static mut curbuf_splice_pending: c_int;
-    fn nvim_get_virtual_op() -> c_int;
+    static mut virtual_op: c_int;
 }
 
 // -----------------------------------------------------------------------
@@ -310,9 +310,9 @@ pub(crate) unsafe fn opd_block_delete(oap: *mut c_void) -> c_int {
 /// - `oap` must be a valid `oparg_T *`.
 pub(crate) unsafe fn opd_charwise_delete(oap: *mut c_void) -> c_int {
     let oap_t: *mut OpargT = oap.cast();
-    let virtual_op = nvim_get_virtual_op() != 0;
+    let is_virtual_op = virtual_op != 0;
 
-    if virtual_op {
+    if is_virtual_op {
         if gchar_pos((&raw const (*oap_t).start).cast()) == TAB {
             let mut endcol: c_int = 0;
             if u_save_cursor() == FAIL {
@@ -384,7 +384,7 @@ pub(crate) unsafe fn opd_charwise_delete(oap: *mut c_void) -> c_int {
 
         let mut n = (*oap_t).end.col - (*oap_t).start.col + 1 - c_int::from(!(*oap_t).inclusive);
 
-        if virtual_op {
+        if is_virtual_op {
             let len = get_cursor_line_len();
             if (*oap_t).end.coladd != 0 && (*oap_t).end.col >= len - 1 && (*oap_t).start.coladd == 0
             {
@@ -400,7 +400,7 @@ pub(crate) unsafe fn opd_charwise_delete(oap: *mut c_void) -> c_int {
 
         del_bytes(
             n,
-            c_int::from(!virtual_op),
+            c_int::from(!is_virtual_op),
             c_int::from((*oap_t).op_type == OP_DELETE && !(*oap_t).is_visual),
         );
     } else {
@@ -436,7 +436,7 @@ pub(crate) unsafe fn opd_charwise_delete(oap: *mut c_void) -> c_int {
         nvim_set_cursor_col(0);
         del_bytes(
             n,
-            c_int::from(!virtual_op),
+            c_int::from(!is_virtual_op),
             c_int::from((*oap_t).op_type == OP_DELETE && !(*oap_t).is_visual),
         );
         // curwin->w_cursor = curpos

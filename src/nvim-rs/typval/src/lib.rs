@@ -1155,7 +1155,7 @@ extern "C" {
     fn nvim_get_special_var_name(s: c_int) -> *const c_char;
     fn nvim_vim_str2nr(s: *const c_char, out: *mut i64);
     fn nvim_tv_to_lnum_pos(tv: TypevalHandle, ret_fnum: *mut c_int) -> i32;
-    fn nvim_did_emsg_check() -> c_int;
+    static mut did_emsg: c_int;
     fn nvim_buf_get_ml_line_count(buf: *const std::ffi::c_void) -> i32;
     fn nvim_emsg_get_number_unknown();
 
@@ -4798,12 +4798,9 @@ pub unsafe extern "C" fn rs_tv_get_string_buf(
 
 /// Get line number from a typval (line number or special string like "$", ".", etc.)
 fn tv_get_lnum_impl(tv: TypevalHandle) -> i32 {
-    let did_emsg_before = unsafe { nvim_did_emsg_check() };
+    let did_emsg_before = unsafe { did_emsg };
     let lnum = tv_get_number_chk_impl(tv, std::ptr::null_mut()) as i32;
-    if lnum <= 0
-        && unsafe { nvim_did_emsg_check() } == did_emsg_before
-        && tv_type_impl(tv) != VarType::Number
-    {
+    if lnum <= 0 && unsafe { did_emsg } == did_emsg_before && tv_type_impl(tv) != VarType::Number {
         let mut fnum: c_int = 0;
         let pos_lnum = unsafe { nvim_tv_to_lnum_pos(tv, &raw mut fnum) };
         if pos_lnum != 0 {

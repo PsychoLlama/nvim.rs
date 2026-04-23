@@ -1405,7 +1405,7 @@ extern "C" {
 
 extern "C" {
     /// `VIsual_active` global.
-    static VIsual_active: bool;
+    static mut VIsual_active: bool;
 
     /// `VIsual_mode` global (character: 'v', 'V', or Ctrl-V).
     static VIsual_mode: c_int;
@@ -1512,7 +1512,7 @@ extern "C" {
     fn nvim_get_cmdwin_win() -> WinHandle;
 
     /// Set `VIsual_reselect`.
-    fn nvim_set_VIsual_reselect(val: bool);
+    static mut VIsual_reselect: bool;
 
     /// Check `stl_connected(wp)`.
     fn stl_connected(wp: WinHandle) -> c_int;
@@ -1542,8 +1542,7 @@ extern "C" {
     /// `rs_may_start_select(c)` — check if we may start Select mode.
     fn rs_may_start_select(c: c_int);
 
-    /// Set `VIsual_active`.
-    fn nvim_set_VIsual_active(val: bool);
+    // VIsual_active already declared mutable above
 
     /// Set `VIsual` position fields.
     fn nvim_set_VIsual_pos(lnum: linenr_T, col: c_int, coladd: c_int);
@@ -2487,8 +2486,8 @@ pub unsafe extern "C" fn rs_jump_to_mouse(
             old_cursor.col as c_int,
             old_cursor.coladd as c_int,
         );
-        nvim_set_VIsual_active(true);
-        nvim_set_VIsual_reselect(true);
+        VIsual_active = true;
+        VIsual_reselect = true;
         rs_may_start_select(c_int::from(b'o'));
         setmouse_global();
         if p_smd != 0 && msg_silent == 0 {
@@ -2642,7 +2641,7 @@ extern "C" {
     fn nvim_set_mouse_grid(val: c_int);
     fn nvim_set_mouse_row(val: c_int);
     fn nvim_set_mouse_col(val: c_int);
-    fn nvim_set_mouse_dragging(val: c_int);
+    static mut mouse_dragging: c_int;
 
     // Mode/state accessors
     fn nvim_get_state_mouse() -> c_int;
@@ -3295,9 +3294,9 @@ unsafe fn rs_do_mouse_impl(
     // ------------------------------------------------------------------
     if nvim_get_VIsual_active_mouse() && is_drag && rs_get_scrolloff_value(nvim_get_curwin()) > 0 {
         if mouse_row == 0 {
-            nvim_set_mouse_dragging(2);
+            mouse_dragging = 2;
         } else {
-            nvim_set_mouse_dragging(1);
+            mouse_dragging = 1;
         }
     }
 
@@ -3486,8 +3485,8 @@ unsafe fn rs_do_mouse_impl(
                 nvim_set_VIsual_to_cursor();
                 let curwin = nvim_get_curwin();
                 ORIG_CURSOR = *nvim_win_get_cursor_ptr(curwin);
-                nvim_set_VIsual_active(true);
-                nvim_set_VIsual_reselect(true);
+                VIsual_active = true;
+                VIsual_reselect = true;
                 rs_may_start_select(c_int::from(b'o'));
                 setmouse_global();
             }

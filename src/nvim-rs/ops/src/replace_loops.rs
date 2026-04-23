@@ -114,7 +114,7 @@ extern "C" {
     static mut curbuf: *mut c_void;
     static mut curwin: *mut c_void;
     static mut curbuf_splice_pending: c_int;
-    fn nvim_get_virtual_op() -> c_int;
+    static mut virtual_op: c_int;
 }
 
 // -----------------------------------------------------------------------
@@ -213,14 +213,14 @@ pub(crate) unsafe fn rs_opr_block_loop(oap: *mut c_void, c: c_int, had_ctrl_v_cr
         nvim_set_cursor_col(0);
         block_prep(oap, (&raw mut bd).cast(), cursor_lnum, true);
 
-        let virtual_op = nvim_get_virtual_op() != 0;
-        if bd.textlen == 0 && (!virtual_op || bd.is_max != 0) {
+        let is_virtual_op = virtual_op != 0;
+        if bd.textlen == 0 && (!is_virtual_op || bd.is_max != 0) {
             nvim_set_cursor_lnum(cursor_lnum + 1);
             continue;
         }
 
         let n: c_int;
-        if virtual_op && bd.is_short != 0 && *bd.textstart == 0 {
+        if is_virtual_op && bd.is_short != 0 && *bd.textstart == 0 {
             let mut vpos: PosT = std::mem::zeroed();
             vpos.lnum = cursor_lnum;
             getvpos(curwin, (&raw mut vpos).cast(), (*oap_t).start_vcol);
@@ -242,7 +242,7 @@ pub(crate) unsafe fn rs_opr_block_loop(oap: *mut c_void, c: c_int, had_ctrl_v_cr
         };
 
         let mut numc = (*oap_t).end_vcol - (*oap_t).start_vcol + 1;
-        if bd.is_short != 0 && (!virtual_op || bd.is_max != 0) {
+        if bd.is_short != 0 && (!is_virtual_op || bd.is_max != 0) {
             numc -= ((*oap_t).end_vcol - bd.end_vcol) + 1;
         }
 
@@ -408,8 +408,8 @@ pub(crate) unsafe fn rs_opr_charwise_loop(oap: *mut c_void, c: c_int) {
             }
         }
 
-        let virtual_op = nvim_get_virtual_op() != 0;
-        if !done && virtual_op && nvim_get_cursor_lnum() == (*oap_t).end.lnum {
+        let is_virtual_op2 = virtual_op != 0;
+        if !done && is_virtual_op2 && nvim_get_cursor_lnum() == (*oap_t).end.lnum {
             let mut virtcols = (*oap_t).end.coladd;
             if nvim_get_cursor_lnum() == (*oap_t).start.lnum
                 && (*oap_t).start.col == (*oap_t).end.col

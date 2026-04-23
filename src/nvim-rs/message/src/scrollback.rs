@@ -662,9 +662,8 @@ extern "C" {
         attr: c_int,
     );
 
-    // nvim_set_ wrappers for C globals
-    fn nvim_set_clear_cmdline(val: bool);
-    fn nvim_set_mode_displayed(val: bool);
+    // nvim_set_ wrappers for C globals (clear_cmdline declared above)
+    static mut mode_displayed: bool;
     static mut redraw_cmdline: bool;
 }
 
@@ -983,8 +982,8 @@ pub unsafe extern "C" fn rs_do_more_prompt(typed_char: c_int) -> bool {
         Columns,
         hl_attr_sb(HLF_MSG_SB),
     );
-    nvim_set_clear_cmdline(false);
-    nvim_set_mode_displayed(false);
+    clear_cmdline = false;
+    mode_displayed = false;
 
     redraw_cmdline = true;
 

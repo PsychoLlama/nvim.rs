@@ -792,9 +792,6 @@ extern "C" {
     #[link_name = "win_cursorline_standout"]
     fn rs_win_cursorline_standout(wp: WinHandle) -> bool;
 
-    // Visual mode state
-    fn nvim_VIsual_active() -> c_int;
-
     // Buffer accessor
     fn nvim_get_curbuf() -> *mut std::ffi::c_void;
 
@@ -938,7 +935,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
     }
 
     // When current buffer's cursor moves in Visual mode, redraw it with UPD_INVERTED.
-    let visual_active = nvim_VIsual_active() != 0;
+    let visual_active = VIsual_active;
     let win_buf = win_ref(wp).w_buffer;
     let curbuf = nvim_get_curbuf();
     if visual_active && win_buf == curbuf {
@@ -3885,20 +3882,16 @@ extern "C" {
     /// Set curbuf global.
     fn nvim_set_curbuf(buf: *mut std::ffi::c_void);
 
-    /// Get `VIsual_select` global.
-    fn nvim_get_VIsual_select() -> bool;
-
-    /// Set `VIsual_select` global.
-    fn nvim_set_VIsual_select(val: c_int);
-
-    /// Set `VIsual_active` global.
-    fn nvim_set_VIsual_active(val: c_int);
+    /// Direct global access.
+    static mut VIsual_select: bool;
+    static mut VIsual_active: bool;
 
     /// Get diff corresponding line.
     fn rs_diff_get_corresponding_line(buf: *mut std::ffi::c_void, lnum: LinenrT) -> LinenrT;
 
-    /// Check cursor position (uses curwin global).
-    fn nvim_check_cursor();
+    /// Check cursor position.
+    #[link_name = "check_cursor"]
+    fn nvim_check_cursor(wp: *mut std::ffi::c_void);
 
     /// Adjust cursor for multi-byte character.
     fn nvim_mb_adjust_cursor();
@@ -3959,12 +3952,12 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
     let set_curswant = win_ref(curwin).w_set_curswant;
     let old_curwin = curwin;
     let old_curbuf = nvim_get_curbuf();
-    let old_visual_select = nvim_get_VIsual_select();
-    let old_visual_active = nvim_VIsual_active();
+    let old_visual_select = VIsual_select;
+    let old_visual_active = VIsual_active;
 
     // loop through the cursorbound windows
-    nvim_set_VIsual_select(0);
-    nvim_set_VIsual_active(0);
+    VIsual_select = false;
+    VIsual_active = false;
 
     let curtab = nvim_get_curtab();
     let mut wp = nvim_tabpage_get_firstwin(curtab);
@@ -3991,7 +3984,7 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
             // Temporarily set "restart_edit" to allow the cursor to be beyond EOL.
             let re_save = restart_edit;
             restart_edit = 1;
-            nvim_check_cursor(); // Uses curwin global which we just set
+            nvim_check_cursor(curwin.as_ptr()); // Uses curwin global which we just set
 
             // Avoid a scroll here for the cursor position, 'scrollbind' is
             // more important.
@@ -4016,8 +4009,8 @@ pub unsafe extern "C" fn rs_do_check_cursorbind() {
     }
 
     // reset current-window
-    nvim_set_VIsual_select(c_int::from(old_visual_select));
-    nvim_set_VIsual_active(old_visual_active);
+    VIsual_select = old_visual_select;
+    VIsual_active = old_visual_active;
     nvim_set_curwin(old_curwin);
     nvim_set_curbuf(old_curbuf);
 }

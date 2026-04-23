@@ -1087,7 +1087,7 @@ unsafe extern "C" {
     fn cmdline_pum_active() -> c_int;
 
     static mut redir_off: bool;
-    fn nvim_set_quit_more(val: bool);
+    static mut quit_more: bool;
     fn nvim_get_typebuf_len() -> c_int;
     fn stuff_empty() -> c_int;
     fn may_trigger_safestate(pending: bool);
@@ -1655,7 +1655,7 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
     (*s).prev_cmdbuff = std::ptr::null_mut();
 
     redir_off = (1) != 0; // Don't redirect the typed command.
-    nvim_set_quit_more(false); // reset after CTRL-D which had a more-prompt
+    quit_more = false; // reset after CTRL-D which had a more-prompt
 
     did_emsg = 0; // There can't really be a reason why an error
                   // that occurs while typing a command should

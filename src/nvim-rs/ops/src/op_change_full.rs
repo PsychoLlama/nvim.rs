@@ -96,12 +96,11 @@ extern "C" {
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_get_cursor_coladd() -> c_int;
 
-    // finish_op accessors
-    fn nvim_get_finish_op() -> c_int;
-    fn nvim_set_finish_op(val: bool);
+    // finish_op (direct static)
+    static mut finish_op: bool;
 
     // virtual_op accessor
-    fn nvim_get_virtual_op() -> c_int;
+    static mut virtual_op: c_int;
 
     // can_si accessor
     fn nvim_set_can_si(val: bool);
@@ -205,7 +204,7 @@ pub unsafe extern "C" fn rs_op_change(oap: *mut c_void) -> c_int {
         }
         nvim_get_cursor_lnum()
     };
-    if l > cursor_col && nvim_get_virtual_op() == 0 {
+    if l > cursor_col && virtual_op == 0 {
         // LINEEMPTY = *ml_get(lnum) == NUL
         let line = ml_get(cursor_lnum);
         let lineempty = *line == 0 as c_char;
@@ -217,7 +216,7 @@ pub unsafe extern "C" fn rs_op_change(oap: *mut c_void) -> c_int {
     // check for still on same line (skip blank lines too)
     if (*oap_t).motion_type == K_MT_BLOCK_WISE {
         // Add spaces before getting the current line length.
-        if nvim_get_virtual_op() != 0 && (nvim_get_cursor_coladd() > 0 || gchar_cursor() == NUL) {
+        if virtual_op != 0 && (nvim_get_cursor_coladd() > 0 || gchar_cursor() == NUL) {
             coladvance_force(getviscol());
         }
         let firstline = ml_get((*oap_t).start.lnum);
@@ -231,12 +230,12 @@ pub unsafe extern "C" fn rs_op_change(oap: *mut c_void) -> c_int {
     }
 
     // Reset finish_op now, don't want it set inside edit().
-    let save_finish_op = nvim_get_finish_op() != 0;
-    nvim_set_finish_op(false);
+    let save_finish_op = finish_op;
+    finish_op = false;
 
     let retval = edit(NUL, false, 1);
 
-    nvim_set_finish_op(save_finish_op);
+    finish_op = save_finish_op;
 
     // In Visual block mode, handle copying the new text to all lines of the block.
     // Don't repeat the insert when Insert mode ended with CTRL-C.
@@ -268,7 +267,7 @@ pub unsafe extern "C" fn rs_op_change(oap: *mut c_void) -> c_int {
             let mut linenr = (*oap_t).start.lnum + 1;
             while linenr <= (*oap_t).end.lnum {
                 block_prep(oap, (&raw mut bd).cast::<c_void>(), linenr, true);
-                if bd.is_short == 0 || nvim_get_virtual_op() != 0 {
+                if bd.is_short == 0 || virtual_op != 0 {
                     let mut vpos = PosC::zeroed();
 
                     // If the block starts in virtual space, count the

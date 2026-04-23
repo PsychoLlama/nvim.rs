@@ -41,7 +41,7 @@ extern "C" {
 
     // Visual state: individual shims replace nvim_cpi_get_visual_state
     static mut VIsual_active: bool;
-    fn nvim_get_VIsual_mode() -> c_int;
+    static mut VIsual_mode: c_int;
     fn nvim_get_VIsual_lnum() -> c_int;
     fn nvim_get_VIsual_col() -> c_int;
     fn nvim_get_cursor_lnum() -> c_int;
@@ -707,7 +707,7 @@ pub unsafe extern "C" fn rs_cursor_pos_info(dict: *mut c_void) {
     let line_count = nvim_curbuf_get_ml_line_count();
 
     // Get visual state via individual shims (nvim_cpi_get_visual_state absorbed)
-    let visual_mode = nvim_get_VIsual_mode();
+    let visual_mode = VIsual_mode;
     let visual_lnum = nvim_get_VIsual_lnum();
     let visual_col = nvim_get_VIsual_col();
     let cursor_lnum = nvim_get_cursor_lnum();

@@ -41,10 +41,8 @@ extern "C" {
     fn nvim_get_p_opfunc_nonempty() -> bool;
 
     // virtual_op and finish_op globals
-    fn nvim_get_virtual_op() -> c_int;
-    fn nvim_set_virtual_op(val: c_int);
-    fn nvim_dpo_get_finish_op() -> bool;
-    fn nvim_set_finish_op(val: bool);
+    static mut virtual_op: c_int;
+    static mut finish_op: bool;
 
     // curbuf b_op_start/end management
     fn nvim_opfunc_set_op_marks(oap: *mut OpargT);
@@ -121,12 +119,12 @@ pub unsafe fn rs_op_function_impl(oap: *mut OpargT) {
     argv1_ptr.cast::<c_int>().write_unaligned(VAR_UNKNOWN);
 
     // Reset virtual_op so 'virtualedit' can be changed in the callback.
-    let save_virtual_op = nvim_get_virtual_op();
-    nvim_set_virtual_op(K_NONE);
+    let save_virtual_op = virtual_op;
+    virtual_op = K_NONE;
 
     // Reset finish_op so mode() returns the right value.
-    let save_finish_op = nvim_dpo_get_finish_op();
-    nvim_set_finish_op(false);
+    let save_finish_op = finish_op;
+    finish_op = false;
 
     // Allocate rettv on the stack and call the callback.
     let mut rettv = [0u8; TYPVAL_SIZE];
@@ -137,8 +135,8 @@ pub unsafe fn rs_op_function_impl(oap: *mut OpargT) {
         tv_clear(rettv_ptr);
     }
 
-    nvim_set_virtual_op(save_virtual_op);
-    nvim_set_finish_op(save_finish_op);
+    virtual_op = save_virtual_op;
+    finish_op = save_finish_op;
 
     if nvim_cmdmod_has_lockmarks() != 0 {
         nvim_excmds_curbuf_op_restore(orig_start, orig_end);

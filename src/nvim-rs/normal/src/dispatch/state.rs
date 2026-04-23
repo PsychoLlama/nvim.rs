@@ -19,25 +19,18 @@ const OP_NOP: c_int = 0;
 
 #[allow(dead_code)]
 extern "C" {
-    // Global state accessors
-    fn nvim_get_finish_op() -> c_int;
-    fn nvim_set_finish_op(val: bool);
+    // Global state (direct linkage)
+    static mut finish_op: bool;
     static mut no_mapping: c_int;
     static mut allow_keys: c_int;
     static mut VIsual_active: bool;
-    fn nvim_set_VIsual_active(val: bool);
     static mut VIsual_reselect: bool;
-    fn nvim_get_VIsual_select() -> bool;
-    fn nvim_set_VIsual_select(val: bool);
-    fn nvim_get_VIsual_mode() -> c_int;
-    fn nvim_set_VIsual_mode(val: c_int);
+    static mut VIsual_select: bool;
+    static mut VIsual_mode: c_int;
+    static mut opcount: c_int;
     static mut restart_edit: c_int;
     static mut nvim_current_oap: *mut OpargT;
     fn nvim_oap_set_op_type(oap: OpArgHandle, val: c_int);
-
-    // vcount accessors
-    fn nvim_get_opcount() -> c_int;
-    fn nvim_set_opcount(val: c_int);
 }
 
 // =============================================================================
@@ -47,13 +40,13 @@ extern "C" {
 /// Check if finish_op is set.
 #[inline]
 fn is_finish_op_impl() -> bool {
-    unsafe { nvim_get_finish_op() != 0 }
+    unsafe { finish_op }
 }
 
 /// Set finish_op flag.
 #[inline]
 fn set_finish_op_impl(val: bool) {
-    unsafe { nvim_set_finish_op(val) };
+    unsafe { finish_op = val };
 }
 
 // =============================================================================
@@ -101,7 +94,7 @@ fn is_visual_active_impl() -> bool {
 /// Set visual mode active state.
 #[inline]
 fn set_visual_active_impl(val: bool) {
-    unsafe { nvim_set_VIsual_active(val) };
+    unsafe { VIsual_active = val };
 }
 
 /// Check if visual reselect mode.
@@ -119,25 +112,25 @@ fn set_visual_reselect_impl(val: bool) {
 /// Check if visual select mode.
 #[inline]
 fn is_visual_select_impl() -> bool {
-    unsafe { nvim_get_VIsual_select() }
+    unsafe { VIsual_select }
 }
 
 /// Set visual select mode.
 #[inline]
 fn set_visual_select_impl(val: bool) {
-    unsafe { nvim_set_VIsual_select(val) };
+    unsafe { VIsual_select = val };
 }
 
 /// Get visual mode character.
 #[inline]
 fn get_visual_mode_impl() -> c_int {
-    unsafe { nvim_get_VIsual_mode() }
+    unsafe { VIsual_mode }
 }
 
 /// Set visual mode character.
 #[inline]
 fn set_visual_mode_impl(val: c_int) {
-    unsafe { nvim_set_VIsual_mode(val) };
+    unsafe { VIsual_mode = val };
 }
 
 // =============================================================================
@@ -219,13 +212,13 @@ fn get_regname_global_impl() -> c_int {
 /// Get opcount value.
 #[inline]
 fn get_opcount_impl() -> c_int {
-    unsafe { nvim_get_opcount() }
+    unsafe { opcount }
 }
 
 /// Set opcount value.
 #[inline]
 fn set_opcount_impl(val: c_int) {
-    unsafe { nvim_set_opcount(val) };
+    unsafe { opcount = val };
 }
 
 // =============================================================================

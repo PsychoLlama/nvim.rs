@@ -56,11 +56,14 @@ extern "C" {
 
     // cmdarg_T accessors
 
-    // Global accessors (existing)
+    // Global accessors (direct linkage)
     static mut restart_edit: c_int;
     static mut VIsual_active: bool;
-    fn nvim_get_VIsual_select() -> bool;
-    fn nvim_get_KeyTyped() -> bool;
+    static mut VIsual_select: bool;
+    static mut KeyTyped: bool;
+    static mut did_cursorhold: bool;
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
     static KeyStuffed: c_int;
     #[link_name = "get_real_state"]
     fn nvim_get_real_state() -> c_int;
@@ -74,7 +77,6 @@ extern "C" {
     static mut msg_nowait: bool;
     static mut msg_didout: bool;
     static mut msg_col: c_int;
-    fn nvim_set_did_cursorhold(val: bool);
 
     // Function wrappers (existing)
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
@@ -106,10 +108,6 @@ extern "C" {
 
     // Phase 5 count/visual accessors
     fn del_from_showcmd(len: c_int);
-    fn nvim_inc_no_mapping();
-    fn nvim_dec_no_mapping();
-    fn nvim_inc_allow_keys();
-    fn nvim_dec_allow_keys();
     static mut no_zero_mapping: c_int;
     fn plain_vgetc() -> c_int;
     static km_stopsel: bool;
@@ -157,13 +155,10 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 
     // In Select mode, typed text replaces the selection.
     let c = (*sp).c;
-    if VIsual_active
-        && nvim_get_VIsual_select()
-        && (vim_isprintc(c) || c == NL || c == CAR || c == K_KENTER)
-    {
+    if VIsual_active && VIsual_select && (vim_isprintc(c) || c == NL || c == CAR || c == K_KENTER) {
         let len = ins_char_typebuf(nvim_get_vgetc_char(), vgetc_mod_mask, true);
 
-        if nvim_get_KeyTyped() {
+        if KeyTyped {
             ungetchars(len);
         }
 
@@ -245,7 +240,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         }
 
         if nvim_get_curwin_w_p_rl()
-            && nvim_get_KeyTyped()
+            && KeyTyped
             && KeyStuffed == 0
             && (crate::dispatch::table::rs_table_get_cmd_flags((*sp).idx) & NV_RL != 0)
         {
@@ -266,7 +261,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
         }
 
         if (*ca).cmdchar != K_IGNORE && (*ca).cmdchar != K_EVENT {
-            nvim_set_did_cursorhold(false);
+            did_cursorhold = false;
         }
 
         State = MODE_NORMAL;
@@ -322,7 +317,7 @@ pub unsafe extern "C" fn rs_normal_execute(s: NormalStateHandle, key: c_int) -> 
 /// `s` must be a valid NormalState pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bool {
-    if VIsual_active && nvim_get_VIsual_select() {
+    if VIsual_active && VIsual_select {
         return false;
     }
 
@@ -360,8 +355,8 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
         }
 
         if (*sp).ctrl_w {
-            nvim_inc_no_mapping();
-            nvim_inc_allow_keys(); // no mapping for nchar, but keys
+            no_mapping += 1;
+            allow_keys += 1; // no mapping for nchar, but keys
         }
 
         no_zero_mapping += 1; // don't map zero here
@@ -370,8 +365,8 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
         (*sp).c = adjusted;
         no_zero_mapping -= 1;
         if (*sp).ctrl_w {
-            nvim_dec_no_mapping();
-            nvim_dec_allow_keys();
+            no_mapping -= 1;
+            allow_keys -= 1;
         }
         (*sp).need_flushbuf |= add_to_showcmd((*sp).c);
     }
@@ -381,13 +376,13 @@ pub unsafe extern "C" fn rs_normal_get_command_count(s: NormalStateHandle) -> bo
         (*sp).ctrl_w = true;
         (*ca.cast::<CmdargT>()).opcount = (*ca).count0; // remember first count
         (*ca).count0 = 0;
-        nvim_inc_no_mapping();
-        nvim_inc_allow_keys(); // no mapping for nchar, but keys
+        no_mapping += 1;
+        allow_keys += 1; // no mapping for nchar, but keys
         let new_c = plain_vgetc(); // get next character
         let adjusted = nvim_langmap_adjust(new_c, true);
         (*sp).c = adjusted;
-        nvim_dec_no_mapping();
-        nvim_dec_allow_keys();
+        no_mapping -= 1;
+        allow_keys -= 1;
         (*sp).need_flushbuf |= add_to_showcmd((*sp).c);
         return true;
     }

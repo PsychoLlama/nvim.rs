@@ -24,14 +24,10 @@ extern "C" {
     fn nvim_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn nvim_vim_strchr_p_cpo(c: c_int) -> bool;
 
-    // Phase 7d: current_search accessors
+    // Phase 7d: current_search accessors (direct globals)
     static mut VIsual_active: bool;
-    fn nvim_set_VIsual_active(val: bool);
-    fn nvim_get_VIsual_lnum() -> c_int;
-    fn nvim_get_VIsual_col() -> c_int;
-    fn nvim_get_VIsual_coladd() -> c_int;
-    fn nvim_set_VIsual_pos(lnum: c_int, col: c_int, coladd: c_int);
-    fn nvim_set_VIsual_mode(val: c_int);
+    static mut VIsual: crate::searchit::PosT;
+    static mut VIsual_mode: c_int;
     fn nvim_set_p_ws(val: c_int);
     fn nvim_get_p_sel_first() -> c_char;
     fn nvim_get_curwin_cursor_lnum() -> c_int;
@@ -56,8 +52,8 @@ extern "C" {
         end_col: *mut c_int,
         end_coladd: *mut c_int,
     ) -> c_int;
-    fn nvim_get_fdo_flags() -> u32;
-    fn nvim_get_KeyTyped() -> bool;
+    static mut fdo_flags: u32;
+    static mut KeyTyped: bool;
     fn setmouse();
     fn showmode();
     fn nvim_redraw_curbuf_inverted();
@@ -761,17 +757,17 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
 
     let old_p_ws = nvim_get_p_ws();
     // Save VIsual position
-    let save_visual_lnum = nvim_get_VIsual_lnum();
-    let save_visual_col = nvim_get_VIsual_col();
-    let save_visual_coladd = nvim_get_VIsual_coladd();
+    let save_visual_lnum = VIsual.lnum;
+    let save_visual_col = VIsual.col;
+    let save_visual_coladd = VIsual.coladd;
 
     let visual_active = VIsual_active;
 
     // Correct cursor when 'selection' is exclusive
     if visual_active && nvim_get_p_sel_first() == b'e' as c_char {
-        let vis_lnum = nvim_get_VIsual_lnum();
-        let vis_col = nvim_get_VIsual_col();
-        let vis_coladd = nvim_get_VIsual_coladd();
+        let vis_lnum = VIsual.lnum;
+        let vis_col = VIsual.col;
+        let vis_coladd = VIsual.coladd;
         let cur_lnum = nvim_get_curwin_cursor_lnum();
         let cur_col = nvim_get_curwin_cursor_col();
         let cur_coladd = nvim_search_get_curwin_cursor_coladd();
@@ -797,9 +793,9 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
             cur_lnum,
             cur_col,
             cur_coladd,
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
+            VIsual.lnum,
+            VIsual.col,
+            VIsual.coladd,
         );
 
     let mut pos_lnum = cur_lnum;
@@ -883,7 +879,11 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
             nvim_set_curwin_cursor_col(orig_col);
             nvim_set_curwin_cursor_coladd(orig_coladd);
             if visual_active {
-                nvim_set_VIsual_pos(save_visual_lnum, save_visual_col, save_visual_coladd);
+                VIsual = crate::searchit::PosT {
+                    lnum: save_visual_lnum,
+                    col: save_visual_col,
+                    coladd: save_visual_coladd,
+                };
             }
             return FAIL;
         } else if i == 0 && result == 0 {
@@ -908,7 +908,11 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
     let start_coladd = pos_coladd;
 
     if !visual_active {
-        nvim_set_VIsual_pos(start_lnum, start_col, start_coladd);
+        VIsual = crate::searchit::PosT {
+            lnum: start_lnum,
+            col: start_col,
+            coladd: start_coladd,
+        };
     }
 
     // Put cursor after the match
@@ -916,9 +920,9 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
     nvim_set_curwin_cursor_col(end_col);
     nvim_set_curwin_cursor_coladd(end_coladd);
 
-    let vis_lnum = nvim_get_VIsual_lnum();
-    let vis_col = nvim_get_VIsual_col();
-    let vis_coladd = nvim_get_VIsual_coladd();
+    let vis_lnum = VIsual.lnum;
+    let vis_col = VIsual.col;
+    let vis_coladd = VIsual.coladd;
 
     if lt_pos(vis_lnum, vis_col, vis_coladd, end_lnum, end_col, end_coladd) && forward {
         if skip_first_backward {
@@ -951,16 +955,16 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
         }
     }
 
-    nvim_set_VIsual_active(true);
-    nvim_set_VIsual_mode(b'v' as c_int);
+    VIsual_active = true;
+    VIsual_mode = b'v' as c_int;
 
     if nvim_get_p_sel_first() == b'e' as c_char {
         let cur_lnum3 = nvim_get_curwin_cursor_lnum();
         let cur_col3 = nvim_get_curwin_cursor_col();
         let cur_coladd3 = nvim_search_get_curwin_cursor_coladd();
-        let vis_lnum2 = nvim_get_VIsual_lnum();
-        let vis_col2 = nvim_get_VIsual_col();
-        let vis_coladd2 = nvim_get_VIsual_coladd();
+        let vis_lnum2 = VIsual.lnum;
+        let vis_col2 = VIsual.col;
+        let vis_coladd2 = VIsual.coladd;
         if forward
             && ltoreq_pos(
                 vis_lnum2,
@@ -986,11 +990,15 @@ pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int
             let mut vc = vis_col2;
             let mut vca = vis_coladd2;
             nvim_search_incl_pos(&mut vl, &mut vc, &mut vca);
-            nvim_set_VIsual_pos(vl, vc, vca);
+            VIsual = crate::searchit::PosT {
+                lnum: vl,
+                col: vc,
+                coladd: vca,
+            };
         }
     }
 
-    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0 && nvim_get_KeyTyped() {
+    if (fdo_flags & K_OPT_FDO_FLAG_SEARCH) != 0 && KeyTyped {
         rs_foldOpenCursor();
     }
 

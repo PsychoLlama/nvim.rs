@@ -249,7 +249,7 @@ extern "C" {
     static mut nvim_current_oap: *mut OpargT;
 
     /// Get the finish_op global flag.
-    fn nvim_get_finish_op() -> c_int;
+    static mut finish_op: bool;
 }
 
 /// Check if an operator was started but not finished yet.
@@ -264,7 +264,6 @@ fn op_pending_impl() -> bool {
         if oap.is_null() {
             return false;
         }
-        let finish_op = nvim_get_finish_op() != 0;
         let prev_opcount = (*oap).prev_opcount;
         let prev_count0 = (*oap).prev_count0;
         let op_type = (*oap).op_type;
@@ -915,7 +914,7 @@ mod tests {
 
         // Simulate: oap is NULL -> operator is pending
         let oap_null = true;
-        let finish_op = false;
+        let test_finish_op = false;
         let prev_opcount = 0;
         let prev_count0 = 0;
         let op_type = OP_NOP;
@@ -925,7 +924,7 @@ mod tests {
         //                    && prev_count0 == 0 && op_type == OP_NOP && regname == NUL)
         // When oap is NULL: !(false && ...) = !(false) = true
         let result = !(!oap_null
-            && !finish_op
+            && !test_finish_op
             && prev_opcount == 0
             && prev_count0 == 0
             && op_type == OP_NOP
@@ -935,7 +934,7 @@ mod tests {
         // Simulate: oap is not null, all conditions met -> no operator pending
         let oap_null = false;
         let result = !(!oap_null
-            && !finish_op
+            && !test_finish_op
             && prev_opcount == 0
             && prev_count0 == 0
             && op_type == OP_NOP
@@ -943,9 +942,9 @@ mod tests {
         assert!(!result); // all conditions met means no pending
 
         // Simulate: oap not null, but finish_op is true -> operator pending
-        let finish_op = true;
+        let test_finish_op = true;
         let result = !(!oap_null
-            && !finish_op
+            && !test_finish_op
             && prev_opcount == 0
             && prev_count0 == 0
             && op_type == OP_NOP

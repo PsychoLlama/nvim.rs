@@ -92,7 +92,7 @@ extern "C" {
     fn nvim_clear_where_paste_started();
     fn nvim_get_arrow_used() -> c_int;
     fn nvim_set_arrow_used(val: c_int);
-    fn nvim_set_ins_at_eol(val: bool);
+    static mut ins_at_eol: bool;
     fn nvim_get_o_lnum() -> LinenrT;
     fn nvim_set_o_lnum(val: LinenrT);
     fn nvim_set_need_start_insertmode(val: c_int);
@@ -106,7 +106,7 @@ extern "C" {
     fn nvim_set_new_insert_skip(val: c_int);
     fn nvim_get_p_ri() -> c_int;
     fn nvim_get_need_highlight_changed() -> c_int;
-    fn nvim_set_did_cursorhold(val: bool);
+    static mut did_cursorhold: bool;
 
     // AutocmdS
     fn nvim_set_vv_insertmode(cmdchar: c_int);
@@ -345,7 +345,7 @@ pub unsafe extern "C" fn rs_insert_enter(s: *mut InsertState) {
     if cmdchar != c_int::from(b'r') && cmdchar != c_int::from(b'v') && (*s).c != CTRL_C {
         nvim_ins_apply_insertleave();
     }
-    nvim_set_did_cursorhold(false);
+    did_cursorhold = false;
 
     // ins_redraw() triggers TextChangedI only when no characters are in the
     // typeahead buffer, so reset curbuf->b_last_changedtick if TextChangedI
@@ -397,12 +397,12 @@ unsafe fn handle_restart_edit_cursor_impl() -> c_int {
 
         let cursor_lnum = nvim_curwin_get_cursor_lnum();
         let cursor_col = nvim_curwin_get_cursor_col();
-        let ins_at_eol = nvim_get_ins_at_eol();
+        let cur_ins_at_eol = nvim_get_ins_at_eol();
         let o_lnum = nvim_get_o_lnum();
         let curswant = nvim_window::win_struct::win_ref(nvim_get_curwin()).w_curswant;
         let virtcol = nvim_curwin_get_w_virtcol();
 
-        if (ins_at_eol && cursor_lnum == o_lnum) || curswant > virtcol {
+        if (cur_ins_at_eol && cursor_lnum == o_lnum) || curswant > virtcol {
             // Check character at current position
             let line_ptr = nvim_get_cursor_line_ptr();
             if !line_ptr.is_null() {
@@ -421,7 +421,7 @@ unsafe fn handle_restart_edit_cursor_impl() -> c_int {
             }
         }
 
-        nvim_set_ins_at_eol(false);
+        ins_at_eol = false;
         return 1;
     }
 

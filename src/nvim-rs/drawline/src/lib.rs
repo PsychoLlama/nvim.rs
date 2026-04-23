@@ -3871,10 +3871,8 @@ impl Default for WinLineState {
 
 // Additional FFI bindings for win_line_init
 extern "C" {
-    fn nvim_get_VIsual_mode() -> c_int;
-    fn nvim_get_VIsual_lnum() -> LinenrT;
-    fn nvim_get_VIsual_col() -> ColnrT;
-    fn nvim_get_VIsual_coladd() -> ColnrT;
+    static mut VIsual_mode: c_int;
+    static mut VIsual: PosT;
     fn nvim_get_highlight_match() -> c_int;
     fn nvim_get_search_match_lines() -> c_int;
     fn nvim_get_search_match_endcol() -> c_int;
@@ -4085,9 +4083,9 @@ pub unsafe extern "C" fn rs_win_line_init(
 
         // Visual area highlighting
         if VIsual_active && buf == BufHandle(win_ref(nvim_get_curwin()).w_buffer) {
-            let vis_lnum = nvim_get_VIsual_lnum();
-            let vis_col = nvim_get_VIsual_col();
-            let vis_coladd = nvim_get_VIsual_coladd();
+            let vis_lnum = VIsual.lnum;
+            let vis_col = VIsual.col;
+            let vis_coladd = VIsual.coladd;
             let cursor_lnum2 = win_ref(wp).w_cursor.lnum;
             let cursor_col = win_ref(wp).w_cursor.col;
             let cursor_coladd = win_ref(wp).w_cursor.coladd;
@@ -4122,7 +4120,7 @@ pub unsafe extern "C" fn rs_win_line_init(
             }
 
             state.lnum_in_visual_area = lnum >= top.lnum && lnum <= bot.lnum;
-            let vis_mode = nvim_get_VIsual_mode();
+            let vis_mode = VIsual_mode;
             if vis_mode == i32::from(b'\x16') {
                 // Ctrl-V block mode
                 if state.lnum_in_visual_area {
@@ -4583,8 +4581,8 @@ pub unsafe extern "C" fn rs_win_line_eol_highlight(
     let prevcol_hl_flag = get_prevcol_hl_flag(wp, screen_search_hl, ptr_col - 1);
 
     let visual_check = {
-        let vis_mode = nvim_get_VIsual_mode();
-        let vis_lnum = nvim_get_VIsual_lnum();
+        let vis_mode = VIsual_mode;
+        let vis_lnum = VIsual.lnum;
         let cursor_lnum = win_ref(wp).w_cursor.lnum;
         vis_mode != CTRL_V || lnum == vis_lnum || lnum == cursor_lnum
     };
@@ -6990,7 +6988,7 @@ pub unsafe extern "C" fn rs_win_line_process_char(
             && (win_ref(wp).w_p_list() != 0
                 || (((*wlv).fromcol >= 0 || (*wls).fromcol_prev >= 0)
                     && (*wlv).tocol > (*wlv).vcol
-                    && nvim_get_VIsual_mode() != c_int::from(b'\x16') // Ctrl_V
+                    && VIsual_mode != c_int::from(b'\x16') // Ctrl_V
                     && (*wlv).col < view_width
                     && !((*wls).noinvcur
                         && lnum == win_ref(wp).w_cursor.lnum
@@ -7053,8 +7051,8 @@ pub unsafe extern "C" fn rs_win_line_process_char(
             (*wls).saved_attr2 = (*wlv).char_attr;
             mb_schar = rs_schar_from_ascii(mb_c);
         } else if nvim_get_VIsual_active() != 0
-            && (nvim_get_VIsual_mode() == c_int::from(b'v')
-                || nvim_get_VIsual_mode() == c_int::from(b'\x16')) // Ctrl_V
+            && (VIsual_mode == c_int::from(b'v')
+                || VIsual_mode == c_int::from(b'\x16')) // Ctrl_V
             && nvim_win_virtual_active_drawline(wp)
             && (*wlv).tocol != ColnrT::MAX
             && (*wlv).vcol < (*wlv).tocol

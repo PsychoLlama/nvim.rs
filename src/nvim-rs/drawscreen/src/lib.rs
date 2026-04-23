@@ -178,7 +178,7 @@ extern "C" {
 extern "C" {
     // Phase 1: Flag/guard function accessors
     fn nvim_char_avail() -> c_int;
-    fn nvim_get_KeyTyped() -> bool;
+    static mut KeyTyped: bool;
     fn ui_has(ext: c_int) -> bool;
     fn nvim_cmdline_mouse_used() -> c_int;
     #[link_name = "rs_min_rows_for_all_tabpages"]
@@ -1910,8 +1910,7 @@ const MIN_COLUMNS: c_int = 12;
 /// Rust equivalent of `redrawing()` in drawscreen.c.
 fn redrawing_impl() -> bool {
     unsafe {
-        (do_redraw || nvim_get_KeyTyped() || nvim_char_avail() == 0 || p_lz == 0)
-            && RedrawingDisabled == 0
+        (do_redraw || KeyTyped || nvim_char_avail() == 0 || p_lz == 0) && RedrawingDisabled == 0
     }
 }
 
@@ -2040,7 +2039,7 @@ pub extern "C" fn rs_skip_showmode() -> bool {
         if nvim_get_global_busy() != 0
             || msg_silent != 0
             || !redrawing_impl()
-            || (nvim_char_avail() != 0 && !nvim_get_KeyTyped())
+            || (nvim_char_avail() != 0 && !KeyTyped)
         {
             redraw_mode = 1; // show mode later
             return true;
@@ -2101,7 +2100,7 @@ pub extern "C" fn rs_clearmode() {
 pub extern "C" fn rs_unshowmode(force: bool) {
     unsafe {
         // Don't delete it right now, when not redrawing or inside a mapping.
-        if !redrawing_impl() || (!force && nvim_char_avail() != 0 && !nvim_get_KeyTyped()) {
+        if !redrawing_impl() || (!force && nvim_char_avail() != 0 && !KeyTyped) {
             nvim_set_redraw_cmdline(true); // delete mode later
         } else {
             rs_clearmode();
@@ -2837,8 +2836,7 @@ extern "C" {
     // ui_has is already declared in the Phase 1 extern block above.
     static mut need_wait_return: bool;
     fn msg_check_for_delay(check_msg_scroll: c_int);
-    fn nvim_get_clear_cmdline() -> bool;
-    fn nvim_set_clear_cmdline(val: bool);
+    static mut clear_cmdline: bool;
     static mut cmdline_row: c_int;
     fn msg_clr_cmdline();
     static mut msg_no_more: bool;
@@ -2858,8 +2856,7 @@ extern "C" {
     fn nvim_get_p_paste() -> c_int;
     fn get_keymap_str(wp: WinHandle, fmt: *const c_char, buf: *mut c_char, len: c_int) -> c_int;
     static mut NameBuff: [c_char; 4096];
-    fn nvim_get_mode_displayed() -> bool;
-    fn nvim_set_mode_displayed(val: bool);
+    static mut mode_displayed: bool;
     static mut msg_didout: bool;
     fn redraw_ruler();
     fn msg_grid_validate();
@@ -3025,8 +3022,8 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         let nwr_save = need_wait_return;
         msg_check_for_delay(0);
 
-        let mut need_clear = nvim_get_clear_cmdline();
-        if nvim_get_clear_cmdline() && cmdline_row < Rows - 1 {
+        let mut need_clear = clear_cmdline;
+        if clear_cmdline && cmdline_row < Rows - 1 {
             msg_clr_cmdline();
         }
 
@@ -3047,8 +3044,8 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
             need_clear = true;
         }
 
-        nvim_set_mode_displayed(true);
-        if need_clear || nvim_get_clear_cmdline() || redraw_mode != 0 {
+        mode_displayed = true;
+        if need_clear || clear_cmdline || redraw_mode != 0 {
             msg_clr_eos();
         }
         msg_didout = false;
@@ -3057,7 +3054,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         nvim_set_msg_no_more(0);
         lines_left = save_lines_left;
         need_wait_return = nwr_save;
-    } else if nvim_get_clear_cmdline() && msg_silent == 0 {
+    } else if clear_cmdline && msg_silent == 0 {
         msg_clr_cmdline();
     } else if redraw_mode != 0 {
         msg_pos_mode();
@@ -3073,7 +3070,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
     redraw_ruler();
     nvim_set_redraw_cmdline(false);
     redraw_mode = 0;
-    nvim_set_clear_cmdline(false);
+    clear_cmdline = false;
 
     length
 }
@@ -5245,7 +5242,7 @@ pub unsafe extern "C" fn rs_update_screen() -> c_int {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    if type_ == UPD_NOT_VALID && nvim_get_clear_cmdline() && !ui_has(K_UI_MESSAGES) {
+    if type_ == UPD_NOT_VALID && clear_cmdline && !ui_has(K_UI_MESSAGES) {
         grid_clear(
             nvim_get_default_gridview(),
             Rows - p_ch as c_int,
@@ -5265,7 +5262,7 @@ pub unsafe extern "C" fn rs_update_screen() -> c_int {
         redraw_tabline = true;
     }
 
-    if nvim_get_clear_cmdline() {
+    if clear_cmdline {
         msg_check_for_delay(c_int::from(false));
     }
 
@@ -5281,7 +5278,7 @@ pub unsafe extern "C" fn rs_update_screen() -> c_int {
         maketitle();
     }
 
-    if nvim_get_clear_cmdline() || nvim_get_redraw_cmdline() != 0 || redraw_mode != 0 {
+    if clear_cmdline || nvim_get_redraw_cmdline() != 0 || redraw_mode != 0 {
         rs_showmode();
     }
 

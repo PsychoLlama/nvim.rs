@@ -136,10 +136,8 @@ extern "C" {
 
     // --- 'g' sub-dispatch wrappers (Phase 3) ---
     // These exist in normal_shim.c / tag_shim.c / window_shim.c:
-    fn nvim_inc_no_mapping(); // normal_shim.c
-    fn nvim_dec_no_mapping(); // normal_shim.c
-    fn nvim_inc_allow_keys(); // normal_shim.c
-    fn nvim_dec_allow_keys(); // normal_shim.c
+    static mut no_mapping: c_int; // globals.h
+    static mut allow_keys: c_int; // globals.h
     fn plain_vgetc() -> c_int;
     /// Applies LANGMAP_ADJUST(c, condition). Defined in normal_shim.c.
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int; // normal_shim.c
@@ -861,14 +859,14 @@ pub extern "C" fn rs_do_window_g(prenum: c_int, mut xchar: c_int) {
     let prenum1 = if prenum == 0 { 1 } else { prenum };
 
     unsafe {
-        nvim_inc_no_mapping();
-        nvim_inc_allow_keys();
+        no_mapping += 1;
+        allow_keys += 1;
         if xchar == NUL {
             xchar = plain_vgetc();
         }
         xchar = nvim_langmap_adjust(xchar, true);
-        nvim_dec_no_mapping();
-        nvim_dec_allow_keys();
+        no_mapping -= 1;
+        allow_keys -= 1;
         add_to_showcmd(xchar);
 
         match xchar {

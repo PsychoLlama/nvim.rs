@@ -137,10 +137,9 @@ extern "C" {
 
     // Phase 1: Visual info accessors (formerly nvim_clear_showcmd_visual_info)
     static mut VIsual_active: bool;
+    static mut VIsual: crate::types::PosT;
+    static mut VIsual_mode: c_int;
     fn char_avail() -> bool;
-    fn nvim_get_VIsual_lnum() -> c_int;
-    fn nvim_get_VIsual_col() -> c_int;
-    fn nvim_get_VIsual_coladd() -> c_int;
     fn nvim_get_cursor_lnum() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
     fn nvim_get_cursor_coladd() -> c_int;
@@ -150,12 +149,10 @@ extern "C" {
         lnum_top: *mut c_int,
         lnum_bot: *mut c_int,
     ) -> bool;
-    fn nvim_get_VIsual_mode() -> c_int;
     fn nvim_getvcols_visual_sbr_save(out_left: *mut c_int, out_right: *mut c_int);
     fn ui_has(ext: c_int) -> bool;
     fn nvim_ml_get_pos_visual() -> *mut std::ffi::c_char;
     fn nvim_get_cursor_pos_ptr() -> *const std::ffi::c_char;
-    fn nvim_p_sel_is_exclusive() -> bool;
 
     // Phase 5: add_to_showcmd / del_from_showcmd
     fn transchar(c: c_int) -> *const std::ffi::c_char;
@@ -187,9 +184,9 @@ unsafe fn clear_showcmd_visual_info() -> bool {
     }
 
     // Inline of lt(VIsual, curwin->w_cursor)
-    let vl = nvim_get_VIsual_lnum();
-    let vc = nvim_get_VIsual_col();
-    let vca = nvim_get_VIsual_coladd();
+    let vl = VIsual.lnum;
+    let vc = VIsual.col;
+    let vca = VIsual.coladd;
     let cl = nvim_get_cursor_lnum();
     let cc = nvim_get_cursor_col();
     let cca = nvim_get_cursor_coladd();
@@ -213,7 +210,7 @@ unsafe fn clear_showcmd_visual_info() -> bool {
     hasFolding(nvim_get_curwin(), bot, std::ptr::null_mut(), &raw mut bot);
     let lines = bot - top + 1;
 
-    let vmode = nvim_get_VIsual_mode();
+    let vmode = VIsual_mode;
     let showcmd_buf: *mut u8 = nvim_normal_showcmd_buf_ptr().cast();
 
     if vmode == CTRL_V {
@@ -251,7 +248,7 @@ unsafe fn clear_showcmd_visual_info() -> bool {
             )
         };
 
-        let is_exclusive = nvim_p_sel_is_exclusive();
+        let is_exclusive = super::sel_is_exclusive();
         let mut s: *const u8 = s_init;
         let e: *const u8 = e_init;
         let mut bytes: c_int = 0;

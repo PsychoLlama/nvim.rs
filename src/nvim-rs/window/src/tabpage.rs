@@ -1382,7 +1382,7 @@ extern "C" {
     fn nvim_tabpage_get_firstwin_winrow(tp: TabpageHandle) -> c_int;
     fn nvim_set_prevwin(wp: WinHandle);
     fn nvim_win_float_update_statusline();
-    fn nvim_set_diff_need_scrollbind(val: bool);
+    static mut diff_need_scrollbind: bool;
     fn nvim_tabpage_get_old_rows_avail(tp: TabpageHandle) -> c_int;
     fn nvim_get_starting() -> c_int;
     fn nvim_set_lastused_tabpage_from_rust(tp: TabpageHandle);
@@ -1512,7 +1512,7 @@ unsafe fn enter_tabpage_impl(
     crate::statusline::rs_last_status(0);
     nvim_win_float_update_statusline();
     crate::rs_win_comp_pos();
-    nvim_set_diff_need_scrollbind(true);
+    diff_need_scrollbind = true;
     nvim_reset_dragwin();
 
     // The tabpage line may have appeared or disappeared; also check ROWS_AVAIL.

@@ -51,11 +51,9 @@ extern "C" {
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
     fn add_to_showcmd(c: c_int) -> bool;
     fn del_from_showcmd(n: c_int);
-    fn nvim_inc_no_mapping();
-    fn nvim_dec_no_mapping();
-    fn nvim_inc_allow_keys();
-    fn nvim_dec_allow_keys();
-    fn nvim_set_did_cursorhold(val: bool);
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
+    static mut did_cursorhold: bool;
     fn nvim_get_curbuf_b_p_iminsert() -> c_int;
     fn ui_cursor_shape_no_check_conceal();
     fn get_digraph(flag: bool) -> c_int;
@@ -129,8 +127,8 @@ unsafe fn read_target_char(
         ui_cursor_shape_no_check_conceal();
     }
     if lang && nvim_get_curbuf_b_p_iminsert() == B_IMODE_LMAP {
-        nvim_dec_no_mapping();
-        nvim_dec_allow_keys();
+        no_mapping -= 1;
+        allow_keys -= 1;
         if repl {
             State = MODE_LREPLACE;
         } else {
@@ -143,8 +141,8 @@ unsafe fn read_target_char(
     target.set(ca, ch);
 
     if langmap_active {
-        nvim_inc_no_mapping();
-        nvim_inc_allow_keys();
+        no_mapping += 1;
+        allow_keys += 1;
     }
     State = MODE_NORMAL_BUSY;
     (*ns(s)).need_flushbuf |= add_to_showcmd(target.get(ca));
@@ -242,9 +240,9 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
     let mut repl = false;
     let mut lit = false;
 
-    nvim_inc_no_mapping();
-    nvim_inc_allow_keys();
-    nvim_set_did_cursorhold(true);
+    no_mapping += 1;
+    allow_keys += 1;
+    did_cursorhold = true;
 
     let cmdchar = (*ca).cmdchar;
     let idx = (*sp).idx;
@@ -286,8 +284,8 @@ pub unsafe extern "C" fn rs_normal_get_additional_char(s: NormalStateHandle) {
         read_target_char(s, ca, oa, target, repl, lit, lang, flags, cmdchar);
     }
 
-    nvim_dec_no_mapping();
-    nvim_dec_allow_keys();
+    no_mapping -= 1;
+    allow_keys -= 1;
 }
 
 /// Maximum byte length of nchar_composing buffer (normal_defs.h MAX_SCHAR_SIZE = 32).
@@ -308,7 +306,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
     let sp = ns(s);
     let ca: CapHandle = (&raw mut (*sp).ca).cast();
 
-    nvim_dec_no_mapping();
+    no_mapping -= 1;
 
     // GraphemeState is int32_t; GRAPHEME_STATE_INIT = 0.
     let mut grapheme_state: i32 = 0;
@@ -366,7 +364,7 @@ pub unsafe extern "C" fn rs_normal_handle_composing_chars(s: NormalStateHandle) 
         *composing_ptr.add(offset) = 0;
     }
 
-    nvim_inc_no_mapping();
+    no_mapping += 1;
     no_u_sync += 1;
     gotchars_ignore();
     no_u_sync -= 1;

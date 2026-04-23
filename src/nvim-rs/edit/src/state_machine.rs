@@ -79,15 +79,15 @@ extern "C" {
 
     // --- timestamps ---
     fn stuff_empty() -> bool;
-    fn nvim_set_did_check_timestamps(val: bool);
-    fn nvim_get_need_check_timestamps() -> bool;
+    static mut did_check_timestamps: bool;
+    static mut need_check_timestamps: bool;
     fn check_timestamps(focus: bool);
 
     // --- msg_scroll ---
     static mut msg_scroll: c_int;
 
     // --- fold ---
-    fn nvim_get_fdo_flags() -> c_uint;
+    static mut fdo_flags: c_uint;
     fn rs_foldOpenCursor();
     fn rs_foldCheckClose();
     fn nvim_char_avail() -> c_int;
@@ -225,8 +225,8 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
 
     // Check for timestamps when no typeahead
     if unsafe { stuff_empty() } {
-        unsafe { nvim_set_did_check_timestamps(false) };
-        if unsafe { nvim_get_need_check_timestamps() } {
+        unsafe { did_check_timestamps = false };
+        if unsafe { need_check_timestamps } {
             unsafe { check_timestamps(false) };
         }
     }
@@ -235,7 +235,7 @@ pub unsafe extern "C" fn rs_insert_check(state: *mut VimState) -> c_int {
     unsafe { msg_scroll = 0 };
 
     // Open fold at cursor line per 'foldopen'
-    if unsafe { nvim_get_fdo_flags() } & K_OPT_FDO_FLAG_INSERT != 0 {
+    if unsafe { fdo_flags } & K_OPT_FDO_FLAG_INSERT != 0 {
         unsafe { rs_foldOpenCursor() };
     }
 
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
         } else {
             if c2 == CTRL_O {
                 unsafe { ins_ctrl_o() };
-                unsafe { nvim_set_ins_at_eol(false) }; // cursor keeps column
+                unsafe { ins_at_eol = false }; // cursor keeps column
                 unsafe { (*s).nomove = true };
             }
             unsafe { (*s).count = 0 };
@@ -553,8 +553,8 @@ extern "C" {
     fn nvim_get_can_cindent() -> c_int;
     fn rs_ins_compl_col() -> c_int;
     fn nvim_cursor_col_ge_compl_col() -> c_int;
-    fn nvim_set_did_cursorhold(val: bool);
-    fn nvim_set_ins_at_eol(val: bool);
+    static mut did_cursorhold: bool;
+    static mut ins_at_eol: bool;
     fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
     #[link_name = "utf_ptr2len"]
     fn nvim_utf_ptr2len(p: *const std::ffi::c_char) -> c_int;
@@ -590,5 +590,5 @@ const K_C_RIGHT: c_int = -22269;
 /// Wrapper to avoid duplicate declaration of `nvim_edit_set_did_cursorhold`.
 #[inline]
 unsafe fn nvim_edit_set_did_cursorhold_true() {
-    unsafe { nvim_set_did_cursorhold(true) };
+    unsafe { did_cursorhold = true };
 }

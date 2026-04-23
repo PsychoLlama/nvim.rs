@@ -169,7 +169,7 @@ extern "C" {
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // virtual_op global
-    fn nvim_get_virtual_op() -> c_int;
+    static mut virtual_op: c_int;
 }
 
 // =============================================================================
@@ -387,7 +387,7 @@ pub unsafe extern "C" fn rs_block_prep(
             {
                 // line too short
                 (*bdp).is_short = 1;
-                if (*oap).op_type == OP_APPEND || nvim_get_virtual_op() != 0 {
+                if (*oap).op_type == OP_APPEND || virtual_op != 0 {
                     (*bdp).endspaces =
                         (*oap).end_vcol - (*bdp).end_vcol + c_int::from((*oap).inclusive);
                 }
@@ -450,7 +450,7 @@ pub unsafe extern "C" fn rs_charwise_block_prep(
 
     if lnum == start.lnum {
         startcol = start.col;
-        if nvim_get_virtual_op() != 0 {
+        if virtual_op != 0 {
             let mut cs: c_int = 0;
             let mut ce: c_int = 0;
             getvcol(
@@ -471,7 +471,7 @@ pub unsafe extern "C" fn rs_charwise_block_prep(
 
     if lnum == end.lnum {
         endcol = end.col;
-        if nvim_get_virtual_op() != 0 {
+        if virtual_op != 0 {
             let mut cs: c_int = 0;
             let mut ce: c_int = 0;
             getvcol(

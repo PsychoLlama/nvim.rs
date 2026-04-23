@@ -157,9 +157,9 @@ extern "C" {
     static mut g_edit_submode_extra: *mut c_char;
     static cmdwin_type: c_int;
     static mut restart_edit: c_int;
-    fn nvim_set_cmdwin_result(val: c_int);
-    fn nvim_set_ins_at_eol(val: bool);
-    fn nvim_set_did_cursorhold(val: bool);
+    static mut cmdwin_result: c_int;
+    static mut ins_at_eol: bool;
+    static mut did_cursorhold: bool;
     fn nvim_inc_disable_fold_update();
     fn nvim_dec_disable_fold_update();
     fn nvim_set_compl_busy(val: bool);
@@ -464,7 +464,7 @@ pub unsafe extern "C" fn rs_insert_handle_key_post(s: *mut InsertState) {
     // If typed something, may trigger CursorHoldI again.
     // But not in CTRL-X mode — a script can't restore the state.
     if (*s).c != K_EVENT && rs_ctrl_x_mode_normal() != 0 {
-        nvim_set_did_cursorhold(false);
+        did_cursorhold = false;
     }
 
     // Cancel completion if window or tab page changed.
@@ -672,7 +672,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
 
         CTRL_C => {
             if cmdwin_type != 0 {
-                nvim_set_cmdwin_result(K_IGNORE);
+                cmdwin_result = K_IGNORE;
                 unsafe {
                     got_int = false;
                 }
@@ -700,7 +700,7 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
             }
             ins_ctrl_o();
             if nvim_has_ve_flag_onemore() {
-                nvim_set_ins_at_eol(false);
+                ins_at_eol = false;
                 (*s).nomove = true;
             }
             (*s).count = 0;
@@ -1082,7 +1082,7 @@ unsafe fn handle_enter(s: *mut InsertState) -> SwitchAction {
         return SwitchAction::Continue;
     }
     if cmdwin_type != 0 {
-        nvim_set_cmdwin_result(CAR);
+        cmdwin_result = CAR;
         return SwitchAction::Exit(0);
     }
     if (mod_mask & MOD_MASK_SHIFT) == 0 && nvim_bt_prompt_curbuf() {

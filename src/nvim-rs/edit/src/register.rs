@@ -42,10 +42,8 @@ extern "C" {
     fn nvim_set_pc_status_unset();
     fn add_to_showcmd_c(c: c_int);
     fn rs_clear_showcmd();
-    fn nvim_inc_no_mapping();
-    fn nvim_dec_no_mapping();
-    fn nvim_inc_allow_keys();
-    fn nvim_dec_allow_keys();
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
     fn plain_vgetc() -> c_int;
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
     fn nvim_inc_no_u_sync();
@@ -100,8 +98,8 @@ pub unsafe extern "C" fn rs_ins_reg() {
     }
 
     // Don't map the register name.
-    nvim_inc_no_mapping();
-    nvim_inc_allow_keys();
+    no_mapping += 1;
+    allow_keys += 1;
     let mut regname = plain_vgetc();
     regname = nvim_langmap_adjust(regname, true);
     if regname == CTRL_R || regname == CTRL_O || regname == CTRL_P {
@@ -111,8 +109,8 @@ pub unsafe extern "C" fn rs_ins_reg() {
         regname = plain_vgetc();
         regname = nvim_langmap_adjust(regname, true);
     }
-    nvim_dec_no_mapping();
-    nvim_dec_allow_keys();
+    no_mapping -= 1;
+    allow_keys -= 1;
 
     // Don't call `u_sync()` while typing the expression or giving error message.
     nvim_inc_no_u_sync();

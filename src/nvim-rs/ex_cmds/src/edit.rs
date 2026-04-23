@@ -211,7 +211,7 @@ extern "C" {
     fn nvim_ecmd_cmdwin_clear();
     fn nvim_ecmd_cmdwin_restore(type_: c_int, win: *mut WinHandle, old_curwin: *mut WinHandle);
     static mut exmode_active: bool;
-    fn nvim_get_skip_redraw() -> bool;
+    static mut skip_redraw: bool;
     fn nvim_excmds_cmdmod_has_keepalt() -> c_int;
     fn nvim_get_p_sol() -> c_int;
     static mut msg_scroll: c_int;
@@ -922,7 +922,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
         nvim_dec_RedrawingDisabled();
         did_inc_redrawing_disabled = false;
 
-        if !nvim_get_skip_redraw() {
+        if !skip_redraw {
             // Force cursor to center if no topline and no +cmd
             if topline == 0 && command.is_null() {
                 nvim_ecmd_curwin_set_effective_p_so(999);

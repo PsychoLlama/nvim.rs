@@ -193,7 +193,7 @@ extern "C" {
 // declare it as c_int. Use bool here to match the actual signature.
 #[allow(clashing_extern_declarations)]
 extern "C" {
-    fn nvim_get_in_assert_fails() -> bool;
+    static in_assert_fails: bool;
 }
 
 // ============================================================================
@@ -334,7 +334,7 @@ pub unsafe extern "C" fn rs_msg_check_for_delay(check_msg_scroll: c_int) {
     if (c_int::from(emsg_on_display) != 0 || (check && msg_scroll != 0))
         && !did_wait_return
         && emsg_silent == 0
-        && !nvim_get_in_assert_fails()
+        && !in_assert_fails
         && !ui_has(K_UI_MESSAGES)
     {
         ui_flush();

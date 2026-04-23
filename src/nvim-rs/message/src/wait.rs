@@ -97,10 +97,8 @@ extern "C" {
     static Rows: c_int;
     static Columns: c_int;
     fn hit_return_msg(newline_sb: bool);
-    fn nvim_inc_no_mapping();
-    fn nvim_dec_no_mapping();
-    fn nvim_inc_allow_keys();
-    fn nvim_dec_allow_keys();
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
     static mut reg_recording: c_int;
     static mut scriptout: *mut c_void; // FILE* treated as opaque
     fn safe_vgetc() -> c_int;
@@ -220,8 +218,8 @@ pub unsafe extern "C" fn rs_wait_return(redraw: c_int) {
                 let had_got_int = got_int;
 
                 // Don't do mappings; put the character back in typeahead.
-                nvim_inc_no_mapping();
-                nvim_inc_allow_keys();
+                no_mapping += 1;
+                allow_keys += 1;
 
                 // Temporarily disable Recording.
                 let save_reg_recording = reg_recording;
@@ -232,8 +230,8 @@ pub unsafe extern "C" fn rs_wait_return(redraw: c_int) {
                 if had_got_int && global_busy == 0 {
                     got_int = false;
                 }
-                nvim_dec_no_mapping();
-                nvim_dec_allow_keys();
+                no_mapping -= 1;
+                allow_keys -= 1;
                 reg_recording = save_reg_recording;
                 scriptout = save_scriptout;
 

@@ -490,7 +490,7 @@ unsafe extern "C" {
     fn nvim_set_cmdwin_old_curwin(wp: WinHandle);
     fn nvim_set_cmdwin_buf(buf: BufHandle);
     fn nvim_get_cmdwin_result() -> c_int;
-    fn nvim_set_cmdwin_result(val: c_int);
+    static mut cmdwin_result: c_int;
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_set_restart_edit(val: c_int);
     fn nvim_get_State() -> c_int;
@@ -503,7 +503,7 @@ unsafe extern "C" {
     fn nvim_set_need_wait_return(val: c_int);
     fn nvim_get_RedrawingDisabled() -> c_int;
     fn nvim_set_RedrawingDisabled(val: c_int);
-    fn nvim_get_KeyTyped() -> bool;
+    static mut KeyTyped: bool;
     fn nvim_set_KeyTyped(val: c_int);
     fn nvim_set_skip_win_fix_cursor(val: c_int);
     fn nvim_set_cmdline_was_last_drawn(val: c_int);
@@ -848,7 +848,7 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
     rs_clear_showcmd();
 
     // Reset result (can be set by CmdwinEnter autocmd).
-    nvim_set_cmdwin_result(0);
+    cmdwin_result = 0;
 
     // Trigger CmdwinEnter.
     nvim_trigger_cmdwinenter();
@@ -868,7 +868,7 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
     nvim_set_RedrawingDisabled(saved_redrawing);
     nvim_restore_batch_count(save_count);
 
-    let save_key_typed = nvim_get_KeyTyped();
+    let save_key_typed = KeyTyped;
 
     // Trigger CmdwinLeave.
     nvim_trigger_cmdwinleave();
@@ -900,12 +900,12 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
         c_int::from(!old_curwin_buf3.is_null() && old_curwin_buf3 != old_curbuf_buf3),
     ) != 0
     {
-        nvim_set_cmdwin_result(CTRL_C);
+        cmdwin_result = CTRL_C;
         nvim_emsg_cmdwin_changed();
     } else {
         // autocmds may abort script processing
         if nvim_aborting() != 0 && nvim_get_cmdwin_result() != K_IGNORE {
-            nvim_set_cmdwin_result(CTRL_C);
+            cmdwin_result = CTRL_C;
         }
 
         // Set the new command line from the cmdwin buffer.
@@ -918,7 +918,7 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
             if histtype == HIST_CMD {
                 // Execute the command directly.
                 nvim_set_ccline_cmdbuff_qa(with_bang);
-                nvim_set_cmdwin_result(CAR);
+                cmdwin_result = CAR;
             } else {
                 // Cancel what we were doing, then stuff the command.
                 nvim_stuff_qa_into_readbuff(with_bang);
@@ -932,7 +932,7 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
 
         if nvim_get_ccline_cmdbuff().is_null() {
             nvim_set_ccline_cmdbuff_empty();
-            nvim_set_cmdwin_result(CTRL_C);
+            cmdwin_result = CTRL_C;
         } else {
             nvim_set_ccline_cmdpos_from_cursor();
             // If cursor is at last char or beyond, set cmdpos to cmdlen.

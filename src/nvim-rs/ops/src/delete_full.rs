@@ -31,10 +31,10 @@ extern "C" {
 
     // VIsual state
     fn nvim_get_VIsual_select() -> bool;
-    fn nvim_get_VIsual_select_reg() -> c_int;
+    static mut VIsual_select_reg: c_int;
 
     // Virtual op flag
-    fn nvim_get_virtual_op() -> c_int;
+    static mut virtual_op: c_int;
 
     // cpo option
     static mut p_cpo: *mut c_char;
@@ -115,7 +115,7 @@ unsafe fn mb_adjust_opend(oap: *mut c_void) {
 unsafe fn opd_setup_visual_reg(oap: *mut c_void) {
     let oap_const: *const c_void = oap;
     if nvim_get_VIsual_select() && (*oap_const.cast::<OpargT>()).is_visual {
-        (*oap.cast::<OpargT>()).regname = nvim_get_VIsual_select_reg();
+        (*oap.cast::<OpargT>()).regname = VIsual_select_reg;
     }
 }
 
@@ -132,7 +132,7 @@ unsafe fn opd_check_empty_line(oap: *const c_void) -> c_int {
         let start_lnum = (*oap.cast::<OpargT>()).start.lnum;
         let line = nvim_ml_get(start_lnum);
         if !line.is_null() && unsafe { *line } == 0 {
-            if nvim_get_virtual_op() != 0 {
+            if virtual_op != 0 {
                 return 2; // goto setmarks
             }
             if !vim_strchr(p_cpo, CPO_EMPTYREGION).is_null() {

@@ -79,7 +79,7 @@ extern "C" {
     /// Get current editor State
     fn nvim_get_state() -> c_int;
     /// Check if operator is pending
-    fn nvim_get_finish_op() -> c_int;
+    static mut finish_op: bool;
     /// Check if Visual mode is active
     static mut VIsual_active: bool;
     /// Get first char of 'selection' option
@@ -195,7 +195,7 @@ pub unsafe extern "C" fn rs_cursor_get_mode_idx() -> c_int {
             return ModeShape::Ci as c_int;
         }
     }
-    if nvim_get_finish_op() != 0 {
+    if finish_op {
         return ModeShape::O as c_int;
     }
     if VIsual_active {

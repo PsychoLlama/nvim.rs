@@ -135,22 +135,36 @@ extern "C" {
     // curbuf handle (needed by buf_ref/buf_mut helpers)
     fn nvim_get_curbuf() -> BufHandle;
 
-    // oparg_T pointer accessors (takes explicit oap parameter)
-
-    // Global motion_force accessor
-    fn nvim_set_motion_force(val: c_int);
-
     // Lock check functions (remain in C)
     fn text_locked() -> bool;
     fn text_locked_msg();
     fn curbuf_locked() -> bool;
 
-    // VIsual_active global (from plines.c, returns 0 or 1)
+    // VIsual_* globals (from globals.h)
     static mut VIsual_active: bool;
     static mut VIsual_reselect: bool;
     static mut VIsual_select_exclu_adj: bool;
     static mut VIsual_select_reg: c_int;
+    static mut VIsual_select: bool;
+    static mut VIsual_mode: c_int;
+    static mut VIsual: crate::types::PosT;
     static mut restart_VIsual_select: c_int;
+    static mut resel_VIsual_mode: c_int;
+    static mut resel_VIsual_line_count: c_int;
+    static mut resel_VIsual_vcol: c_int;
+
+    // Other globals (from globals.h / option_vars.h)
+    static mut motion_force: c_int;
+    static mut finish_op: bool;
+    static mut mode_displayed: bool;
+    static mut ins_at_eol: bool;
+    static mut KeyTyped: bool;
+    static mut fdo_flags: c_uint;
+    static mut cmdwin_result: c_int;
+    static mut p_sel: *const c_char;
+    static mut no_mapping: c_int;
+    static mut allow_keys: c_int;
+
     static cmdwin_type: c_int;
     static typebuf_was_empty: bool;
 
@@ -166,8 +180,6 @@ extern "C" {
     static mut mod_mask: c_int;
     fn goto_tabpage(n: c_int);
     fn pagescroll(dir: c_int, count: c_int, half: bool);
-    fn nvim_get_VIsual_select() -> bool;
-    fn nvim_set_VIsual_select(val: bool);
     fn may_trigger_modechanged();
     fn showmode() -> c_int;
     fn fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
@@ -181,10 +193,7 @@ extern "C" {
     fn setpcmark();
     fn beginline(flags: c_int);
     fn cursor_down(n: c_int, upd_topline: bool) -> bool;
-    fn nvim_get_KeyTyped() -> bool;
-    fn nvim_get_fdo_flags() -> c_uint;
     fn rs_foldOpenCursor();
-    fn nvim_set_ins_at_eol(val: bool);
     fn nvim_get_curswant() -> c_int;
     fn nvim_set_curswant(val: c_int);
     fn virtual_active(wp: WinHandle) -> bool;
@@ -208,9 +217,8 @@ extern "C" {
 
     // Wave 2 Phase 1: Visual state accessors
     fn nvim_redraw_curbuf_inverted();
-    fn nvim_get_mode_displayed() -> bool;
-    fn nvim_set_clear_cmdline(val: bool);
     fn rs_clear_showcmd();
+    static mut clear_cmdline: bool;
 
     // Wave 2 Phase 2: Redo/count/handler accessors
     fn AppendToRedobuff(s: *const c_char);
@@ -226,9 +234,6 @@ extern "C" {
     fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int;
     static reg_recorded: c_int;
 
-    // Wave 2 Phase 3: Visual operator accessors
-    fn nvim_set_VIsual_mode(val: c_int);
-
     // Wave 2 Phase 4: Selection/g-cmd accessors
     fn stuff_empty() -> bool;
     fn typebuf_typed() -> bool;
@@ -237,18 +242,12 @@ extern "C" {
     fn nvim_check_cursor_lnum_call();
     fn nvim_get_cursor_line_len() -> c_int;
     fn nvim_get_cursor_coladd() -> c_int;
-    fn nvim_set_cmdwin_result(val: c_int);
     static mut restart_edit: c_int;
     // Wave 2 Phase 5: Visual complex function accessors
-    fn nvim_set_VIsual_active(val: bool);
-    fn nvim_check_cursor();
+    #[link_name = "check_cursor"]
+    fn nvim_check_cursor(wp: WinHandle);
     fn setmouse();
-    fn nvim_get_VIsual_lnum() -> c_int;
-    fn nvim_get_VIsual_col() -> c_int;
-    fn nvim_get_VIsual_coladd() -> c_int;
-    fn nvim_set_VIsual_pos(lnum: c_int, col: c_int, coladd: c_int);
     fn nvim_set_cursor_pos(lnum: c_int, col: c_int, coladd: c_int);
-    fn nvim_p_sel_is_exclusive() -> bool;
     fn getvcols(
         wp: WinHandle,
         pos1: *const crate::types::PosT,
@@ -353,6 +352,16 @@ unsafe fn buf_mut<'a>(bp: BufHandle) -> &'a mut nvim_buffer::buf_struct::BufStru
 #[inline]
 const fn make_pos(lnum: c_int, col: c_int, coladd: c_int) -> nvim_buffer::buf_struct::PosT {
     nvim_buffer::buf_struct::PosT { lnum, col, coladd }
+}
+
+/// Check if the 'selection' option is "exclusive" (p_sel[0] == 'e').
+///
+/// # Safety
+/// `p_sel` must be a valid non-null pointer to a C string.
+#[allow(clippy::cast_sign_loss)]
+#[inline]
+unsafe fn sel_is_exclusive() -> bool {
+    *p_sel as u8 == b'e'
 }
 
 /// Opaque handle to operator arguments (oparg_T*).
@@ -770,7 +779,7 @@ pub unsafe extern "C" fn rs_clearop(oap: OapHandle) {
     (*oap).regname = 0;
     (*oap).motion_force = NUL_CHAR;
     (*oap).use_reg_one = false;
-    nvim_set_motion_force(NUL_CHAR);
+    motion_force = NUL_CHAR;
 }
 
 /// Clear operator state and beep.
@@ -1084,8 +1093,8 @@ pub unsafe extern "C" fn rs_nv_halfpage(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_ctrlg(cap: CapHandle) {
     if VIsual_active {
         // toggle Selection/Visual mode
-        let select = nvim_get_VIsual_select();
-        nvim_set_VIsual_select(!select);
+        let select = VIsual_select;
+        VIsual_select = !select;
         may_trigger_modechanged();
         showmode();
     } else {
@@ -1160,10 +1169,7 @@ pub unsafe extern "C" fn rs_nv_goto(cap: CapHandle) {
     nvim_set_cursor_lnum(lnum);
     beginline(BL_SOL | BL_FIX);
 
-    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_JUMP) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
-    {
+    if (fdo_flags & K_OPT_FDO_FLAG_JUMP) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
         rs_foldOpenCursor();
     }
 }
@@ -1183,13 +1189,10 @@ pub unsafe extern "C" fn rs_nv_beginline(cap: CapHandle) {
     (*oap).inclusive = false;
     beginline(arg);
 
-    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
-    {
+    if (fdo_flags & K_OPT_FDO_FLAG_HOR) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
         rs_foldOpenCursor();
     }
-    nvim_set_ins_at_eol(false);
+    ins_at_eol = false;
 }
 
 /// Command handler for "$" command.
@@ -1216,10 +1219,7 @@ pub unsafe extern "C" fn rs_nv_dollar(cap: CapHandle) {
 
     if !cursor_down(count1 - 1, (*oap).op_type == OP_NOP) {
         rs_clearopbeep(oap);
-    } else if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
-    {
+    } else if (fdo_flags & K_OPT_FDO_FLAG_HOR) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
         rs_foldOpenCursor();
     }
 }
@@ -1254,7 +1254,7 @@ pub unsafe extern "C" fn rs_nv_home(cap: CapHandle) {
         (*cap).count0 = 1;
         rs_nv_pipe(cap);
     }
-    nvim_set_ins_at_eol(false);
+    ins_at_eol = false;
 }
 
 /// Command handler for "|" command: go to column.
@@ -1304,7 +1304,6 @@ extern "C" {
     fn nvim_get_ve_flags() -> c_uint;
 
     // Character search functions
-    fn nvim_get_VIsual_mode() -> c_int;
     #[link_name = "rs_unadjust_for_sel"]
     fn nvim_unadjust_for_sel() -> bool;
     fn searchc(cap: CapHandle, t_cmd: bool) -> c_int;
@@ -1362,10 +1361,6 @@ extern "C" {
     fn nvim_set_b_op_start_cursor();
     fn do_pending_operator(cap: CapHandle, old_col: c_int, gui_yank: bool);
 
-    // Phase 3: nv_visual_impl accessors (C functions already exist, add Rust declarations)
-    fn nvim_get_resel_VIsual_mode() -> c_int;
-    fn nvim_get_resel_VIsual_line_count() -> c_int;
-    fn nvim_get_resel_VIsual_vcol() -> c_int;
     fn update_curswant_force();
     // nvim_get_p_smd: inlined (Phase 39, use p_smd directly)
     #[link_name = "p_smd"]
@@ -1443,9 +1438,9 @@ unsafe fn adjust_for_sel(cap: CapHandle) {
         && nvim_get_p_sel_first() == sel_e
         && utf_ptr2char(get_cursor_pos_ptr()) != NUL_CHAR
         && lt_pos(
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
+            VIsual.lnum,
+            VIsual.col,
+            VIsual.coladd,
             nvim_get_cursor_lnum(),
             nvim_get_cursor_col(),
             nvim_get_cursor_coladd(),
@@ -1475,10 +1470,7 @@ pub unsafe extern "C" fn rs_nv_bck_word(cap: CapHandle) {
 
     if bck_word(count1, arg != 0, false) == FAIL {
         rs_clearopbeep(oap);
-    } else if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
-    {
+    } else if (fdo_flags & K_OPT_FDO_FLAG_HOR) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
         rs_foldOpenCursor();
     }
 }
@@ -1552,10 +1544,7 @@ pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
         rs_clearopbeep(oap);
     } else {
         adjust_for_sel(cap);
-        if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
-            && nvim_get_KeyTyped()
-            && (*oap).op_type == OP_NOP
-        {
+        if (fdo_flags & K_OPT_FDO_FLAG_HOR) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
             rs_foldOpenCursor();
         }
     }
@@ -1586,10 +1575,7 @@ pub unsafe extern "C" fn rs_nv_findpar(cap: CapHandle) {
     (*oap).inclusive = inclusive;
 
     nvim_set_cursor_coladd(0);
-    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
-    {
+    if (fdo_flags & K_OPT_FDO_FLAG_BLOCK) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
         rs_foldOpenCursor();
     }
 }
@@ -1620,10 +1606,7 @@ pub unsafe extern "C" fn rs_nv_brace(cap: CapHandle) {
     // Don't leave the cursor on the NUL past end of line.
     adjust_cursor(oap);
     nvim_set_cursor_coladd(0);
-    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
-    {
+    if (fdo_flags & K_OPT_FDO_FLAG_BLOCK) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
         rs_foldOpenCursor();
     }
 }
@@ -1700,7 +1683,7 @@ pub unsafe extern "C" fn rs_nv_gomark(cap: CapHandle) {
     } else {
         0
     };
-    let old_key_typed = nvim_get_KeyTyped();
+    let old_key_typed = KeyTyped;
 
     let name: c_int;
     if cmdchar == c_int::from(b'g') {
@@ -1729,7 +1712,7 @@ pub unsafe extern "C" fn rs_nv_gomark(cap: CapHandle) {
     if (*oap).op_type == OP_NOP
         && (move_res & K_MARK_MOVE_SUCCESS) != 0
         && ((move_res & K_MARK_SWITCHED_BUF) != 0 || (move_res & K_MARK_CHANGED_CURSOR) != 0)
-        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_MARK) != 0
+        && (fdo_flags & K_OPT_FDO_FLAG_MARK) != 0
         && old_key_typed
     {
         rs_foldOpenCursor();
@@ -1754,7 +1737,7 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
     } else {
         0
     };
-    let old_key_typed = nvim_get_KeyTyped();
+    let old_key_typed = KeyTyped;
 
     if rs_checkclearopq(oap) {
         return;
@@ -1796,7 +1779,7 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
 
     if (*oap).op_type == OP_NOP
         && ((move_res & K_MARK_SWITCHED_BUF) != 0 || (move_res & K_MARK_CHANGED_LINE) != 0)
-        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_MARK) != 0
+        && (fdo_flags & K_OPT_FDO_FLAG_MARK) != 0
         && old_key_typed
     {
         rs_foldOpenCursor();
@@ -1830,22 +1813,22 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
     // to make it charwise, linewise, or blockwise.
     if (*oap).op_type != OP_NOP {
         (*oap).motion_force = cmdchar;
-        nvim_set_motion_force(cmdchar);
-        nvim_set_finish_op(false); // operator doesn't finish now but later
+        motion_force = cmdchar;
+        finish_op = false; // operator doesn't finish now but later
         return;
     }
 
     // VIsual_select = cap->arg (arg != 0 means select mode)
-    nvim_set_VIsual_select((*cap).arg != 0);
+    VIsual_select = (*cap).arg != 0;
 
     if VIsual_active {
         // change Visual mode
-        if nvim_get_VIsual_mode() == cmdchar {
+        if VIsual_mode == cmdchar {
             // stop visual mode
             rs_end_visual_mode();
         } else {
             // toggle char/block mode or char/line mode
-            nvim_set_VIsual_mode(cmdchar);
+            VIsual_mode = cmdchar;
             showmode();
             may_trigger_modechanged();
         }
@@ -1853,16 +1836,16 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
     } else {
         // start Visual mode
         let count0 = (*cap).count0;
-        let resel_mode = nvim_get_resel_VIsual_mode();
+        let resel_mode = resel_VIsual_mode;
         if count0 > 0 && resel_mode != 0 {
             // use previously selected part
             // VIsual = curwin->w_cursor
-            nvim_set_VIsual_pos(
-                nvim_get_cursor_lnum(),
-                nvim_get_cursor_col(),
-                nvim_get_cursor_coladd(),
-            );
-            nvim_set_VIsual_active(true);
+            VIsual = crate::types::PosT {
+                lnum: nvim_get_cursor_lnum(),
+                col: nvim_get_cursor_col(),
+                coladd: nvim_get_cursor_coladd(),
+            };
+            VIsual_active = true;
             VIsual_reselect = true;
             if (*cap).arg == 0 {
                 // start Select mode when 'selectmode' contains "cmd"
@@ -1872,21 +1855,21 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
             if p_smd != 0 && msg_silent == 0 {
                 nvim_set_redraw_cmdline(true); // show visual mode later
             }
-            let resel_line_count = nvim_get_resel_VIsual_line_count();
-            let resel_vcol = nvim_get_resel_VIsual_vcol();
+            let resel_line_count = resel_VIsual_line_count;
+            let resel_vcol = resel_VIsual_vcol;
             // For V and ^V, multiply number of lines
             if resel_mode != c_int::from(b'v') || resel_line_count > 1 {
                 let new_lnum = nvim_get_cursor_lnum() + resel_line_count * count0 - 1;
                 nvim_set_cursor_lnum(new_lnum);
-                nvim_check_cursor();
+                nvim_check_cursor(nvim_get_curwin());
             }
-            nvim_set_VIsual_mode(resel_mode);
+            VIsual_mode = resel_mode;
             if resel_mode == c_int::from(b'v') {
                 if resel_line_count <= 1 {
                     update_curswant_force();
                     let new_cw = nvim_get_curswant() + resel_vcol * count0;
                     nvim_set_curswant(new_cw);
-                    if !nvim_p_sel_is_exclusive() {
+                    if !sel_is_exclusive() {
                         nvim_set_curswant(nvim_get_curswant() - 1);
                     }
                 } else {
@@ -1897,15 +1880,15 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
             if resel_vcol == MAXCOL {
                 nvim_set_curswant(MAXCOL);
                 coladvance(nvim_get_curwin(), MAXCOL);
-            } else if nvim_get_VIsual_mode() == CTRL_V {
+            } else if VIsual_mode == CTRL_V {
                 // Update curswant on the original line (where "col" is valid)
                 let lnum = nvim_get_cursor_lnum();
-                nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
+                nvim_set_cursor_lnum(VIsual.lnum);
                 update_curswant_force();
                 let new_cw = nvim_get_curswant() + resel_vcol * count0 - 1;
                 nvim_set_curswant(new_cw);
                 nvim_set_cursor_lnum(lnum);
-                if nvim_p_sel_is_exclusive() {
+                if sel_is_exclusive() {
                     nvim_set_curswant(nvim_get_curswant() + 1);
                 }
                 coladvance(nvim_get_curwin(), nvim_get_curswant());
@@ -1919,7 +1902,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 rs_may_start_select(c_int::from(b'c'));
             }
             rs_n_start_visual_mode(cmdchar);
-            if nvim_get_VIsual_mode() != c_int::from(b'V') && nvim_p_sel_is_exclusive() {
+            if VIsual_mode != c_int::from(b'V') && sel_is_exclusive() {
                 // include one more char
                 let c1 = (*cap).count1;
                 (*cap).count1 = c1 + 1;
@@ -1931,7 +1914,7 @@ pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
                 (*cap).count1 > 0
             } {
                 // With a count select that many characters or lines.
-                let vmode = nvim_get_VIsual_mode();
+                let vmode = VIsual_mode;
                 if vmode == c_int::from(b'v') || vmode == CTRL_V {
                     rs_nv_right(cap);
                 } else if vmode == c_int::from(b'V') {
@@ -2038,11 +2021,11 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
     let op_type = (*oap).op_type;
     if op_type != OP_NOP {
         let cmdchar = (*cap).cmdchar;
-        let opcount = (*cap).opcount;
+        let cap_opcount = (*cap).opcount;
         if op_type == OP_DELETE && cmdchar == b'p' as c_int {
             rs_clearop(oap);
-            assert!(opcount >= 0);
-            nv_diffgetput(true, opcount.unsigned_abs() as usize);
+            assert!(cap_opcount >= 0);
+            nv_diffgetput(true, cap_opcount.unsigned_abs() as usize);
         } else {
             rs_clearopbeep(oap);
         }
@@ -2117,10 +2100,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
 
         // Inlined nvim_put_visual_delete: delete visual selection before put
         nvim_set_w_p_fen(false);
-        if !VIsual_active
-            || nvim_get_VIsual_mode() == c_int::from(b'V')
-            || regname != c_int::from(b'.')
-        {
+        if !VIsual_active || VIsual_mode == c_int::from(b'V') || regname != c_int::from(b'.') {
             (*cap).cmdchar = b'd' as c_int;
             (*cap).nchar = NUL_CHAR;
             let underscore = if keep_registers {
@@ -2138,7 +2118,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
         }
 
         // Inlined nvim_put_visual_flags: compute put flags for visual mode
-        let vis_mode = nvim_get_VIsual_mode();
+        let vis_mode = VIsual_mode;
         if vis_mode == b'V' as c_int {
             flags |= PUT_LINE;
         } else if vis_mode == b'v' as c_int {
@@ -2154,7 +2134,7 @@ unsafe fn nv_put_opt_impl(cap: CapHandle, fix_indent: bool) {
             dir = FORWARD;
         }
         // VIsual_active = true (needed after delete)
-        nvim_set_VIsual_active(true);
+        VIsual_active = true;
     }
 
     let regname = (*oap).regname;
@@ -2219,7 +2199,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
     let visual_v = c_int::from(b'v');
     if nvim_get_p_sel_first() == sel_e
         && VIsual_active
-        && nvim_get_VIsual_mode() == visual_v
+        && VIsual_mode == visual_v
         && VIsual_select_exclu_adj
     {
         nvim_unadjust_for_sel();
@@ -2253,10 +2233,7 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
         nvim_set_cursor_coladd(0);
     }
     adjust_for_sel(cap);
-    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
-    {
+    if (fdo_flags & K_OPT_FDO_FLAG_HOR) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
         rs_foldOpenCursor();
     }
 }
@@ -2320,8 +2297,8 @@ pub unsafe extern "C" fn rs_nv_clear(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_ctrlo(cap: CapHandle) {
-    if VIsual_active && nvim_get_VIsual_select() {
-        nvim_set_VIsual_select(false);
+    if VIsual_active && VIsual_select {
+        VIsual_select = false;
         may_trigger_modechanged();
         showmode();
         restart_VIsual_select = 2; // restart Select mode later
@@ -2451,7 +2428,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
         }
         restart_edit = 0;
         if cmdwin_type != 0 {
-            nvim_set_cmdwin_result(K_IGNORE);
+            cmdwin_result = K_IGNORE;
             unsafe {
                 got_int = false;
             } // don't stop executing autocommands et al.
@@ -2461,7 +2438,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
         // When :normal runs out of characters while in the command line window
         // vgetorpeek() will repeatedly return ESC.  Exit the cmdline window to
         // break the loop.
-        nvim_set_cmdwin_result(K_IGNORE);
+        cmdwin_result = K_IGNORE;
         return;
     }
 
@@ -3187,9 +3164,9 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
         // "vs" and "vS" are the same as "vc"
         let cmdchar = (*cap).cmdchar;
         if cmdchar == c_int::from(b'S') {
-            let vis_mode = nvim_get_VIsual_mode();
+            let vis_mode = VIsual_mode;
             VISUAL_MODE_ORIG.store(vis_mode, Ordering::Relaxed);
-            nvim_set_VIsual_mode(c_int::from(b'V'));
+            VIsual_mode = c_int::from(b'V');
         }
         (*cap).cmdchar = c_int::from(b'c');
         nv_operator_impl(cap);
@@ -3278,7 +3255,7 @@ pub unsafe extern "C" fn rs_n_swapchar(cap: CapHandle) {
         n -= 1;
     }
 
-    nvim_check_cursor();
+    nvim_check_cursor(nvim_get_curwin());
     nvim_curwin_set_curswant(true);
     if did_change {
         let end_lnum = nvim_get_cursor_lnum();
@@ -3442,7 +3419,7 @@ pub unsafe extern "C" fn rs_nv_object(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_select(cap: CapHandle) {
     if VIsual_active {
-        nvim_set_VIsual_select(true);
+        VIsual_select = true;
         VIsual_select_reg = 0;
     } else if VIsual_reselect {
         (*cap).nchar = c_int::from(b'v'); // fake "gv" command
@@ -3515,10 +3492,7 @@ pub unsafe extern "C" fn rs_nv_bracket_block(cap: CapHandle) {
         setpcmark();
         nvim_set_cursor_pos(lnum, col, coladd);
         nvim_curwin_set_curswant(true);
-        if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
-            && nvim_get_KeyTyped()
-            && (*oap).op_type == OP_NOP
-        {
+        if (fdo_flags & K_OPT_FDO_FLAG_BLOCK) != 0 && KeyTyped && (*oap).op_type == OP_NOP {
             rs_foldOpenCursor();
         }
     }
@@ -3742,10 +3716,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
             if op_type == OP_NOP {
                 beginline(BL_WHITE | BL_FIX);
             }
-            if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
-                && nvim_get_KeyTyped()
-                && op_type == OP_NOP
-            {
+            if (fdo_flags & K_OPT_FDO_FLAG_BLOCK) != 0 && KeyTyped && op_type == OP_NOP {
                 rs_foldOpenCursor();
             }
         } else {
@@ -3844,10 +3815,7 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
             }
             nvim_curwin_set_curswant(true);
         }
-        if op_type == OP_NOP
-            && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0
-            && nvim_get_KeyTyped()
-        {
+        if op_type == OP_NOP && (fdo_flags & K_OPT_FDO_FLAG_SEARCH) != 0 && KeyTyped {
             rs_foldOpenCursor();
         }
     } else {
@@ -4132,12 +4100,12 @@ pub unsafe extern "C" fn rs_nv_dot(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_redo_or_register(cap: CapHandle) {
-    if nvim_get_VIsual_select() && VIsual_active {
+    if VIsual_select && VIsual_active {
         // Get register name
-        nvim_inc_no_mapping();
+        no_mapping += 1;
         let mut reg = plain_vgetc();
         reg = nvim_langmap_adjust(reg, true);
-        nvim_dec_no_mapping();
+        no_mapping -= 1;
 
         if reg == c_int::from(b'"') {
             // the unnamed register is 0
@@ -4363,9 +4331,9 @@ pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
         // "R" is replace lines in Visual mode
         (*cap).cmdchar = c_int::from(b'c');
         (*cap).nchar = NUL_CHAR;
-        let vis_mode = nvim_get_VIsual_mode();
+        let vis_mode = VIsual_mode;
         VISUAL_MODE_ORIG.store(vis_mode, Ordering::Relaxed);
-        nvim_set_VIsual_mode(c_int::from(b'V'));
+        VIsual_mode = c_int::from(b'V');
         rs_nv_operator(cap);
         return;
     }
@@ -4487,10 +4455,6 @@ extern "C" {
     fn plain_vgetc() -> c_int;
     fn nvim_langmap_adjust(c: c_int, condition: bool) -> c_int;
     fn add_to_showcmd(c: c_int) -> bool;
-    fn nvim_inc_no_mapping();
-    fn nvim_dec_no_mapping();
-    fn nvim_inc_allow_keys();
-    fn nvim_dec_allow_keys();
     fn nvim_get_curwin() -> WinHandle;
     fn redraw_later(win: WinHandle, type_val: c_int);
     fn cursor_down_inner(win: WinHandle, n: c_int, skip_conceal: bool);
@@ -4524,7 +4488,6 @@ extern "C" {
     fn rs_set_fraction(wp: WinHandle);
     fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int;
     fn nvim_curwin_get_p_scb() -> bool;
-    fn nvim_set_finish_op(val: bool);
 }
 
 // z-command constants
@@ -4552,12 +4515,12 @@ const SMT_ALL_DIR: c_int = 1; // FORWARD direction for spell_move_to
 pub unsafe extern "C" fn rs_nv_zg_zw(cap: CapHandle, mut nchar: c_int) -> c_int {
     let undo = if nchar == c_int::from(b'u') {
         // Get the next character to determine which word list to affect.
-        nvim_inc_no_mapping();
-        nvim_inc_allow_keys();
+        no_mapping += 1;
+        allow_keys += 1;
         nchar = plain_vgetc();
         nchar = nvim_langmap_adjust(nchar, true);
-        nvim_dec_no_mapping();
-        nvim_dec_allow_keys();
+        no_mapping -= 1;
+        allow_keys -= 1;
         add_to_showcmd(nchar);
 
         // Must be one of g/G/w/W.
@@ -4660,12 +4623,12 @@ unsafe fn nv_z_get_count_impl(cap: CapHandle, nchar_arg: &mut c_int) -> bool {
     }
     let mut n = *nchar_arg - c_int::from(b'0');
     loop {
-        nvim_inc_no_mapping();
-        nvim_inc_allow_keys(); // no mapping for nchar, but allow key codes
+        no_mapping += 1;
+        allow_keys += 1; // no mapping for nchar, but allow key codes
         let nchar = plain_vgetc();
         let nchar = nvim_langmap_adjust(nchar, true);
-        nvim_dec_no_mapping();
-        nvim_dec_allow_keys();
+        no_mapping -= 1;
+        allow_keys -= 1;
         add_to_showcmd(nchar);
 
         if nchar == K_DEL || nchar == K_KDEL {
@@ -4951,7 +4914,7 @@ unsafe fn nv_zet_impl(cap: CapHandle) {
                 // "zF" is like "zfzf"
                 if nchar == b'F' as c_int && (*oap).op_type == OP_FOLD {
                     rs_nv_operator(cap);
-                    nvim_set_finish_op(true);
+                    finish_op = true;
                 }
             } else {
                 rs_clearopbeep(oap);
@@ -5436,10 +5399,7 @@ pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
         n -= 1;
     }
 
-    if n != count1
-        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
+    if n != count1 && (fdo_flags & K_OPT_FDO_FLAG_HOR) != 0 && KeyTyped && (*oap).op_type == OP_NOP
     {
         rs_foldOpenCursor();
     }
@@ -5511,10 +5471,7 @@ pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
         n -= 1;
     }
 
-    if n != count1
-        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
-        && nvim_get_KeyTyped()
-        && (*oap).op_type == OP_NOP
+    if n != count1 && (fdo_flags & K_OPT_FDO_FLAG_HOR) != 0 && KeyTyped && (*oap).op_type == OP_NOP
     {
         rs_foldOpenCursor();
     }
@@ -5568,7 +5525,7 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
     } else {
         // In the cmdline window a <CR> executes the command.
         if cmdwin_type != 0 && cmdchar == CAR_CHAR {
-            nvim_set_cmdwin_result(CAR_CHAR);
+            cmdwin_result = CAR_CHAR;
         } else if nvim_bt_prompt_curbuf()
             && cmdchar == CAR_CHAR
             && win_ref(nvim_get_curwin()).w_cursor.lnum == nvim_get_line_count()
@@ -5639,10 +5596,6 @@ extern "C" {
     fn nvim_getvcol_cursor_coladd_after_adj() -> c_int;
     fn nvim_mark_mb_adjustpos_visual_new() -> c_int;
     fn nvim_getvcol_visual_coladd_after_adj() -> c_int;
-    // nvim_get_VIsual_coladd/col/lnum already declared above at lines ~261-263
-    fn nvim_set_VIsual_coladd(val: c_int);
-    fn nvim_set_VIsual_col(val: c_int);
-    fn nvim_set_VIsual_lnum(val: c_int);
     fn messaging() -> bool;
     fn rs_hasAnyFolding(win: WinHandle) -> c_int;
     fn do_sleep(ms: c_int, allow_int: bool);
@@ -6124,24 +6077,24 @@ pub unsafe extern "C" fn rs_unadjust_for_sel_inner_cursor() -> bool {
 #[no_mangle]
 pub unsafe extern "C" fn rs_unadjust_for_sel_inner_visual() -> bool {
     VIsual_select_exclu_adj = false;
-    let coladd = nvim_get_VIsual_coladd();
+    let coladd = VIsual.coladd;
     if coladd > 0 {
-        nvim_set_VIsual_coladd(coladd - 1);
+        VIsual.coladd = coladd - 1;
     } else {
-        let col = nvim_get_VIsual_col();
+        let col = VIsual.col;
         if col > 0 {
-            nvim_set_VIsual_col(col - 1);
+            VIsual.col = col - 1;
             nvim_mark_mb_adjustpos_visual_new();
             if virtual_active(nvim_get_curwin()) {
                 let coladd_new = nvim_getvcol_visual_coladd_after_adj();
-                nvim_set_VIsual_coladd(coladd_new);
+                VIsual.coladd = coladd_new;
             }
         } else {
-            let lnum = nvim_get_VIsual_lnum();
+            let lnum = VIsual.lnum;
             if lnum > 1 {
                 let new_lnum = lnum - 1;
-                nvim_set_VIsual_lnum(new_lnum);
-                nvim_set_VIsual_col(ml_get_len(new_lnum));
+                VIsual.lnum = new_lnum;
+                VIsual.col = ml_get_len(new_lnum);
                 return true;
             }
         }
@@ -6461,15 +6414,13 @@ unsafe fn nv_g_cmd_impl(cap: CapHandle) {
             {
                 rs_clearopbeep(oap);
             } else {
-                if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0
-                    && nvim_get_KeyTyped()
-                    && (*oap).op_type == OP_NOP
+                if (fdo_flags & K_OPT_FDO_FLAG_SEARCH) != 0 && KeyTyped && (*oap).op_type == OP_NOP
                 {
                     rs_foldOpenCursor();
                 }
                 // clear any search statistics
                 if messaging() {
-                    nvim_set_clear_cmdline(true);
+                    clear_cmdline = true;
                 }
             }
         }
@@ -6653,10 +6604,10 @@ pub unsafe extern "C" fn rs_nv_open(cap: CapHandle) {
     if (*oap).op_type == OP_DELETE && cmdchar == c_int::from(b'o') {
         // "do" is ":diffget"
         rs_clearop(oap);
-        let opcount = (*cap).opcount;
-        debug_assert!(opcount >= 0);
+        let cap_opcount = (*cap).opcount;
+        debug_assert!(cap_opcount >= 0);
         #[allow(clippy::cast_sign_loss)]
-        nv_diffgetput(false, opcount as usize);
+        nv_diffgetput(false, cap_opcount as usize);
     } else if VIsual_active {
         // switch start and end of visual
         rs_v_swap_corners(cmdchar);
@@ -6724,8 +6675,8 @@ pub extern "C" fn rs_restore_visual_mode() {
 #[no_mangle]
 pub extern "C" fn rs_may_clear_cmdline() {
     unsafe {
-        if nvim_get_mode_displayed() {
-            nvim_set_clear_cmdline(true);
+        if mode_displayed {
+            clear_cmdline = true;
         } else {
             rs_clear_showcmd();
         }
@@ -6772,10 +6723,10 @@ pub unsafe extern "C" fn rs_prep_redo_cmd(cap: CapHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_vcount_ca(cap: CapHandle, set_prevcount: *mut bool) {
     let count0 = i64::from((*cap).count0);
-    let opcount = i64::from((*cap).opcount);
+    let cap_opcount = i64::from((*cap).opcount);
 
-    let count = if opcount != 0 {
-        opcount * (if count0 == 0 { 1 } else { count0 })
+    let count = if cap_opcount != 0 {
+        cap_opcount * (if count0 == 0 { 1 } else { count0 })
     } else {
         count0
     };
@@ -6828,7 +6779,7 @@ pub unsafe extern "C" fn rs_nv_regreplay(cap: CapHandle) {
 /// `cap` must be a valid cmdarg_T pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nv_ctrlh(cap: CapHandle) {
-    if VIsual_active && nvim_get_VIsual_select() {
+    if VIsual_active && VIsual_select {
         (*cap).cmdchar = c_int::from(b'x');
         rs_v_visop(cap);
     } else {
@@ -6854,9 +6805,9 @@ pub unsafe extern "C" fn rs_v_visop(cap: CapHandle) {
 
     // Uppercase means linewise, except in block mode (isupper equivalent)
     if cmdchar >= c_int::from(b'A') && cmdchar <= c_int::from(b'Z') {
-        if nvim_get_VIsual_mode() != CTRL_V {
-            VISUAL_MODE_ORIG.store(nvim_get_VIsual_mode(), Ordering::Relaxed);
-            nvim_set_VIsual_mode(c_int::from(b'V'));
+        if VIsual_mode != CTRL_V {
+            VISUAL_MODE_ORIG.store(VIsual_mode, Ordering::Relaxed);
+            VIsual_mode = c_int::from(b'V');
         } else if cmdchar == c_int::from(b'C') || cmdchar == c_int::from(b'D') {
             nvim_set_curswant(MAXCOL);
         }
@@ -6908,9 +6859,10 @@ pub unsafe extern "C" fn rs_nv_lineop(cap: CapHandle) {
     let op_type = (*oap).op_type;
 
     if cursor_down(count1 - 1, op_type == OP_NOP) {
-        let motion_force = (*oap).motion_force;
-        let is_linewise_delete =
-            op_type == OP_DELETE && motion_force != c_int::from(b'v') && motion_force != CTRL_V;
+        let oap_motion_force = (*oap).motion_force;
+        let is_linewise_delete = op_type == OP_DELETE
+            && oap_motion_force != c_int::from(b'v')
+            && oap_motion_force != CTRL_V;
         if is_linewise_delete || op_type == OP_LSHIFT || op_type == OP_RSHIFT {
             beginline(BL_SOL | BL_FIX);
         } else if op_type != OP_YANK {
@@ -6938,7 +6890,7 @@ pub extern "C" fn rs_may_start_select(c: c_int) {
     unsafe {
         let select = (c == c_int::from(b'o') || (stuff_empty() && typebuf_typed()))
             && !vim_strchr(p_slm, c).is_null();
-        nvim_set_VIsual_select(select);
+        VIsual_select = select;
     }
 }
 
@@ -7026,12 +6978,12 @@ pub unsafe extern "C" fn rs_nv_normal(cap: CapHandle) {
     let oap = (*cap).oap;
     if nchar == CTRL_N || nchar == CTRL_G {
         rs_clearop(oap);
-        if restart_edit != 0 && nvim_get_mode_displayed() {
-            nvim_set_clear_cmdline(true);
+        if restart_edit != 0 && mode_displayed {
+            clear_cmdline = true;
         }
         restart_edit = 0;
         if cmdwin_type != 0 {
-            nvim_set_cmdwin_result(CTRL_C);
+            cmdwin_result = CTRL_C;
         }
         if VIsual_active {
             rs_end_visual_mode();
@@ -7071,8 +7023,8 @@ pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
 
     if VIsual_active {
         // Swap VIsual_mode with b_visual.vi_mode
-        let i = nvim_get_VIsual_mode();
-        nvim_set_VIsual_mode(buf_ref(cur_buf).b_visual.vi_mode);
+        let i = VIsual_mode;
+        VIsual_mode = buf_ref(cur_buf).b_visual.vi_mode;
         {
             let b = buf_mut(cur_buf);
             b.b_visual.vi_mode = i;
@@ -7102,13 +7054,9 @@ pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
         nvim_set_cursor_pos(vi_start.lnum, vi_start.col, vi_start.coladd);
 
         // b_visual.vi_start = VIsual
-        buf_mut(cur_buf).b_visual.vi_start = make_pos(
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
-        );
+        buf_mut(cur_buf).b_visual.vi_start = make_pos(VIsual.lnum, VIsual.col, VIsual.coladd);
     } else {
-        nvim_set_VIsual_mode(buf_ref(cur_buf).b_visual.vi_mode);
+        VIsual_mode = buf_ref(cur_buf).b_visual.vi_mode;
         nvim_set_curswant(buf_ref(cur_buf).b_visual.vi_curswant);
 
         let vi_end = buf_ref(cur_buf).b_visual.vi_end;
@@ -7120,25 +7068,25 @@ pub unsafe extern "C" fn rs_nv_gv_cmd(cap: CapHandle) {
         nvim_set_cursor_pos(vi_start.lnum, vi_start.col, vi_start.coladd);
     }
 
-    nvim_set_VIsual_active(true);
+    VIsual_active = true;
     VIsual_reselect = true;
 
     // Make sure cursor is on an existing character
-    nvim_check_cursor();
+    nvim_check_cursor(nvim_get_curwin());
     // VIsual = cursor
-    nvim_set_VIsual_pos(
-        nvim_get_cursor_lnum(),
-        nvim_get_cursor_col(),
-        nvim_get_cursor_coladd(),
-    );
+    VIsual = crate::types::PosT {
+        lnum: nvim_get_cursor_lnum(),
+        col: nvim_get_cursor_col(),
+        coladd: nvim_get_cursor_coladd(),
+    };
     // cursor = tpos
     nvim_set_cursor_pos(tpos_lnum, tpos_col, tpos_coladd);
-    nvim_check_cursor();
+    nvim_check_cursor(nvim_get_curwin());
     update_topline(nvim_get_curwin());
 
     // Start Select mode or may_start_select
     if (*cap).arg != 0 {
-        nvim_set_VIsual_select(true);
+        VIsual_select = true;
         VIsual_select_reg = 0;
     } else {
         rs_may_start_select(c_int::from(b'c'));
@@ -7159,7 +7107,7 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
     let old_col = nvim_get_cursor_col();
     let old_coladd = nvim_get_cursor_coladd();
 
-    if cmdchar == c_int::from(b'O') && nvim_get_VIsual_mode() == CTRL_V {
+    if cmdchar == c_int::from(b'O') && VIsual_mode == CTRL_V {
         let mut left: c_int = 0;
         let mut right: c_int = 0;
         let pos1 = crate::types::PosT {
@@ -7167,11 +7115,7 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
             col: old_col,
             coladd: old_coladd,
         };
-        let pos2 = crate::types::PosT {
-            lnum: nvim_get_VIsual_lnum(),
-            col: nvim_get_VIsual_col(),
-            coladd: nvim_get_VIsual_coladd(),
-        };
+        let pos2 = VIsual;
         getvcols(
             nvim_get_curwin(),
             &raw const pos1,
@@ -7181,21 +7125,21 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
         );
 
         // Move cursor to VIsual line, advance to left column
-        nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
+        nvim_set_cursor_lnum(VIsual.lnum);
         coladvance(nvim_get_curwin(), left);
         // VIsual = cursor
-        nvim_set_VIsual_pos(
-            nvim_get_cursor_lnum(),
-            nvim_get_cursor_col(),
-            nvim_get_cursor_coladd(),
-        );
+        VIsual = crate::types::PosT {
+            lnum: nvim_get_cursor_lnum(),
+            col: nvim_get_cursor_col(),
+            coladd: nvim_get_cursor_coladd(),
+        };
 
         // Restore cursor to old line, set curswant to right
         nvim_set_cursor_lnum(old_lnum);
         nvim_set_curswant(right);
 
         // 'selection' "exclusive" and cursor at right-bottom corner: move right
-        if old_lnum >= nvim_get_VIsual_lnum() && nvim_p_sel_is_exclusive() {
+        if old_lnum >= VIsual.lnum && sel_is_exclusive() {
             nvim_set_curswant(nvim_get_curswant() + 1);
         }
         coladvance(nvim_get_curwin(), nvim_get_curswant());
@@ -7203,16 +7147,16 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
         if nvim_get_cursor_col() == old_col
             && (!virtual_active(nvim_get_curwin()) || nvim_get_cursor_coladd() == old_coladd)
         {
-            nvim_set_cursor_lnum(nvim_get_VIsual_lnum());
-            if old_lnum <= nvim_get_VIsual_lnum() && nvim_p_sel_is_exclusive() {
+            nvim_set_cursor_lnum(VIsual.lnum);
+            if old_lnum <= VIsual.lnum && sel_is_exclusive() {
                 right += 1;
             }
             coladvance(nvim_get_curwin(), right);
-            nvim_set_VIsual_pos(
-                nvim_get_cursor_lnum(),
-                nvim_get_cursor_col(),
-                nvim_get_cursor_coladd(),
-            );
+            VIsual = crate::types::PosT {
+                lnum: nvim_get_cursor_lnum(),
+                col: nvim_get_cursor_col(),
+                coladd: nvim_get_cursor_coladd(),
+            };
 
             nvim_set_cursor_lnum(old_lnum);
             coladvance(nvim_get_curwin(), left);
@@ -7220,12 +7164,12 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
         }
     } else {
         // Simple swap: cursor <-> VIsual
-        nvim_set_cursor_pos(
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
-        );
-        nvim_set_VIsual_pos(old_lnum, old_col, old_coladd);
+        nvim_set_cursor_pos(VIsual.lnum, VIsual.col, VIsual.coladd);
+        VIsual = crate::types::PosT {
+            lnum: old_lnum,
+            col: old_col,
+            coladd: old_coladd,
+        };
         nvim_curwin_set_curswant(true);
     }
 }
@@ -7236,15 +7180,15 @@ pub unsafe extern "C" fn rs_v_swap_corners(cmdchar: c_int) {
 /// Called from C with valid state.
 #[no_mangle]
 pub unsafe extern "C" fn rs_unadjust_for_sel() -> bool {
-    if nvim_p_sel_is_exclusive()
-        && !(nvim_get_VIsual_lnum() == nvim_get_cursor_lnum()
-            && nvim_get_VIsual_col() == nvim_get_cursor_col()
-            && nvim_get_VIsual_coladd() == nvim_get_cursor_coladd())
+    if sel_is_exclusive()
+        && !(VIsual.lnum == nvim_get_cursor_lnum()
+            && VIsual.col == nvim_get_cursor_col()
+            && VIsual.coladd == nvim_get_cursor_coladd())
     {
         if lt_pos(
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
+            VIsual.lnum,
+            VIsual.col,
+            VIsual.coladd,
             nvim_get_cursor_lnum(),
             nvim_get_cursor_col(),
             nvim_get_cursor_coladd(),
@@ -7309,8 +7253,8 @@ pub unsafe extern "C" fn rs_nv_percent(cap: CapHandle) {
 
     if (*oap).op_type == OP_NOP
         && lnum != nvim_get_cursor_lnum()
-        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_PERCENT) != 0
-        && nvim_get_KeyTyped()
+        && (fdo_flags & K_OPT_FDO_FLAG_PERCENT) != 0
+        && KeyTyped
     {
         rs_foldOpenCursor();
     }
@@ -7415,7 +7359,7 @@ pub unsafe extern "C" fn rs_nv_colon(cap: CapHandle) {
     }
 
     // When typing, don't type below an old message
-    if nvim_get_KeyTyped() {
+    if KeyTyped {
         nvim_compute_cmdrow();
     }
 
@@ -7500,7 +7444,7 @@ pub unsafe extern "C" fn rs_nv_event(cap: CapHandle) {
     may_garbage_collect = false;
     let may_restart = restart_edit != 0 || restart_VIsual_select != 0;
     state_handle_k_event();
-    nvim_set_finish_op(false);
+    finish_op = false;
     if may_restart {
         // If restart_edit was set before the handler we are in ctrl-o mode,
         // but if not, the event should be allowed to trigger :startinsert.
@@ -7623,10 +7567,7 @@ pub unsafe fn rs_normal_search(
             (*oap).motion_type = K_MT_LINE_WISE_P2;
         }
         nvim_set_cursor_coladd(0);
-        if (*oap).op_type == OP_NOP
-            && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_SEARCH) != 0
-            && nvim_get_KeyTyped()
-        {
+        if (*oap).op_type == OP_NOP && (fdo_flags & K_OPT_FDO_FLAG_SEARCH) != 0 && KeyTyped {
             rs_foldOpenCursor();
         }
     }
@@ -7635,7 +7576,7 @@ pub unsafe fn rs_normal_search(
         redraw_later(nvim_get_curwin(), UPD_SOME_VALID);
     }
 
-    nvim_check_cursor();
+    nvim_check_cursor(nvim_get_curwin());
 
     i
 }
@@ -7659,36 +7600,36 @@ pub unsafe extern "C" fn rs_get_visual_text(
     lenp: *mut usize,
 ) -> bool {
     let visual_mode_linewise = c_int::from(b'V');
-    if nvim_get_VIsual_mode() != visual_mode_linewise {
+    if VIsual_mode != visual_mode_linewise {
         rs_unadjust_for_sel();
     }
-    if nvim_get_VIsual_lnum() != nvim_get_cursor_lnum() {
+    if VIsual.lnum != nvim_get_cursor_lnum() {
         if !cap.is_null() {
             let oap = (*cap).oap;
             rs_clearopbeep(oap);
         }
         return false;
     }
-    if nvim_get_VIsual_mode() == visual_mode_linewise {
+    if VIsual_mode == visual_mode_linewise {
         *pp = nvim_get_cursor_line_ptr();
         *lenp = nvim_get_cursor_line_len() as usize;
     } else {
         // cursor_gt_VIsual: cursor is after VIsual
         if lt_pos(
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
+            VIsual.lnum,
+            VIsual.col,
+            VIsual.coladd,
             nvim_get_cursor_lnum(),
             nvim_get_cursor_col(),
             nvim_get_cursor_coladd(),
         ) {
             // text from VIsual to cursor
             *pp = nvim_ml_get_pos_visual();
-            *lenp = (nvim_get_cursor_col() - nvim_get_VIsual_col()) as usize + 1;
+            *lenp = (nvim_get_cursor_col() - VIsual.col) as usize + 1;
         } else {
             // text from cursor to VIsual
             *pp = nvim_ml_get_pos_cursor();
-            *lenp = (nvim_get_VIsual_col() - nvim_get_cursor_col()) as usize + 1;
+            *lenp = (VIsual.col - nvim_get_cursor_col()) as usize + 1;
         }
         if !(*pp).is_null() && (**pp as u8) == b'\0' {
             *lenp = 0;
@@ -7786,7 +7727,7 @@ const UPD_INVERTED: c_int = 20;
 extern "C" {
     // Phase 3: n_start_visual_mode accessors
     fn conceal_check_cursor_line();
-    fn nvim_set_mouse_dragging(val: c_int);
+    static mut mouse_dragging: c_int;
     fn adjust_cursor_eol();
     fn get_op_char(optype: c_int) -> c_int;
     fn get_extra_op_char(optype: c_int) -> c_int;
@@ -7805,8 +7746,8 @@ extern "C" {
 /// Calls C accessor functions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
-    nvim_set_VIsual_mode(c);
-    nvim_set_VIsual_active(true);
+    VIsual_mode = c;
+    VIsual_active = true;
     VIsual_reselect = true;
     // Corner case: the 0 position in a tab may change when going into
     // virtualedit. Recalculate curwin->w_cursor to avoid bad highlighting.
@@ -7821,7 +7762,7 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
     let lnum = nvim_get_cursor_lnum();
     let col = nvim_get_cursor_col();
     let coladd = nvim_get_cursor_coladd();
-    nvim_set_VIsual_pos(lnum, col, coladd);
+    VIsual = crate::types::PosT { lnum, col, coladd };
 
     rs_foldAdjustVisual();
 
@@ -7850,20 +7791,16 @@ pub unsafe extern "C" fn rs_n_start_visual_mode(c: c_int) {
 #[export_name = "end_visual_mode"]
 pub unsafe extern "C" fn rs_end_visual_mode() {
     VIsual_select_exclu_adj = false;
-    nvim_set_VIsual_active(false);
+    VIsual_active = false;
     setmouse();
-    nvim_set_mouse_dragging(0);
+    mouse_dragging = 0;
 
     // Save the current VIsual area for '< and '> marks, and "gv"
-    let vis_mode = nvim_get_VIsual_mode();
+    let vis_mode = VIsual_mode;
     {
         let b = buf_mut(nvim_get_curbuf());
         b.b_visual.vi_mode = vis_mode;
-        b.b_visual.vi_start = make_pos(
-            nvim_get_VIsual_lnum(),
-            nvim_get_VIsual_col(),
-            nvim_get_VIsual_coladd(),
-        );
+        b.b_visual.vi_start = make_pos(VIsual.lnum, VIsual.col, VIsual.coladd);
         b.b_visual.vi_end = make_pos(
             nvim_get_cursor_lnum(),
             nvim_get_cursor_col(),

@@ -472,8 +472,8 @@ extern "C" {
     // Phase 2 FFI declarations
     /// Get emsg_silent global
     fn nvim_get_emsg_silent() -> c_int;
-    /// Get in_assert_fails global
-    fn nvim_get_in_assert_fails() -> bool;
+    /// Global: in_assert_fails
+    static in_assert_fails: bool;
     /// Get bo_flags global (bitmask of 'belloff' flags)
     fn nvim_get_bo_flags() -> u32;
     /// Get p_vb option (visualbell)
@@ -891,7 +891,7 @@ static BEEP_MSG: &[u8] = b"Beep!\0";
 pub unsafe extern "C" fn vim_beep(val: u32) {
     nvim_set_called_vim_beep(1);
 
-    if nvim_get_emsg_silent() != 0 || nvim_get_in_assert_fails() {
+    if nvim_get_emsg_silent() != 0 || in_assert_fails {
         return;
     }
 

@@ -949,7 +949,7 @@ pub unsafe extern "C" fn rs_readfile(
         return retval;
     }
 
-    nvim_set_no_wait_return(nvim_get_no_wait_return() + 1);
+    no_wait_return += 1;
 
     // Set '[ mark
     // re-read orig_start from curbuf (may have changed during retries)
@@ -1027,7 +1027,7 @@ pub unsafe extern "C" fn rs_readfile(
         }
 
         if nvim_fileio_aborting() {
-            nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
+            no_wait_return -= 1;
             g_msg_scroll = msg_save;
             {
                 curbuf_mut().b_p_ro = 1;
@@ -1049,7 +1049,7 @@ pub unsafe extern "C" fn rs_readfile(
             ) != 0
             {
                 // curbuf changed by autocmd
-                nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
+                no_wait_return -= 1;
                 g_msg_scroll = msg_save;
                 nvim_fileio_emsg(msg_ptr!(MSG_E201));
                 {
@@ -1064,7 +1064,7 @@ pub unsafe extern "C" fn rs_readfile(
             // Try to re-open the file
             fd = nvim_fileio_os_open_rdonly(fname, 0, 0);
             if fd < 0 {
-                nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
+                no_wait_return -= 1;
                 g_msg_scroll = msg_save;
                 nvim_fileio_emsg(msg_ptr!(MSG_E200));
                 {
@@ -1987,7 +1987,7 @@ pub unsafe extern "C" fn rs_readfile(
         nvim_fileio_os_remove(tmpname);
         nvim_fileio_xfree(tmpname as *mut c_void);
     }
-    nvim_set_no_wait_return(nvim_get_no_wait_return() - 1);
+    no_wait_return -= 1;
 
     // Recovery mode skips most post-read processing
     if g_recoverymode as c_int == 0 {
@@ -2518,8 +2518,7 @@ unsafe fn strcmp_c(a: *const c_char, b: *const c_char) -> bool {
 
 extern "C" {
     fn nvim_set_ex_no_reprint(val: c_int);
-    fn nvim_get_no_wait_return() -> c_int;
-    fn nvim_set_no_wait_return(val: c_int);
+    static mut no_wait_return: c_int;
     fn nvim_get_swap_exists_action() -> c_int;
     fn nvim_fileio_eap_read_edit(eap: *mut c_void) -> c_int;
     fn nvim_fileio_eap_bad_char(eap: *mut c_void) -> c_int;

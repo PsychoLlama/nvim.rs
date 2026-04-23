@@ -459,8 +459,8 @@ extern "C" {
 
     static mut got_int: bool;
     // clear_cmdline, mode_displayed (normal_shim.c)
-    fn nvim_set_clear_cmdline(val: bool);
-    fn nvim_set_mode_displayed(val: bool);
+    static mut clear_cmdline: bool;
+    static mut mode_displayed: bool;
 }
 
 // ============================================================================
@@ -720,8 +720,8 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
     // When drawing over the command line no need to clear it later or remove
     // the mode message.
     if msg_silent == 0 && len > 0 && msg_row >= cmdline_row && msg_col == 0 {
-        nvim_set_clear_cmdline(false);
-        nvim_set_mode_displayed(false);
+        clear_cmdline = false;
+        mode_displayed = false;
     }
 
     // Go over the string. Special characters are translated and printed.

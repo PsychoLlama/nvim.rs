@@ -492,7 +492,7 @@ extern "C" {
 // These are also declared elsewhere; allow the type-compatible clashes.
 #[allow(clashing_extern_declarations)]
 extern "C" {
-    fn nvim_get_in_assert_fails() -> c_int;
+    static in_assert_fails: bool;
     fn nvim_get_global_busy() -> c_int;
     static mut msg_scrolled: c_int;
     fn xfree(ptr: *mut std::ffi::c_void);
@@ -562,7 +562,7 @@ pub unsafe extern "C" fn rs_emsg_multiline(
             return 1;
         }
 
-        if nvim_get_in_assert_fails() != 0 && emsg_assert_fails_msg.is_null() {
+        if in_assert_fails && emsg_assert_fails_msg.is_null() {
             emsg_assert_fails_msg = xstrdup(s);
             emsg_assert_fails_lnum = c_long::from(nvim_get_sourcing_lnum());
             xfree(emsg_assert_fails_context.cast::<std::ffi::c_void>());

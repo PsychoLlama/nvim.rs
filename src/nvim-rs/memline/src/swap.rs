@@ -2186,8 +2186,8 @@ extern "C" {
     /// Set need_check_timestamps global
     fn nvim_set_need_check_timestamps(val: c_int);
 
-    /// Set did_check_timestamps global
-    fn nvim_set_did_check_timestamps(val: bool);
+    /// Global: did_check_timestamps
+    static mut did_check_timestamps: bool;
 
     /// Check if original file changed since last read
     fn nvim_buf_file_unchanged(buf: *mut BufHandle) -> c_int;
@@ -2250,7 +2250,7 @@ pub unsafe extern "C" fn rs_ml_sync_one(
     {
         // Original file no longer matches; preserve to translate negative blocks.
         rs_ml_preserve(buf, false, do_fsync);
-        nvim_set_did_check_timestamps(false);
+        did_check_timestamps = false;
         nvim_set_need_check_timestamps(1); // give message later
     }
 

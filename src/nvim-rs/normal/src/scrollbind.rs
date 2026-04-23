@@ -18,8 +18,7 @@ static OLD_BUF: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize:
 static OLD_LEFTCOL: AtomicI32 = AtomicI32::new(0);
 
 extern "C" {
-    static did_syncbind: bool;
-    fn nvim_set_did_syncbind(val: bool);
+    static mut did_syncbind: bool;
     fn nvim_curwin_get_p_scb() -> bool;
     fn nvim_get_curwin() -> WinHandle;
     fn nvim_get_curbuf() -> BufHandle;
@@ -59,7 +58,7 @@ pub unsafe extern "C" fn rs_do_check_scrollbind(check: bool) {
 
         if did_syncbind {
             // ":syncbind" was just used: reset values, don't scroll.
-            nvim_set_did_syncbind(false);
+            did_syncbind = false;
         } else if nvim_get_curwin() == old_curwin {
             // Same window: sync if buffer or diff matches and position changed.
             if (nvim_curwin_buf_eq(old_buf) || nvim_curwin_get_w_p_diff())

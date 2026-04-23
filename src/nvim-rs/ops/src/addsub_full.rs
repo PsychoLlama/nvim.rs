@@ -63,7 +63,7 @@ extern "C" {
     fn nvim_VIsual_active() -> c_int;
 
     fn nvim_get_cursor_lnum() -> c_int;
-    fn nvim_get_VIsual_mode() -> c_int;
+    static mut VIsual_mode: c_int;
     fn nvim_get_b_visual_vi_curswant() -> c_int;
     fn vim_str2nr(
         start: *const std::ffi::c_char,
@@ -364,7 +364,7 @@ unsafe fn addsub_parse_number(
         }
     }
 
-    let maxlen = if visual != 0 && nvim_get_VIsual_mode() != i32::from(b'V') {
+    let maxlen = if visual != 0 && VIsual_mode != i32::from(b'V') {
         if nvim_get_b_visual_vi_curswant() == MAXCOL {
             linelen - col
         } else {

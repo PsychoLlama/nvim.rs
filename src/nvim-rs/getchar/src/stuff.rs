@@ -899,7 +899,7 @@ extern "C" {
     static mut VIsual_active: bool;
     static mut VIsual_select: bool;
     static mut VIsual_reselect: bool;
-    fn nvim_set_redo_VIsual_busy(val: bool);
+    static mut redo_VIsual_busy: bool;
 }
 
 /// Set VIsual to the current cursor position and activate visual mode.
@@ -916,7 +916,7 @@ pub unsafe extern "C" fn nvim_set_visual_from_cursor() {
     VIsual_active = true;
     VIsual_select = false;
     VIsual_reselect = true;
-    nvim_set_redo_VIsual_busy(true);
+    redo_VIsual_busy = true;
 }
 
 // Note: rs_to_special and rs_is_special are already exported from input.rs
