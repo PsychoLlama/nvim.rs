@@ -2,11 +2,12 @@
 //!
 //! Migrated from `src/nvim/eval/userfunc.c` Phase 6.
 //! Covers: func_has_ended, func_has_abort, func_name, func_breakpoint,
-//!         func_dbg_tick, func_level, get_func_arity.
+//!         func_dbg_tick, func_level, get_func_arity, deref_func_name.
 
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -36,6 +37,24 @@ extern "C" {
 
     // find_func / find_internal_func
     fn find_func(name: *const c_char) -> *mut c_void;
+
+    // find_var: find a variable by name/len, returns dictitem_T*
+    fn find_var(
+        name: *const c_char,
+        len: usize,
+        ht: *mut *mut c_void,
+        no_autoload: c_int,
+    ) -> *mut c_void;
+
+    // typval and dictitem accessors (for deref_func_name)
+    fn nvim_dictitem_di_tv(di: *mut c_void) -> *mut c_void;
+    fn nvim_tv_get_type(tv: *const c_void) -> c_int;
+    fn nvim_tv_get_string_ptr(tv: *const c_void) -> *const c_char;
+    fn nvim_tv_get_partial(tv: *const c_void) -> *mut c_void;
+
+    // rs_partial_name: returns the name of a partial (already Rust, in eval crate)
+    fn rs_partial_name(pt: *mut c_void) -> *mut c_char;
+
     fn nvim_get_internal_func_arity(
         name: *const c_char,
         required: *mut c_int,
@@ -228,4 +247,82 @@ pub unsafe extern "C" fn rs_get_func_arity(
     }
 
     FCERR_NONE // OK
+}
+
+// =============================================================================
+// deref_func_name
+// =============================================================================
+
+/// VarType constants (matches C VarType enum)
+const VAR_FUNC: c_int = 3; // function reference (v_string holds name)
+const VAR_PARTIAL: c_int = 9; // partial function (v_partial holds partial_T*)
+
+/// Dereference a name that is a function reference.
+/// If the name can be dereferenced then "lenp" is set to the function name length.
+/// Returns the dereferenced name, or `name` if not a function reference.
+///
+/// # Safety
+/// All pointers must be valid. `name` must be a valid NUL-terminated or len-bounded C string.
+/// `lenp` must be a valid pointer to the name length (also updated on return).
+/// `partialp` may be NULL; if not NULL, set to the partial if name was a VAR_PARTIAL.
+/// `found_var` may be NULL; if not NULL, set to true if a variable was found.
+#[unsafe(export_name = "deref_func_name")]
+pub unsafe extern "C" fn rs_deref_func_name(
+    name: *const c_char,
+    lenp: *mut c_int,
+    partialp: *mut *mut c_void,
+    no_autoload: c_int,
+    found_var: *mut bool,
+) -> *mut c_char {
+    if !partialp.is_null() {
+        unsafe { *partialp = std::ptr::null_mut() };
+    }
+
+    let len = unsafe { *lenp } as usize;
+    let v = unsafe { find_var(name, len, std::ptr::null_mut(), no_autoload) };
+    if v.is_null() {
+        return name.cast_mut();
+    }
+
+    let tv = unsafe { nvim_dictitem_di_tv(v) };
+    if !found_var.is_null() {
+        unsafe { *found_var = true };
+    }
+
+    let tv_type = unsafe { nvim_tv_get_type(tv) };
+
+    if tv_type == VAR_FUNC {
+        let s = unsafe { nvim_tv_get_string_ptr(tv) };
+        if s.is_null() {
+            unsafe { *lenp = 0 };
+            return c"".as_ptr().cast_mut();
+        }
+        unsafe { *lenp = libc_strlen(s) as c_int };
+        return s.cast_mut();
+    }
+
+    if tv_type == VAR_PARTIAL {
+        let pt = unsafe { nvim_tv_get_partial(tv) };
+        if pt.is_null() {
+            unsafe { *lenp = 0 };
+            return c"".as_ptr().cast_mut();
+        }
+        if !partialp.is_null() {
+            unsafe { *partialp = pt };
+        }
+        let s = unsafe { rs_partial_name(pt) };
+        unsafe { *lenp = libc_strlen(s) as c_int };
+        return s;
+    }
+
+    name.cast_mut()
+}
+
+/// strlen for a *const c_char (NUL-terminated).
+unsafe fn libc_strlen(s: *const c_char) -> usize {
+    let mut len = 0usize;
+    while unsafe { *s.add(len) } != 0 {
+        len += 1;
+    }
+    len
 }

@@ -488,48 +488,7 @@ errret:
 /// @param[out]  found_var  If not NULL and a variable was found set it to true.
 ///
 /// @return name of the function.
-char *deref_func_name(const char *name, int *lenp, partial_T **const partialp, bool no_autoload,
-                      bool *found_var)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  if (partialp != NULL) {
-    *partialp = NULL;
-  }
-
-  dictitem_T *const v = find_var(name, (size_t)(*lenp), NULL, no_autoload);
-  if (v == NULL) {
-    return (char *)name;
-  }
-  typval_T *const tv = &v->di_tv;
-  if (found_var != NULL) {
-    *found_var = true;
-  }
-
-  if (tv->v_type == VAR_FUNC) {
-    if (tv->vval.v_string == NULL) {  // just in case
-      *lenp = 0;
-      return "";
-    }
-    *lenp = (int)strlen(tv->vval.v_string);
-    return tv->vval.v_string;
-  }
-
-  if (tv->v_type == VAR_PARTIAL) {
-    partial_T *const pt = tv->vval.v_partial;
-    if (pt == NULL) {  // just in case
-      *lenp = 0;
-      return "";
-    }
-    if (partialp != NULL) {
-      *partialp = pt;
-    }
-    char *s = rs_partial_name(pt);
-    *lenp = (int)strlen(s);
-    return s;
-  }
-
-  return (char *)name;
-}
+// deref_func_name migrated to Rust (lookup.rs Phase 7)
 
 /// Phase 7: C implementation shim for emsg_funcname (called from Rust).
 void nvim_emsg_funcname_impl(const char *errmsg, const char *name)
