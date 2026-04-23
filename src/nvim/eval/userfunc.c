@@ -340,7 +340,7 @@ static void register_closure(ufunc_T *fp)
     // no change
     return;
   }
-  funccal_unref(fp->uf_scoped, fp, false);
+  rs_funccal_unref(fp->uf_scoped, fp, 0);
   fp->uf_scoped = current_funccal;
   current_funccal->fc_refcount++;
   ga_grow(&current_funccal->fc_ufuncs, 1);
@@ -700,14 +700,6 @@ static inline bool eval_fname_sid(const char *const name)
   return *name == 's' || TOUPPER_ASC(name[2]) == 'I';
 }
 
-/// In a script transform script-local names into actually used names.
-/// Thin wrapper — logic lives in Rust (names.rs).
-static char *fname_trans_sid(const char *const name, char *const fname_buf, char **const tofree,
-                             int *const error)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return rs_fname_trans_sid(name, fname_buf, tofree, error);
-}
 
 int get_func_arity(const char *name, int *required, int *optional, bool *varargs)
 {
@@ -725,7 +717,7 @@ int get_func_arity(const char *name, int *required, int *optional, bool *varargs
     int error = FCERR_NONE;
 
     // May need to translate <SNR>123_ to K_SNR.
-    char *fname = fname_trans_sid(name, fname_buf, &tofree, &error);
+    char *fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
     ufunc_T *ufunc = NULL;
     if (error == FCERR_NONE) {
       ufunc = find_func(fname);
@@ -759,13 +751,6 @@ ufunc_T *find_func(const char *name)
   return NULL;
 }
 
-/// Copy the function name of "fp" to buffer "buf".
-/// "buf" must be able to hold the function name plus three bytes.
-/// Takes care of script-local function names.
-static int cat_func_name(char *buf, size_t bufsize, ufunc_T *fp)
-{
-  return rs_cat_func_name(buf, bufsize, fp);
-}
 
 /// Add a number variable "name" to dict "dp" with value "nr".
 static void add_nr_var(dict_T *dp, dictitem_T *v, char *name, varnumber_T nr)
@@ -798,11 +783,6 @@ void nvim_free_funccal_impl(funccall_T *fc)
   xfree(fc);
 }
 
-/// Free "fc"
-static void free_funccal(funccall_T *fc)
-{
-  rs_free_funccal(fc);
-}
 
 /// Phase 7: C implementation shim for free_funccal_contents (called from Rust).
 void nvim_free_funccal_contents_impl(funccall_T *fc)
@@ -818,15 +798,7 @@ void nvim_free_funccal_contents_impl(funccall_T *fc)
     tv_clear(TV_LIST_ITEM_TV(li));
   });
 
-  free_funccal(fc);
-}
-
-/// Free "fc" and what it contains.
-/// Can be called only when "fc" is kept beyond the period of it called,
-/// i.e. after cleanup_function_call(fc).
-static void free_funccal_contents(funccall_T *fc)
-{
-  rs_free_funccal_contents(fc);
+  rs_free_funccal(fc);
 }
 
 /// Phase 7: C implementation shim for cleanup_function_call (called from Rust).
@@ -871,7 +843,7 @@ void nvim_cleanup_function_call_impl(funccall_T *fc)
   }
 
   if (free_fc) {
-    free_funccal(fc);
+    rs_free_funccal(fc);
   } else {
     static int made_copy = 0;
 
@@ -895,12 +867,6 @@ void nvim_cleanup_function_call_impl(funccall_T *fc)
   }
 }
 
-/// Handle the last part of returning from a function: free the local hashtable.
-/// Unless it is still in use by a closure.
-static void cleanup_function_call(funccall_T *fc)
-{
-  rs_cleanup_function_call(fc);
-}
 
 /// Phase 7: C implementation shim for funccal_unref (called from Rust).
 void nvim_funccal_unref_impl(funccall_T *fc, ufunc_T *fp, int force)
@@ -910,11 +876,11 @@ void nvim_funccal_unref_impl(funccall_T *fc, ufunc_T *fp, int force)
   }
 
   fc->fc_refcount--;
-  if (force ? fc->fc_refcount <= 0 : !fc_referenced(fc)) {
+  if (force ? fc->fc_refcount <= 0 : !rs_fc_referenced(fc)) {
     for (funccall_T **pfc = &previous_funccal; *pfc != NULL; pfc = &(*pfc)->fc_caller) {
       if (fc == *pfc) {
         *pfc = fc->fc_caller;
-        free_funccal_contents(fc);
+        rs_free_funccal_contents(fc);
         return;
       }
     }
@@ -926,14 +892,6 @@ void nvim_funccal_unref_impl(funccall_T *fc, ufunc_T *fp, int force)
   }
 }
 
-/// Unreference "fc": decrement the reference count and free it when it
-/// becomes zero.  "fp" is detached from "fc".
-///
-/// @param[in]   force   When true, we are exiting.
-static void funccal_unref(funccall_T *fc, ufunc_T *fp, bool force)
-{
-  rs_funccal_unref(fc, fp, force ? 1 : 0);
-}
 
 /// Phase 4: C implementation shim for func_remove (called from Rust).
 int nvim_func_remove_impl(ufunc_T *fp)
@@ -944,12 +902,6 @@ int nvim_func_remove_impl(ufunc_T *fp)
   }
   hash_remove(&func_hashtab, hi);
   return true;
-}
-
-/// Remove function from hashtable. Thin wrapper — logic lives in Rust.
-static bool func_remove(ufunc_T *fp)
-{
-  return rs_func_remove(fp) != 0;
 }
 
 /// Phase 4: C implementation shim for func_clear_items.
@@ -967,11 +919,6 @@ void nvim_func_clear_items_impl(ufunc_T *fp)
   XFREE_CLEAR(fp->uf_tml_self);
 }
 
-static void func_clear_items(ufunc_T *fp)
-{
-  rs_func_clear_items(fp);
-}
-
 /// Phase 4: C implementation shim for func_clear.
 void nvim_func_clear_impl(ufunc_T *fp, int force)
 {
@@ -979,43 +926,25 @@ void nvim_func_clear_impl(ufunc_T *fp, int force)
     return;
   }
   fp->uf_cleared = true;
-  func_clear_items(fp);
-  funccal_unref(fp->uf_scoped, fp, force != 0);
-}
-
-/// Clear all things a function contains. Thin wrapper — logic lives in Rust.
-static void func_clear(ufunc_T *fp, bool force)
-{
-  rs_func_clear(fp, force ? 1 : 0);
+  rs_func_clear_items(fp);
+  rs_funccal_unref(fp->uf_scoped, fp, force);
 }
 
 /// Phase 4: C implementation shim for func_free.
 void nvim_func_free_impl(ufunc_T *fp)
 {
   if ((fp->uf_flags & (FC_DELETED | FC_REMOVED)) == 0) {
-    func_remove(fp);
+    rs_func_remove(fp);
   }
   XFREE_CLEAR(fp->uf_name_exp);
   xfree(fp);
 }
 
-/// Free a function and remove from the list. Thin wrapper — logic lives in Rust.
-static void func_free(ufunc_T *fp)
-{
-  rs_func_free(fp);
-}
-
 /// Phase 4: C implementation shim for func_clear_free.
 void nvim_func_clear_free_impl(ufunc_T *fp, int force)
 {
-  func_clear(fp, force != 0);
-  func_free(fp);
-}
-
-/// Clear and free a function. Thin wrapper — logic lives in Rust.
-static void func_clear_free(ufunc_T *fp, bool force)
-{
-  rs_func_clear_free(fp, force ? 1 : 0);
+  rs_func_clear(fp, force);
+  rs_func_free(fp);
 }
 
 /// Phase 7: C implementation shim for create_funccal (called from Rust).
@@ -1042,7 +971,7 @@ void nvim_remove_funccal_impl(void)
 {
   funccall_T *fc = current_funccal;
   current_funccal = fc->fc_caller;
-  free_funccal(fc);
+  rs_free_funccal(fc);
 }
 
 /// Restore current_funccal.
@@ -1336,7 +1265,7 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
   }
 
   // Invoke functions added with ":defer".
-  handle_defer_one(current_funccal);
+  rs_handle_defer_one(current_funccal);
 
   RedrawingDisabled--;
 
@@ -1426,11 +1355,11 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
   for (int i = 0; i < tv_to_free_len; i++) {
     tv_clear(tv_to_free[i]);
   }
-  cleanup_function_call(fc);
+  rs_cleanup_function_call(fc);
 
   if (--fp->uf_calls <= 0 && fp->uf_refcount <= 0) {
     // Function was unreferenced while being used, free it now.
-    func_clear_free(fp, false);
+    rs_func_clear_free(fp, 0);
   }
   // restore search patterns and redo buffer
   if (did_save_redo) {
@@ -1445,7 +1374,6 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
 /// For the first we only count the name stored in func_hashtab as a reference,
 /// using function() does not count as a reference, because the function is
 /// looked up by name.
-static bool func_name_refcount(const char *name) { return rs_func_name_refcount(name) != 0; }
 
 /// Check the argument count for user function "fp".
 /// @return  FCERR_UNKNOWN if OK, FCERR_TOOFEW or FCERR_TOOMANY otherwise.
@@ -1539,7 +1467,7 @@ void free_all_functions(void)
   // Clean up the current_funccal chain and the funccal stack.
   while (current_funccal != NULL) {
     tv_clear(current_funccal->fc_rettv);
-    cleanup_function_call(current_funccal);
+    rs_cleanup_function_call(current_funccal);
     if (current_funccal == NULL && funccal_stack != NULL) {
       restore_funccal();
     }
@@ -1555,11 +1483,11 @@ void free_all_functions(void)
         // Only free functions that are not refcounted, those are
         // supposed to be freed when no longer referenced.
         fp = HI2UF(hi);
-        if (func_name_refcount(fp->uf_name)) {
+        if (rs_func_name_refcount(fp->uf_name)) {
           skipped++;
         } else {
           changed = func_hashtab.ht_changed;
-          func_clear(fp, true);
+          rs_func_clear(fp, 1);
           if (changed != func_hashtab.ht_changed) {
             skipped = 0;
             break;
@@ -1581,10 +1509,10 @@ void free_all_functions(void)
         // Only free functions that are not refcounted, those are
         // supposed to be freed when no longer referenced.
         fp = HI2UF(hi);
-        if (func_name_refcount(fp->uf_name)) {
+        if (rs_func_name_refcount(fp->uf_name)) {
           skipped++;
         } else {
-          func_free(fp);
+          rs_func_free(fp);
           skipped = 0;
           break;
         }
@@ -1598,12 +1526,6 @@ void free_all_functions(void)
 
 #endif
 
-/// Checks if a builtin function with the given name exists.
-/// Thin wrapper — logic lives in Rust (names.rs).
-static bool builtin_function(const char *name, int len)
-{
-  return rs_builtin_function(name, len) != 0;
-}
 
 int func_call(char *name, typval_T *args, partial_T *partial, dict_T *selfdict, typval_T *rettv)
 {
@@ -1688,13 +1610,6 @@ void nvim_user_func_error_impl(int error, const char *name, int found_var)
   }
 }
 
-/// Give an error message for the result of a function.
-/// Nothing if "error" is FCERR_NONE.
-static void user_func_error(int error, const char *name, bool found_var)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  rs_user_func_error(error, name, found_var ? 1 : 0);
-}
 
 /// Used by call_func to add a method base (if any) to a function argument list
 /// as the first argument. @see call_func
@@ -1758,7 +1673,7 @@ int call_func(const char *funcname, int len, typval_T *rettv, int argcount_in, t
     // Make a copy of the name, if it comes from a funcref variable it could
     // be changed or deleted in the called function.
     name = xmemdupz(funcname, (size_t)len);
-    fname = fname_trans_sid(name, fname_buf, &tofree, &error);
+    fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
   }
 
   if (funcexe->fe_doesrange != NULL) {
@@ -1807,7 +1722,7 @@ int call_func(const char *funcname, int len, typval_T *rettv, int argcount_in, t
         XFREE_CLEAR(name);
         funcname = "v:lua";
       }
-    } else if (fp != NULL || !builtin_function(rfname, -1)) {
+    } else if (fp != NULL || !rs_builtin_function(rfname, -1)) {
       // User defined function.
       if (fp == NULL) {
         fp = find_func(rfname);
@@ -1865,7 +1780,7 @@ theend:
   // Report an error unless the argument evaluation or function call has been
   // cancelled due to an aborting error, an interrupt, or an exception.
   if (!aborting()) {
-    user_func_error(error, (name != NULL) ? name : funcname, funcexe->fe_found_var);
+    rs_user_func_error(error, (name != NULL) ? name : funcname, funcexe->fe_found_var ? 1 : 0);
   }
 
   // clear the copies made from the partial
@@ -1913,7 +1828,7 @@ int call_simple_func(const char *funcname, size_t len, typval_T *rettv)
   int error = FCERR_NONE;
   char *tofree = NULL;
   char fname_buf[FLEN_FIXED + 1];
-  char *fname = fname_trans_sid(name, fname_buf, &tofree, &error);
+  char *fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
 
   // Skip "g:" before a function name.
   bool is_global = fname[0] == 'g' && fname[1] == ':';
@@ -1936,7 +1851,7 @@ int call_simple_func(const char *funcname, size_t len, typval_T *rettv)
     }
   }
 
-  user_func_error(error, name, false);
+  rs_user_func_error(error, name, 0);
   xfree(tofree);
   xfree(name);
 
@@ -1945,23 +1860,6 @@ int call_simple_func(const char *funcname, size_t len, typval_T *rettv)
 
 char *printable_func_name(ufunc_T *fp) { return (char *)rs_printable_func_name(fp); }
 
-/// When "prev_ht_changed" does not equal "ht_changed" give an error and return
-/// true.  Otherwise return false.
-static int function_list_modified(const int prev_ht_changed)
-{
-  return rs_function_list_modified(prev_ht_changed);
-}
-
-/// List the head of the function: "name(arg1, arg2)".
-///
-/// @param[in]  fp      Function pointer.
-/// @param[in]  indent  Indent line.
-/// @param[in]  force   Include bang "!" (i.e.: "function!").
-static int list_func_head(ufunc_T *fp, bool indent, bool force)
-{
-  int result = rs_list_func_head(fp, indent ? 1 : 0, force ? 1 : 0);
-  return result != 0 ? FAIL : OK;
-}
 
 /// Get a function name, translating "<SID>" and "<SNR>".
 /// Also handles a Funcref in a List or Dict.
@@ -2142,7 +2040,7 @@ char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp, part
                                     current_sctx.sc_sid);
       lead += (int)sid_buflen;
     }
-  } else if (!(flags & TFN_INT) && builtin_function(lv.ll_name, (int)lv.ll_name_len)) {
+  } else if (!(flags & TFN_INT) && rs_builtin_function(lv.ll_name, (int)lv.ll_name_len)) {
     semsg(_("E128: Function name must start with a capital or \"s:\": %s"),
           start);
     goto theend;
@@ -2211,10 +2109,10 @@ static void list_functions(regmatch_T *regmatch)
         todo--;
         if (!isdigit((uint8_t)(*fp->uf_name))
             && vim_regexec(regmatch, fp->uf_name, 0)) {
-          if (list_func_head(fp, false, false) == FAIL) {
+          if (rs_list_func_head(fp, 0, 0) != 0) {
             return;
           }
-          if (function_list_modified(prev_ht_changed)) {
+          if (rs_function_list_modified(prev_ht_changed)) {
             return;
           }
         }
@@ -2223,21 +2121,6 @@ static void list_functions(regmatch_T *regmatch)
   }
 }
 
-/// ":function /pat": list functions matching pattern.
-static char *list_functions_matching_pat(exarg_T *eap)
-{
-  return rs_list_functions_matching_pat(eap);
-}
-
-/// List function "name".
-/// If bang is given:
-///  - include "!" in function head
-///  - exclude line numbers from function body
-/// Returns the function pointer or NULL on failure.
-static ufunc_T *list_one_function(exarg_T *eap, char *name, char *p)
-{
-  return rs_list_one_function(eap, name, p);
-}
 
 #define MAX_FUNC_NESTING 50
 
@@ -2546,7 +2429,7 @@ void ex_function(exarg_T *eap)
 
   // ":function /pat": list functions matching pattern.
   if (*eap->arg == '/') {
-    char *p = list_functions_matching_pat(eap);
+    char *p = rs_list_functions_matching_pat(eap);
     eap->nextcmd = check_nextcmd(p);
     return;
   }
@@ -2589,7 +2472,7 @@ void ex_function(exarg_T *eap)
 
   // ":function func" with only function name: list function.
   if (!paren) {
-    fp = list_one_function(eap, name, p);
+    fp = rs_list_one_function(eap, name, p);
     goto ret_free;
   }
 
@@ -2754,7 +2637,7 @@ void ex_function(exarg_T *eap)
         // redefine existing function, keep the expanded name
         XFREE_CLEAR(name);
         fp->uf_name_exp = NULL;
-        func_clear_items(fp);
+        rs_func_clear_items(fp);
         fp->uf_name_exp = exp_name;
         fp->uf_profiling = false;
         fp->uf_prof_initialized = false;
@@ -2943,7 +2826,7 @@ char *get_user_func_name(expand_T *xp, int idx)
       return fp->uf_name;  // Prevent overflow.
     }
 
-    int len = cat_func_name(IObuff, IOSIZE, fp);
+    int len = rs_cat_func_name(IObuff, IOSIZE, fp);
     if (xp->xp_context != EXPAND_USER_FUNC) {
       xstrlcpy(IObuff + len, "(", IOSIZE - (size_t)len);
       if (!fp->uf_varargs && GA_EMPTY(&fp->uf_args)) {
@@ -3022,15 +2905,15 @@ void nvim_ex_delfunction_impl(exarg_T *eap)
       // it and the refcount is more than one, it should be kept.
       // A numbered function or lambda should be kept if the refcount is
       // one or more.
-      if (fp->uf_refcount > (func_name_refcount(fp->uf_name) ? 0 : 1)) {
+      if (fp->uf_refcount > (rs_func_name_refcount(fp->uf_name) ? 0 : 1)) {
         // Function is still referenced somewhere. Don't free it but
         // do remove it from the hashtable.
-        if (func_remove(fp)) {
+        if (rs_func_remove(fp)) {
           fp->uf_refcount--;
         }
         fp->uf_flags |= FC_DELETED;
       } else {
-        func_clear_free(fp, false);
+        rs_func_clear_free(fp, 0);
       }
     }
   }
@@ -3081,13 +2964,6 @@ int nvim_fc_referenced_impl(const funccall_T *fc)
          || fc->fc_refcount > 0;
 }
 
-static inline bool fc_referenced(const funccall_T *const fc)
-  FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-  FUNC_ATTR_NONNULL_ALL
-{
-  return rs_fc_referenced(fc) != 0;
-}
-
 /// Phase 5: C implementation shim for can_free_funccal.
 int nvim_can_free_funccal_impl(funccall_T *fc, int copyID)
 {
@@ -3095,12 +2971,6 @@ int nvim_can_free_funccal_impl(funccall_T *fc, int copyID)
          && fc->fc_l_vars.dv_copyID != copyID
          && fc->fc_l_avars.dv_copyID != copyID
          && fc->fc_copyID != copyID;
-}
-
-/// @return true if items in "fc" do not have "copyID".
-static bool can_free_funccal(funccall_T *fc, int copyID)
-{
-  return rs_can_free_funccal(fc, copyID) != 0;
 }
 
 /// Phase 6: C implementation shim for ex_return (called from Rust).
@@ -3242,7 +3112,7 @@ int nvim_ex_defer_inner_impl(char *name, char **arg, const partial_T *const part
   argcount += partial_argc;
 
   if (r == OK) {
-    if (builtin_function(name, -1)) {
+    if (rs_builtin_function(name, -1)) {
       const EvalFuncDef *const fdef = find_internal_func(name);
       if (fdef == NULL) {
         emsg_funcname(e_unknown_function_str, name);
@@ -3255,7 +3125,7 @@ int nvim_ex_defer_inner_impl(char *name, char **arg, const partial_T *const part
       if (ufunc != NULL) {
         int error = check_user_func_argcount(ufunc, argcount);
         if (error != FCERR_UNKNOWN) {
-          user_func_error(error, name, false);
+          rs_user_func_error(error, name, 0);
           r = FAIL;
         }
       }
@@ -3272,13 +3142,6 @@ int nvim_ex_defer_inner_impl(char *name, char **arg, const partial_T *const part
   return OK;
 }
 
-/// Core part of ":defer func(arg)".
-/// Thin wrapper — logic lives in Rust (defer.rs).
-static int ex_defer_inner(char *name, char **arg, const partial_T *const partial,
-                          evalarg_T *const evalarg)
-{
-  return rs_ex_defer_inner(name, arg, partial, evalarg);
-}
 
 /// Return true if currently inside a function call.
 /// Give an error message and return false when not.
@@ -3327,12 +3190,6 @@ void nvim_handle_defer_one_impl(funccall_T *funccal)
   ga_clear(&funccal->fc_defer);
 }
 
-/// Invoked after a function has finished: invoke ":defer" functions.
-/// Thin wrapper — logic lives in Rust (defer.rs).
-static void handle_defer_one(funccall_T *funccal)
-{
-  rs_handle_defer_one(funccal);
-}
 
 /// Called when exiting: call all defer functions.
 /// Thin wrapper — logic lives in Rust (defer.rs).
@@ -3400,7 +3257,7 @@ void ex_call(exarg_T *eap)
 
   if (eap->cmdidx == CMD_defer) {
     arg = startarg;
-    failed = ex_defer_inner(name, &arg, partial, &evalarg) == FAIL;
+    failed = rs_ex_defer_inner(name, &arg, partial, &evalarg) == FAIL;
   } else {
     funcexe_T funcexe = FUNCEXE_INIT;
     funcexe.fe_partial = partial;
@@ -3629,7 +3486,7 @@ void make_partial(dict_T *const selfdict, typval_T *const rettv)
                   ? rettv->vval.v_string
                   : rettv->vval.v_partial->pt_name;
     // Translate "s:func" to the stored function name.
-    fname = fname_trans_sid(fname, fname_buf, &tofree, &error);
+    fname = rs_fname_trans_sid(fname, fname_buf, &tofree, &error);
     fp = find_func(fname);
     xfree(tofree);
   }
@@ -3696,10 +3553,10 @@ int nvim_free_unref_funccal_impl(int copyID, int testing)
   bool did_free = false;
   bool did_free_funccal = false;
   for (funccall_T **pfc = &previous_funccal; *pfc != NULL;) {
-    if (can_free_funccal(*pfc, copyID)) {
+    if (rs_can_free_funccal(*pfc, copyID)) {
       funccall_T *fc = *pfc;
       *pfc = fc->fc_caller;
-      free_funccal_contents(fc);
+      rs_free_funccal_contents(fc);
       did_free = true;
       did_free_funccal = true;
     } else {
@@ -3912,22 +3769,18 @@ int nvim_set_ref_in_funccal_impl(funccall_T *fc, int copyID)
   return false;
 }
 
-static bool set_ref_in_funccal(funccall_T *fc, int copyID)
-{
-  return rs_set_ref_in_funccal(fc, copyID) != 0;
-}
 
 /// Phase 5: C implementation shim for set_ref_in_call_stack.
 int nvim_set_ref_in_call_stack_impl(int copyID)
 {
   for (funccall_T *fc = current_funccal; fc != NULL; fc = fc->fc_caller) {
-    if (set_ref_in_funccal(fc, copyID)) {
+    if (rs_set_ref_in_funccal(fc, copyID)) {
       return true;
     }
   }
   for (funccal_entry_T *entry = funccal_stack; entry != NULL; entry = entry->next) {
     for (funccall_T *fc = entry->top_funccal; fc != NULL; fc = fc->fc_caller) {
-      if (set_ref_in_funccal(fc, copyID)) {
+      if (rs_set_ref_in_funccal(fc, copyID)) {
         return true;
       }
     }
@@ -3948,7 +3801,7 @@ int nvim_set_ref_in_functions_impl(int copyID)
     if (!HASHITEM_EMPTY(hi)) {
       todo--;
       ufunc_T *fp = HI2UF(hi);
-      if (!func_name_refcount(fp->uf_name) && set_ref_in_func(NULL, fp, copyID)) {
+      if (!rs_func_name_refcount(fp->uf_name) && set_ref_in_func(NULL, fp, copyID)) {
         return true;
       }
     }
@@ -3989,12 +3842,12 @@ int nvim_set_ref_in_func_impl(char *name, ufunc_T *fp_in, int copyID)
     return false;
   }
   if (fp_in == NULL) {
-    char *fname = fname_trans_sid(name, fname_buf, &tofree, &error);
+    char *fname = rs_fname_trans_sid(name, fname_buf, &tofree, &error);
     fp = find_func(fname);
   }
   if (fp != NULL) {
     for (funccall_T *fc = fp->uf_scoped; fc != NULL; fc = fc->fc_func->uf_scoped) {
-      abort = abort || set_ref_in_funccal(fc, copyID);
+      abort = abort || rs_set_ref_in_funccal(fc, copyID);
     }
   }
   xfree(tofree);
@@ -4075,7 +3928,7 @@ int apply_autocmds_for_funcundefined(const char *name)
 }
 
 /// Check if name is a builtin function (wrapper for static function).
-int nvim_is_builtin_function(const char *name, int len) { return builtin_function(name, len); }
+int nvim_is_builtin_function(const char *name, int len) { return rs_builtin_function(name, len); }
 
 // Profile FFI Accessor Functions
 
@@ -4225,7 +4078,7 @@ int nvim_func_ht_changed(void) { return func_hashtab.ht_changed; }
 
 int nvim_ufunc_name_refcount(const char *name)
 {
-  return func_name_refcount(name) ? 1 : 0;
+  return rs_func_name_refcount(name) ? 1 : 0;
 }
 
 ufunc_T *nvim_func_hi_to_uf(const hashitem_T *hi)
