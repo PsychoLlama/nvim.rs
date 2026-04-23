@@ -488,6 +488,9 @@ extern bool value_check_lock(VarLockStatus lock, const char *name, size_t name_l
 extern bool tv_check_lock(const typval_T *tv, const char *name, size_t name_len);
 extern bool tv_islocked(const typval_T *tv);
 
+// Lock/unlock operations (migrated to Rust, Phase 3)
+extern void tv_item_lock(typval_T *tv, int deep, bool lock, bool check_refcount);
+
 // Float getter (migrated to Rust)
 extern float_T tv_get_float(const typval_T *tv);
 

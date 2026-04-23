@@ -1118,7 +1118,7 @@ extern "C" {
     fn nvim_blob_set_ga_len(b: BlobHandle, len: c_int);
     fn nvim_blob_ga_grow(b: BlobHandle, n: c_int);
     fn nvim_tv_set_blob(tv: TypevalHandle, b: BlobHandle);
-    fn nvim_value_check_lock_translated(lock: c_int, name: *const c_char) -> bool;
+    // nvim_value_check_lock_translated removed: value_check_lock_impl is now native Rust (Phase 3)
     fn nvim_semsg_blobidx(idx: i64);
     fn nvim_emsg_blob_wrong_bytes();
 
@@ -1145,8 +1145,19 @@ extern "C" {
     fn nvim_emsg_float_special();
     fn nvim_emsg_float_blob();
     fn nvim_emsg_float_unknown();
-    fn nvim_value_check_lock(lock: c_int, name: *const c_char, name_len: usize) -> bool;
+    // nvim_value_check_lock removed: value_check_lock is now native Rust (Phase 3)
     fn nvim_tv_get_v_lock(tv: TypevalHandle) -> c_int;
+
+    // Phase 3: tv_item_lock / value_check_lock_impl native accessors
+    fn nvim_gettext_value_locked() -> *const c_char;
+    fn nvim_gettext_value_fixed() -> *const c_char;
+    fn nvim_gettext_unknown() -> *const c_char;
+    fn nvim_emsg_item_lock_nested();
+    fn nvim_list_set_lock(l: ListHandle, lock: c_int);
+    fn nvim_blob_set_lock(b: BlobHandle, lock: c_int);
+    fn nvim_list_get_refcount(l: ListHandle) -> c_int;
+    fn nvim_dict_get_refcount(d: DictHandle) -> c_int;
+    fn nvim_blob_get_bv_refcount(b: BlobHandle) -> c_int;
 
     // Phase 1 accessor helpers for get functions
     fn nvim_format_number(n: i64, buf: *mut c_char, buflen: c_int);
@@ -2272,7 +2283,7 @@ pub unsafe extern "C" fn rs_tv_list_remove(
     let arg0 = unsafe { nvim_typval_array_get(argvars, 0) };
     let l = unsafe { nvim_tv_get_list(arg0) };
     let lock = tv_list_locked_impl(l);
-    if unsafe { nvim_value_check_lock_translated(lock, arg_errmsg) } {
+    if unsafe { value_check_lock_impl(lock, arg_errmsg, TV_TRANSLATE) } {
         return;
     }
 
@@ -2361,7 +2372,7 @@ pub unsafe extern "C" fn rs_tv_list_assign_range(
     let mut src_li = unsafe { nvim_list_get_first(src) };
     while !src_li.is_null() && !dest_li.is_null() {
         let v_lock = unsafe { nvim_listitem_get_v_lock(dest_li) };
-        if unsafe { nvim_value_check_lock(v_lock, varname, usize::MAX - 1) } {
+        if unsafe { value_check_lock_impl(v_lock, varname, TV_CSTRING) } {
             return FAIL;
         }
         src_li = unsafe { nvim_listitem_get_next(src_li) };
@@ -2596,7 +2607,7 @@ pub unsafe extern "C" fn rs_tv_dict_remove(
         return;
     }
     let dv_lock = unsafe { nvim_dict_get_lock(d) };
-    if unsafe { nvim_value_check_lock(dv_lock, arg_errmsg, usize::MAX) } {
+    if unsafe { value_check_lock_impl(dv_lock, arg_errmsg, TV_TRANSLATE) } {
         return;
     }
     let arg1 = unsafe { nvim_typval_array_get(argvars, 1) };
@@ -3454,7 +3465,7 @@ pub unsafe extern "C" fn rs_tv_blob_remove(
 
     if !b.is_null() {
         let lock = unsafe { nvim_blob_get_lock(b) };
-        if unsafe { nvim_value_check_lock_translated(lock, arg_errmsg) } {
+        if unsafe { value_check_lock_impl(lock, arg_errmsg, TV_TRANSLATE) } {
             return;
         }
     }
@@ -3714,9 +3725,47 @@ pub extern "C" fn rs_tv_get_float(tv: TypevalHandle) -> f64 {
     tv_get_float_impl(tv)
 }
 
+/// TV_TRANSLATE sentinel: name should be passed through gettext().
+const TV_TRANSLATE: usize = usize::MAX;
+/// TV_CSTRING sentinel: name_len should be computed via strlen().
+const TV_CSTRING: usize = usize::MAX - 1;
+
 /// Check if variable "name" has a locked (immutable) value.
-fn value_check_lock_impl(lock: c_int, name: *const c_char, name_len: usize) -> bool {
-    unsafe { nvim_value_check_lock(lock, name, name_len) }
+///
+/// Native Rust implementation (Phase 3): no longer delegates to C.
+///
+/// # Safety
+///
+/// `name` must be a valid C string pointer, or null.
+unsafe fn value_check_lock_impl(lock: c_int, name: *const c_char, name_len: usize) -> bool {
+    // VAR_UNLOCKED = 0, VAR_LOCKED = 1, VAR_FIXED = 2
+    if lock == 0 {
+        return false;
+    }
+    let fmt = if lock == 1 {
+        nvim_gettext_value_locked()
+    } else {
+        nvim_gettext_value_fixed()
+    };
+    // Resolve name and name_len
+    let (resolved_name, resolved_len) = if name.is_null() {
+        let unknown = nvim_gettext_unknown();
+        (unknown, libc_strlen(unknown))
+    } else if name_len == TV_TRANSLATE {
+        // Need to apply gettext
+        extern "C" {
+            #[link_name = "gettext"]
+            fn do_gettext(msgid: *const c_char) -> *const c_char;
+        }
+        let translated = do_gettext(name);
+        (translated, libc_strlen(translated))
+    } else if name_len == TV_CSTRING {
+        (name, libc_strlen(name))
+    } else {
+        (name, name_len)
+    };
+    semsg_typval(fmt, resolved_len as c_int, resolved_name);
+    true
 }
 
 /// FFI wrapper: check value lock status.
@@ -3759,8 +3808,10 @@ fn tv_check_lock_impl(tv: TypevalHandle, name: *const c_char, name_len: usize) -
         _ => 0,
     };
     let v_lock = unsafe { nvim_tv_get_v_lock(tv) };
-    value_check_lock_impl(v_lock, name, name_len)
-        || (container_lock != 0 && value_check_lock_impl(container_lock, name, name_len))
+    if unsafe { value_check_lock_impl(v_lock, name, name_len) } {
+        return true;
+    }
+    container_lock != 0 && unsafe { value_check_lock_impl(container_lock, name, name_len) }
 }
 
 /// FFI wrapper: check typval lock status.
@@ -5337,6 +5388,122 @@ unsafe fn rs_tv_list_ref(l: ListHandle) {
     if !l.is_null() {
         nvim_list_ref(l);
     }
+}
+
+// =============================================================================
+// Phase 3 (typval migration): tv_item_lock
+// =============================================================================
+
+thread_local! {
+    /// Recursion counter for tv_item_lock (mirrors C static `recurse`).
+    static TV_ITEM_LOCK_RECURSE: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+}
+
+/// CHANGE_LOCK logic: apply lock/unlock respecting VAR_FIXED.
+///
+/// VAR_UNLOCKED=0, VAR_LOCKED=1, VAR_FIXED=2
+/// If current == VAR_FIXED: stays VAR_FIXED.
+/// If lock: becomes VAR_LOCKED.
+/// Else: becomes VAR_UNLOCKED.
+fn change_lock(current: c_int, lock: bool) -> c_int {
+    if current == 2 {
+        2 // VAR_FIXED stays fixed
+    } else {
+        c_int::from(lock) // 1 if lock=true (VAR_LOCKED), 0 if false (VAR_UNLOCKED)
+    }
+}
+
+/// Lock or unlock an item (and optionally its container contents).
+///
+/// Migrated from C `tv_item_lock`.
+///
+/// # Safety
+///
+/// `tv` must be a valid non-null pointer to `typval_T`.
+#[export_name = "tv_item_lock"]
+pub unsafe extern "C" fn rs_tv_item_lock(
+    tv: TypevalHandle,
+    deep: c_int,
+    lock: bool,
+    check_refcount: bool,
+) {
+    let recurse = TV_ITEM_LOCK_RECURSE.get();
+    if recurse >= 100 {
+        // DICT_MAXNEST = 100
+        nvim_emsg_item_lock_nested();
+        return;
+    }
+    if deep == 0 {
+        return;
+    }
+    TV_ITEM_LOCK_RECURSE.set(recurse + 1);
+
+    // Lock/unlock the typval itself
+    let v_lock = nvim_tv_get_v_lock(tv);
+    nvim_tv_set_lock(tv, change_lock(v_lock, lock));
+
+    match VarType::from_c_int(nvim_tv_get_type(tv)) {
+        Some(VarType::Blob) => {
+            let b = nvim_tv_get_blob(tv);
+            if !b.is_null() {
+                let bv_refcount = nvim_blob_get_bv_refcount(b);
+                if !(check_refcount && bv_refcount > 1) {
+                    let bv_lock = nvim_blob_get_lock(b);
+                    nvim_blob_set_lock(b, change_lock(bv_lock, lock));
+                }
+            }
+        }
+        Some(VarType::List) => {
+            let l = nvim_tv_get_list(tv);
+            if !l.is_null() {
+                let lv_refcount = nvim_list_get_refcount(l);
+                if !(check_refcount && lv_refcount > 1) {
+                    let lv_lock = nvim_list_get_lock(l);
+                    nvim_list_set_lock(l, change_lock(lv_lock, lock));
+                    if !(0..=1).contains(&deep) {
+                        // Recursively lock list items
+                        let mut li = nvim_list_get_first(l);
+                        while !li.is_null() {
+                            let item_tv = nvim_listitem_get_tv(li);
+                            rs_tv_item_lock(item_tv, deep - 1, lock, check_refcount);
+                            li = nvim_listitem_get_next(li);
+                        }
+                    }
+                }
+            }
+        }
+        Some(VarType::Dict) => {
+            let d = nvim_tv_get_dict(tv);
+            if !d.is_null() {
+                let dv_refcount = nvim_dict_get_refcount(d);
+                if !(check_refcount && dv_refcount > 1) {
+                    let dv_lock = nvim_dict_get_lock(d);
+                    nvim_dict_set_lock(d, change_lock(dv_lock, lock));
+                    if !(0..=1).contains(&deep) {
+                        // Recursively lock dict item values
+                        let ht_used = nvim_dict_get_ht_used(d);
+                        let hi_removed = nvim_hash_removed_ptr();
+                        let mut hi = nvim_dict_get_ht_array(d);
+                        let mut todo = ht_used;
+                        while todo > 0 {
+                            let key = nvim_hashitem_get_key(hi);
+                            if !key.is_null() && key != hi_removed {
+                                let di = nvim_hashitem_to_dictitem(hi);
+                                let di_tv = nvim_dictitem_get_tv(di);
+                                rs_tv_item_lock(di_tv, deep - 1, lock, check_refcount);
+                                todo -= 1;
+                            }
+                            hi = nvim_hashitem_next(hi);
+                        }
+                    }
+                }
+            }
+        }
+        // Other types: no container to lock, just the typval v_lock (done above)
+        _ => {}
+    }
+
+    TV_ITEM_LOCK_RECURSE.set(recurse);
 }
 
 #[cfg(test)]

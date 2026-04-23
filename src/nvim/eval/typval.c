@@ -1601,91 +1601,11 @@ void tv_clear(typval_T *const tv)
 
 //{{{2 Locks
 
-/// Lock or unlock an item
-///
-/// @param[out]  tv  Item to (un)lock.
-/// @param[in]  deep  Levels to (un)lock, -1 to (un)lock everything.
-/// @param[in]  lock  True if it is needed to lock an item, false to unlock.
-/// @param[in]  check_refcount  If true, do not lock a list or dict with a
-///                             reference count larger than 1.
-void tv_item_lock(typval_T *const tv, const int deep, const bool lock, const bool check_refcount)
-  FUNC_ATTR_NONNULL_ALL
-{
-  // TODO(ZyX-I): Make this not recursive
-  static int recurse = 0;
-
-  if (recurse >= DICT_MAXNEST) {
-    emsg(_(e_variable_nested_too_deep_for_unlock));
-    return;
-  }
-  if (deep == 0) {
-    return;
-  }
-  recurse++;
-
-  // lock/unlock the item itself
-#define CHANGE_LOCK(lock, var) \
-  do { \
-    (var) = ((VarLockStatus[]) { \
-      [VAR_UNLOCKED] = ((lock) ? VAR_LOCKED : VAR_UNLOCKED), \
-      [VAR_LOCKED] = ((lock) ? VAR_LOCKED : VAR_UNLOCKED), \
-      [VAR_FIXED] = VAR_FIXED, \
-    })[var]; \
-  } while (0)
-  CHANGE_LOCK(lock, tv->v_lock);
-
-  switch (tv->v_type) {
-  case VAR_BLOB: {
-    blob_T *const b = tv->vval.v_blob;
-    if (b != NULL && !(check_refcount && b->bv_refcount > 1)) {
-      CHANGE_LOCK(lock, b->bv_lock);
-    }
-    break;
-  }
-  case VAR_LIST: {
-    list_T *const l = tv->vval.v_list;
-    if (l != NULL && !(check_refcount && l->lv_refcount > 1)) {
-      CHANGE_LOCK(lock, l->lv_lock);
-      if (deep < 0 || deep > 1) {
-        // Recursive: lock/unlock the items the List contains.
-        TV_LIST_ITER(l, li, {
-            tv_item_lock(TV_LIST_ITEM_TV(li), deep - 1, lock, check_refcount);
-          });
-      }
-    }
-    break;
-  }
-  case VAR_DICT: {
-    dict_T *const d = tv->vval.v_dict;
-    if (d != NULL && !(check_refcount && d->dv_refcount > 1)) {
-      CHANGE_LOCK(lock, d->dv_lock);
-      if (deep < 0 || deep > 1) {
-        // recursive: lock/unlock the items the List contains
-        TV_DICT_ITER(d, di, {
-            tv_item_lock(&di->di_tv, deep - 1, lock, check_refcount);
-          });
-      }
-    }
-    break;
-  }
-  case VAR_NUMBER:
-  case VAR_FLOAT:
-  case VAR_STRING:
-  case VAR_FUNC:
-  case VAR_PARTIAL:
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-    break;
-  case VAR_UNKNOWN:
-    abort();
-  }
-#undef CHANGE_LOCK
-  recurse--;
-}
+// tv_item_lock migrated to Rust (Phase 3 of typval.c migration)
 
 // tv_islocked: migrated to Rust (nvim-rs/typval)
 
-// tv_check_lock and value_check_lock migrated to Rust (nvim-rs/typval); declared in typval.h
+// tv_check_lock, value_check_lock, value_check_lock_impl migrated to Rust (Phase 3 / nvim-rs/typval)
 
 // tv_equal migrated to Rust (Phase 2 of typval.c migration)
 
@@ -2088,43 +2008,16 @@ void nvim_blob_ga_grow(blob_T *b, int n) { ga_grow(&b->bv_ga, n); }
 /// Also increments the blob's refcount.
 void nvim_tv_set_blob(typval_T *tv, blob_T *b) { tv_blob_set_ret(tv, b); }
 
-/// Real implementation of value_check_lock (called from Rust and from
-/// nvim_value_check_lock_translated). Does NOT call the Rust symbol.
-static bool value_check_lock_impl(VarLockStatus lock, const char *name, size_t name_len)
-{
-  const char *error_message = NULL;
-  switch (lock) {
-  case VAR_UNLOCKED:
-    return false;
-  case VAR_LOCKED:
-    error_message = N_("E741: Value is locked: %.*s");
-    break;
-  case VAR_FIXED:
-    error_message = N_("E742: Cannot change value of %.*s");
-    break;
-  }
-  assert(error_message != NULL);
+// value_check_lock_impl and nvim_value_check_lock_translated: migrated to Rust (Phase 3)
 
-  if (name == NULL) {
-    name = _("Unknown");
-    name_len = strlen(name);
-  } else if (name_len == TV_TRANSLATE) {
-    name = _(name);
-    name_len = strlen(name);
-  } else if (name_len == TV_CSTRING) {
-    name_len = strlen(name);
-  }
-
-  semsg(_(error_message), (int)name_len, name);
-  return true;
-}
-
-/// Call value_check_lock with TV_TRANSLATE semantics (accessor for Rust).
-/// Returns true if locked (and emits error), false if unlocked.
-bool nvim_value_check_lock_translated(VarLockStatus lock, const char *name)
-{
-  return value_check_lock_impl(lock, name, TV_TRANSLATE);
-}
+/// Get translated error string for "Value is locked" (accessor for Rust).
+const char *nvim_gettext_value_locked(void) { return _(N_("E741: Value is locked: %.*s")); }
+/// Get translated error string for "Cannot change value" (accessor for Rust).
+const char *nvim_gettext_value_fixed(void) { return _(N_("E742: Cannot change value of %.*s")); }
+/// Get translated "Unknown" string (accessor for Rust).
+const char *nvim_gettext_unknown(void) { return _("Unknown"); }
+/// Emit tv_item_lock nested too deep error (accessor for Rust).
+void nvim_emsg_item_lock_nested(void) { emsg(_(e_variable_nested_too_deep_for_unlock)); }
 
 /// Emit blob index out of range error (accessor for Rust).
 void nvim_semsg_blobidx(int64_t idx) { semsg(_(e_blobidx), idx); }
@@ -2149,12 +2042,18 @@ void nvim_emsg_float_blob(void) { emsg(_("E975: Using a Blob as a Float")); }
 /// Emit tv_get_float error for unknown (accessor for Rust).
 void nvim_emsg_float_unknown(void) { semsg(_(e_intern2), "tv_get_float(UNKNOWN)"); }
 
-/// Call value_check_lock_impl with arbitrary name and length (accessor for Rust).
-/// Returns true if locked, false otherwise.
+/// Thin C stub for nvim_value_check_lock: calls the Rust value_check_lock.
+/// Required because other crates (eval_exec, vars) still call this by name.
 bool nvim_value_check_lock(VarLockStatus lock, const char *name, size_t name_len)
 {
-  return value_check_lock_impl(lock, name, name_len);
+  return value_check_lock((int)lock, name, name_len);
 }
+
+/// Set lv_lock on a list (accessor for Rust tv_item_lock).
+void nvim_list_set_lock(list_T *l, int lock) { l->lv_lock = (VarLockStatus)lock; }
+
+/// Set bv_lock on a blob (accessor for Rust tv_item_lock).
+void nvim_blob_set_lock(blob_T *b, int lock) { b->bv_lock = (VarLockStatus)lock; }
 
 /// Get v_lock from a typval (accessor for Rust).
 int nvim_tv_get_v_lock(const typval_T *tv) { return (int)tv->v_lock; }
