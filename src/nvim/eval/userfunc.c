@@ -798,26 +798,9 @@ void nvim_func_clear_items_impl(ufunc_T *fp)
   XFREE_CLEAR(fp->uf_tml_self);
 }
 
-/// Phase 4: C implementation shim for func_clear.
-void nvim_func_clear_impl(ufunc_T *fp, int force)
-{
-  if (fp->uf_cleared) {
-    return;
-  }
-  fp->uf_cleared = true;
-  rs_func_clear_items(fp);
-  rs_funccal_unref(fp->uf_scoped, fp, force);
-}
+// nvim_func_clear_impl inlined into rs_func_clear (Rust, Phase 9)
 
-/// Phase 4: C implementation shim for func_free.
-void nvim_func_free_impl(ufunc_T *fp)
-{
-  if ((fp->uf_flags & (FC_DELETED | FC_REMOVED)) == 0) {
-    rs_func_remove(fp);
-  }
-  XFREE_CLEAR(fp->uf_name_exp);
-  xfree(fp);
-}
+// nvim_func_free_impl inlined into rs_func_free (Rust, Phase 9)
 
 // nvim_func_clear_free_impl inlined into rs_func_clear_free (Rust, Phase 8)
 
@@ -3824,6 +3807,15 @@ int nvim_fc_get_returned(const funccall_T *fc) { return fc ? fc->fc_returned : 0
 int nvim_fc_get_level(const funccall_T *fc) { return fc ? fc->fc_level : 0; }
 linenr_T *nvim_fc_get_breakpoint_ptr(funccall_T *fc) { return fc ? &fc->fc_breakpoint : NULL; }
 int *nvim_fc_get_dbg_tick_ptr(funccall_T *fc) { return fc ? &fc->fc_dbg_tick : NULL; }
+
+// Phase 9: ufunc_T accessors for inlining nvim_func_clear_impl in Rust
+int nvim_ufunc_get_cleared(const ufunc_T *fp) { return fp ? fp->uf_cleared : 0; }
+void nvim_ufunc_set_cleared(ufunc_T *fp, int v) { if (fp) { fp->uf_cleared = v; } }
+funccall_T *nvim_ufunc_get_scoped(const ufunc_T *fp) { return fp ? fp->uf_scoped : NULL; }
+
+// Phase 9: ufunc_T accessor for inlining nvim_func_free_impl
+char *nvim_ufunc_get_name_exp_mut(ufunc_T *fp) { return fp ? fp->uf_name_exp : NULL; }
+void nvim_ufunc_clear_name_exp(ufunc_T *fp) { if (fp) { XFREE_CLEAR(fp->uf_name_exp); } }
 
 // Phase 6: Internal function arity accessor for Rust get_func_arity
 // Returns 1 if found (sets *required and *optional), 0 if not a builtin.

@@ -11,11 +11,19 @@ extern "C" {
     fn nvim_ufunc_decrement_refcount(fp: *mut c_void) -> c_int;
     fn nvim_ufunc_increment_refcount(fp: *mut c_void);
     fn nvim_ufunc_get_calls(fp: *mut c_void) -> c_int;
-    fn nvim_func_clear_impl(fp: *mut c_void, force: c_int);
-    fn nvim_func_free_impl(fp: *mut c_void);
     fn nvim_func_clear_items_impl(fp: *mut c_void);
     fn nvim_func_remove_impl(fp: *mut c_void) -> c_int;
     fn internal_error(msg: *const c_char);
+
+    // Phase 9: Accessors for inlining nvim_func_clear_impl
+    fn nvim_ufunc_get_cleared(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_set_cleared(fp: *mut c_void, v: c_int);
+    fn nvim_ufunc_get_scoped(fp: *mut c_void) -> *mut c_void;
+
+    // Phase 9: Accessors for inlining nvim_func_free_impl
+    fn nvim_ufunc_get_flags(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_clear_name_exp(fp: *mut c_void);
+    fn xfree(ptr: *mut c_void);
 }
 
 // =============================================================================
@@ -127,17 +135,32 @@ pub unsafe extern "C" fn rs_func_clear_items(fp: *mut c_void) {
 /// Clear all things a function contains. Does not free the function itself.
 #[no_mangle]
 pub unsafe extern "C" fn rs_func_clear(fp: *mut c_void, force: c_int) {
-    unsafe { nvim_func_clear_impl(fp, force) };
+    if unsafe { nvim_ufunc_get_cleared(fp) } != 0 {
+        return;
+    }
+    unsafe { nvim_ufunc_set_cleared(fp, 1) };
+    unsafe { rs_func_clear_items(fp) };
+    let scoped = unsafe { nvim_ufunc_get_scoped(fp) };
+    unsafe { super::funccal::rs_funccal_unref(scoped, fp, force) };
 }
 
 // =============================================================================
 // func_free
 // =============================================================================
 
+// FC_DELETED and FC_REMOVED flags (matches userfunc.h)
+const FC_DELETED: c_int = 0x10;
+const FC_REMOVED: c_int = 0x20;
+
 /// Free a function and remove it from the list. Does not free contents.
 #[no_mangle]
 pub unsafe extern "C" fn rs_func_free(fp: *mut c_void) {
-    unsafe { nvim_func_free_impl(fp) };
+    let flags = unsafe { nvim_ufunc_get_flags(fp) };
+    if (flags & (FC_DELETED | FC_REMOVED)) == 0 {
+        unsafe { rs_func_remove(fp) };
+    }
+    unsafe { nvim_ufunc_clear_name_exp(fp) };
+    unsafe { xfree(fp) };
 }
 
 // =============================================================================
