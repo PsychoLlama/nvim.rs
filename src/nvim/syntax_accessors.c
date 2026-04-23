@@ -262,7 +262,7 @@ int nvim_win_get_keywtab_ic_used(win_T *win) { return (int)win->w_s->b_keywtab_i
 synpat_T *nvim_synblock_get_pattern(synblock_T *block, int idx) { if (idx < 0 || idx >= block->b_syn_patterns.ga_len) return NULL; return &SYN_ITEMS(block)[idx]; }
 syn_cluster_T *nvim_synblock_get_cluster(synblock_T *block, int idx) { if (idx < 0 || idx >= block->b_syn_clusters.ga_len) return NULL; return &SYN_CLSTR(block)[idx]; }
 int nvim_syn_get_current_sub_char(void) { return current_sub_char; }
-int16_t nvim_id_list_get(int16_t *list, int idx) { return list[idx]; }
+// nvim_id_list_get: exported from Rust (syntax crate, types.rs)
 synblock_T *nvim_syn_get_curwin_synblock(void) { return curwin->w_s; }
 void nvim_syn_update_si_attr(int idx) { if (idx >= 0 && idx < current_state.ga_len) rs_update_si_attr(idx); }
 const char *nvim_extmatch_get_string(reg_extmatch_T *em, int subidx) { if (em == NULL || subidx < 0 || subidx >= NSUBEXP) return NULL; return (const char *)em->matches[subidx]; }

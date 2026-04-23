@@ -184,7 +184,7 @@ bool nvim_mark_get_wrapper(int mname, int32_t *lnum_out, int *col_out, int *cola
   return true;
 }
 
-void nvim_update_topline_curwin(void) { update_topline(curwin); }
+// nvim_update_topline_curwin: exported from Rust (window crate, wrappers.rs)
 
 bool nvim_tv_list_item_is_dollar(list_T *l, int idx)
 {

@@ -209,7 +209,7 @@ void nvim_internal_error_othertab(void) { internal_error("win_close_othertab()")
 void nvim_inc_split_disallowed(void) { split_disallowed++; }
 void nvim_dec_split_disallowed(void) { split_disallowed--; }
 frame_T *nvim_win_get_frame_parent(win_T *wp) { return (wp && wp->w_frame) ? wp->w_frame->fr_parent : NULL; }
-buf_T *nvim_get_firstbuf_wrapper(void) { return firstbuf; }
+// nvim_get_firstbuf_wrapper: exported from Rust (window crate, globals.rs)
 void nvim_emsg_e_cmdwin(void) { emsg(_(e_cmdwin)); }
 void nvim_msg_onlyone(void) { msg(_(m_onlyone), 0); }
 int nvim_get_split_disallowed(void) { return split_disallowed; }
@@ -237,8 +237,7 @@ void nvim_win_sync_s(win_T *wp) { if (wp && wp->w_buffer) { wp->w_s = &wp->w_buf
 void nvim_win_set_script_ctx_scroll(win_T *wp) { if (wp) { wp->w_p_script_ctx[kWinOptScroll].sc_sid = SID_WINLAYOUT; wp->w_p_script_ctx[kWinOptScroll].sc_lnum = 0; } }
 int nvim_has_event_winclosed(void) { return has_event(EVENT_WINCLOSED) ? 1 : 0; }
 void nvim_apply_autocmds_winclosed_by_handle(const char *handle_str, win_T *win) { apply_autocmds(EVENT_WINCLOSED, (char *)handle_str, (char *)handle_str, false, win->w_buffer); }
-win_T *nvim_get_cmdwin_win(void) { return cmdwin_win; }
-win_T *nvim_get_cmdwin_old_curwin(void) { return cmdwin_old_curwin; }
+// nvim_get_cmdwin_win, nvim_get_cmdwin_old_curwin: exported from Rust (window crate, globals.rs)
 void nvim_api_set_error_e_cmdwin(Error *err) { api_set_error(err, kErrorTypeException, "%s", e_cmdwin); }
 void nvim_set_option_cmdheight(int64_t val) { set_option_value(kOptCmdheight, NUMBER_OPTVAL(val), 0); }
 int nvim_win_get_p_wbr_empty(win_T *wp) { return (!wp || !wp->w_p_wbr || *wp->w_p_wbr == NUL) ? 1 : 0; }
@@ -271,7 +270,7 @@ void nvim_win_dialog_changed(win_T *wp) { if (wp && wp->w_buffer) { dialog_chang
 int nvim_win_bufIsChanged(win_T *wp) { return (wp && wp->w_buffer) ? bufIsChanged(wp->w_buffer) : 0; }
 int nvim_win_buf_hide(win_T *wp) { return (wp && wp->w_buffer) ? buf_hide(wp->w_buffer) : 0; }
 int nvim_get_cmdmod_confirm(void) { return (cmdmod.cmod_flags & CMOD_CONFIRM) ? 1 : 0; }
-void nvim_set_curwin_from_wp(win_T *wp) { if (wp) { curwin = wp; curbuf = wp->w_buffer; } }
+// nvim_set_curwin_from_wp: exported from Rust (window crate, globals.rs)
 int nvim_win_buf_b_locked(win_T *wp) { return (wp && wp->w_buffer && wp->w_buffer->b_locked > 0) ? 1 : 0; }
 void nvim_ui_call_win_viewport_wrapper(int grid, int win, int topline, int botline,
                                        int curline, int curcol, int line_count, int64_t delta)
@@ -321,7 +320,7 @@ void *nvim_tv_dict_add_list_win(void *dict, const char *key, size_t key_len, voi
 void nvim_tv_dict_extend_win(void *dst, void *src) { tv_dict_extend((dict_T *)dst, (dict_T *)src, "move"); }
 void nvim_buf_set_p_bl(buf_T *buf, int val) { if (buf) { buf->b_p_bl = (val != 0); } }
 int nvim_win_buf_has_terminal_safe(win_T *win) { return (win && win->w_buffer && win->w_buffer->terminal) ? 1 : 0; }
-int nvim_win_is_cmdline_win(win_T *win) { return (win == cmdline_win) ? 1 : 0; }
+// nvim_win_is_cmdline_win: exported from Rust (window crate, globals.rs)
 void nvim_apply_autocmds_bufenter_if_changed(buf_T *old_curbuf) { if (old_curbuf != curbuf) { apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf); } }
 int nvim_win_close_force(win_T *wp, int free_buf) { return win_close(wp, free_buf != 0, true); }
 void nvim_getout_zero(void) { getout(0); }
@@ -382,7 +381,7 @@ int nvim_hlrec_get_item(stl_hlrec_t *sp) { return (int)sp->item; }
 int nvim_hlrec_get_userhl(stl_hlrec_t *sp) { return sp->userhl; }
 stl_hlrec_t *nvim_hlrec_next(stl_hlrec_t *sp) { return sp + 1; }
 size_t nvim_transstr_buf(const char *s, ptrdiff_t slen, char *buf, size_t buflen) { return transstr_buf(s, slen, buf, buflen, true); }
-const char *nvim_get_p_sel(void) { return p_sel; }
+// nvim_get_p_sel: exported from Rust (window crate, globals.rs)
 GridView *nvim_win_get_grid(win_T *wp) { return &wp->w_grid; }
 int nvim_curwin_cursor_line_is_nul(void) { return *ml_get_buf(curwin->w_buffer, curwin->w_cursor.lnum) == NUL ? 1 : 0; }
 void nvim_get_VIsual_pos_fields(int32_t *lnum, int32_t *col, int32_t *coladd) { *lnum = (int32_t)VIsual.lnum; *col = (int32_t)VIsual.col; *coladd = (int32_t)VIsual.coladd; }

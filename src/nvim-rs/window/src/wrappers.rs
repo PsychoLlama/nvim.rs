@@ -113,9 +113,18 @@ pub unsafe extern "C" fn wrap_compute_cmdrow() {
     compute_cmdrow();
 }
 
-/// update_topline(curwin) wrapper.
+/// update_topline(curwin) wrapper (for win_enter).
 #[export_name = "nvim_update_topline_curwin_enter"]
 pub unsafe extern "C" fn wrap_update_topline_curwin_enter() {
+    let curwin = nvim_get_curwin();
+    update_topline(curwin);
+}
+
+/// update_topline(curwin) wrapper (for eval crate).
+///
+/// Replaces the C shim `nvim_update_topline_curwin()` in eval_shim.c.
+#[export_name = "nvim_update_topline_curwin"]
+pub unsafe extern "C" fn wrap_update_topline_curwin() {
     let curwin = nvim_get_curwin();
     update_topline(curwin);
 }

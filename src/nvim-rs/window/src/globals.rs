@@ -24,6 +24,7 @@ extern "C" {
 
     // Buffer globals
     static mut curbuf: BufHandle;
+    static mut firstbuf: BufHandle; // first buffer in list
 
     // Tabpage globals
     static mut curtab: TabpageHandle;
@@ -70,6 +71,7 @@ extern "C" {
     static mut p_cpo: *mut c_char; // cpoptions
     static mut p_sbr: *mut c_char; // showbreak
     static mut p_wbr: *const c_char; // winbar
+    static mut p_sel: *mut c_char; // 'selection' option
 
     // Additional globals for Phase 1 elimination
     static mut RedrawingDisabled: c_int;
@@ -85,6 +87,8 @@ extern "C" {
     static mut postponed_split_tab: c_int;
     static mut last_chdir_reason: *mut c_char;
     static mut cmdline_win: WinHandle;
+    static mut cmdwin_win: WinHandle; // window of cmdline window or NULL
+    static mut cmdwin_old_curwin: WinHandle; // curwin before opening cmdline window
 
     // Phase 3 globals
     static mut got_int: bool; // interrupt flag
@@ -281,6 +285,20 @@ pub unsafe extern "C" fn set_curbuf(buf: BufHandle) {
 #[export_name = "nvim_set_curbuf_from_curwin"]
 pub unsafe extern "C" fn set_curbuf_from_curwin() {
     curbuf = nvim_win_get_w_buffer(curwin);
+}
+
+/// Set curwin = wp and curbuf = wp->w_buffer (if wp is non-null).
+///
+/// Replaces the C shim `nvim_set_curwin_from_wp()` in window_shim.c.
+///
+/// # Safety
+/// `wp` must be a valid window pointer or null.
+#[export_name = "nvim_set_curwin_from_wp"]
+pub unsafe extern "C" fn set_curwin_from_wp(wp: WinHandle) {
+    if !wp.is_null() {
+        curwin = wp;
+        curbuf = nvim_win_get_w_buffer(wp);
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -989,6 +1007,18 @@ pub unsafe extern "C" fn set_p_ch_alias(val: i64) {
     p_ch = val;
 }
 
+/// Get p_sel ('selection' option) pointer.
+///
+/// Replaces the C shim `nvim_get_p_sel()` in window_shim.c.
+///
+/// # Safety
+/// Accesses C global p_sel.
+#[must_use]
+#[export_name = "nvim_get_p_sel"]
+pub unsafe extern "C" fn get_p_sel() -> *const c_char {
+    p_sel
+}
+
 // -------------------------------------------------------------------------
 // Phase 3: Constants and global accessors for cross-crate use
 // -------------------------------------------------------------------------
@@ -1079,6 +1109,76 @@ pub unsafe extern "C" fn update_cmdline_row() {
     {
         cmdline_row = Rows - p_ch as c_int;
     }
+}
+
+/// Get firstbuf (first buffer in list).
+///
+/// Replaces the C shim `nvim_get_firstbuf_wrapper()` in window_shim.c.
+///
+/// # Safety
+/// Accesses C global firstbuf.
+#[must_use]
+#[export_name = "nvim_get_firstbuf_wrapper"]
+pub unsafe extern "C" fn get_firstbuf_wrapper() -> BufHandle {
+    firstbuf
+}
+
+/// Get cmdwin_win (window of cmdline window, or null).
+///
+/// Replaces the C shim `nvim_get_cmdwin_win()` in window_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_win.
+#[must_use]
+#[export_name = "nvim_get_cmdwin_win"]
+pub unsafe extern "C" fn get_cmdwin_win() -> WinHandle {
+    cmdwin_win
+}
+
+/// Get cmdwin_old_curwin (curwin before opening cmdline window, or null).
+///
+/// Replaces the C shim `nvim_get_cmdwin_old_curwin()` in window_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_old_curwin.
+#[must_use]
+#[export_name = "nvim_get_cmdwin_old_curwin"]
+pub unsafe extern "C" fn get_cmdwin_old_curwin() -> WinHandle {
+    cmdwin_old_curwin
+}
+
+/// Check if win == cmdline_win (ext_cmdline window).
+///
+/// Replaces the C shim `nvim_win_is_cmdline_win()` in window_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdline_win.
+#[must_use]
+#[export_name = "nvim_win_is_cmdline_win"]
+pub unsafe extern "C" fn win_is_cmdline_win(win: WinHandle) -> c_int {
+    c_int::from(!win.is_null() && win.as_ptr() == cmdline_win.as_ptr())
+}
+
+/// Set cmdwin_win.
+///
+/// Replaces the C shim `nvim_set_cmdwin_win()` in cmdwin_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_win.
+#[export_name = "nvim_set_cmdwin_win"]
+pub unsafe extern "C" fn set_cmdwin_win(wp: WinHandle) {
+    cmdwin_win = wp;
+}
+
+/// Set cmdwin_old_curwin.
+///
+/// Replaces the C shim `nvim_set_cmdwin_old_curwin()` in cmdwin_shim.c.
+///
+/// # Safety
+/// Accesses C global cmdwin_old_curwin.
+#[export_name = "nvim_set_cmdwin_old_curwin"]
+pub unsafe extern "C" fn set_cmdwin_old_curwin(wp: WinHandle) {
+    cmdwin_old_curwin = wp;
 }
 
 /// Check if wp is the cmdline window (== cmdline_win).

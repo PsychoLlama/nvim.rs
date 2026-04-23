@@ -52,8 +52,7 @@ extern int rs_last_window(win_T *win);
 
 void nvim_set_cmdwin_type(int val) { cmdwin_type = val; }
 void nvim_set_cmdwin_level(int val) { cmdwin_level = val; }
-void nvim_set_cmdwin_win(win_T *wp) { cmdwin_win = wp; }
-void nvim_set_cmdwin_old_curwin(win_T *wp) { cmdwin_old_curwin = wp; }
+// nvim_set_cmdwin_win, nvim_set_cmdwin_old_curwin: exported from Rust (window crate, globals.rs)
 void nvim_set_cmdwin_buf(buf_T *buf) { cmdwin_buf = buf; }
 int nvim_get_cmdwin_result(void) { return cmdwin_result; }
 

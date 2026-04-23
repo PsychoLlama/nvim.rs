@@ -511,6 +511,18 @@ pub extern "C" fn is_id_list_all(list: IdListHandle) -> std::ffi::c_int {
     std::ffi::c_int::from(list.0 == ID_LIST_ALL_SENTINEL as *mut i16)
 }
 
+/// Get element at `idx` from an ID list (int16_t array).
+///
+/// Replaces the C function `nvim_id_list_get()` in syntax_accessors.c.
+///
+/// # Safety
+/// `list` must be a valid non-null pointer with at least `idx+1` elements.
+#[must_use]
+#[unsafe(export_name = "nvim_id_list_get")]
+pub unsafe extern "C" fn id_list_get(list: IdListHandle, idx: std::ffi::c_int) -> i16 {
+    *list.0.add(idx as usize)
+}
+
 // =============================================================================
 // Syntax ID helper types and functions
 // =============================================================================
