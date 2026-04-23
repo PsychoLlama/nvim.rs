@@ -149,150 +149,9 @@ void func_init(void) { hash_init(&func_hashtab); }
 /// Return the function hash table
 hashtab_T *func_tbl_get(void) { return &func_hashtab; }
 
-/// Get one function argument.
-/// Return a pointer to after the type.
-/// When something is wrong return "arg".
-static char *one_function_arg(char *arg, garray_T *newargs, bool skip)
-{
-  char *p = arg;
-
-  while (ASCII_ISALNUM(*p) || *p == '_') {
-    p++;
-  }
-  if (arg == p || isdigit((uint8_t)(*arg))
-      || (p - arg == 9 && strncmp(arg, "firstline", 9) == 0)
-      || (p - arg == 8 && strncmp(arg, "lastline", 8) == 0)) {
-    if (!skip) {
-      semsg(_("E125: Illegal argument: %s"), arg);
-    }
-    return arg;
-  }
-
-  if (newargs != NULL) {
-    ga_grow(newargs, 1);
-    uint8_t c = (uint8_t)(*p);
-    *p = NUL;
-    char *arg_copy = xstrdup(arg);
-
-    // Check for duplicate argument name.
-    for (int i = 0; i < newargs->ga_len; i++) {
-      if (strcmp(((char **)(newargs->ga_data))[i], arg_copy) == 0) {
-        semsg(_("E853: Duplicate argument name: %s"), arg_copy);
-        xfree(arg_copy);
-        return arg;
-      }
-    }
-    ((char **)(newargs->ga_data))[newargs->ga_len] = arg_copy;
-    newargs->ga_len++;
-
-    *p = (char)c;
-  }
-
-  return p;
-}
-
-/// Get function arguments.
-static int get_function_args(char **argp, char endchar, garray_T *newargs, int *varargs,
-                             garray_T *default_args, bool skip)
-{
-  bool mustend = false;
-  char *arg = *argp;
-  char *p = arg;
-
-  if (newargs != NULL) {
-    ga_init(newargs, (int)sizeof(char *), 3);
-  }
-  if (default_args != NULL) {
-    ga_init(default_args, (int)sizeof(char *), 3);
-  }
-
-  if (varargs != NULL) {
-    *varargs = false;
-  }
-
-  // Isolate the arguments: "arg1, arg2, ...)"
-  bool any_default = false;
-  while (*p != endchar) {
-    if (p[0] == '.' && p[1] == '.' && p[2] == '.') {
-      if (varargs != NULL) {
-        *varargs = true;
-      }
-      p += 3;
-      mustend = true;
-    } else {
-      arg = p;
-      p = one_function_arg(p, newargs, skip);
-      if (p == arg) {
-        break;
-      }
-
-      if (*skipwhite(p) == '=' && default_args != NULL) {
-        typval_T rettv;
-
-        any_default = true;
-        p = skipwhite(p) + 1;
-        p = skipwhite(p);
-        char *expr = p;
-        if (eval1(&p, &rettv, NULL) != FAIL) {
-          ga_grow(default_args, 1);
-
-          // trim trailing whitespace
-          while (p > expr && ascii_iswhite(p[-1])) {
-            p--;
-          }
-          uint8_t c = (uint8_t)(*p);
-          *p = NUL;
-          expr = xstrdup(expr);
-          ((char **)(default_args->ga_data))[default_args->ga_len] = expr;
-          default_args->ga_len++;
-          *p = (char)c;
-        } else {
-          mustend = true;
-        }
-      } else if (any_default) {
-        emsg(_("E989: Non-default argument follows default argument"));
-        mustend = true;
-      }
-
-      if (ascii_iswhite(*p) && *skipwhite(p) == ',') {
-        // Be tolerant when skipping
-        if (!skip) {
-          semsg(_(e_no_white_space_allowed_before_str_str), ",", p);
-          goto err_ret;
-        }
-        p = skipwhite(p);
-      }
-      if (*p == ',') {
-        p++;
-      } else {
-        mustend = true;
-      }
-    }
-    p = skipwhite(p);
-    if (mustend && *p != endchar) {
-      if (!skip) {
-        semsg(_(e_invarg2), *argp);
-      }
-      break;
-    }
-  }
-  if (*p != endchar) {
-    goto err_ret;
-  }
-  p++;  // skip "endchar"
-
-  *argp = p;
-  return OK;
-
-err_ret:
-  if (newargs != NULL) {
-    ga_clear_strings(newargs);
-  }
-  if (default_args != NULL) {
-    ga_clear_strings(default_args);
-  }
-  return FAIL;
-}
+// one_function_arg and get_function_args migrated to Rust (parsing.rs Phase 20)
+extern int get_function_args(char **argp, char endchar, garray_T *newargs, int *varargs,
+                             garray_T *default_args, bool skip);
 
 /// Register function "fp" as using "current_funccal" as its scope.
 static void register_closure(ufunc_T *fp)
@@ -3479,3 +3338,14 @@ int nvim_call_user_func_check_simple(ufunc_T *fp, typval_T *argvars, typval_T *r
   funcexe.fe_evaluate = true;
   return call_user_func_check(fp, 0, argvars, rettv, &funcexe, NULL);
 }
+
+// Phase 20: shims for one_function_arg + get_function_args migration (parsing.rs)
+// Phase 20: shims for get_function_args migration (parsing.rs)
+void nvim_semsg_e125_illegal_arg(const char *arg) { semsg(_("E125: Illegal argument: %s"), arg); }
+void nvim_semsg_e853_duplicate_arg(const char *arg) { semsg(_("E853: Duplicate argument name: %s"), arg); }
+void nvim_emsg_e989_nondefault_follows(void) { emsg(_("E989: Non-default argument follows default argument")); }
+void nvim_semsg_no_white_before_comma(const char *p)
+{
+  semsg(_(e_no_white_space_allowed_before_str_str), ",", p);
+}
+// nvim_semsg_invarg2 already exists in nvim-match Rust crate -- reuse directly
