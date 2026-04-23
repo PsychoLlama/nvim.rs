@@ -1466,15 +1466,19 @@ extern "C" {
     fn nvim_get_restart_edit() -> c_int;
     fn nvim_set_restart_edit(v: c_int);
     fn showmode();
-    fn nvim_unshowmode();
+    #[link_name = "unshowmode"]
+    fn nvim_unshowmode(force: bool);
     #[link_name = "ui_cursor_shape"]
     fn nvim_ui_cursor_shape();
     #[link_name = "setcursor"]
     fn nvim_setcursor();
-    fn nvim_parse_shape_opt(scope: c_int);
-    fn nvim_show_cursor_info_later();
+    #[link_name = "parse_shape_opt"]
+    fn nvim_parse_shape_opt(scope: c_int) -> *const i8;
+    #[link_name = "show_cursor_info_later"]
+    fn nvim_show_cursor_info_later(force: bool);
     fn nvim_refresh_cursor_c(term: *mut c_void, cursor_visible: *mut c_int);
-    fn nvim_validate_cursor_cw();
+    #[link_name = "validate_cursor"]
+    fn nvim_validate_cursor_cw(wp: *mut c_void);
     #[link_name = "update_screen"]
     fn nvim_update_screen_c();
     #[link_name = "redraw_statuslines"]
@@ -3167,6 +3171,7 @@ pub unsafe extern "C" fn rs_terminal_notify_theme_impl(term: TerminalHandle, dar
 extern "C" {
     fn nvim_terminal_timer_start();
     fn nvim_terminal_buf_set_title(buf: *mut c_void, title: *const i8, len: usize);
+    #[link_name = "xrealloc"]
     fn nvim_term_xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void;
     // Phase 6: termrequest / OSC / DCS / APC
     fn nvim_term_treqbuf_printf_osc(term: *mut c_void, command: c_int);
@@ -4857,7 +4862,7 @@ pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
 
     // Validate topline and cursor position for autocommands.
     unsafe { nvim_terminal_check_cursor_c() };
-    unsafe { nvim_validate_cursor_cw() };
+    unsafe { nvim_validate_cursor_cw(c_curwin) };
 
     // Don't let autocommands free the terminal from under our fingers.
     let term = unsafe { TerminalHandle::from_ptr(s.term) };
@@ -4883,9 +4888,9 @@ pub unsafe extern "C" fn rs_terminal_check(state: *mut c_void) -> c_int {
         return 0;
     }
     unsafe { nvim_terminal_check_cursor_c() };
-    unsafe { nvim_validate_cursor_cw() };
+    unsafe { nvim_validate_cursor_cw(c_curwin) };
 
-    unsafe { nvim_show_cursor_info_later() };
+    unsafe { nvim_show_cursor_info_later(false) };
     if unsafe { c_must_redraw } != 0 {
         unsafe { nvim_update_screen_c() };
     } else {
@@ -5012,7 +5017,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
     }
 
     // Restore the terminal cursor to what is set in 'guicursor'.
-    unsafe { nvim_parse_shape_opt(SHAPE_CURSOR) };
+    let _ = unsafe { nvim_parse_shape_opt(SHAPE_CURSOR) };
 
     unsafe { nvim_terminal_unset_winopts(std::ptr::addr_of_mut!(s).cast()) };
 
@@ -5033,7 +5038,7 @@ pub extern "C" fn rs_terminal_enter() -> bool {
     if unsafe { nvim_get_restart_edit() } != 0 {
         unsafe { showmode() };
     } else {
-        unsafe { nvim_unshowmode() };
+        unsafe { nvim_unshowmode(true) };
     }
     unsafe { nvim_ui_cursor_shape() };
 

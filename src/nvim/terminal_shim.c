@@ -333,7 +333,6 @@ void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
                STRING_OBJ(((String){ .data = (char *)title, .size = len })),
                false, false, NULL, &err);
   api_clear_error(&err); status_redraw_buf((buf_T *)buf); }
-void *nvim_term_xrealloc(void *ptr, size_t size) { return xrealloc(ptr, size); }
 void *nvim_terminal_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
 int nvim_ml_append_buf_term(void *buf, int lnum, char *line, bool newfile) { return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile); }
 int nvim_ml_replace_buf_term(void *buf, int lnum, char *line, bool copy) { return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false); }
@@ -389,11 +388,7 @@ int nvim_must_redraw(void) { return (int)must_redraw; }
 int nvim_clear_cmdline(void) { return (int)clear_cmdline; }
 int nvim_redraw_cmdline(void) { return (int)redraw_cmdline; }
 int nvim_redraw_mode(void) { return (int)redraw_mode; }
-void nvim_unshowmode(void) { unshowmode(true); }
-void nvim_parse_shape_opt(int scope) { (void)parse_shape_opt(scope); }
-void nvim_show_cursor_info_later(void) { show_cursor_info_later(false); }
 void nvim_refresh_cursor_c(void *term, int *cursor_visible) { bool vis = (bool)*cursor_visible; rs_refresh_cursor((Terminal *)term, &vis); *cursor_visible = (int)vis; }
-void nvim_validate_cursor_cw(void) { validate_cursor(curwin); }
 void nvim_apply_termenter_autocmd(void) { apply_autocmds(EVENT_TERMENTER, NULL, NULL, false, curbuf); }
 void nvim_apply_termleave_autocmd(void) { apply_autocmds(EVENT_TERMLEAVE, NULL, NULL, false, curbuf); }
 void nvim_apply_textchangedt_autocmd(void) { apply_autocmds(EVENT_TEXTCHANGEDT, NULL, NULL, false, curbuf); }
