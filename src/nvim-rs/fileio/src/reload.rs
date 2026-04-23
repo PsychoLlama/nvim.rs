@@ -78,7 +78,12 @@ extern "C" {
     ) -> c_int;
     #[link_name = "aborting"]
     fn nvim_aborting() -> bool;
-    fn nvim_shortmess_fileinfo() -> c_int;
+    /// shortmess(x): returns true if flag x is in 'shortmess'.
+    fn shortmess(x: c_int) -> bool;
+    /// semsg(fmt, ...): emit an error message.
+    fn semsg(fmt: *const c_char, ...) -> bool;
+    /// gettext(msgid): translate a string.
+    fn gettext(msgid: *const c_char) -> *const c_char;
 
     // --- unchanged / buf_updates ---
     #[link_name = "unchanged"]
@@ -113,10 +118,6 @@ extern "C" {
     #[link_name = "rs_do_modelines"]
     fn nvim_do_modelines(flags: c_int);
 
-    // --- error messages ---
-    fn nvim_semsg_reload_fail(fname: *const c_char);
-    fn nvim_semsg_prep_reload_fail(fname: *const c_char);
-
     // --- xstrdup / xfree ---
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn xfree(ptr: *mut c_void);
@@ -135,6 +136,9 @@ const BF_CHECK_RO: c_int = 0x02;
 // Return values
 const OK: c_int = 1;
 const FAIL: c_int = 0;
+
+// SHM_FILEINFO is 'F' == 70 (from vim_defs.h)
+const SHM_FILEINFO: c_int = b'F' as c_int;
 
 /// Move all the lines from buffer `frombuf` to buffer `tobuf`.
 ///
@@ -259,7 +263,10 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
 
         if savebuf.is_null() || saved == FAIL || buf != curbuf || move_lines(buf, savebuf) == FAIL {
             let b_fname = bref_void(buf as *const c_void).b_fname;
-            nvim_semsg_prep_reload_fail(b_fname);
+            semsg(
+                gettext(c"E462: Could not prepare for reloading \"%s\"".as_ptr()),
+                b_fname,
+            );
             saved = FAIL;
         }
     }
@@ -270,13 +277,13 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
         buf_mut_void(curbuf).b_flags |= BF_CHECK_RO;
         buf_mut_void(curbuf).b_keep_filetype = 1;
 
-        let silent = nvim_shortmess_fileinfo();
-        let readfile_ok = nvim_readfile_reload(buf, ea, flags, silent);
+        let silent = shortmess(SHM_FILEINFO);
+        let readfile_ok = nvim_readfile_reload(buf, ea, flags, c_int::from(silent));
 
         if readfile_ok != OK {
             if !nvim_aborting() {
                 let b_fname = bref_void(buf as *const c_void).b_fname;
-                nvim_semsg_reload_fail(b_fname);
+                semsg(gettext(c"E321: Could not reload \"%s\"".as_ptr()), b_fname);
             }
             if !savebuf.is_null() && nvim_bufref_valid(bufref_ptr) != 0 && buf == curbuf {
                 // Restore old contents: delete what readfile added, then move lines back.

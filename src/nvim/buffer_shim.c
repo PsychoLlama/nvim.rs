@@ -472,11 +472,6 @@ int nvim_os_fileinfo(const char *fname, int64_t *mtime_sec, int64_t *mtime_ns,
   if (mode)      *mode      = (int32_t)fi.stat.st_mode;
   return 1;
 }
-// --- VV_ vim variable accessors ---
-void nvim_set_vim_var_fcs_reason(const char *reason) { set_vim_var_string(VV_FCS_REASON, (char *)reason, -1); }
-void nvim_set_vim_var_fcs_choice_empty(void) { set_vim_var_string(VV_FCS_CHOICE, "", -1); }
-const char *nvim_get_vim_var_fcs_choice(void) { return get_vim_var_str(VV_FCS_CHOICE); }
-void nvim_set_vim_var_warningmsg(const char *msg, int len) { set_vim_var_string(VV_WARNINGMSG, (char *)msg, len); }
 // --- do_dialog for file-changed warning ---
 int nvim_do_dialog_file_changed(const char *tbuf) {
   return do_dialog(VIM_WARNING, _("Warning"), (char *)tbuf,
@@ -484,7 +479,6 @@ int nvim_do_dialog_file_changed(const char *tbuf) {
 }
 // Phase 6: buf_reload / move_lines accessors
 int nvim_get_p_ur(void) { return (int)p_ur; }
-int nvim_shortmess_fileinfo(void) { return shortmess(SHM_FILEINFO) ? 1 : 0; }
 int nvim_u_savecommon_reload_ok(buf_T *buf) {
   u_sync(false);
   return u_savecommon(buf, 0, buf->b_ml.ml_line_count + 1, 0, true);
@@ -527,12 +521,6 @@ int nvim_ml_append_curbuf(linenr_T lnum, const char *line) {
   return ml_append(lnum, (char *)line, 0, false);
 }
 // Note: nvim_buf_get_b_ml_line_count is defined in undo.c
-void nvim_semsg_reload_fail(const char *fname) {
-  semsg(_("E321: Could not reload \"%s\""), fname);
-}
-void nvim_semsg_prep_reload_fail(const char *fname) {
-  semsg(_("E462: Could not prepare for reloading \"%s\""), fname);
-}
 int nvim_readfile_reload(buf_T *buf, exarg_T *ea, int flags, int silent) {
   return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM, ea, flags, silent != 0);
 }

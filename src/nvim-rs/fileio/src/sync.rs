@@ -648,14 +648,10 @@ extern "C" {
     /// buf_contents_changed: returns true if buffer contents changed on disk.
     #[link_name = "buf_contents_changed"]
     fn nvim_buf_contents_changed(buf: *mut c_void) -> bool;
-    /// Sets VV_FCS_REASON to reason string.
-    fn nvim_set_vim_var_fcs_reason(reason: *const c_char);
-    /// Sets VV_FCS_CHOICE to "".
-    fn nvim_set_vim_var_fcs_choice_empty();
-    /// Gets VV_FCS_CHOICE value.
-    fn nvim_get_vim_var_fcs_choice() -> *const c_char;
-    /// Sets VV_WARNINGMSG.
-    fn nvim_set_vim_var_warningmsg(msg: *const c_char, len: c_int);
+    /// set_vim_var_string(idx, val, len): set a v: variable string.
+    fn set_vim_var_string(idx: c_int, val: *const c_char, len: isize);
+    /// get_vim_var_str(idx): get a v: variable string.
+    fn get_vim_var_str(idx: c_int) -> *const c_char;
     // Note: nvim_get_autocmd_busy, nvim_set_allbuf_lock, nvim_get_allbuf_lock
     // are declared in the check_timestamps extern block above.
     /// Emit error message.
@@ -738,6 +734,11 @@ const FAT_TOLERANCE: c_int = 0;
 // (from auevents_enum.generated.h in the build directory)
 const EVENT_FILECHANGEDSHELL: c_int = 20;
 const EVENT_FILECHANGEDSHELLPOST: c_int = 21;
+
+// v: variable indices (from eval_defs.h VimVarIndex enum)
+const VV_WARNINGMSG: c_int = 4;
+const VV_FCS_REASON: c_int = 38;
+const VV_FCS_CHOICE: c_int = 39;
 
 // Mode constants from state_defs.h
 const MODE_NORMAL_BUSY: c_int = 0x1001;
@@ -882,8 +883,8 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                 // (BUF_CHECK_BUSY is already set at the outer level; the inner guard
                 //  in rs_buf_check_timestamp handles recursion. We just need to set
                 //  allbuf_lock here to match C behavior.)
-                nvim_set_vim_var_fcs_reason(reason);
-                nvim_set_vim_var_fcs_choice_empty();
+                set_vim_var_string(VV_FCS_REASON, reason, -1);
+                set_vim_var_string(VV_FCS_CHOICE, c"".as_ptr(), -1);
                 let old_allbuf_lock = allbuf_lock;
                 allbuf_lock = old_allbuf_lock + 1;
                 let n = apply_autocmds(EVENT_FILECHANGEDSHELL, b_fname, b_fname, false, buf);
@@ -895,7 +896,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                     if nvim_bufref_valid(bufref_ptr) == 0 {
                         emsg(c"E246: FileChangedShell autocommand deleted buffer".as_ptr());
                     }
-                    let s = nvim_get_vim_var_fcs_choice();
+                    let s = get_vim_var_str(VV_FCS_CHOICE);
                     let choice = if s.is_null() {
                         ""
                     } else {
@@ -971,7 +972,7 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
         snprintf(tbuf, tbuf_len, mesg, path);
 
         // Set VV_WARNINGMSG before appending mesg2
-        nvim_set_vim_var_warningmsg(tbuf, -1);
+        set_vim_var_string(VV_WARNINGMSG, tbuf, -1);
 
         if can_reload {
             if *mesg2 != 0 {
