@@ -231,6 +231,27 @@ extern "C" {
     ) -> *mut c_char;
     fn nvim_emsg_trailing_arg(p: *const c_char);
 
+    // Phase 33: for get_func_line migration
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_fc_get_returned(fc: *mut c_void) -> c_int;
+    fn nvim_fc_get_linenr(fc: *mut c_void) -> c_int;
+    fn nvim_fc_set_linenr(fc: *mut c_void, v: c_int);
+    fn nvim_fc_postincrement_linenr(fc: *mut c_void) -> c_int;
+    fn nvim_fc_get_breakpoint_ptr(fc: *mut c_void) -> *mut i32;
+    fn nvim_fc_get_dbg_tick_ptr(fc: *mut c_void) -> *mut c_int;
+    fn nvim_ufunc_get_lines_len(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_funcline_is_null(fp: *mut c_void, idx: c_int) -> c_int;
+    fn nvim_ufunc_get_funcline(fp: *mut c_void, i: c_int) -> *const c_char;
+    fn nvim_get_sourcing_lnum_direct() -> i32;
+    fn nvim_rt_set_sourcing_lnum(lnum: c_int);
+    fn func_line_start(cookie: *mut c_void);
+    fn func_line_end(cookie: *mut c_void);
+    fn dbg_find_breakpoint(file: bool, fname: *const c_char, after: i32) -> i32;
+    fn dbg_breakpoint(name: *const c_char, lnum: i32);
+    static did_emsg: c_int;
+    static debug_tick: c_int;
+    static do_profiling: c_int;
+
     // Phase 31: for nvim_free_funccal_contents_impl and nvim_cleanup_function_call_impl migration
     fn nvim_fc_l_vars_ht_clear(fc: *mut c_void);
     fn nvim_fc_l_avars_ht_clear(fc: *mut c_void);
@@ -574,6 +595,88 @@ pub unsafe extern "C" fn rs_ex_delfunction(eap: *mut c_void) {
             unsafe { nvim_tv_dict_item_remove(fd_dict, di) };
         }
     }
+}
+
+// =============================================================================
+// get_func_line
+// =============================================================================
+//
+// Phase 33: inlined from C get_func_line.
+// PROF_YES = 1 (matches C's PROF_YES enum value).
+const PROF_YES: c_int = 1;
+// FC_ABORT flag value (matches C's FC_ABORT).
+const FC_ABORT: c_int = 0x01;
+
+#[unsafe(export_name = "get_func_line")]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_get_func_line(
+    _c: c_int,
+    cookie: *mut c_void,
+    _indent: c_int,
+    _do_concat: bool,
+) -> *mut c_char {
+    let fcp = cookie; // funccall_T *
+    let fp = unsafe { nvim_fc_get_func(fcp) };
+
+    // If breakpoints have been added/deleted, need to check for it.
+    let dbg_tick = unsafe { debug_tick };
+    let dbg_tick_ptr = unsafe { nvim_fc_get_dbg_tick_ptr(fcp) };
+    if unsafe { *dbg_tick_ptr } != dbg_tick {
+        let sourcing_lnum = unsafe { nvim_get_sourcing_lnum_direct() };
+        let fname = unsafe { nvim_ufunc_get_name(fp) };
+        let bp = unsafe { dbg_find_breakpoint(false, fname, sourcing_lnum) };
+        let bp_ptr = unsafe { nvim_fc_get_breakpoint_ptr(fcp) };
+        unsafe { *bp_ptr = bp };
+        unsafe { *dbg_tick_ptr = dbg_tick };
+    }
+    if unsafe { do_profiling } == PROF_YES {
+        unsafe { func_line_end(cookie) };
+    }
+
+    let lines_len = unsafe { nvim_ufunc_get_lines_len(fp) };
+    let flags = unsafe { nvim_ufunc_get_flags(fp) };
+    let fc_returned = unsafe { nvim_fc_get_returned(fcp) } != 0;
+    let aborted = (flags & FC_ABORT != 0) && unsafe { did_emsg } != 0 && !unsafe { aborting() };
+
+    let retval: *mut c_char;
+    if aborted || fc_returned {
+        retval = std::ptr::null_mut();
+    } else {
+        // Skip NULL lines (continuation lines).
+        while unsafe { nvim_fc_get_linenr(fcp) } < lines_len
+            && unsafe { nvim_ufunc_funcline_is_null(fp, nvim_fc_get_linenr(fcp)) } != 0
+        {
+            let linenr = unsafe { nvim_fc_get_linenr(fcp) };
+            unsafe { nvim_fc_set_linenr(fcp, linenr + 1) };
+        }
+        if unsafe { nvim_fc_get_linenr(fcp) } >= lines_len {
+            retval = std::ptr::null_mut();
+        } else {
+            let line_idx = unsafe { nvim_fc_postincrement_linenr(fcp) };
+            let line = unsafe { nvim_ufunc_get_funcline(fp, line_idx) };
+            retval = unsafe { xstrdup(line) };
+            // SOURCING_LNUM = fcp->fc_linenr (after increment)
+            unsafe { nvim_rt_set_sourcing_lnum(nvim_fc_get_linenr(fcp)) };
+            if unsafe { do_profiling } == PROF_YES {
+                unsafe { func_line_start(cookie) };
+            }
+        }
+    }
+
+    // Did we encounter a breakpoint?
+    let bp_ptr = unsafe { nvim_fc_get_breakpoint_ptr(fcp) };
+    let breakpoint = unsafe { *bp_ptr };
+    let sourcing_lnum = unsafe { nvim_get_sourcing_lnum_direct() };
+    if breakpoint != 0 && breakpoint <= sourcing_lnum {
+        let fname = unsafe { nvim_ufunc_get_name(fp) };
+        unsafe { dbg_breakpoint(fname, sourcing_lnum) };
+        // Find next breakpoint.
+        let bp = unsafe { dbg_find_breakpoint(false, fname, sourcing_lnum) };
+        unsafe { *bp_ptr = bp };
+        unsafe { *nvim_fc_get_dbg_tick_ptr(fcp) = debug_tick };
+    }
+
+    retval
 }
 
 // =============================================================================

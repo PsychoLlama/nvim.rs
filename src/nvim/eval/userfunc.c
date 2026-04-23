@@ -107,6 +107,7 @@ extern void rs_free_funccal_contents(funccall_T *fc);
 extern void rs_cleanup_function_call(funccall_T *fc);
 extern void rs_funccal_unref(funccall_T *fc, ufunc_T *fp, int force);
 extern void rs_user_func_error(int error, const char *name, int found_var);
+extern char *get_func_line(int c, void *cookie, int indent, bool do_concat);
 
 #include "eval/userfunc.c.generated.h"
 
@@ -2180,52 +2181,8 @@ char *nvim_get_return_cmd_impl(void *rettv)
 /// Called by do_cmdline() to get the next line.
 ///
 /// @return  allocated string, or NULL for end of function.
-char *get_func_line(int c, void *cookie, int indent, bool do_concat)
-{
-  funccall_T *fcp = (funccall_T *)cookie;
-  ufunc_T *fp = fcp->fc_func;
-  char *retval;
-
-  // If breakpoints have been added/deleted need to check for it.
-  if (fcp->fc_dbg_tick != debug_tick) {
-    fcp->fc_breakpoint = dbg_find_breakpoint(false, fp->uf_name, SOURCING_LNUM);
-    fcp->fc_dbg_tick = debug_tick;
-  }
-  if (do_profiling == PROF_YES) {
-    func_line_end(cookie);
-  }
-
-  garray_T *gap = &fp->uf_lines;  // growarray with function lines
-  if (((fp->uf_flags & FC_ABORT) && did_emsg && !aborted_in_try())
-      || fcp->fc_returned) {
-    retval = NULL;
-  } else {
-    // Skip NULL lines (continuation lines).
-    while (fcp->fc_linenr < gap->ga_len
-           && ((char **)(gap->ga_data))[fcp->fc_linenr] == NULL) {
-      fcp->fc_linenr++;
-    }
-    if (fcp->fc_linenr >= gap->ga_len) {
-      retval = NULL;
-    } else {
-      retval = xstrdup(((char **)(gap->ga_data))[fcp->fc_linenr++]);
-      SOURCING_LNUM = fcp->fc_linenr;
-      if (do_profiling == PROF_YES) {
-        func_line_start(cookie);
-      }
-    }
-  }
-
-  // Did we encounter a breakpoint?
-  if (fcp->fc_breakpoint != 0 && fcp->fc_breakpoint <= SOURCING_LNUM) {
-    dbg_breakpoint(fp->uf_name, SOURCING_LNUM);
-    // Find next breakpoint.
-    fcp->fc_breakpoint = dbg_find_breakpoint(false, fp->uf_name, SOURCING_LNUM);
-    fcp->fc_dbg_tick = debug_tick;
-  }
-
-  return retval;
-}
+// get_func_line migrated to Rust (funccal.rs Phase 33).
+// rs_get_func_line now implements the logic directly.
 
 // func_has_ended, func_has_abort migrated to Rust (lookup.rs Phase 6)
 
@@ -2929,3 +2886,9 @@ void nvim_semsg_cannot_delete_internal(const char *arg)
 {
   semsg(_("Cannot delete function %s: It is being used internally"), arg);
 }
+
+// Phase 33: accessors for get_func_line migration (funccal.rs)
+int nvim_fc_get_linenr(const funccall_T *fc) { return fc ? fc->fc_linenr : 0; }
+void nvim_fc_set_linenr(funccall_T *fc, int v) { if (fc) { fc->fc_linenr = v; } }
+// Increment fc_linenr and return the post-increment value.
+int nvim_fc_postincrement_linenr(funccall_T *fc) { return fc ? fc->fc_linenr++ : 0; }
