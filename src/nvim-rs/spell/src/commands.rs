@@ -1338,11 +1338,41 @@ extern "C" {
         over_write: bool,
         added_word: bool,
     );
-    // exarg_T field accessors still in spell_shim.c (Phase 4 migration)
-    fn nvim_spell_eap_get_add_type(eap: *const c_void) -> c_int;
-    fn nvim_spell_eap_is_undo(eap: *const c_void) -> bool;
+    // nvim_spell_eap_get_add_type removed: replaced by rs_spell_eap_get_add_type below
+    // nvim_spell_eap_is_undo removed: replaced by rs_spell_eap_is_undo below
     // spell_add_word is still in C (spellfile.c) at this point
     fn spell_add_word(word: *mut c_char, len: c_int, what: c_int, idx: c_int, undo: bool);
+}
+
+// CMD_ enum constants for spell commands (from ex_cmds_enum.generated.h)
+// Verified: CMD_spellgood = 420, CMD_spellrare = 424, CMD_spellundo = 425, CMD_spellwrong = 426
+// (see _Static_assert blocks in spell_shim.c)
+// CMD_SPELLGOOD = 420 is not used directly (it's the default case in rs_spell_eap_get_add_type).
+const CMD_SPELLRARE: c_int = 424;
+const CMD_SPELLUNDO: c_int = 425;
+const CMD_SPELLWRONG: c_int = 426;
+
+// SPELL_ADD_* constants from spell_defs.h
+const SPELL_ADD_GOOD: c_int = 0;
+const SPELL_ADD_BAD: c_int = 1;
+const SPELL_ADD_RARE: c_int = 2;
+
+/// Map eap.cmdidx to SpellAddType (SPELL_ADD_BAD, _RARE, or _GOOD).
+/// Replaces nvim_spell_eap_get_add_type in spell_shim.c.
+fn rs_spell_eap_get_add_type(cmdidx: c_int) -> c_int {
+    if cmdidx == CMD_SPELLWRONG {
+        SPELL_ADD_BAD
+    } else if cmdidx == CMD_SPELLRARE {
+        SPELL_ADD_RARE
+    } else {
+        SPELL_ADD_GOOD
+    }
+}
+
+/// Return true if cmdidx is CMD_spellundo.
+/// Replaces nvim_spell_eap_is_undo in spell_shim.c.
+fn rs_spell_eap_is_undo(cmdidx: c_int) -> bool {
+    cmdidx == CMD_SPELLUNDO
 }
 
 /// `:mkspell [-ascii] outfile infile ...` / `:mkspell [-ascii] addfile`
@@ -1386,8 +1416,8 @@ pub unsafe extern "C" fn rs_ex_spell(eap_ptr: *mut c_void) {
     let eap = &*(eap_ptr.cast::<nvim_ex_eval::ExargT>());
     let arg = eap.arg;
     let len = libc::strlen(arg.cast::<libc::c_char>()) as c_int;
-    let what = nvim_spell_eap_get_add_type(eap_ptr.cast_const());
-    let undo = nvim_spell_eap_is_undo(eap_ptr.cast_const());
+    let what = rs_spell_eap_get_add_type(eap.cmdidx);
+    let undo = rs_spell_eap_is_undo(eap.cmdidx);
     let forceit = eap.forceit != 0;
     let line2 = eap.line2;
     let idx = if forceit { 0 } else { line2 };

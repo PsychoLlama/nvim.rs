@@ -45,8 +45,10 @@ extern "C" {
     fn nvim_win_set_cursor_coladd(wp: *mut c_void, coladd: c_int);
 
     // Buffer / memline
-    fn nvim_spell_win_ml_line_count(wp: *mut c_void) -> c_int;
     fn nvim_win_get_w_buffer(wp: *mut c_void) -> *mut c_void;
+    // nvim_spell_win_ml_line_count removed: use rs_spell_win_ml_line_count() below
+    #[link_name = "nvim_buf_ml_line_count"]
+    fn nvim_spell_buf_ml_line_count(buf: *mut c_void) -> c_int;
     #[link_name = "ml_get_buf"]
     fn nvim_spell_ml_get_buf(buf: *mut c_void, lnum: c_int) -> *mut c_char;
     #[link_name = "ml_get_buf_len"]
@@ -70,7 +72,16 @@ extern "C" {
     // Syntax
     #[link_name = "syntax_present"]
     fn nvim_spell_syntax_present(wp: *mut c_void) -> bool;
-    fn nvim_spell_can_syn_spell(wp: *mut c_void, lnum: c_int, col: c_int) -> bool;
+    // nvim_spell_can_syn_spell removed: use rs_spell_can_syn_spell() below
+    #[link_name = "syn_get_id"]
+    fn nvim_spell_syn_get_id(
+        wp: *mut c_void,
+        lnum: c_int,
+        col: c_int,
+        trans: c_int,
+        spellp: *mut bool,
+        keep_state: c_int,
+    ) -> c_int;
 
     // Misc
     fn nvim_shortmess_search() -> c_int;
@@ -100,6 +111,26 @@ const BACKWARD: c_int = -1;
 
 // MAXWLEN from spell_defs.h
 const MAXWLEN: usize = 254;
+
+/// Get the ml_line_count of a window's buffer.
+/// Replaces nvim_spell_win_ml_line_count shim in spell_shim.c.
+///
+/// # Safety
+/// `wp` must be a valid win_T pointer.
+unsafe fn nvim_spell_win_ml_line_count(wp: *mut c_void) -> c_int {
+    nvim_spell_buf_ml_line_count(nvim_win_get_w_buffer(wp))
+}
+
+/// Check if syntax allows spell checking at a position.
+/// Replaces nvim_spell_can_syn_spell shim in spell_shim.c.
+///
+/// # Safety
+/// `wp` must be a valid win_T pointer.
+unsafe fn nvim_spell_can_syn_spell(wp: *mut c_void, lnum: c_int, col: c_int) -> bool {
+    let mut can_spell = false;
+    nvim_spell_syn_get_id(wp, lnum, col, 0, &raw mut can_spell, 0);
+    can_spell
+}
 
 /// Moves to the next spell error in the window.
 ///

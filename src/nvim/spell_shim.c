@@ -102,13 +102,7 @@ int nvim_spell_nav_decor_col(win_T *wp, int lnum, int *decor_lnum, int col)
 
 // Deleted: nvim_spell_syntax_present — Rust uses syntax_present directly via link_name.
 
-/// Check if syntax allows spell checking at a position.
-bool nvim_spell_can_syn_spell(win_T *wp, int lnum, int col)
-{
-  bool can_spell;
-  syn_get_id(wp, lnum, col, false, &can_spell, false);
-  return can_spell;
-}
+// Deleted: nvim_spell_can_syn_spell — Rust calls syn_get_id directly via #[link_name].
 
 // =============================================================================
 // Misc accessors for spell navigation
@@ -116,11 +110,7 @@ bool nvim_spell_can_syn_spell(win_T *wp, int lnum, int col)
 
 // Deleted: nvim_spell_getwhitecols — Rust uses getwhitecols directly via link_name.
 
-/// Get the line count of a window's buffer.
-int nvim_spell_win_ml_line_count(win_T *wp)
-{
-  return wp->w_buffer->b_ml.ml_line_count;
-}
+// Deleted: nvim_spell_win_ml_line_count — Rust uses nvim_win_get_w_buffer + nvim_buf_ml_line_count.
 
 // Deleted: nvim_spell_ml_get_buf_win — Rust uses nvim_win_get_w_buffer + ml_get_buf directly via link_name.
 // Deleted: nvim_spell_ml_get_buf_len_win — Rust uses nvim_win_get_w_buffer + ml_get_buf_len directly via link_name.
@@ -332,23 +322,17 @@ void nvim_spell_win_clear_ismw(win_T *wp)
 
 #include "nvim/spell_defs.h"
 
-/// Map eap->cmdidx to SpellAddType for ex_spell (SPELL_ADD_BAD, _RARE, or _GOOD).
-int nvim_spell_eap_get_add_type(const exarg_T *eap)
-{
-  if (eap->cmdidx == CMD_spellwrong) {
-    return SPELL_ADD_BAD;
-  }
-  if (eap->cmdidx == CMD_spellrare) {
-    return SPELL_ADD_RARE;
-  }
-  return SPELL_ADD_GOOD;
-}
+// Deleted: nvim_spell_eap_get_add_type — Rust uses rs_spell_eap_get_add_type with integer constants.
+// Deleted: nvim_spell_eap_is_undo — Rust uses rs_spell_eap_is_undo with integer constant.
 
-/// Return true if eap->cmdidx is CMD_spellundo.
-bool nvim_spell_eap_is_undo(const exarg_T *eap)
-{
-  return eap->cmdidx == CMD_spellundo;
-}
+// Verify CMD_ and SPELL_ADD_ constants used in Rust (update commands.rs if these fail).
+_Static_assert(CMD_spellgood == 420, "CMD_spellgood mismatch; update CMD_SPELLGOOD in spell/src/commands.rs");
+_Static_assert(CMD_spellrare == 424, "CMD_spellrare mismatch; update CMD_SPELLRARE in spell/src/commands.rs");
+_Static_assert(CMD_spellundo == 425, "CMD_spellundo mismatch; update CMD_SPELLUNDO in spell/src/commands.rs");
+_Static_assert(CMD_spellwrong == 426, "CMD_spellwrong mismatch; update CMD_SPELLWRONG in spell/src/commands.rs");
+_Static_assert(SPELL_ADD_GOOD == 0, "SPELL_ADD_GOOD mismatch; update SPELL_ADD_GOOD in spell/src/commands.rs");
+_Static_assert(SPELL_ADD_BAD == 1, "SPELL_ADD_BAD mismatch; update SPELL_ADD_BAD in spell/src/commands.rs");
+_Static_assert(SPELL_ADD_RARE == 2, "SPELL_ADD_RARE mismatch; update SPELL_ADD_RARE in spell/src/commands.rs");
 
 // =============================================================================
 // spell_add_word / init_spellfile accessors (Phase 3)
