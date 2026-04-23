@@ -126,8 +126,11 @@ extern void rs_get_var_from(const char *varname, typval_T *rettv, typval_T *deft
                              tabpage_T *tp, win_T *win, buf_T *buf);
 // (rs_f_* functions are declared below)
 
-// Phase 4: heredoc functions migrated to Rust
+// Phase 4: heredoc and unlet functions migrated to Rust
 extern list_T *rs_heredoc_get(exarg_T *eap, char *cmd, int script_get);
+extern void rs_ex_unlet(exarg_T *eap);
+extern void rs_ex_lockvar(exarg_T *eap);
+extern int rs_do_unlet(const char *name, size_t name_len, int forceit);
 
 // Phase 3: listing and redirection functions migrated to Rust
 extern char *rs_cat_prefix_varname(int prefix, const char *name);
@@ -1164,23 +1167,10 @@ static char *ex_let_one(char *arg, typval_T *const tv, const bool copy, const bo
 }
 
 /// ":unlet[!] var1 ... " command.
-void ex_unlet(exarg_T *eap) { ex_unletlock(eap, eap->arg, 0, eap->forceit ? GLV_QUIET : 0, do_unlet_var); }
+void ex_unlet(exarg_T *eap) { rs_ex_unlet(eap); }
 
 /// ":lockvar" and ":unlockvar" commands
-void ex_lockvar(exarg_T *eap)
-{
-  char *arg = eap->arg;
-  int deep = 2;
-
-  if (eap->forceit) {
-    deep = -1;
-  } else if (ascii_isdigit(*arg)) {
-    deep = getdigits_int(&arg, false, -1);
-    arg = skipwhite(arg);
-  }
-
-  ex_unletlock(eap, arg, deep, 0, do_lock_var);
-}
+void ex_lockvar(exarg_T *eap) { rs_ex_lockvar(eap); }
 
 /// Common parsing logic for :unlet, :lockvar and :unlockvar.
 ///
@@ -1343,67 +1333,7 @@ static void tv_list_unlet_range(list_T *const l, listitem_T *const li_first, con
 ///
 /// @return OK if it existed, FAIL otherwise.
 int do_unlet(const char *const name, const size_t name_len, const bool forceit)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *varname = NULL;  // init to shut up gcc
-  dict_T *dict;
-  hashtab_T *ht = find_var_ht_dict(name, name_len, &varname, &dict);
-
-  if (ht != NULL && *varname != NUL) {
-    dict_T *d = get_current_funccal_dict(ht);
-    if (d == NULL) {
-      if (ht == &globvarht) {
-        d = &globvardict;
-      } else if (ht == &compat_hashtab) {
-        d = &vimvardict;
-      } else {
-        dictitem_T *const di = find_var_in_ht(ht, *name, "", 0, false);
-        d = di->di_tv.vval.v_dict;
-      }
-      if (d == NULL) {
-        internal_error("do_unlet()");
-        return FAIL;
-      }
-    }
-
-    hashitem_T *hi = hash_find(ht, varname);
-    if (HASHITEM_EMPTY(hi)) {
-      hi = find_hi_in_scoped_ht(name, &ht);
-    }
-    if (hi != NULL && !HASHITEM_EMPTY(hi)) {
-      dictitem_T *const di = TV_DICT_HI2DI(hi);
-      if (var_check_fixed(di->di_flags, name, TV_CSTRING)
-          || var_check_ro(di->di_flags, name, TV_CSTRING)
-          || value_check_lock(d->dv_lock, name, TV_CSTRING)) {
-        return FAIL;
-      }
-
-      if (value_check_lock(d->dv_lock, name, TV_CSTRING)) {
-        return FAIL;
-      }
-
-      typval_T oldtv;
-      bool watched = tv_dict_is_watched(dict);
-
-      if (watched) {
-        tv_copy(&di->di_tv, &oldtv);
-      }
-
-      delete_var(ht, hi);
-
-      if (watched) {
-        tv_dict_watcher_notify(dict, varname, NULL, &oldtv);
-        tv_clear(&oldtv);
-      }
-      return OK;
-    }
-  }
-  if (forceit) {
-    return OK;
-  }
-  semsg(_("E108: No such variable: \"%s\""), name);
-  return FAIL;
-}
+{ return rs_do_unlet(name, name_len, forceit); }
 
 /// Lock or unlock variable indicated by `lp`.
 ///
@@ -2596,6 +2526,41 @@ char *nvim_eap_call_getline(void *eap_void, int c, int indent)
 
 /// Get *eap->cmdlinep (the command line string for trim indent detection).
 const char *nvim_eap_get_cmdlinep_str(const void *eap) { return *((const exarg_T *)eap)->cmdlinep; }
+
+// Phase 4b: do_unlet and ex_lockvar shims for Rust FFI
+
+/// Wrapper for ex_unletlock with do_unlet_var callback (for :unlet).
+void nvim_ex_unletlock_unlet(void *eap, char *arg, int deep, int glv_flags)
+{ ex_unletlock((exarg_T *)eap, arg, deep, glv_flags, do_unlet_var); }
+
+/// Wrapper for ex_unletlock with do_lock_var callback (for :lockvar/:unlockvar).
+void nvim_ex_unletlock_lock(void *eap, char *arg, int deep)
+{ ex_unletlock((exarg_T *)eap, arg, deep, 0, do_lock_var); }
+
+/// find_var_ht_dict wrapper for Rust FFI (static in C).
+/// Returns ht or NULL; sets *varname and *dict_out.
+void *nvim_vars_find_var_ht_dict(const char *name, size_t name_len, const char **varname, void **dict_out)
+{ return find_var_ht_dict(name, name_len, varname, (dict_T **)dict_out); }
+
+/// delete_var wrapper for Rust FFI (static in C).
+void nvim_vars_delete_var(void *ht, void *hi)
+{ delete_var((hashtab_T *)ht, (hashitem_T *)hi); }
+
+/// Get the dict from a dictitem's inner typval (di->di_tv.vval.v_dict).
+void *nvim_vars_dictitem_inner_dict(void *di)
+{ return ((dictitem_T *)di)->di_tv.vval.v_dict; }
+
+/// Get di->di_flags as int.
+int nvim_vars_dictitem_get_flags(void *di)
+{ return (int)((dictitem_T *)di)->di_flags; }
+
+/// Get the tv of a dictitem (di->di_tv pointer).
+void *nvim_vars_dictitem_get_tv_ptr(void *di)
+{ return &((dictitem_T *)di)->di_tv; }
+
+/// hash_find wrapper (for do_unlet in Rust).
+void *nvim_vars_hash_find(void *ht, const char *key)
+{ return hash_find((hashtab_T *)ht, key); }
 
 /// Get a script line to execute, from a heredoc (<<) or regular string.
 /// Used by python, tcl, etc. when the argument starts with "<<".

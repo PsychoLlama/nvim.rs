@@ -44,6 +44,7 @@ pub mod heredoc;
 pub mod listing;
 pub mod lookup;
 pub mod option_conv;
+pub mod unlet_lock;
 pub mod viml_funcs;
 pub mod vimvar_accessors;
 
