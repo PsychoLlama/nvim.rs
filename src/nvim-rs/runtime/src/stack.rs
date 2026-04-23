@@ -112,10 +112,12 @@ extern "C" {
     fn tv_list_alloc_c(count: isize) -> ListHandle;
     #[link_name = "tv_dict_add_func"]
     fn tv_dict_add_func_c(d: DictHandle, key: *const c_char, keylen: usize, fp: UfuncHandle);
-    fn nvim_rt_dict_add_event(d: DictHandle, event: *const c_char);
-    fn nvim_rt_dict_add_lnum(d: DictHandle, lnum: LinenrT);
-    fn nvim_rt_dict_add_filepath(d: DictHandle, filepath: *const c_char);
-    fn nvim_rt_list_append_dict(l: ListHandle, d: DictHandle);
+    #[link_name = "tv_dict_add_str"]
+    fn tv_dict_add_str_c(d: *mut c_void, key: *const c_char, keylen: usize, val: *const c_char);
+    #[link_name = "tv_dict_add_nr"]
+    fn tv_dict_add_nr_c(d: *mut c_void, key: *const c_char, keylen: usize, nr: i64);
+    #[link_name = "tv_list_append_dict"]
+    fn tv_list_append_dict_c(l: *mut c_void, d: *mut c_void);
     fn nvim_rt_list_set_ret(rettv: *mut c_void, l: ListHandle);
 
     // get_scriptname wrappers
@@ -395,12 +397,12 @@ unsafe fn stacktrace_push_item(
         tv_dict_add_func_c(d, b"funcref\0".as_ptr().cast(), 7, fp);
     }
     if !event.is_null() {
-        nvim_rt_dict_add_event(d, event);
+        tv_dict_add_str_c(d.0, b"event\0".as_ptr().cast(), 5, event);
     }
-    nvim_rt_dict_add_lnum(d, lnum);
-    nvim_rt_dict_add_filepath(d, filepath);
+    tv_dict_add_nr_c(d.0, b"lnum\0".as_ptr().cast(), 4, i64::from(lnum));
+    tv_dict_add_str_c(d.0, b"filepath\0".as_ptr().cast(), 8, filepath);
 
-    nvim_rt_list_append_dict(l, d);
+    tv_list_append_dict_c(l.0, d.0);
 }
 
 /// Create the stacktrace from the execution stack.

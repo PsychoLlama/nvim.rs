@@ -42,7 +42,8 @@ extern "C" {
         inclusive: c_int,
     ) -> c_int;
     fn nvim_rt_cstack_set_pending(cstack: *mut c_void, idx: c_int, val: c_int);
-    fn nvim_rt_report_make_pending_finish();
+    #[link_name = "report_make_pending"]
+    fn report_make_pending_c(pending: c_int, value: *mut c_void);
 
     // Error messages (called inline with emsg + gettext)
     fn emsg(s: *const c_char);
@@ -160,7 +161,7 @@ pub unsafe extern "C" fn rs_do_finish(eap: *mut c_void, reanimate: bool) {
     let idx = nvim_rt_cleanup_conditionals(cstack, 0, 1);
     if idx >= 0 {
         nvim_rt_cstack_set_pending(cstack, idx, CSTP_FINISH);
-        nvim_rt_report_make_pending_finish();
+        report_make_pending_c(CSTP_FINISH, std::ptr::null_mut());
     } else {
         let sp = nvim_rt_exarg_get_source_cookie(eap);
         nvim_rt_cookie_set_finished(sp, true);

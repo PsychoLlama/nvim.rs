@@ -222,25 +222,10 @@ char *nvim_estack_get_def_script_name(estack_T *entry)
 // Deleted: nvim_rt_list_alloc — Rust uses tv_list_alloc directly via link_name.
 // Deleted: nvim_rt_dict_add_func — Rust uses tv_dict_add_func with hardcoded "funcref" key via link_name.
 
-/// Add an "event" string to a dict.
-void nvim_rt_dict_add_event(dict_T *d, const char *event) { tv_dict_add_str(d, S_LEN("event"), event); }
-
-/// Add a "lnum" number to a dict.
-void nvim_rt_dict_add_lnum(dict_T *d, linenr_T lnum) { tv_dict_add_nr(d, S_LEN("lnum"), lnum); }
-
-/// Add a "filepath" string to a dict.
-void nvim_rt_dict_add_filepath(dict_T *d, const char *filepath) { tv_dict_add_str(d, S_LEN("filepath"), filepath); }
-
-/// Append a dict typval to a list.
-void nvim_rt_list_append_dict(list_T *l, dict_T *d)
-{
-  typval_T tv = {
-    .v_type = VAR_DICT,
-    .v_lock = VAR_LOCKED,
-    .vval.v_dict = d,
-  };
-  tv_list_append_tv(l, &tv);
-}
+// Deleted: nvim_rt_dict_add_event — Rust uses tv_dict_add_str directly via link_name.
+// Deleted: nvim_rt_dict_add_lnum — Rust uses tv_dict_add_nr directly via link_name.
+// Deleted: nvim_rt_dict_add_filepath — Rust uses tv_dict_add_str directly via link_name.
+// Deleted: nvim_rt_list_append_dict — Rust uses tv_list_append_dict directly via link_name.
 
 void nvim_rt_list_set_ret(void *rettv, list_T *l) { tv_list_set_ret((typval_T *)rettv, l); }
 
@@ -451,8 +436,7 @@ int64_t nvim_rt_pkg_eval_to_number(char *expr) { return (int64_t)eval_to_number(
 
 /// Call do_cmdline_cmd.
 
-/// Call TIME_MSG (time_msg if time_fd is set).
-void nvim_rt_pkg_time_msg(const char *msg) { TIME_MSG(msg); }
+// Deleted: nvim_rt_pkg_time_msg — Rust checks time_fd and calls time_msg directly.
 
 _Static_assert(EXPAND_RUNTIME == 51, "EXPAND_RUNTIME must be 51");
 
@@ -504,8 +488,7 @@ void nvim_rt_cstack_set_pending(void *cstack, int idx, int val)
   ((cstack_T *)cstack)->cs_pending[idx] = (char)val;
 }
 
-/// report_make_pending wrapper (for CSTP_FINISH).
-void nvim_rt_report_make_pending_finish(void) { report_make_pending(CSTP_FINISH, NULL); }
+// Deleted: nvim_rt_report_make_pending_finish — Rust calls report_make_pending with CSTP_FINISH constant directly.
 
 // Deleted: nvim_rt_emsg_scriptencoding_outside — Rust calls emsg(gettext(...)) directly.
 // Deleted: nvim_rt_emsg_finish_outside — Rust calls emsg(gettext(...)) directly.

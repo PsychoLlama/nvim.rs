@@ -89,10 +89,29 @@ extern "C" {
     fn nvim_rt_pkg_eval_to_number(expr: *mut c_char) -> i64;
     #[link_name = "do_cmdline_cmd"]
     fn nvim_rt_pkg_do_cmdline_cmd(cmd: *const c_char);
-    fn nvim_rt_pkg_time_msg(msg: *const c_char);
+    // nvim_rt_pkg_time_msg: implemented inline in Rust
+    #[link_name = "time_msg"]
+    fn nvim_rt_pkg_time_msg_inner(msg: *const c_char, start: *const c_void);
 
     // exarg_T field accessors (already in runtime_ffi.c)
     fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
+}
+
+extern "C" {
+    /// Timing log file pointer (FILE *time_fd). Non-null when timing is active.
+    #[link_name = "time_fd"]
+    static nvim_rt_pkg_time_fd: *mut c_void;
+}
+
+/// Call time_msg if time_fd is set (replaces the TIME_MSG macro / nvim_rt_pkg_time_msg).
+///
+/// # Safety
+/// `msg` must be a valid NUL-terminated C string.
+#[inline]
+unsafe fn pkg_time_msg(msg: *const c_char) {
+    if !nvim_rt_pkg_time_fd.is_null() {
+        nvim_rt_pkg_time_msg_inner(msg, std::ptr::null());
+    }
 }
 
 use crate::pathsearch::{
@@ -776,7 +795,7 @@ pub unsafe extern "C" fn rs_load_plugins() {
     // Don't use source_runtime_vim_lua() yet so we can check for :packloadall below.
     // NB: after calling this "rtp_copy" may have been freed if it wasn't copied.
     rs_source_in_path_vim_lua(rtp_copy, plugin_pattern, dip::ALL | dip::NOAFTER);
-    nvim_rt_pkg_time_msg(c"loading rtp plugins".as_ptr());
+    pkg_time_msg(c"loading rtp plugins".as_ptr());
 
     // Only source "start" packages if not done already with a :packloadall
     // command.
@@ -784,10 +803,10 @@ pub unsafe extern "C" fn rs_load_plugins() {
         xfree(rtp_copy.cast());
         rs_load_start_packages();
     }
-    nvim_rt_pkg_time_msg(c"loading packages".as_ptr());
+    pkg_time_msg(c"loading packages".as_ptr());
 
     rs_source_runtime_vim_lua(plugin_pattern, dip::ALL | dip::AFTER);
-    nvim_rt_pkg_time_msg(c"loading after plugins".as_ptr());
+    pkg_time_msg(c"loading after plugins".as_ptr());
 }
 
 /// ":packadd[!] {name}" - Add an optional package and load it.
