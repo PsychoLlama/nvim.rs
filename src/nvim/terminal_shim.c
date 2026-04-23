@@ -319,7 +319,6 @@ int nvim_name_to_color_int(const char *name) { int dummy; return (int)name_to_co
 void nvim_terminal_vterm_set_palette(void *state, int i, int r, int g, int b)
 { VTermColor color; vterm_color_rgb(&color, (uint8_t)r, (uint8_t)g, (uint8_t)b);
   vterm_state_set_palette_color((VTermState *)state, i, &color); }
-void nvim_vim_beep_term(void) { vim_beep(kOptBoFlagTerm); }
 void nvim_terminal_set_put(void *term) { set_put(ptr_t, &invalidated_terminals, (Terminal *)term); }
 
 int nvim_terminal_invalidated_check_del(void *term)
@@ -334,9 +333,6 @@ void nvim_terminal_buf_set_title(void *buf, const char *title, size_t len)
                false, false, NULL, &err);
   api_clear_error(&err); status_redraw_buf((buf_T *)buf); }
 void *nvim_terminal_get_buffer(int buf_handle) { return handle_get_buffer(buf_handle); }
-int nvim_ml_append_buf_term(void *buf, int lnum, char *line, bool newfile) { return ml_append_buf((buf_T *)buf, (linenr_T)lnum, line, 0, newfile); }
-int nvim_ml_replace_buf_term(void *buf, int lnum, char *line, bool copy) { return ml_replace_buf((buf_T *)buf, (linenr_T)lnum, line, copy, false); }
-int nvim_ml_delete_buf_term(void *buf, int lnum) { return ml_delete_buf((buf_T *)buf, (linenr_T)lnum, false); }
 void nvim_mark_adjust_buf_term(void *buf, int line1, int line2, int amount, int amount_after)
   { mark_adjust_buf((buf_T *)buf, (linenr_T)line1, (linenr_T)line2, (linenr_T)amount,
                     (linenr_T)amount_after, true, kMarkAdjustTerm, kExtmarkUndo); }
@@ -355,7 +351,6 @@ void nvim_terminal_foreach_invalidated(void (*fn)(void *term, void *ctx), void *
   set_clear(ptr_t, &invalidated_terminals);
   unblock_autocmds();
 }
-void nvim_terminal_refresh_blocking(void *term) { block_autocmds(); rs_refresh_terminal((Terminal *)term); unblock_autocmds(); }
 int nvim_terminal_opts_is_internal(void *term) { return ((Channel *)((Terminal *)term)->opts.data)->streamtype == kChannelStreamInternal; }
 void nvim_terminal_apply_termclose_event(void *buf, int status)
 {

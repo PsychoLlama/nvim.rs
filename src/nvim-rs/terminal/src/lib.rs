@@ -1229,16 +1229,18 @@ pub extern "C" fn rs_terminal_focus_lose(term: TerminalHandle) {
 // =============================================================================
 
 extern "C" {
-    /// Ring the terminal bell (wraps `vim_beep(kOptBoFlagTerm)`).
-    fn nvim_vim_beep_term();
+    /// `vim_beep` from `ui.h`.
+    fn vim_beep(flag: c_uint);
 }
+/// `kOptBoFlagTerm` from `option_vars.generated.h`.
+const OPT_BO_FLAG_TERM: c_uint = 0x40000;
 
 /// Terminal bell callback -- ring the system bell.
 ///
 /// Replaces the body of `term_bell` in `terminal_shim.c`.
 #[no_mangle]
 pub extern "C" fn rs_terminal_bell() -> c_int {
-    unsafe { nvim_vim_beep_term() };
+    unsafe { vim_beep(OPT_BO_FLAG_TERM) };
     1
 }
 
@@ -1521,7 +1523,10 @@ extern "C" {
     fn nvim_do_mousescroll_c(term: *mut c_void, mouse_win: *mut c_void, c: c_int) -> c_int;
     fn nvim_do_buffer_wipe(buf_handle: c_int);
     // Phase 13: terminal_close helpers
-    fn nvim_terminal_refresh_blocking(term: *mut c_void);
+    #[link_name = "block_autocmds"]
+    fn c_block_autocmds();
+    #[link_name = "unblock_autocmds"]
+    fn c_unblock_autocmds();
     fn nvim_terminal_opts_is_internal(term: *mut c_void) -> c_int;
     fn nvim_terminal_apply_termclose_event(buf: *mut c_void, status: c_int);
     static mut mod_mask: c_int;
@@ -2862,7 +2867,7 @@ pub unsafe extern "C" fn rs_term_movecursor(
 /// The `_user` parameter is ignored (bell doesn't need terminal context).
 #[no_mangle]
 pub extern "C" fn rs_term_bell_cb(_user: *mut c_void) -> c_int {
-    unsafe { nvim_vim_beep_term() };
+    unsafe { vim_beep(OPT_BO_FLAG_TERM) };
     1
 }
 
@@ -3226,14 +3231,27 @@ extern "C" {
     // Phase 7: refresh pipeline
     fn rs_buf_valid(buf: *mut c_void) -> c_int;
     fn nvim_terminal_get_buffer(buf_handle: c_int) -> *mut c_void;
+    // ml_append_buf(buf, lnum, line, len, newfile) -- len=0 means NUL-terminated
+    #[link_name = "ml_append_buf"]
     fn nvim_ml_append_buf_term(
         buf: *mut c_void,
         lnum: c_int,
         line: *mut i8,
+        len: c_int,
         newfile: bool,
     ) -> c_int;
-    fn nvim_ml_replace_buf_term(buf: *mut c_void, lnum: c_int, line: *mut i8, copy: bool) -> c_int;
-    fn nvim_ml_delete_buf_term(buf: *mut c_void, lnum: c_int) -> c_int;
+    // ml_replace_buf(buf, lnum, line, copy, noalloc)
+    #[link_name = "ml_replace_buf"]
+    fn nvim_ml_replace_buf_term(
+        buf: *mut c_void,
+        lnum: c_int,
+        line: *mut i8,
+        copy: bool,
+        noalloc: bool,
+    ) -> c_int;
+    // ml_delete_buf(buf, lnum, message)
+    #[link_name = "ml_delete_buf"]
+    fn nvim_ml_delete_buf_term(buf: *mut c_void, lnum: c_int, message: bool) -> c_int;
     fn nvim_mark_adjust_buf_term(
         buf: *mut c_void,
         line1: c_int,
@@ -4194,10 +4212,10 @@ unsafe fn rs_refresh_screen(term: TerminalHandle, buf: *mut c_void) {
         unsafe { rs_fetch_row(term, r, width) };
         let textbuf = t.textbuf.as_mut_ptr();
         if linenr <= ml_line_count {
-            unsafe { nvim_ml_replace_buf_term(buf, linenr, textbuf, true) };
+            unsafe { nvim_ml_replace_buf_term(buf, linenr, textbuf, true, false) };
             changed += 1;
         } else {
-            unsafe { nvim_ml_append_buf_term(buf, linenr - 1, textbuf, false) };
+            unsafe { nvim_ml_append_buf_term(buf, linenr - 1, textbuf, 0, false) };
             added += 1;
         }
     }
@@ -4236,7 +4254,7 @@ unsafe fn rs_adjust_scrollback(term: TerminalHandle, buf: *mut c_void) {
     if scbk < t.sb_current {
         let diff = t.sb_current - scbk;
         for _ in 0..diff {
-            unsafe { nvim_ml_delete_buf_term(buf, 1) };
+            unsafe { nvim_ml_delete_buf_term(buf, 1, false) };
             t.sb_current -= 1;
             let sbrow = unsafe { *t.sb_buffer.add(t.sb_current) };
             unsafe { xfree(sbrow) };
@@ -4286,7 +4304,7 @@ unsafe fn rs_refresh_scrollback(term: TerminalHandle, buf: *mut c_void) {
     let row_offset = t.sb_pending;
     while t.sb_pending > 0 && unsafe { bref_raw(buf).ml_line_count } < height {
         unsafe { rs_fetch_row(term, t.sb_pending - row_offset - 1, width) };
-        unsafe { nvim_ml_append_buf_term(buf, 0, t.textbuf.as_mut_ptr(), false) };
+        unsafe { nvim_ml_append_buf_term(buf, 0, t.textbuf.as_mut_ptr(), 0, false) };
         unsafe { nvim_appended_lines_buf_term(buf, 0, 1) };
         t.sb_pending -= 1;
     }
@@ -4297,12 +4315,12 @@ unsafe fn rs_refresh_scrollback(term: TerminalHandle, buf: *mut c_void) {
         #[allow(clippy::cast_sign_loss)]
         if (ml_line_count - height) as usize >= t.sb_size {
             // scrollback full, delete lines at the top
-            unsafe { nvim_ml_delete_buf_term(buf, 1) };
+            unsafe { nvim_ml_delete_buf_term(buf, 1, false) };
             unsafe { nvim_deleted_lines_buf_term(buf, 1, 1) };
         }
         unsafe { rs_fetch_row(term, -t.sb_pending - row_offset, width) };
         let buf_index = unsafe { bref_raw(buf).ml_line_count } - height;
-        unsafe { nvim_ml_append_buf_term(buf, buf_index, t.textbuf.as_mut_ptr(), false) };
+        unsafe { nvim_ml_append_buf_term(buf, buf_index, t.textbuf.as_mut_ptr(), 0, false) };
         unsafe { nvim_appended_lines_buf_term(buf, buf_index, 1) };
         t.sb_pending -= 1;
     }
@@ -4312,7 +4330,7 @@ unsafe fn rs_refresh_scrollback(term: TerminalHandle, buf: *mut c_void) {
     let max_line_count = t.sb_current as c_int + height;
     while unsafe { bref_raw(buf).ml_line_count } > max_line_count {
         let last = unsafe { bref_raw(buf).ml_line_count };
-        unsafe { nvim_ml_delete_buf_term(buf, last) };
+        unsafe { nvim_ml_delete_buf_term(buf, last, false) };
         unsafe { nvim_deleted_lines_buf_term(buf, last, 1) };
     }
 
@@ -4486,7 +4504,10 @@ pub unsafe extern "C" fn rs_terminal_close(termpp: *mut *mut c_void, status: c_i
         let t = unsafe { term.as_mut() };
         t.forward_mouse = false;
         if !unsafe { c_exiting } {
-            unsafe { nvim_terminal_refresh_blocking(term.as_ptr()) };
+            // Equivalent to nvim_terminal_refresh_blocking: block_autocmds, refresh, unblock
+            unsafe { c_block_autocmds() };
+            unsafe { rs_refresh_terminal(term) };
+            unsafe { c_unblock_autocmds() };
         }
         t.closed = true;
         false
