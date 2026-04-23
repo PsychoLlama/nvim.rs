@@ -54,8 +54,6 @@ _Static_assert(VV_WARNINGMSG == 4, "VV_WARNINGMSG changed - update Rust constant
 _Static_assert(VV_EXCEPTION == 30, "VV_EXCEPTION changed - update Rust constants");
 _Static_assert(VV_TESTING == 76, "VV_TESTING changed - update Rust constants");
 
-typedef int (*ex_unletlock_callback)(lval_T *, char *, exarg_T *, int);
-
 #include "eval/vars.c.generated.h"
 extern int rs_valid_tabpage(tabpage_T *tpc);
 
@@ -1088,159 +1086,6 @@ void ex_unlet(exarg_T *eap) { rs_ex_unlet(eap); }
 /// ":lockvar" and ":unlockvar" commands
 void ex_lockvar(exarg_T *eap) { rs_ex_lockvar(eap); }
 
-/// Common parsing logic for :unlet, :lockvar and :unlockvar.
-///
-/// Invokes `callback` afterwards if successful and `eap->skip == false`.
-///
-/// @param[in]  eap  Ex command arguments for the command.
-/// @param[in]  argstart  Start of the string argument for the command.
-/// @param[in]  deep  Levels to (un)lock for :(un)lockvar, -1 to (un)lock
-///                   everything.
-/// @param[in]  callback  Appropriate handler for the command.
-static void ex_unletlock(exarg_T *eap, char *argstart, int deep, int glv_flags,
-                         ex_unletlock_callback callback)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char *arg = argstart;
-  char *name_end;
-  bool error = false;
-  lval_T lv;
-
-  do {
-    if (*arg == '$') {
-      lv.ll_name = arg;
-      lv.ll_tv = NULL;
-      arg++;
-      if (rs_get_env_len((const char **)&arg) == 0) {
-        semsg(_(e_invarg2), arg - 1);
-        return;
-      }
-      assert(*lv.ll_name == '$');  // suppress clang "Uninitialized argument value"
-      if (!error && !eap->skip && callback(&lv, arg, eap, deep) == FAIL) {
-        error = true;
-      }
-      name_end = arg;
-    } else {
-      // Parse the name and find the end.
-      name_end = get_lval(arg, NULL, &lv, true, eap->skip || error,
-                          glv_flags, FNE_CHECK_START);
-      if (lv.ll_name == NULL) {
-        error = true;  // error, but continue parsing.
-      }
-      if (name_end == NULL
-          || (!ascii_iswhite(*name_end) && !ends_excmd(*name_end))) {
-        if (name_end != NULL) {
-          emsg_severe = true;
-          semsg(_(e_trailing_arg), name_end);
-        }
-        if (!(eap->skip || error)) {
-          clear_lval(&lv);
-        }
-        break;
-      }
-
-      if (!error && !eap->skip && callback(&lv, name_end, eap, deep) == FAIL) {
-        error = true;
-      }
-
-      if (!eap->skip) {
-        clear_lval(&lv);
-      }
-    }
-    arg = skipwhite(name_end);
-  } while (!ends_excmd(*arg));
-
-  eap->nextcmd = check_nextcmd(arg);
-}
-
-/// Unlet a variable indicated by `lp`.
-///
-/// @param[in]  lp  The lvalue.
-/// @param[in]  name_end  End of the string argument for the command.
-/// @param[in]  eap  Ex command arguments for :unlet.
-/// @param[in]  deep  Unused.
-///
-/// @return OK on success, or FAIL on failure.
-static int do_unlet_var(lval_T *lp, char *name_end, exarg_T *eap, int deep FUNC_ATTR_UNUSED)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int forceit = eap->forceit;
-  int ret = OK;
-
-  if (lp->ll_tv == NULL) {
-    int cc = (uint8_t)(*name_end);
-    *name_end = NUL;
-
-    // Environment variable, normal name or expanded name.
-    if (*lp->ll_name == '$') {
-      vim_unsetenv_ext(lp->ll_name + 1);
-    } else if (do_unlet(lp->ll_name, lp->ll_name_len, forceit) == FAIL) {
-      ret = FAIL;
-    }
-    *name_end = (char)cc;
-  } else if ((lp->ll_list != NULL
-              // ll_list is not NULL when lvalue is not in a list, NULL lists
-              // yield E689.
-              && value_check_lock(tv_list_locked(lp->ll_list),
-                                  lp->ll_name,
-                                  lp->ll_name_len))
-             || (lp->ll_dict != NULL
-                 && value_check_lock(lp->ll_dict->dv_lock,
-                                     lp->ll_name,
-                                     lp->ll_name_len))) {
-    return FAIL;
-  } else if (lp->ll_range) {
-    tv_list_unlet_range(lp->ll_list, lp->ll_li, lp->ll_n1, !lp->ll_empty2, lp->ll_n2);
-  } else if (lp->ll_list != NULL) {
-    // unlet a List item.
-    tv_list_item_remove(lp->ll_list, lp->ll_li);
-  } else {
-    // unlet a Dict item.
-    dict_T *d = lp->ll_dict;
-    assert(d != NULL);
-    dictitem_T *di = lp->ll_di;
-    bool watched = tv_dict_is_watched(d);
-    char *key = NULL;
-    typval_T oldtv;
-
-    if (watched) {
-      tv_copy(&di->di_tv, &oldtv);
-      // need to save key because dictitem_remove will free it
-      key = xstrdup(di->di_key);
-    }
-
-    tv_dict_item_remove(d, di);
-
-    if (watched) {
-      tv_dict_watcher_notify(d, key, NULL, &oldtv);
-      tv_clear(&oldtv);
-      xfree(key);
-    }
-  }
-
-  return ret;
-}
-
-/// Unlet one item or a range of items from a list.
-/// Return OK or FAIL.
-static void tv_list_unlet_range(list_T *const l, listitem_T *const li_first, const int n1_arg,
-                                const bool has_n2, const int n2)
-{
-  assert(l != NULL);
-  // Delete a range of List items.
-  listitem_T *li_last = li_first;
-  int n1 = n1_arg;
-  while (true) {
-    listitem_T *const li = TV_LIST_ITEM_NEXT(l, li_last);
-    n1++;
-    if (li == NULL || (has_n2 && n2 < n1)) {
-      break;
-    }
-    li_last = li;
-  }
-  tv_list_remove_items(l, li_first, li_last);
-}
-
 /// unlet a variable
 ///
 /// @param[in]  name  Variable name to unlet.
@@ -1250,72 +1095,6 @@ static void tv_list_unlet_range(list_T *const l, listitem_T *const li_first, con
 /// @return OK if it existed, FAIL otherwise.
 int do_unlet(const char *const name, const size_t name_len, const bool forceit)
 { return rs_do_unlet(name, name_len, forceit); }
-
-/// Lock or unlock variable indicated by `lp`.
-///
-/// Locks if `eap->cmdidx == CMD_lockvar`, unlocks otherwise.
-///
-/// @param[in]  lp  The lvalue.
-/// @param[in]  name_end  Unused.
-/// @param[in]  eap  Ex command arguments for :(un)lockvar.
-/// @param[in]  deep  Levels to (un)lock, -1 to (un)lock everything.
-///
-/// @return OK on success, or FAIL on failure.
-static int do_lock_var(lval_T *lp, char *name_end FUNC_ATTR_UNUSED, exarg_T *eap, int deep)
-  FUNC_ATTR_NONNULL_ARG(1, 3)
-{
-  bool lock = eap->cmdidx == CMD_lockvar;
-  int ret = OK;
-
-  if (lp->ll_tv == NULL) {
-    if (*lp->ll_name == '$') {
-      semsg(_(e_lock_unlock), lp->ll_name);
-      ret = FAIL;
-    } else {
-      // Normal name or expanded name.
-      dictitem_T *const di = find_var(lp->ll_name, lp->ll_name_len, NULL,
-                                      true);
-      if (di == NULL) {
-        ret = FAIL;
-      } else if ((di->di_flags & DI_FLAGS_FIX)
-                 && di->di_tv.v_type != VAR_DICT
-                 && di->di_tv.v_type != VAR_LIST) {
-        // For historical reasons this error is not given for Lists and
-        // Dictionaries. E.g. b: dictionary may be locked/unlocked.
-        semsg(_(e_lock_unlock), lp->ll_name);
-        ret = FAIL;
-      } else {
-        if (lock) {
-          di->di_flags |= DI_FLAGS_LOCK;
-        } else {
-          di->di_flags &= (uint8_t)(~DI_FLAGS_LOCK);
-        }
-        if (deep != 0) {
-          tv_item_lock(&di->di_tv, deep, lock, false);
-        }
-      }
-    }
-  } else if (deep == 0) {
-    // nothing to do
-  } else if (lp->ll_range) {
-    listitem_T *li = lp->ll_li;
-
-    // (un)lock a range of List items.
-    while (li != NULL && (lp->ll_empty2 || lp->ll_n2 >= lp->ll_n1)) {
-      tv_item_lock(TV_LIST_ITEM_TV(li), deep, lock, false);
-      li = TV_LIST_ITEM_NEXT(lp->ll_list, li);
-      lp->ll_n1++;
-    }
-  } else if (lp->ll_list != NULL) {
-    // (un)lock a List item.
-    tv_item_lock(TV_LIST_ITEM_TV(lp->ll_li), deep, lock, false);
-  } else {
-    // (un)lock a Dict item.
-    tv_item_lock(&lp->ll_di->di_tv, deep, lock, false);
-  }
-
-  return ret;
-}
 
 /// Delete all "menutrans_" variables.
 void del_menutrans_vars(void)
@@ -2290,16 +2069,6 @@ char *nvim_eap_call_getline(void *eap_void, int c, int indent)
 /// Get *eap->cmdlinep (the command line string for trim indent detection).
 const char *nvim_eap_get_cmdlinep_str(const void *eap) { return *((const exarg_T *)eap)->cmdlinep; }
 
-// Phase 4b: do_unlet and ex_lockvar shims for Rust FFI
-
-/// Wrapper for ex_unletlock with do_unlet_var callback (for :unlet).
-void nvim_ex_unletlock_unlet(void *eap, char *arg, int deep, int glv_flags)
-{ ex_unletlock((exarg_T *)eap, arg, deep, glv_flags, do_unlet_var); }
-
-/// Wrapper for ex_unletlock with do_lock_var callback (for :lockvar/:unlockvar).
-void nvim_ex_unletlock_lock(void *eap, char *arg, int deep)
-{ ex_unletlock((exarg_T *)eap, arg, deep, 0, do_lock_var); }
-
 /// find_var_ht_dict wrapper for Rust FFI (static in C).
 /// Returns ht or NULL; sets *varname and *dict_out.
 void *nvim_vars_find_var_ht_dict(const char *name, size_t name_len, const char **varname, void **dict_out)
@@ -2402,3 +2171,108 @@ int nvim_vars_eval_variable(const char *name, int len, void *tv)
 /// handle_subscript wrapper for Rust (EVALARG_EVALUATE, verbose=false).
 int nvim_vars_handle_subscript_check(const char **arg, void *tv)
 { return handle_subscript(arg, (typval_T *)tv, &EVALARG_EVALUATE, false); }
+
+// Phase 8b: lval_T and misc accessors for ex_unletlock/do_unlet_var/do_lock_var migration.
+
+/// get_lval() with unlet=true for use in :unlet/:lockvar parsing.
+char *nvim_vars_get_lval_unlet(char *name, void *lv, bool skip, int glv_flags)
+{ return get_lval(name, NULL, (lval_T *)lv, true, skip, glv_flags, FNE_CHECK_START); }
+
+/// Return true if ll_tv is NULL (lvalue is a simple variable name).
+bool nvim_lval_is_tv_null(const void *lv) { return ((const lval_T *)lv)->ll_tv == NULL; }
+
+/// Set ll_name and ll_tv=NULL on lval_T (for $ENV var case in ex_unletlock).
+void nvim_lval_set_name_and_clear_tv(void *lv, char *name)
+{ lval_T *p = (lval_T *)lv; p->ll_name = name; p->ll_tv = NULL; }
+
+/// ends_excmd() check for a char value.
+bool nvim_ends_excmd_char(int c) { return ends_excmd(c); }
+
+/// check_nextcmd() wrapper.
+char *nvim_check_nextcmd(char *arg) { return check_nextcmd(arg); }
+
+/// Set emsg_severe to true (used for trailing chars error in ex_unletlock).
+void nvim_emsg_severe_set(void) { emsg_severe = true; }
+
+/// Get eap->cmdidx as int.
+int nvim_eap_get_cmdidx(const void *eap) { return (int)((const exarg_T *)eap)->cmdidx; }
+
+/// CMD_lockvar constant.
+int nvim_cmd_lockvar(void) { return CMD_lockvar; }
+
+/// Get ll_name_len from lval_T.
+size_t nvim_lval_get_name_len(const void *lv) { return ((const lval_T *)lv)->ll_name_len; }
+
+/// Get ll_list from lval_T (as void*).
+void *nvim_lval_get_list(const void *lv) { return ((const lval_T *)lv)->ll_list; }
+
+/// Get ll_dict from lval_T (as void*).
+void *nvim_lval_get_dict(const void *lv) { return ((const lval_T *)lv)->ll_dict; }
+
+/// Get ll_di from lval_T (as void*).
+void *nvim_lval_get_di(const void *lv) { return ((const lval_T *)lv)->ll_di; }
+
+/// Get ll_li from lval_T (as void*).
+void *nvim_lval_get_li(const void *lv) { return ((const lval_T *)lv)->ll_li; }
+
+/// Get ll_range from lval_T.
+bool nvim_lval_get_range(const void *lv) { return ((const lval_T *)lv)->ll_range; }
+
+/// Get ll_empty2 from lval_T.
+bool nvim_lval_get_empty2(const void *lv) { return ((const lval_T *)lv)->ll_empty2; }
+
+/// Get ll_n1 from lval_T.
+int nvim_lval_get_n1(const void *lv) { return ((const lval_T *)lv)->ll_n1; }
+
+/// Get ll_n2 from lval_T.
+int nvim_lval_get_n2(const void *lv) { return ((const lval_T *)lv)->ll_n2; }
+
+/// Increment ll_n1 in lval_T.
+void nvim_lval_inc_n1(void *lv) { ((lval_T *)lv)->ll_n1++; }
+
+/// tv_list_locked() wrapper.
+int nvim_tv_list_locked(const void *l) { return (int)tv_list_locked((const list_T *)l); }
+
+/// tv_list_item_remove() wrapper.
+void nvim_tv_list_item_remove(void *l, void *li)
+{ tv_list_item_remove((list_T *)l, (listitem_T *)li); }
+
+/// tv_list_remove_items() wrapper.
+void nvim_tv_list_remove_items(void *l, void *li_first, void *li_last)
+{ tv_list_remove_items((list_T *)l, (listitem_T *)li_first, (listitem_T *)li_last); }
+
+/// vim_unsetenv_ext() wrapper (strips leading '$' from name).
+void nvim_vim_unsetenv_ext(const char *name_with_dollar)
+{ vim_unsetenv_ext(name_with_dollar + 1); }
+
+/// find_var() wrapper returning void* (NULL for not found).
+void *nvim_find_var(const char *name, size_t name_len, bool no_autoload)
+{ return find_var(name, name_len, NULL, no_autoload); }
+
+/// tv_item_lock() wrapper.
+void nvim_tv_item_lock(void *tv, int deep, bool lock, bool check_refcount)
+{ tv_item_lock((typval_T *)tv, deep, lock, check_refcount); }
+
+/// Get di->di_tv.v_type as int.
+int nvim_dictitem_get_tv_type(const void *di)
+{ return (int)((const dictitem_T *)di)->di_tv.v_type; }
+
+/// Set or clear DI_FLAGS_LOCK on di->di_flags.
+void nvim_dictitem_set_lock_bit(void *di, bool lock)
+{
+  dictitem_T *d = (dictitem_T *)di;
+  if (lock) {
+    d->di_flags |= DI_FLAGS_LOCK;
+  } else {
+    d->di_flags &= (uint8_t)(~DI_FLAGS_LOCK);
+  }
+}
+
+/// DI_FLAGS_FIX constant.
+int nvim_di_flags_fix(void) { return DI_FLAGS_FIX; }
+
+/// VAR_DICT constant.
+int nvim_var_dict(void) { return VAR_DICT; }
+
+/// VAR_LIST constant.
+int nvim_var_list(void) { return VAR_LIST; }
