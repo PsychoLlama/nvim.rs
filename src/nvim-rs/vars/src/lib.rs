@@ -43,6 +43,7 @@ pub mod eval_helpers;
 pub mod heredoc;
 pub mod listing;
 pub mod lookup;
+pub mod misc;
 pub mod option_conv;
 pub mod redirect;
 pub mod unlet_lock;

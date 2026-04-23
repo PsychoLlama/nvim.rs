@@ -78,8 +78,11 @@ extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stac
 extern const char *rs_skip_var_list(const char *arg, int *var_count, int *semicolon,
                                     bool silent);
 extern char *rs_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate);
-extern char *rs_eval_all_expr_in_str(char *str);
 extern int rs_get_spellword(list_T *list, const char **ret_word);
+
+// Phase 9: misc utility functions migrated to Rust
+extern bool rs_garbage_collect_scriptvars(int copy_id);
+extern void rs_set_internal_string_var(const char *name, char *value);
 
 // Phase 3 partial: ex_let_env, ex_let_register migrated to Rust
 extern char *rs_ex_let_env(char *arg, typval_T *tv, bool is_const,
@@ -489,29 +492,13 @@ int garbage_collect_globvars(int copyID) { return rs_set_ref_in_ht(&globvarht, c
 
 bool garbage_collect_vimvars(int copyID) { return rs_set_ref_in_ht(&vimvarht, copyID, NULL); }
 
-bool garbage_collect_scriptvars(int copyID)
-{
-  bool abort = false;
-
-  for (int i = 1; i <= script_items.ga_len; i++) {
-    abort = abort || rs_set_ref_in_ht(&SCRIPT_VARS(i), copyID, NULL);
-  }
-
-  return abort;
-}
+bool garbage_collect_scriptvars(int copyID) { return rs_garbage_collect_scriptvars(copyID); }
 
 /// Set an internal variable to a string value. Creates the variable if it does
 /// not already exist.
 void set_internal_string_var(const char *name, char *value)  // NOLINT(readability-non-const-parameter)
   FUNC_ATTR_NONNULL_ARG(1)
-{
-  typval_T tv = {
-    .v_type = VAR_STRING,
-    .vval.v_string = value,
-  };
-
-  set_var(name, strlen(name), &tv, true);
-}
+{ rs_set_internal_string_var(name, value); }
 
 int eval_charconvert(const char *const enc_from, const char *const enc_to,
                      const char *const fname_from, const char *const fname_to)
@@ -668,7 +655,6 @@ static void list_script_vars(int *first)
 }
 
 char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return rs_eval_one_expr_in_str(p, gap, evaluate); }
-static char *eval_all_expr_in_str(char *str) { return rs_eval_all_expr_in_str(str); }
 
 /// Get a list of lines from a HERE document. The here document is a list of
 /// lines surrounded by a marker.
@@ -1843,6 +1829,9 @@ dict_T *nvim_get_script_vars_dict(int sid)
   scriptvar_T *sv = SCRIPT_SV(sid);
   return sv ? &sv->sv_dict : NULL;
 }
+
+/// Get script_items.ga_len (total number of script items allocated).
+int nvim_script_items_len(void) { return script_items.ga_len; }
 
 /// Get current script context SID.
 int nvim_get_current_sctx_sid(void) { return current_sctx.sc_sid; }
