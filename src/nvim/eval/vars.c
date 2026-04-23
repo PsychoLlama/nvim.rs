@@ -96,6 +96,15 @@ extern char *rs_ex_let_one(char *arg, typval_T *tv, bool copy, bool is_const,
 extern int rs_ex_let_vars(char *arg_start, typval_T *tv, int copy, int semicolon,
                            int var_count, int is_const, char *op);
 
+// Phase 12: eval_variable, check_vars, list_arg_vars, del_menutrans_vars, eval_spell_expr migrated
+extern const char *rs_get_var_value(const char *name);
+extern int rs_eval_variable(const char *name, int len, void *rettv, void **dip, bool verbose,
+                             bool no_autoload);
+extern void rs_check_vars(const char *name, size_t len);
+extern const char *rs_list_arg_vars(exarg_T *eap, const char *arg, int *first);
+extern void rs_del_menutrans_vars(void);
+extern list_T *rs_eval_spell_expr(const char *badword, char *expr);
+
 // Phase 11: eval_charconvert, eval_diff, eval_patch migrated to Rust
 extern int rs_eval_charconvert(const char *enc_from, const char *enc_to,
                                 const char *fname_from, const char *fname_to);
@@ -527,45 +536,7 @@ void eval_patch(const char *const origfile, const char *const difffile, const ch
 ///
 /// @return  NULL when there is an error.
 list_T *eval_spell_expr(char *badword, char *expr)
-{
-  typval_T save_val;
-  typval_T rettv;
-  list_T *list = NULL;
-  char *p = skipwhite(expr);
-  const sctx_T saved_sctx = current_sctx;
-
-  // Set "v:val" to the bad word.
-  prepare_vimvar(VV_VAL, &save_val);
-  set_vim_var_string(VV_VAL, badword, -1);
-  if (p_verbose == 0) {
-    emsg_off++;
-  }
-  sctx_T *ctx = get_option_sctx(kOptSpellsuggest);
-  if (ctx != NULL) {
-    current_sctx = *ctx;
-  }
-
-  int r = may_call_simple_func(p, &rettv);
-  if (r == NOTDONE) {
-    r = eval1(&p, &rettv, &EVALARG_EVALUATE);
-  }
-  if (r == OK) {
-    if (rettv.v_type != VAR_LIST) {
-      tv_clear(&rettv);
-    } else {
-      list = rettv.vval.v_list;
-    }
-  }
-
-  if (p_verbose == 0) {
-    emsg_off--;
-  }
-  tv_clear(get_vim_var_tv(VV_VAL));
-  restore_vimvar(VV_VAL, &save_val);
-  current_sctx = saved_sctx;
-
-  return list;
-}
+{ return (list_T *)rs_eval_spell_expr(badword, expr); }
 
 int get_spellword(list_T *const list, const char **ret_word) { return rs_get_spellword(list, ret_word); }
 
@@ -590,14 +561,6 @@ void restore_vimvar(int idx, typval_T *save_tv)
     internal_error("restore_vimvar()");
   } else {
     hash_remove(&vimvarht, hi);
-  }
-}
-
-static void list_vim_vars(int *first) { list_hashtable_vars(&vimvarht, "v:", false, first); }
-static void list_script_vars(int *first)
-{
-  if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len) {
-    list_hashtable_vars(&SCRIPT_VARS(current_sctx.sc_sid), "s:", false, first);
   }
 }
 
@@ -665,16 +628,16 @@ void ex_let(exarg_T *eap)
       emsg(_(e_invarg));
     } else if (!ends_excmd(*arg)) {
       // ":let var1 var2"
-      arg = (char *)list_arg_vars(eap, arg, &first);
+      arg = (char *)rs_list_arg_vars(eap, arg, &first);
     } else if (!eap->skip) {
       // ":let"
       list_glob_vars(&first);
       list_buf_vars(&first);
       list_win_vars(&first);
       list_tab_vars(&first);
-      list_script_vars(&first);
+      nvim_list_script_vars(&first);
       list_func_vars(&first);
-      list_vim_vars(&first);
+      nvim_list_vim_vars(&first);
     }
     eap->nextcmd = check_nextcmd(arg);
     return;
@@ -780,96 +743,6 @@ static void list_win_vars(int *first) { list_hashtable_vars(&curwin->w_vars->dv_
 /// List tab page variables.
 static void list_tab_vars(int *first) { list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, first); }
 
-/// List variables in "arg".
-static const char *list_arg_vars(exarg_T *eap, const char *arg, int *first)
-{
-  bool error = false;
-  int len;
-  const char *name;
-  const char *name_start;
-  typval_T tv;
-
-  while (!ends_excmd(*arg) && !got_int) {
-    if (error || eap->skip) {
-      arg = rs_find_name_end(arg, NULL, NULL, FNE_INCL_BR | FNE_CHECK_START);
-      if (!ascii_iswhite(*arg) && !ends_excmd(*arg)) {
-        emsg_severe = true;
-        semsg(_(e_trailing_arg), arg);
-        break;
-      }
-    } else {
-      // get_name_len() takes care of expanding curly braces
-      name_start = name = arg;
-      char *tofree;
-      len = get_name_len(&arg, &tofree, true, true);
-      if (len <= 0) {
-        // This is mainly to keep test 49 working: when expanding
-        // curly braces fails overrule the exception error message.
-        if (len < 0 && !aborting()) {
-          emsg_severe = true;
-          semsg(_(e_invarg2), arg);
-          break;
-        }
-        error = true;
-      } else {
-        if (tofree != NULL) {
-          name = tofree;
-        }
-        if (eval_variable(name, len, &tv, NULL, true, false) == FAIL) {
-          error = true;
-        } else {
-          // handle d.key, l[idx], f(expr)
-          const char *const arg_subsc = arg;
-          if (handle_subscript(&arg, &tv, &EVALARG_EVALUATE, true) == FAIL) {
-            error = true;
-          } else {
-            if (arg == arg_subsc && len == 2 && name[1] == ':') {
-              switch (*name) {
-              case 'g':
-                list_glob_vars(first); break;
-              case 'b':
-                list_buf_vars(first); break;
-              case 'w':
-                list_win_vars(first); break;
-              case 't':
-                list_tab_vars(first); break;
-              case 'v':
-                list_vim_vars(first); break;
-              case 's':
-                list_script_vars(first); break;
-              case 'l':
-                list_func_vars(first); break;
-              default:
-                semsg(_("E738: Can't list variables for %s"), name);
-              }
-            } else {
-              char *const s = encode_tv2echo(&tv, NULL);
-              const char *const used_name = (arg == arg_subsc
-                                             ? name
-                                             : name_start);
-              assert(used_name != NULL);
-              const ptrdiff_t name_size = (used_name == tofree
-                                           ? (ptrdiff_t)strlen(used_name)
-                                           : (arg - used_name));
-              list_one_var_a("", used_name, name_size,
-                             tv.v_type, s == NULL ? "" : s, first);
-              xfree(s);
-            }
-            tv_clear(&tv);
-          }
-        }
-      }
-
-      xfree(tofree);
-    }
-
-    arg = skipwhite(arg);
-  }
-
-  return arg;
-}
-
-
 /// ":unlet[!] var1 ... " command.
 void ex_unlet(exarg_T *eap) { rs_ex_unlet(eap); }
 
@@ -887,16 +760,7 @@ int do_unlet(const char *const name, const size_t name_len, const bool forceit)
 { return rs_do_unlet(name, name_len, forceit); }
 
 /// Delete all "menutrans_" variables.
-void del_menutrans_vars(void)
-{
-  hash_lock(&globvarht);
-  HASHTAB_ITER(&globvarht, hi, {
-    if (strncmp(hi->hi_key, "menutrans_", 10) == 0) {
-      delete_var(&globvarht, hi);
-    }
-  });
-  hash_unlock(&globvarht);
-}
+void del_menutrans_vars(void) { rs_del_menutrans_vars(); }
 
 dict_T *get_globvar_dict(void) FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RET { return &globvardict; }
 hashtab_T *get_globvar_ht(void) { return &globvarht; }
@@ -970,48 +834,12 @@ void set_vcount(int64_t count, int64_t count1, bool set_prevcount)
 /// @param no_autoload  do not use script autoloading
 int eval_variable(const char *name, int len, typval_T *rettv, dictitem_T **dip, bool verbose,
                   bool no_autoload)
-{
-  int ret = OK;
-  typval_T *tv = NULL;
-  dictitem_T *v;
-
-  v = find_var(name, (size_t)len, NULL, no_autoload);
-  if (v != NULL) {
-    tv = &v->di_tv;
-    if (dip != NULL) {
-      *dip = v;
-    }
-  }
-
-  if (tv == NULL) {
-    if (rettv != NULL && verbose) {
-      semsg(_("E121: Undefined variable: %.*s"), len, name);
-    }
-    ret = FAIL;
-  } else if (rettv != NULL) {
-    tv_copy(tv, rettv);
-  }
-
-  return ret;
-}
+{ return rs_eval_variable(name, len, rettv, (void **)dip, verbose, no_autoload); }
 
 /// Check if variable "name[len]" is a local variable or an argument.
 /// If so, "*eval_lavars_used" is set to true.
 void check_vars(const char *name, size_t len)
-{
-  if (eval_lavars_used == NULL) {
-    return;
-  }
-
-  const char *varname;
-  hashtab_T *ht = find_var_ht(name, len, &varname);
-
-  if (ht == get_funccal_local_ht() || ht == get_funccal_args_ht()) {
-    if (find_var(name, len, NULL, true) != NULL) {
-      *eval_lavars_used = true;
-    }
-  }
-}
+{ rs_check_vars(name, len); }
 
 /// Find variable "name" in the list of variables.
 /// Careful: "a:0" variables don't have a name.
@@ -1203,15 +1031,7 @@ hashtab_T *find_var_ht(const char *name, const size_t name_len, const char **var
 ///
 /// @see  tv_get_string() for how long the pointer remains valid.
 char *get_var_value(const char *const name)
-{
-  dictitem_T *v;
-
-  v = find_var(name, strlen(name), NULL, false);
-  if (v == NULL) {
-    return NULL;
-  }
-  return (char *)tv_get_string(&v->di_tv);
-}
+{ return (char *)rs_get_var_value(name); }
 
 /// Allocate a new hashtab for a sourced script.  It will be used while
 /// sourcing this script and when executing functions defined in the script.
@@ -2069,6 +1889,105 @@ int nvim_var_dict(void) { return VAR_DICT; }
 
 /// VAR_LIST constant.
 int nvim_var_list(void) { return VAR_LIST; }
+
+// Phase 12: eval_variable, check_vars, list_arg_vars, eval_spell_expr, del_menutrans_vars shims.
+
+/// Get eval_lavars_used global pointer (may be NULL).
+bool *nvim_vars_get_eval_lavars_used(void) { return eval_lavars_used; }
+
+/// Get get_funccal_local_ht() as void*.
+void *nvim_vars_get_funccal_local_ht(void) { return get_funccal_local_ht(); }
+
+/// Get get_funccal_args_ht() as void*.
+void *nvim_vars_get_funccal_args_ht(void) { return get_funccal_args_ht(); }
+
+/// find_var wrapper returning void*; sets *htp if non-NULL.
+void *nvim_vars_find_var(const char *name, size_t name_len, void **htp, int no_autoload)
+{ return find_var(name, name_len, (hashtab_T **)htp, no_autoload); }
+
+/// eval_variable wrapper returning full result (verbose, no_autoload params).
+int nvim_vars_eval_variable_full(const char *name, int len, void *rettv, void **dip, bool verbose,
+                                  bool no_autoload)
+{ return rs_eval_variable(name, len, rettv, dip, verbose, no_autoload); }
+
+/// List b: variables.
+void nvim_list_buf_vars(int *first)
+{ list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, first); }
+
+/// List w: variables.
+void nvim_list_win_vars(int *first)
+{ list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, first); }
+
+/// List t: variables.
+void nvim_list_tab_vars(int *first)
+{ list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, first); }
+
+/// List v: variables.
+void nvim_list_vim_vars(int *first) { rs_list_hashtable_vars(&vimvarht, "v:", false, first); }
+
+/// List s: variables for current script.
+void nvim_list_script_vars(int *first)
+{
+  if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len) {
+    rs_list_hashtable_vars(&SCRIPT_VARS(current_sctx.sc_sid), "s:", false, first);
+  }
+}
+
+/// list_func_vars wrapper.
+void nvim_list_func_vars(int *first) { list_func_vars(first); }
+
+/// aborting() wrapper.
+bool nvim_aborting(void) { return aborting(); }
+
+/// get_name_len wrapper for list_arg_vars.
+int nvim_get_name_len(const char **arg, char **tofree, bool evaluate, bool verbose)
+{ return get_name_len(arg, tofree, evaluate, verbose); }
+
+/// handle_subscript wrapper for list_arg_vars (EVALARG_EVALUATE, verbose=true).
+int nvim_vars_handle_subscript_listarg(const char **arg, void *tv)
+{ return handle_subscript(arg, (typval_T *)tv, &EVALARG_EVALUATE, true); }
+
+/// eap->skip getter.
+int nvim_eap_get_skip_val(const void *eap) { return eap ? ((const exarg_T *)eap)->skip : 0; }
+
+/// E738 error message string.
+const char *nvim_e738_cant_list(void) { return _("E738: Can't list variables for %s"); }
+
+/// E475 invalid argument error string.
+const char *nvim_e_invarg2(void) { return _(e_invarg2); }
+
+/// E488 trailing chars error string.
+const char *nvim_e_trailing_arg(void) { return _(e_trailing_arg); }
+
+/// rs_eval_variable extern declaration for use from C.
+extern int rs_eval_variable(const char *name, int len, void *rettv, void **dip, bool verbose,
+                             bool no_autoload);
+
+/// prepare_vimvar wrapper.
+void nvim_prepare_vimvar(int idx, void *save_tv) { prepare_vimvar(idx, (typval_T *)save_tv); }
+
+/// restore_vimvar wrapper.
+void nvim_restore_vimvar(int idx, void *save_tv) { restore_vimvar(idx, (typval_T *)save_tv); }
+
+/// kOptSpellsuggest constant.
+int nvim_kopt_spellsuggest(void) { return (int)kOptSpellsuggest; }
+
+/// may_call_simple_func wrapper.
+int nvim_may_call_simple_func(const char *p, void *rettv)
+{ return may_call_simple_func(p, (typval_T *)rettv); }
+
+/// eval1 wrapper with EVALARG_EVALUATE.
+int nvim_eval1_evaluate(char **arg, void *rettv)
+{ return eval1(arg, (typval_T *)rettv, &EVALARG_EVALUATE); }
+
+/// Evaluate the p_sps spellsuggest option context.
+void nvim_apply_spellsuggest_sctx(void)
+{
+  sctx_T *ctx = get_option_sctx(kOptSpellsuggest);
+  if (ctx != NULL) {
+    current_sctx = *ctx;
+  }
+}
 
 // Phase 11: eval_charconvert / eval_diff / eval_patch accessor shims.
 

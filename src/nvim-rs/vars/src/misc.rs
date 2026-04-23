@@ -14,6 +14,7 @@
 #![allow(clippy::ptr_as_ptr)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::if_not_else)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -72,6 +73,20 @@ extern "C" {
     fn nvim_eval_charconvert_expr() -> bool;
     fn nvim_eval_diffexpr();
     fn nvim_eval_patchexpr();
+
+    // --- eval_spell_expr (Phase 12) ---
+    fn nvim_prepare_vimvar(idx: c_int, save_tv: *mut c_void);
+    fn nvim_restore_vimvar(idx: c_int, save_tv: *mut c_void);
+    fn nvim_get_p_verbose() -> c_int;
+    fn nvim_may_call_simple_func(p: *const c_char, rettv: *mut c_void) -> c_int;
+    fn nvim_eval1_evaluate(arg: *mut *mut c_char, rettv: *mut c_void) -> c_int;
+    fn nvim_apply_spellsuggest_sctx();
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn tv_clear(tv: *mut c_void);
+    fn nvim_tv_get_type(tv: *mut c_void) -> c_int;
+    fn nvim_tv_get_list(tv: *mut c_void) -> *mut c_void;
+    fn nvim_emsg_off_inc();
+    fn nvim_emsg_off_dec();
 }
 
 /// Mark all script variable hashtabs as referenced for garbage collection.
@@ -214,4 +229,80 @@ pub unsafe extern "C" fn rs_eval_patch(
     crate::vimvar_accessors::rs_set_vim_var_string(VV_FNAME_OUT, std::ptr::null(), -1);
 
     nvim_restore_current_sctx(saved_sctx);
+}
+
+// =============================================================================
+// Phase 12: eval_spell_expr
+// =============================================================================
+
+// VV_VAL index (35 in the VimVarIndex enum)
+const VV_VAL: c_int = 35;
+// VAR_LIST type constant (matches VarType::VAR_LIST = 4)
+const VAR_LIST_TYPE: c_int = 4;
+// NOTDONE constant
+const NOTDONE: c_int = 2;
+
+/// Evaluate an expression to a list with suggestions.
+///
+/// For the "expr:" part of 'spellsuggest'. Returns NULL on error.
+///
+/// Matches C `eval_spell_expr`.
+///
+/// # Safety
+/// `badword` and `expr` must be valid NUL-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_spell_expr(
+    badword: *const c_char,
+    expr: *mut c_char,
+) -> *mut c_void {
+    let p = skipwhite(expr);
+    let saved_sctx = nvim_save_current_sctx();
+
+    let mut save_val_buf = [0u8; TYPVAL_SIZE];
+    let save_val = save_val_buf.as_mut_ptr() as *mut c_void;
+
+    nvim_prepare_vimvar(VV_VAL, save_val);
+    crate::vimvar_accessors::rs_set_vim_var_string(VV_VAL, badword, -1);
+
+    if nvim_get_p_verbose() == 0 {
+        nvim_emsg_off_inc();
+    }
+
+    nvim_apply_spellsuggest_sctx();
+
+    let mut rettv_buf = [0u8; TYPVAL_SIZE];
+    let rettv = rettv_buf.as_mut_ptr() as *mut c_void;
+    // Initialize rettv.v_type = VAR_UNKNOWN (0)
+    *(rettv as *mut c_int) = 0;
+
+    let r = nvim_may_call_simple_func(p, rettv);
+    let r = if r == NOTDONE {
+        let mut p_mut = p;
+        nvim_eval1_evaluate(std::ptr::addr_of_mut!(p_mut), rettv)
+    } else {
+        r
+    };
+
+    let list_ptr: *mut c_void = if r == OK {
+        if nvim_tv_get_type(rettv) != VAR_LIST_TYPE {
+            tv_clear(rettv);
+            std::ptr::null_mut()
+        } else {
+            nvim_tv_get_list(rettv)
+        }
+    } else {
+        std::ptr::null_mut()
+    };
+
+    if nvim_get_p_verbose() == 0 {
+        nvim_emsg_off_dec();
+    }
+
+    // Clear v:val and restore
+    let vv_val_tv = crate::vimvar_accessors::rs_get_vim_var_tv(VV_VAL);
+    tv_clear(vv_val_tv.cast());
+    nvim_restore_vimvar(VV_VAL, save_val);
+    nvim_restore_current_sctx(saved_sctx);
+
+    list_ptr
 }

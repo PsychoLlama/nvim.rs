@@ -11,12 +11,15 @@
 //! - `rs_list_one_var_a`: format and display one variable
 
 #![allow(unsafe_op_in_unsafe_fn)]
+#![allow(dead_code)]
 #![allow(clippy::ptr_as_ptr)]
 #![allow(clippy::ref_as_ptr)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::items_after_statements)]
 #![allow(clippy::ptr_cast_constness)]
 #![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::ptr_eq)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -95,6 +98,53 @@ extern "C" {
     fn nvim_redir_ga_grow(len: c_int);
     fn nvim_redir_ga_append(value: *const c_char, len: c_int);
     fn nvim_get_redir_lval() -> *mut c_void;
+
+    // --- list_arg_vars additions ---
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+    // xfree already declared above
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+    fn nvim_ends_excmd_char(c: c_int) -> bool;
+    fn rs_find_name_end(
+        arg: *const c_char,
+        expr_start: *mut *const c_char,
+        expr_end: *mut *const c_char,
+        flags: c_int,
+    ) -> *const c_char;
+    fn nvim_emsg_severe_set();
+    fn nvim_get_name_len(
+        arg: *mut *const c_char,
+        tofree: *mut *mut c_char,
+        evaluate: bool,
+        verbose: bool,
+    ) -> c_int;
+    fn nvim_aborting() -> bool;
+    fn nvim_vars_eval_variable_full(
+        name: *const c_char,
+        len: c_int,
+        rettv: *mut c_void,
+        dip: *mut *mut c_void,
+        verbose: bool,
+        no_autoload: bool,
+    ) -> c_int;
+    fn nvim_vars_handle_subscript_listarg(arg: *mut *const c_char, tv: *mut c_void) -> c_int;
+    fn tv_clear(tv: *mut c_void);
+    fn nvim_list_buf_vars(first: *mut c_int);
+    fn nvim_list_win_vars(first: *mut c_int);
+    fn nvim_list_tab_vars(first: *mut c_int);
+    fn nvim_list_vim_vars(first: *mut c_int);
+    fn nvim_list_script_vars(first: *mut c_int);
+    fn nvim_list_func_vars(first: *mut c_int);
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
+    fn nvim_eap_get_skip_val(eap: *const c_void) -> c_int;
+    fn nvim_e738_cant_list() -> *const c_char;
+    fn nvim_e_invarg2() -> *const c_char;
+    fn nvim_e_trailing_arg() -> *const c_char;
+
+    // --- del_menutrans_vars ---
+    fn hash_lock(ht: *mut c_void);
+    fn hash_unlock(ht: *mut c_void);
+    fn nvim_vars_delete_var(ht: *mut c_void, hi: *mut c_void);
+    // nvim_get_globvarht_ptr and xfree already declared above
 }
 
 // =============================================================================
@@ -410,4 +460,168 @@ pub unsafe extern "C" fn rs_list_hashtable_vars(
     }
 
     xfree(buf as *mut c_void);
+}
+
+// =============================================================================
+// Phase 12: list_arg_vars and del_menutrans_vars
+// =============================================================================
+
+// Constants
+const TYPVAL_SIZE: usize = 24;
+const FNE_INCL_BR: c_int = 1;
+const FNE_CHECK_START: c_int = 2;
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// List variables named in `:let` args.
+///
+/// Matches C `list_arg_vars`. Returns pointer past last consumed char.
+///
+/// # Safety
+/// `eap` must be a valid exarg_T pointer or null.
+/// `arg` must be a valid C string.
+/// `first` must be a valid int pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_list_arg_vars(
+    eap: *const c_void,
+    arg: *const c_char,
+    first: *mut c_int,
+) -> *const c_char {
+    let mut arg = arg;
+    let mut error = false;
+
+    while !nvim_ends_excmd_char(*arg as c_int) && !nvim_vars_got_int() {
+        if error || nvim_eap_get_skip_val(eap) != 0 {
+            arg = rs_find_name_end(
+                arg,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                FNE_INCL_BR | FNE_CHECK_START,
+            );
+            if rs_ascii_iswhite(*arg as c_int) == 0 && !nvim_ends_excmd_char(*arg as c_int) {
+                nvim_emsg_severe_set();
+                semsg(nvim_e_trailing_arg(), arg);
+                break;
+            }
+        } else {
+            let name_start = arg;
+            let mut tofree: *mut c_char = std::ptr::null_mut();
+            let len = nvim_get_name_len(
+                std::ptr::addr_of_mut!(arg),
+                std::ptr::addr_of_mut!(tofree),
+                true,
+                true,
+            );
+
+            if len <= 0 {
+                if len < 0 && !nvim_aborting() {
+                    nvim_emsg_severe_set();
+                    semsg(nvim_e_invarg2(), arg);
+                    if !tofree.is_null() {
+                        xfree(tofree as *mut c_void);
+                    }
+                    break;
+                }
+                error = true;
+            } else {
+                // name is tofree if non-null, else arg (before get_name_len advanced it)
+                let name: *const c_char = if !tofree.is_null() {
+                    tofree
+                } else {
+                    name_start
+                };
+
+                let mut tv_buf = [0u8; TYPVAL_SIZE];
+                let tv = tv_buf.as_mut_ptr() as *mut c_void;
+
+                if nvim_vars_eval_variable_full(name, len, tv, std::ptr::null_mut(), true, false)
+                    == FAIL
+                {
+                    error = true;
+                } else {
+                    let arg_subsc = arg;
+                    if nvim_vars_handle_subscript_listarg(std::ptr::addr_of_mut!(arg), tv) == FAIL {
+                        error = true;
+                    } else {
+                        if arg == arg_subsc && len == 2 && *name.add(1) == b':' as c_char {
+                            // Scope prefix only (e.g. "g:") - list all vars in that scope
+                            match *name as u8 {
+                                b'g' => rs_list_hashtable_vars(
+                                    nvim_get_globvarht_ptr(),
+                                    b"\0".as_ptr() as *const c_char,
+                                    1,
+                                    first,
+                                ),
+                                b'b' => nvim_list_buf_vars(first),
+                                b'w' => nvim_list_win_vars(first),
+                                b't' => nvim_list_tab_vars(first),
+                                b'v' => nvim_list_vim_vars(first),
+                                b's' => nvim_list_script_vars(first),
+                                b'l' => nvim_list_func_vars(first),
+                                _ => {
+                                    semsg(nvim_e738_cant_list(), name);
+                                }
+                            }
+                        } else {
+                            let s = nvim_encode_tv2echo(tv);
+                            let used_name: *const c_char =
+                                if arg == arg_subsc { name } else { name_start };
+                            let name_size: isize = if used_name == tofree as *const c_char {
+                                strlen(used_name) as isize
+                            } else {
+                                arg.offset_from(used_name)
+                            };
+                            let s_str: *const c_char = if s.is_null() {
+                                b"\0".as_ptr() as *const c_char
+                            } else {
+                                s
+                            };
+                            // get tv_type from tv_buf offset 0 (v_type is c_int at offset 0)
+                            let tv_type = *(tv as *const c_int);
+                            rs_list_one_var_a(
+                                b"\0".as_ptr() as *const c_char,
+                                used_name,
+                                name_size,
+                                tv_type,
+                                s_str,
+                                first,
+                            );
+                            xfree(s as *mut c_void);
+                        }
+                        tv_clear(tv);
+                    }
+                }
+            }
+            xfree(tofree as *mut c_void);
+        }
+        arg = skipwhite(arg);
+    }
+
+    arg
+}
+
+/// Delete all "menutrans_" variables from the global variable table.
+///
+/// Matches C `del_menutrans_vars`.
+///
+/// # Safety
+/// Must be called when the global variable state is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_del_menutrans_vars() {
+    let ht = nvim_get_globvarht_ptr();
+    hash_lock(ht);
+    let mut todo = nvim_vars_ht_get_used(ht) as isize;
+    let mut hi = nvim_vars_ht_get_array(ht);
+    let prefix = b"menutrans_\0".as_ptr() as *const c_char;
+    while todo > 0 {
+        if nvim_hashitem_empty(hi) == 0 {
+            todo -= 1;
+            let key = nvim_vars_hashitem_get_key(hi);
+            if strncmp(key, prefix, 10) == 0 {
+                nvim_vars_delete_var(ht, hi);
+            }
+        }
+        hi = nvim_hashitem_advance(hi);
+    }
+    hash_unlock(ht);
 }

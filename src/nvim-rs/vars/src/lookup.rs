@@ -20,6 +20,10 @@
 
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(dead_code)]
+#![allow(clippy::ptr_as_ptr)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::if_not_else)]
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -222,6 +226,13 @@ extern "C" {
     // Dictitem access
     fn nvim_dictitem_get_tv(di: DictitemHandle) -> *mut c_void;
     fn tv_get_string(tv: *mut c_void) -> *const c_char;
+
+    // eval_variable / check_vars additions
+    fn semsg(fmt: *const c_char, ...) -> c_int;
+    fn tv_copy(from: *mut c_void, to: *mut c_void);
+    fn nvim_vars_get_eval_lavars_used() -> *mut bool;
+    fn nvim_vars_get_funccal_local_ht() -> *mut c_void;
+    fn nvim_vars_get_funccal_args_ht() -> *mut c_void;
 }
 
 // =============================================================================
@@ -450,6 +461,88 @@ pub unsafe extern "C" fn rs_skip_scope_prefix(
     let (_, offset) = ScopePrefix::from_name(name_slice);
 
     name.add(offset)
+}
+
+// =============================================================================
+// Phase 12: eval_variable and check_vars
+// =============================================================================
+
+// OK / FAIL return codes
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Get the value of internal variable "name".
+///
+/// Matches C `eval_variable`. Returns OK or FAIL.
+/// If OK is returned "rettv" must be cleared by the caller.
+///
+/// # Safety
+/// - `name` must be a valid pointer to at least `len` bytes.
+/// - `rettv` must be a valid `typval_T*` or null.
+/// - `dip` must be a valid `dictitem_T**` or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_eval_variable(
+    name: *const c_char,
+    len: c_int,
+    rettv: *mut c_void,
+    dip: *mut *mut c_void,
+    verbose: bool,
+    no_autoload: bool,
+) -> c_int {
+    let v = find_var(
+        name,
+        len as usize,
+        std::ptr::null_mut(),
+        no_autoload as c_int,
+    );
+    if v.is_null() {
+        if !rettv.is_null() && verbose {
+            semsg(
+                b"E121: Undefined variable: %.*s\0".as_ptr() as *const c_char,
+                len,
+                name,
+            );
+        }
+        return FAIL;
+    }
+
+    if !dip.is_null() {
+        *dip = v.as_ptr();
+    }
+
+    if !rettv.is_null() {
+        let tv = nvim_dictitem_get_tv(v);
+        tv_copy(tv, rettv);
+    }
+
+    OK
+}
+
+/// Check if variable "name[len]" is a local variable or an argument.
+/// Sets *eval_lavars_used = true if it is.
+///
+/// Matches C `check_vars`.
+///
+/// # Safety
+/// - `name` must be valid for `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_vars(name: *const c_char, len: usize) {
+    let lavars = nvim_vars_get_eval_lavars_used();
+    if lavars.is_null() {
+        return;
+    }
+
+    let mut varname: *const c_char = std::ptr::null();
+    let ht = find_var_ht_impl(name, len, std::ptr::addr_of_mut!(varname));
+    let local_ht = nvim_vars_get_funccal_local_ht();
+    let args_ht = nvim_vars_get_funccal_args_ht();
+    if !ht.is_null() && (ht.as_ptr() == local_ht || ht.as_ptr() == args_ht) {
+        // Variable is local or arg - check it actually exists
+        let di = find_var(name, len, std::ptr::null_mut(), 1);
+        if !di.is_null() {
+            *lavars = true;
+        }
+    }
 }
 
 // =============================================================================
