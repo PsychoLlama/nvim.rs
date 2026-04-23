@@ -328,151 +328,15 @@ int tv_list_join(garray_T *const gap, list_T *const l, const char *const sep)
 //{{{1 Dictionaries
 //{{{2 Dictionary watchers
 
-// tv_dict_watcher_free migrated to Rust (Phase 5)
-extern void tv_dict_watcher_free(DictWatcher *watcher);
-
-/// Add watcher to a dictionary
-///
-/// @param[in]  dict  Dictionary to add watcher to.
-/// @param[in]  key_pattern  Pattern to watch for.
-/// @param[in]  key_pattern_len  Key pattern length.
-/// @param  callback  Function to be called on events.
-void tv_dict_watcher_add(dict_T *const dict, const char *const key_pattern,
-                         const size_t key_pattern_len, Callback callback)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  if (dict == NULL) {
-    return;
-  }
-  DictWatcher *const watcher = xmalloc(sizeof(DictWatcher));
-  watcher->key_pattern = xmemdupz(key_pattern, key_pattern_len);
-  watcher->key_pattern_len = key_pattern_len;
-  watcher->callback = callback;
-  watcher->busy = false;
-  watcher->needs_free = false;
-  QUEUE_INSERT_TAIL(&dict->watchers, &watcher->node);
-}
-
 // tv_callback_equal, callback_free, callback_put, callback_copy, callback_to_string
 // migrated to Rust (Phase 1)
 
-/// Remove watcher from a dictionary
-///
-/// @param  dict  Dictionary to remove watcher from.
-/// @param[in]  key_pattern  Pattern to remove watcher for.
-/// @param[in]  key_pattern_len  Pattern length.
-/// @param  callback  Callback to remove watcher for.
-///
-/// @return True on success, false if relevant watcher was not found.
-bool tv_dict_watcher_remove(dict_T *const dict, const char *const key_pattern,
-                            const size_t key_pattern_len, Callback callback)
-  FUNC_ATTR_NONNULL_ARG(2)
-{
-  if (dict == NULL) {
-    return false;
-  }
-
-  QUEUE *w = NULL;
-  DictWatcher *watcher = NULL;
-  bool matched = false;
-  bool queue_is_busy = false;
-  QUEUE_FOREACH(w, &dict->watchers, {
-    watcher = tv_dict_watcher_node_data(w);
-    if (watcher->busy) {
-      queue_is_busy = true;
-    }
-    if (tv_callback_equal(&watcher->callback, &callback)
-        && watcher->key_pattern_len == key_pattern_len
-        && memcmp(watcher->key_pattern, key_pattern, key_pattern_len) == 0) {
-      matched = true;
-      break;
-    }
-  })
-
-  if (!matched) {
-    return false;
-  }
-
-  if (queue_is_busy) {
-    watcher->needs_free = true;
-  } else {
-    QUEUE_REMOVE(w);
-    tv_dict_watcher_free(watcher);
-  }
-  return true;
-}
+// tv_dict_watcher_add, tv_dict_watcher_remove, tv_dict_watcher_notify
+// migrated to Rust (Phase 7); declared in typval.h
 
 // tv_dict_watcher_matches migrated to Rust (Phase 5)
-extern bool tv_dict_watcher_matches(DictWatcher *watcher, const char *key);
-
-/// Send a change notification to all dictionary watchers that match given key
-///
-/// @param[in]  dict  Dictionary which was modified.
-/// @param[in]  key  Key which was modified.
-/// @param[in]  newtv  New key value.
-/// @param[in]  oldtv  Old key value.
-void tv_dict_watcher_notify(dict_T *const dict, const char *const key, typval_T *const newtv,
-                            typval_T *const oldtv)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
-{
-  typval_T argv[3];
-
-  argv[0].v_type = VAR_DICT;
-  argv[0].v_lock = VAR_UNLOCKED;
-  argv[0].vval.v_dict = dict;
-  argv[1].v_type = VAR_STRING;
-  argv[1].v_lock = VAR_UNLOCKED;
-  argv[1].vval.v_string = xstrdup(key);
-  argv[2].v_type = VAR_DICT;
-  argv[2].v_lock = VAR_UNLOCKED;
-  argv[2].vval.v_dict = tv_dict_alloc();
-  argv[2].vval.v_dict->dv_refcount++;
-
-  if (newtv) {
-    dictitem_T *const v = tv_dict_item_alloc_len(S_LEN("new"));
-    tv_copy(newtv, &v->di_tv);
-    tv_dict_add(argv[2].vval.v_dict, v);
-  }
-
-  if (oldtv && oldtv->v_type != VAR_UNKNOWN) {
-    dictitem_T *const v = tv_dict_item_alloc_len(S_LEN("old"));
-    tv_copy(oldtv, &v->di_tv);
-    tv_dict_add(argv[2].vval.v_dict, v);
-  }
-
-  typval_T rettv;
-
-  bool any_needs_free = false;
-  dict->dv_refcount++;
-  QUEUE *w;
-  QUEUE_FOREACH(w, &dict->watchers, {
-    DictWatcher *watcher = tv_dict_watcher_node_data(w);
-    if (!watcher->busy && tv_dict_watcher_matches(watcher, key)) {
-      rettv = TV_INITIAL_VALUE;
-      watcher->busy = true;
-      callback_call(&watcher->callback, 3, argv, &rettv);
-      watcher->busy = false;
-      tv_clear(&rettv);
-      if (watcher->needs_free) {
-        any_needs_free = true;
-      }
-    }
-  })
-  if (any_needs_free) {
-    QUEUE_FOREACH(w, &dict->watchers, {
-      DictWatcher *watcher = tv_dict_watcher_node_data(w);
-      if (watcher->needs_free) {
-        QUEUE_REMOVE(w);
-        tv_dict_watcher_free(watcher);
-      }
-    })
-  }
-  tv_dict_unref(dict);
-
-  for (size_t i = 1; i < ARRAY_SIZE(argv); i++) {
-    tv_clear(argv + i);
-  }
-}
+// tv_dict_watcher_free migrated to Rust (Phase 5)
+// (declarations now in typval.h)
 
 //{{{2 Dictionary item
 // tv_dict_item_alloc_len, tv_dict_item_alloc, tv_dict_item_free,
@@ -1618,12 +1482,6 @@ dictitem_T *nvim_dict_item_alloc_impl(const char *key)
   return tv_dict_item_alloc(key);
 }
 
-/// Call tv_dict_watcher_notify (accessor for Rust tv_dict_extend).
-void nvim_dict_watcher_notify(dict_T *d, const char *key, typval_T *newtv, typval_T *oldtv)
-{
-  tv_dict_watcher_notify(d, key, newtv, oldtv);
-}
-
 /// Check if varname is valid (accessor for Rust tv_dict_extend).
 int nvim_valid_varname(const char *name) { return valid_varname(name); }
 
@@ -2192,4 +2050,29 @@ char *nvim_f_list2str_from_list(list_T *l)
   return ga.ga_data;
 }
 
+// Phase 7 (typval migration): dict watcher add/remove/notify accessors
+
+/// Get pointer to dict's watchers QUEUE head (accessor for Rust tv_dict_watcher_add/remove/notify).
+QUEUE *nvim_dict_get_watchers_head(dict_T *d) { return &d->watchers; }
+
+/// Get DictWatcher* from a QUEUE node pointer (accessor for Rust watcher iteration).
+DictWatcher *nvim_watcher_node_data(QUEUE *q) { return tv_dict_watcher_node_data(q); }
+
+/// Get busy flag from a DictWatcher (accessor for Rust).
+bool nvim_watcher_get_busy(DictWatcher *w) { return w->busy; }
+
+/// Set busy flag on a DictWatcher (accessor for Rust).
+void nvim_watcher_set_busy(DictWatcher *w, bool v) { w->busy = v; }
+
+/// Get needs_free flag from a DictWatcher (accessor for Rust).
+bool nvim_watcher_get_needs_free(DictWatcher *w) { return w->needs_free; }
+
+/// Set needs_free flag on a DictWatcher (accessor for Rust).
+void nvim_watcher_set_needs_free(DictWatcher *w, bool v) { w->needs_free = v; }
+
+/// Compare two Callback structs for equality, using raw pointers (accessor for Rust).
+bool nvim_callback_equal_raw(const Callback *cb1, const Callback *cb2)
+{
+  return tv_callback_equal(cb1, cb2);
+}
 

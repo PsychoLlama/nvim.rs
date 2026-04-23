@@ -506,6 +506,14 @@ extern int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name);
 extern bool tv_dict_watcher_matches(DictWatcher *watcher, const char *key);
 extern void tv_dict_watcher_free(DictWatcher *watcher);
 
+// Dict watcher add/remove/notify (migrated to Rust, Phase 7)
+extern void tv_dict_watcher_add(dict_T *dict, const char *key_pattern, size_t key_pattern_len,
+                                Callback callback);
+extern bool tv_dict_watcher_remove(dict_T *dict, const char *key_pattern, size_t key_pattern_len,
+                                   Callback callback);
+extern void tv_dict_watcher_notify(dict_T *dict, const char *key, typval_T *newtv,
+                                   typval_T *oldtv);
+
 // Float getter (migrated to Rust)
 extern float_T tv_get_float(const typval_T *tv);
 

@@ -1274,13 +1274,6 @@ extern "C" {
     // nvim_dictitem_move_tv_to_rettv inlined: memcpy(rettv, di_tv@offset0, 16); zero di_tv
     fn nvim_semsg_dictkey(key: *const c_char);
     fn nvim_semsg_toomanyarg(fname: *const c_char);
-    fn nvim_tv_dict_watcher_notify(
-        dict: DictHandle,
-        key: *const c_char,
-        newtv: *mut std::ffi::c_void,
-        oldtv: *mut std::ffi::c_void,
-    );
-
     // Phase 6g: f_keys, f_values
     fn nvim_tv_dict2list_keys(argvars: TypevalHandle, rettv: TypevalHandle);
     fn nvim_tv_dict2list_values(argvars: TypevalHandle, rettv: TypevalHandle);
@@ -2635,7 +2628,14 @@ pub unsafe extern "C" fn rs_tv_dict_remove(
     }
     unsafe { rs_tv_dict_item_remove(d, di) };
     if tv_dict_is_watched_impl(d) {
-        unsafe { nvim_tv_dict_watcher_notify(d, key, std::ptr::null_mut(), rettv.0.cast_mut()) };
+        unsafe {
+            rs_tv_dict_watcher_notify(
+                d,
+                key,
+                TypevalHandle::from_ptr(std::ptr::null()),
+                TypevalHandle::from_ptr(rettv.0.cast_mut()),
+            );
+        }
     }
 }
 
@@ -5520,12 +5520,8 @@ extern "C" {
     fn nvim_dict_item_copy_impl(di: DictItemHandle) -> DictItemHandle;
     fn nvim_dict_item_alloc_impl(key: *const c_char) -> DictItemHandle;
     fn nvim_dict_item_alloc_len_impl(key: *const c_char, len: usize) -> DictItemHandle;
-    fn nvim_dict_watcher_notify(
-        d: DictHandle,
-        key: *const c_char,
-        newtv: TypevalHandle,
-        oldtv: TypevalHandle,
-    );
+    // nvim_dict_watcher_notify was removed (C accessor deleted in Phase 7).
+    // tv_dict_watcher_notify is now exported directly from Rust.
     fn nvim_valid_varname(name: *const c_char) -> c_int;
     fn nvim_var_check_ro(flags: c_int, name: *const c_char, name_len: usize) -> bool;
     fn nvim_dictitem_get_flags(di: DictItemHandle) -> c_int;
@@ -5720,7 +5716,7 @@ pub unsafe extern "C" fn rs_tv_dict_extend(d1: DictHandle, d2: DictHandle, actio
                     if nvim_dict_add_item(d1, new_di) != 0 {
                         // OK = 1 (non-zero)
                         nvim_dict_hash_remove(d2, hi);
-                        nvim_dict_watcher_notify(
+                        rs_tv_dict_watcher_notify(
                             d1,
                             di2_key,
                             di2_tv,
@@ -5735,7 +5731,7 @@ pub unsafe extern "C" fn rs_tv_dict_extend(d1: DictHandle, d2: DictHandle, actio
                         // FAIL = 0
                         nvim_dict_item_free(new_di);
                     } else if watched {
-                        nvim_dict_watcher_notify(
+                        rs_tv_dict_watcher_notify(
                             d1,
                             new_di_key,
                             new_di_tv,
@@ -5770,7 +5766,7 @@ pub unsafe extern "C" fn rs_tv_dict_extend(d1: DictHandle, d2: DictHandle, actio
                         tv_clear(di1_tv);
                         rs_tv_copy(di2_tv, di1_tv);
                         let di1_key = nvim_dictitem_get_key_ptr(di1);
-                        nvim_dict_watcher_notify(d1, di1_key, di1_tv, oldtv_th);
+                        rs_tv_dict_watcher_notify(d1, di1_key, di1_tv, oldtv_th);
                         tv_clear(oldtv_th);
                     } else {
                         tv_clear(di1_tv);
@@ -6588,6 +6584,317 @@ pub unsafe extern "C" fn rs_f_list2str(
 }
 
 // tv_list_append_owned_tv remains in C (by-value struct ABI not compatible with TypevalHandle).
+
+// =============================================================================
+// Phase 7 (typval migration): dict watcher add/remove/notify
+// =============================================================================
+
+/// Raw mirror of C `Callback` struct (16 bytes, verified).
+///
+/// Layout:
+/// ```text
+/// offset 0: data (8 bytes, union: char*/partial_T*/LuaRef)
+/// offset 8: cb_type (i32, CallbackType)
+/// offset 12: _pad (4 bytes)
+/// ```
+#[repr(C)]
+pub struct CallbackRaw {
+    data: u64,
+    cb_type: i32,
+    _pad: u32,
+}
+
+/// QUEUE node raw accessor (two pointer-sized fields: next, prev).
+/// We use *mut *mut c_void to read next/prev without defining the full QUEUE type.
+type QueuePtr = *mut c_void;
+
+extern "C" {
+    // Phase 7: C accessors for DictWatcher fields
+    fn nvim_dict_get_watchers_head(d: DictHandle) -> QueuePtr;
+    fn nvim_watcher_node_data(node: QueuePtr) -> *mut c_void; // -> DictWatcher*
+    fn nvim_watcher_get_busy(w: *mut c_void) -> bool;
+    fn nvim_watcher_set_busy(w: *mut c_void, v: bool);
+    fn nvim_watcher_get_needs_free(w: *mut c_void) -> bool;
+    fn nvim_watcher_set_needs_free(w: *mut c_void, v: bool);
+    fn nvim_callback_equal_raw(cb1: *const c_void, cb2: *const c_void) -> bool;
+
+    // Phase 7: memory / dict operations
+    fn xmalloc(size: usize) -> *mut c_void;
+    fn xmemdupz(data: *const c_void, len: usize) -> *mut c_char;
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn memcmp(s1: *const c_void, s2: *const c_void, n: usize) -> c_int;
+    fn callback_call(
+        cb: *const c_void,
+        argcount: c_int,
+        argv: *mut c_void,
+        rettv: *mut c_void,
+    ) -> bool;
+
+    // Phase 7: QUEUE link/unlink (from collections crate, already exported as C symbols)
+    fn rs_queue_insert_tail(h: QueuePtr, q: QueuePtr);
+    fn rs_queue_remove(q: QueuePtr);
+}
+
+/// Read the `next` pointer from a QUEUE node (first 8 bytes = pointer to next node).
+unsafe fn queue_next(node: QueuePtr) -> QueuePtr {
+    *(node.cast::<QueuePtr>())
+}
+
+/// Build a typval_T [u8; 16] for a dict value.
+/// v_type=VAR_DICT(5) at offset 0, v_lock=VAR_UNLOCKED(0) at offset 4, dict ptr at offset 8.
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn make_tv_dict_raw(d: DictHandle) -> [u8; 16] {
+    let mut tv = [0u8; 16];
+    tv.as_mut_ptr().cast::<i32>().write_unaligned(5); // VAR_DICT = 5
+    tv.as_mut_ptr().add(4).cast::<i32>().write_unaligned(0); // VAR_UNLOCKED = 0
+    tv.as_mut_ptr()
+        .add(8)
+        .cast::<*const c_void>()
+        .write_unaligned(d.as_ptr());
+    tv
+}
+
+/// Build a typval_T [u8; 16] for a string value.
+/// v_type=VAR_STRING(2) at offset 0, v_lock=VAR_UNLOCKED(0) at offset 4, char* at offset 8.
+#[allow(clippy::cast_ptr_alignment)]
+unsafe fn make_tv_string_raw(s: *mut c_char) -> [u8; 16] {
+    let mut tv = [0u8; 16];
+    tv.as_mut_ptr().cast::<i32>().write_unaligned(2); // VAR_STRING = 2
+    tv.as_mut_ptr().add(4).cast::<i32>().write_unaligned(0); // VAR_UNLOCKED = 0
+    tv.as_mut_ptr()
+        .add(8)
+        .cast::<*mut c_char>()
+        .write_unaligned(s);
+    tv
+}
+
+/// Add a watcher to a dictionary (migrated from C `tv_dict_watcher_add`).
+///
+/// DictWatcher layout (56 bytes, verified):
+/// - offset  0: Callback callback (16 bytes)
+/// - offset 16: char *key_pattern (8 bytes)
+/// - offset 24: size_t key_pattern_len (8 bytes)
+/// - offset 32: QUEUE node (16 bytes: next ptr + prev ptr)
+/// - offset 48: bool busy (1 byte)
+/// - offset 49: bool needs_free (1 byte)
+///
+/// # Safety
+///
+/// `dict` and `key_pattern` must be valid. `key_pattern` must point to at least
+/// `key_pattern_len` bytes.
+#[allow(clippy::cast_ptr_alignment, clippy::borrow_as_ptr)]
+#[export_name = "tv_dict_watcher_add"]
+pub unsafe extern "C" fn rs_tv_dict_watcher_add(
+    dict: DictHandle,
+    key_pattern: *const c_char,
+    key_pattern_len: usize,
+    callback: CallbackRaw,
+) {
+    if dict.is_null() {
+        return;
+    }
+    let watcher = xmalloc(56).cast::<u8>();
+
+    // offset 0: Callback (16 bytes)
+    watcher.cast::<CallbackRaw>().write(callback);
+
+    // offset 16: char *key_pattern
+    let dup = xmemdupz(key_pattern.cast::<c_void>(), key_pattern_len);
+    watcher.add(16).cast::<*mut c_char>().write(dup);
+
+    // offset 24: size_t key_pattern_len
+    watcher.add(24).cast::<usize>().write(key_pattern_len);
+
+    // offset 32: QUEUE node — initialize as self-referential (rs_queue_init equivalent)
+    let node: QueuePtr = watcher.add(32).cast::<c_void>();
+    watcher.add(32).cast::<QueuePtr>().write(node); // node->next = node
+    watcher.add(40).cast::<QueuePtr>().write(node); // node->prev = node
+
+    // offset 48: busy = false, offset 49: needs_free = false
+    watcher.add(48).write(0);
+    watcher.add(49).write(0);
+
+    // Insert into dict's watchers queue tail
+    let head = nvim_dict_get_watchers_head(dict);
+    rs_queue_insert_tail(head, node);
+}
+
+/// Remove a matching watcher from a dictionary (migrated from C `tv_dict_watcher_remove`).
+///
+/// # Safety
+///
+/// `dict` and `key_pattern` must be valid. `key_pattern` must point to at least
+/// `key_pattern_len` bytes.
+#[allow(clippy::cast_ptr_alignment, clippy::borrow_as_ptr)]
+#[export_name = "tv_dict_watcher_remove"]
+pub unsafe extern "C" fn rs_tv_dict_watcher_remove(
+    dict: DictHandle,
+    key_pattern: *const c_char,
+    key_pattern_len: usize,
+    callback: CallbackRaw,
+) -> bool {
+    if dict.is_null() {
+        return false;
+    }
+
+    let head = nvim_dict_get_watchers_head(dict);
+    let mut matched_node: QueuePtr = std::ptr::null_mut();
+    let mut matched_watcher: *mut c_void = std::ptr::null_mut();
+    let mut queue_is_busy = false;
+
+    // QUEUE_FOREACH equivalent
+    let mut w = queue_next(head);
+    while !std::ptr::eq(w, head) {
+        let next = queue_next(w);
+        let watcher_ptr = nvim_watcher_node_data(w);
+
+        if nvim_watcher_get_busy(watcher_ptr) {
+            queue_is_busy = true;
+        }
+
+        // Compare callback and key_pattern
+        let watcher_cb = watcher_ptr.cast::<c_void>(); // callback at offset 0
+        let cb_ref: *const c_void = std::ptr::from_ref::<CallbackRaw>(&callback).cast::<c_void>();
+        let watcher_kp = watcher_ptr
+            .cast::<u8>()
+            .add(16)
+            .cast::<*const c_char>()
+            .read();
+        let watcher_kp_len = watcher_ptr.cast::<u8>().add(24).cast::<usize>().read();
+
+        if nvim_callback_equal_raw(watcher_cb, cb_ref)
+            && watcher_kp_len == key_pattern_len
+            && memcmp(
+                watcher_kp.cast::<c_void>(),
+                key_pattern.cast::<c_void>(),
+                key_pattern_len,
+            ) == 0
+        {
+            matched_node = w;
+            matched_watcher = watcher_ptr;
+            break;
+        }
+
+        w = next;
+    }
+
+    if matched_watcher.is_null() {
+        return false;
+    }
+
+    if queue_is_busy {
+        nvim_watcher_set_needs_free(matched_watcher, true);
+    } else {
+        rs_queue_remove(matched_node);
+        rs_tv_dict_watcher_free(DictWatcherHandle::from_ptr(matched_watcher));
+    }
+    true
+}
+
+/// Notify all matching dict watchers of a key change (migrated from C `tv_dict_watcher_notify`).
+///
+/// # Safety
+///
+/// `dict` and `key` must be valid non-null pointers. `newtv` and `oldtv` may be null.
+#[allow(clippy::cast_ptr_alignment)]
+#[export_name = "tv_dict_watcher_notify"]
+pub unsafe extern "C" fn rs_tv_dict_watcher_notify(
+    dict: DictHandle,
+    key: *const c_char,
+    newtv: TypevalHandle,
+    oldtv: TypevalHandle,
+) {
+    // argv[0] = dict typval, argv[1] = key string typval, argv[2] = changes dict typval
+    let argv0 = make_tv_dict_raw(dict);
+    let key_dup = xstrdup(key);
+    let argv1 = make_tv_string_raw(key_dup);
+
+    let changes_dict = tv_dict_alloc();
+    nvim_dict_inc_refcount(changes_dict);
+    let argv2 = make_tv_dict_raw(changes_dict);
+
+    // Optionally add "new" key to changes dict
+    if !newtv.is_null() {
+        let di = nvim_dict_item_alloc_len(b"new\0".as_ptr().cast::<c_char>(), 3);
+        rs_tv_copy(newtv, nvim_dictitem_get_tv(di));
+        nvim_dict_add_item(changes_dict, di);
+    }
+
+    // Optionally add "old" key to changes dict (only if oldtv != NULL and not VAR_UNKNOWN=0)
+    if !oldtv.is_null() {
+        let oldtv_type = oldtv.as_ptr().cast::<i32>().read(); // v_type at offset 0
+        if oldtv_type != 0 {
+            // VAR_UNKNOWN = 0
+            let di = nvim_dict_item_alloc_len(b"old\0".as_ptr().cast::<c_char>(), 3);
+            rs_tv_copy(oldtv, nvim_dictitem_get_tv(di));
+            nvim_dict_add_item(changes_dict, di);
+        }
+    }
+
+    // Concatenate the three typvals into a 48-byte array
+    let mut argv = [0u8; 48];
+    argv[0..16].copy_from_slice(&argv0);
+    argv[16..32].copy_from_slice(&argv1);
+    argv[32..48].copy_from_slice(&argv2);
+
+    // Increment dict refcount to prevent premature free during iteration
+    nvim_dict_inc_refcount(dict);
+
+    let head = nvim_dict_get_watchers_head(dict);
+    let mut any_needs_free = false;
+
+    // First pass: call matching, non-busy watchers
+    let mut w = queue_next(head);
+    while !std::ptr::eq(w, head) {
+        let next = queue_next(w);
+        let watcher_ptr = nvim_watcher_node_data(w);
+        let watcher_handle = DictWatcherHandle::from_ptr(watcher_ptr);
+
+        if !nvim_watcher_get_busy(watcher_ptr) && rs_tv_dict_watcher_matches(watcher_handle, key) {
+            let mut rettv = [0u8; 16]; // TV_INITIAL_VALUE (all zeros = VAR_UNKNOWN)
+            nvim_watcher_set_busy(watcher_ptr, true);
+            // callback is at offset 0 in DictWatcher
+            callback_call(
+                watcher_ptr.cast::<c_void>(),
+                3,
+                argv.as_mut_ptr().cast::<c_void>(),
+                rettv.as_mut_ptr().cast::<c_void>(),
+            );
+            nvim_watcher_set_busy(watcher_ptr, false);
+            tv_clear(TypevalHandle::from_ptr(rettv.as_mut_ptr().cast::<c_void>()));
+            if nvim_watcher_get_needs_free(watcher_ptr) {
+                any_needs_free = true;
+            }
+        }
+
+        w = next;
+    }
+
+    // Second pass: free watchers that were marked needs_free during callbacks
+    if any_needs_free {
+        let mut w2 = queue_next(head);
+        while !std::ptr::eq(w2, head) {
+            let next = queue_next(w2);
+            let watcher_ptr = nvim_watcher_node_data(w2);
+            if nvim_watcher_get_needs_free(watcher_ptr) {
+                rs_queue_remove(w2);
+                rs_tv_dict_watcher_free(DictWatcherHandle::from_ptr(watcher_ptr));
+            }
+            w2 = next;
+        }
+    }
+
+    // Decrement the refcount we incremented above
+    rs_tv_dict_unref(dict);
+
+    // Clear argv[1] (key string) and argv[2] (changes dict) - argv[0] (dict) is not owned
+    tv_clear(TypevalHandle::from_ptr(
+        argv[16..32].as_mut_ptr().cast::<c_void>(),
+    ));
+    tv_clear(TypevalHandle::from_ptr(
+        argv[32..48].as_mut_ptr().cast::<c_void>(),
+    ));
+}
 
 #[cfg(test)]
 mod tests {
