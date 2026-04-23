@@ -96,10 +96,10 @@ extern "C" {
     fn set_buflocal_ofu_callback(buf: *mut core::ffi::c_void);
     fn rs_set_buflocal_tfu_callback(buf: *mut core::ffi::c_void);
 
-    fn nvim_buf_kmap_state_set_init(buf: *mut core::ffi::c_void);
     fn clear_string_option(pp: *mut *mut c_char);
+    fn xstrdup(s: *const c_char) -> *mut c_char;
 
-    fn nvim_buf_set_b_p_fenc_dup(buf: *mut core::ffi::c_void);
+    static mut p_fenc: *mut c_char;
     static mut p_ff: *mut c_char;
     static mut p_ffs: *mut c_char;
     static empty_string_option: [c_char; 1];
@@ -421,7 +421,7 @@ unsafe fn do_bulk_copy(buf: *mut core::ffi::c_void, dont_do_help: bool) {
         crate::p_keymap.cast_const(),
     );
     nvim_buf_copy_opt_sctx(buf, K_BUF_OPT_KEYMAP);
-    nvim_buf_kmap_state_set_init(buf);
+    unsafe { bref_raw_mut(buf) }.b_kmap_state |= 1; // KEYMAP_INIT
 
     // Langmap/IME state: copy from current buffer is better than resetting
     // iminsert/imsearch are OptInt globals, b_p_iminsert/b_p_imsearch are OptInt fields
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn rs_buf_copy_options(buf: *mut core::ffi::c_void, flags:
         } else {
             free_buf_options(buf, true);
             unsafe { bref_raw_mut(buf) }.b_p_ro = 0;
-            nvim_buf_set_b_p_fenc_dup(buf);
+            unsafe { bref_raw_mut(buf) }.b_p_fenc = xstrdup(p_fenc);
             // Set b_p_ff from first char of p_ffs, falling back to p_ff.
             let ff_str: *const c_char = match (*p_ffs) as u8 {
                 b'm' => c"mac".as_ptr(),

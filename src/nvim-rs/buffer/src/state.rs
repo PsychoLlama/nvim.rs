@@ -146,8 +146,6 @@ extern "C" {
     );
     fn nvim_buf_changedtick_di_key(buf: BufHandle) -> *const c_char;
     fn nvim_buf_changedtick_di_tv_ptr(buf: BufHandle) -> *mut u8;
-    fn nvim_buf_b_locked_inc(buf: BufHandle);
-    fn nvim_buf_b_locked_dec(buf: BufHandle);
 }
 
 // =============================================================================
@@ -495,7 +493,7 @@ pub unsafe extern "C" fn rs_buf_set_changedtick(buf: BufHandle, changedtick: i64
     let b_vars = buf_ref(buf).b_vars;
     if nvim_tv_dict_is_watched(b_vars.cast_const()) {
         // Increment b_locked around the notify to match C semantics.
-        nvim_buf_b_locked_inc(buf);
+        buf_mut(buf).b_locked += 1;
         let newtv = nvim_buf_changedtick_di_tv_ptr(buf);
         nvim_tv_dict_watcher_notify(
             b_vars,
@@ -503,7 +501,7 @@ pub unsafe extern "C" fn rs_buf_set_changedtick(buf: BufHandle, changedtick: i64
             newtv,
             old_val.as_mut_ptr(),
         );
-        nvim_buf_b_locked_dec(buf);
+        buf_mut(buf).b_locked -= 1;
     }
 }
 

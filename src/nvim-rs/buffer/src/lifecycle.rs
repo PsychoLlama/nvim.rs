@@ -1367,7 +1367,6 @@ extern "C" {
     fn enter_buffer(buf: BufHandle);
     fn check_colorcolumn(cc: *const c_char, win: *mut c_void) -> *const c_char;
     fn nvim_buf_terminal_check_size(buf: BufHandle) -> c_int;
-    fn nvim_curbuf_dec_nwindows();
     fn nvim_curwin_buffer_is_null() -> c_int;
     fn nvim_curwin_buffer_is_buf(buf: BufHandle) -> c_int;
     fn aborting() -> c_int;
@@ -1476,8 +1475,9 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
 
     let valid = crate::rs_buf_valid(buf) != 0;
     if (valid && buf != nvim_get_curbuf() && aborting() == 0) || nvim_curwin_buffer_is_null() != 0 {
-        if !nvim_get_curbuf().is_null() && prevbuf != nvim_get_curbuf() {
-            nvim_curbuf_dec_nwindows();
+        let cur = nvim_get_curbuf();
+        if !cur.is_null() && prevbuf != cur {
+            buf_mut(cur).b_nwindows -= 1;
         }
         enter_buffer(if valid {
             buf

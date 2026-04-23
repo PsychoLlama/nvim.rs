@@ -82,9 +82,6 @@ extern "C" {
     fn nvim_get_curwin() -> *mut c_void;
     fn nvim_get_curtab() -> *mut c_void;
 
-    fn nvim_buf_lock(buf: BufHandle);
-    fn nvim_buf_unlock(buf: BufHandle);
-
     fn set_bufref(bufref: *mut BufRef, buf: BufHandle);
     #[link_name = "rs_bufref_valid"]
     fn nvim_bufref_valid(bufref: *const BufRef) -> c_int;
@@ -118,13 +115,8 @@ extern "C" {
     fn nvim_syntax_clear_buf(buf: BufHandle);
 
     // Phase 4: close_buffer helpers
-    fn nvim_buf_b_locked_inc(buf: BufHandle);
-    fn nvim_buf_b_locked_dec(buf: BufHandle);
-    fn nvim_buf_b_locked_split_inc(buf: BufHandle);
-    fn nvim_buf_b_locked_split_dec(buf: BufHandle);
     fn nvim_emsg_auabort();
     fn nvim_buflist_setfpos_win(buf: BufHandle, win: *mut c_void);
-    fn nvim_buf_b_nwindows_dec_safe(buf: BufHandle);
     fn nvim_terminal_close_buf(buf: BufHandle);
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_entered_free_all_mem() -> c_int;
@@ -167,7 +159,8 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     let the_curtab = nvim_get_curtab();
 
     // Make sure the buffer isn't closed by autocommands.
-    nvim_buf_lock(buf);
+    buf_mut(buf).b_locked += 1;
+    buf_mut(buf).b_locked_split += 1;
 
     let mut bufref = BufRef::zeroed();
     set_bufref(&raw mut bufref, buf);
@@ -221,7 +214,8 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
         return;
     }
 
-    nvim_buf_unlock(buf);
+    buf_mut(buf).b_locked -= 1;
+    buf_mut(buf).b_locked_split -= 1;
 
     // If the buffer was in curwin and the window has changed, go back to that
     // window, if it still exists.  This avoids that ":edit x" triggering a
@@ -323,8 +317,8 @@ pub unsafe extern "C" fn rs_close_buffer(
 
     // When the buffer is no longer in a window, trigger BufWinLeave
     if buf_ref(buf).b_nwindows == 1 {
-        nvim_buf_b_locked_inc(buf);
-        nvim_buf_b_locked_split_inc(buf);
+        buf_mut(buf).b_locked += 1;
+        buf_mut(buf).b_locked_split += 1;
         if apply_autocmds(
             EVENT_BUFWINLEAVE,
             buf_ref(buf).b_fname,
@@ -337,8 +331,8 @@ pub unsafe extern "C" fn rs_close_buffer(
             nvim_emsg_auabort();
             return false;
         }
-        nvim_buf_b_locked_dec(buf);
-        nvim_buf_b_locked_split_dec(buf);
+        buf_mut(buf).b_locked -= 1;
+        buf_mut(buf).b_locked_split -= 1;
         if abort_if_last && !win.is_null() && rs_one_window_in_tab(win, std::ptr::null_mut()) != 0 {
             // Autocommands made this the only window.
             nvim_emsg_auabort();
@@ -347,8 +341,8 @@ pub unsafe extern "C" fn rs_close_buffer(
 
         // When the buffer becomes hidden, but is not unloaded, trigger BufHidden
         if !unload_buf {
-            nvim_buf_b_locked_inc(buf);
-            nvim_buf_b_locked_split_inc(buf);
+            buf_mut(buf).b_locked += 1;
+            buf_mut(buf).b_locked_split += 1;
             if apply_autocmds(
                 EVENT_BUFHIDDEN,
                 buf_ref(buf).b_fname,
@@ -361,8 +355,8 @@ pub unsafe extern "C" fn rs_close_buffer(
                 nvim_emsg_auabort();
                 return false;
             }
-            nvim_buf_b_locked_dec(buf);
-            nvim_buf_b_locked_split_dec(buf);
+            buf_mut(buf).b_locked -= 1;
+            buf_mut(buf).b_locked_split -= 1;
             if abort_if_last
                 && !win.is_null()
                 && rs_one_window_in_tab(win, std::ptr::null_mut()) != 0
@@ -389,7 +383,9 @@ pub unsafe extern "C" fn rs_close_buffer(
     let nwindows = buf_ref(buf).b_nwindows;
 
     // Decrease the link count from windows (unless not in any window)
-    nvim_buf_b_nwindows_dec_safe(buf);
+    if buf_ref(buf).b_nwindows > 0 {
+        buf_mut(buf).b_nwindows -= 1;
+    }
 
     if rs_diffopt_hiddenoff() != 0 && !unload_buf && buf_ref(buf).b_nwindows == 0 {
         rs_diff_buf_delete(buf); // Clear 'diff' for hidden buffer.
@@ -441,7 +437,9 @@ pub unsafe extern "C" fn rs_close_buffer(
 
     // Autocommands may have opened or closed windows for this buffer.
     // Decrement the count for the close we do here.
-    nvim_buf_b_nwindows_dec_safe(buf);
+    if buf_ref(buf).b_nwindows > 0 {
+        buf_mut(buf).b_nwindows -= 1;
+    }
 
     // Remove the buffer from the list.
     if wipe_buf {

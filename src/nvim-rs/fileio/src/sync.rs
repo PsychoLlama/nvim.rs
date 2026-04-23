@@ -701,8 +701,6 @@ extern "C" {
     fn nvim_u_write_undo(name: *const c_char, forceit: c_int, buf: *mut c_void, hash: *mut u8);
     /// os_path_exists (from undo.c).
     fn nvim_os_path_exists(path: *const c_char) -> bool;
-    /// Copies buf->b_mtime to b_mtime_read and b_mtime_ns to b_mtime_read_ns.
-    fn nvim_buf_copy_mtime_to_mtime_read(buf: *mut c_void);
     /// rs_time_differs: compare file time vs stored.
     fn rs_time_differs(
         file_sec: i64,
@@ -933,7 +931,11 @@ unsafe fn buf_check_timestamp_inner(buf: *mut c_void) -> c_int {
                             mesg2 = c"See \":help W16\" for more info.".as_ptr();
                         } else {
                             // Only timestamp changed: store to avoid check_mtime() warnings.
-                            nvim_buf_copy_mtime_to_mtime_read(buf);
+                            {
+                                let bm = buf_mut_void(buf);
+                                bm.b_mtime_read = bm.b_mtime;
+                                bm.b_mtime_read_ns = bm.b_mtime_ns;
+                            }
                         }
                     }
                 }

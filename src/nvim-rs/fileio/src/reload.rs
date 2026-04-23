@@ -65,9 +65,6 @@ extern "C" {
     fn nvim_get_curbuf_ml_line_count() -> c_int;
 
     // --- buffer flags ---
-    fn nvim_curbuf_set_b_flags_or(flags: c_int);
-    fn nvim_curbuf_set_b_keep_filetype(val: c_int);
-    fn nvim_curbuf_set_b_mod_set(val: c_int);
 
     // --- readfile ---
     fn nvim_readfile_reload(
@@ -262,8 +259,8 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     let curbuf = nvim_get_curbuf();
     if saved == OK {
         // BF_CHECK_RO: check for RO again.
-        nvim_curbuf_set_b_flags_or(BF_CHECK_RO);
-        nvim_curbuf_set_b_keep_filetype(1);
+        buf_mut_void(curbuf).b_flags |= BF_CHECK_RO;
+        buf_mut_void(curbuf).b_keep_filetype = 1;
 
         let silent = nvim_shortmess_fileinfo();
         let readfile_ok = nvim_readfile_reload(buf, ea, flags, silent);
@@ -295,7 +292,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
                 nvim_u_unchanged(curbuf);
             }
             nvim_buf_updates_unload(curbuf);
-            nvim_curbuf_set_b_mod_set(1);
+            buf_mut_void(curbuf).b_mod_set = 1;
         }
     }
 
@@ -314,7 +311,7 @@ pub unsafe extern "C" fn rs_buf_reload(buf: *mut c_void, orig_mode: c_int, reloa
     nvim_curwin_set_cursor(old_cursor_lnum, old_cursor_col);
     nvim_check_cursor_curwin();
     nvim_update_topline_curwin();
-    nvim_curbuf_set_b_keep_filetype(0);
+    buf_mut_void(curbuf).b_keep_filetype = 0;
 
     // Update folds for all tab windows.
     let curwin = nvim_get_curwin();
