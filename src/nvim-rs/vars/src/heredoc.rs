@@ -1,17 +1,22 @@
 //! Heredoc and script_get functions for VimL.
 //!
-//! Phase 4: Migrated from `src/nvim/eval/vars.c`.
+//! Phase 4/5: Migrated from `src/nvim/eval/vars.c`.
 //!
 //! Functions:
 //! - `rs_heredoc_get`: Parse HERE document for :let =<<
+//! - `rs_script_get`: Get script lines, possibly from a heredoc
 
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::ptr_as_ptr)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::items_after_statements)]
 #![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::borrow_as_ptr)]
 
 use std::ffi::{c_char, c_int, c_void};
+
+use crate::eval_helpers::GArray;
 
 // =============================================================================
 // C extern declarations
@@ -55,6 +60,22 @@ extern "C" {
     // --- error messages ---
     fn emsg(msg: *const c_char) -> c_int;
     fn semsg(fmt: *const c_char, ...) -> c_int;
+
+    // --- eap arg accessor ---
+    fn nvim_eap_get_arg(eap: *const c_void) -> *mut c_char;
+
+    // --- list iteration (from list crate) ---
+    fn rs_list_first(list: *mut c_void) -> *mut c_void;
+    fn rs_listitem_next(item: *mut c_void) -> *mut c_void;
+    fn rs_listitem_tv(item: *mut c_void) -> *mut c_void;
+
+    // --- typval string ---
+    fn tv_get_string(tv: *mut c_void) -> *const c_char;
+
+    // --- growing array ---
+    fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int);
+    fn ga_concat(gap: *mut GArray, s: *const c_char);
+    fn ga_append(gap: *mut GArray, c: c_int);
 }
 
 // Error message string constants (must match gettext keys exactly)
@@ -246,4 +267,63 @@ pub unsafe extern "C" fn rs_heredoc_get(
         return std::ptr::null_mut();
     }
     l
+}
+
+/// Get script lines, possibly from a heredoc.
+///
+/// Matches C `script_get`. Returns NULL on skip or error, otherwise an
+/// allocated string. On return, `*lenp` is set to the length (without NUL).
+///
+/// # Safety
+/// `eap` must be a valid `exarg_T*`. `lenp` must be a valid `*mut usize`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_script_get(eap: *mut c_void, lenp: *mut usize) -> *mut c_char {
+    let cmd = nvim_eap_get_arg(eap);
+    let skip = nvim_eap_get_skip(eap) != 0;
+
+    if *cmd != b'<' as c_char || *cmd.add(1) != b'<' as c_char || nvim_eap_has_getline(eap) == 0 {
+        let len = strlen(cmd);
+        *lenp = len;
+        if skip {
+            return std::ptr::null_mut();
+        }
+        return xmemdupz(cmd, len) as *mut c_char;
+    }
+
+    let cmd_after = cmd.add(2); // skip the "<<"
+
+    let l = rs_heredoc_get(eap, cmd_after, 1 /* script_get = true */);
+    if l.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let mut ga = GArray {
+        ga_len: 0,
+        ga_maxlen: 0,
+        ga_itemsize: 0,
+        ga_growsize: 0,
+        ga_data: std::ptr::null_mut(),
+    };
+    if !skip {
+        ga_init(&mut ga, 1, 0x400);
+    }
+
+    let mut li = rs_list_first(l);
+    while !li.is_null() {
+        if !skip {
+            let tv = rs_listitem_tv(li);
+            let s = tv_get_string(tv);
+            ga_concat(&mut ga, s);
+            ga_append(&mut ga, b'\n' as c_int);
+        }
+        li = rs_listitem_next(li);
+    }
+
+    *lenp = ga.ga_len as usize; // length without trailing NUL
+    if !skip {
+        ga_append(&mut ga, 0); // NUL terminate
+    }
+
+    tv_list_free(l);
+    ga.ga_data as *mut c_char
 }

@@ -126,8 +126,9 @@ extern void rs_get_var_from(const char *varname, typval_T *rettv, typval_T *deft
                              tabpage_T *tp, win_T *win, buf_T *buf);
 // (rs_f_* functions are declared below)
 
-// Phase 4: heredoc and unlet functions migrated to Rust
+// Phase 4/5: heredoc, script_get and unlet functions migrated to Rust
 extern list_T *rs_heredoc_get(exarg_T *eap, char *cmd, int script_get);
+extern char *rs_script_get(exarg_T *eap, size_t *lenp);
 extern void rs_ex_unlet(exarg_T *eap);
 extern void rs_ex_lockvar(exarg_T *eap);
 extern int rs_do_unlet(const char *name, size_t name_len, int forceit);
@@ -2570,36 +2571,5 @@ void *nvim_vars_hash_find(void *ht, const char *key)
 char *script_get(exarg_T *const eap, size_t *const lenp)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_MALLOC
 {
-  char *cmd = eap->arg;
-
-  if (cmd[0] != '<' || cmd[1] != '<' || eap->ea_getline == NULL) {
-    *lenp = strlen(eap->arg);
-    return eap->skip ? NULL : xmemdupz(eap->arg, *lenp);
-  }
-  cmd += 2;
-
-  garray_T ga = { .ga_data = NULL, .ga_len = 0 };
-
-  list_T *const l = heredoc_get(eap, cmd, true);
-  if (l == NULL) {
-    return NULL;
-  }
-
-  if (!eap->skip) {
-    ga_init(&ga, 1, 0x400);
-  }
-
-  TV_LIST_ITER_CONST(l, li, {
-    if (!eap->skip) {
-      ga_concat(&ga, tv_get_string(TV_LIST_ITEM_TV(li)));
-      ga_append(&ga, '\n');
-    }
-  });
-  *lenp = (size_t)ga.ga_len;  // Set length without trailing NUL.
-  if (!eap->skip) {
-    ga_append(&ga, NUL);
-  }
-
-  tv_list_free(l);
-  return (char *)ga.ga_data;
+  return rs_script_get(eap, lenp);
 }
