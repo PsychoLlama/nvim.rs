@@ -1597,101 +1597,7 @@ void tv_clear(typval_T *const tv)
   assert(evn_ret == OK);
 }
 
-//{{{3 Free
-
-/// Free allocated Vimscript object and value stored inside
-///
-/// @param  tv  Object to free.
-void tv_free(typval_T *tv)
-{
-  if (tv == NULL) {
-    return;
-  }
-
-  switch (tv->v_type) {
-  case VAR_PARTIAL:
-    partial_unref(tv->vval.v_partial);
-    break;
-  case VAR_FUNC:
-    func_unref(tv->vval.v_string);
-    FALLTHROUGH;
-  case VAR_STRING:
-    xfree(tv->vval.v_string);
-    break;
-  case VAR_BLOB:
-    tv_blob_unref(tv->vval.v_blob);
-    break;
-  case VAR_LIST:
-    tv_list_unref(tv->vval.v_list);
-    break;
-  case VAR_DICT:
-    tv_dict_unref(tv->vval.v_dict);
-    break;
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-  case VAR_NUMBER:
-  case VAR_FLOAT:
-  case VAR_UNKNOWN:
-    break;
-  }
-  xfree(tv);
-}
-
-//{{{3 Copy
-
-/// Copy typval from one location to another
-///
-/// When needed allocates string or increases reference count. Does not make
-/// a copy of a container, but copies its reference!
-///
-/// It is OK for `from` and `to` to point to the same location; this is used to
-/// make a copy later.
-///
-/// @param[in]  from  Location to copy from.
-/// @param[out]  to  Location to copy to.
-void tv_copy(const typval_T *const from, typval_T *const to)
-{
-  to->v_type = from->v_type;
-  to->v_lock = VAR_UNLOCKED;
-  memmove(&to->vval, &from->vval, sizeof(to->vval));
-  switch (from->v_type) {
-  case VAR_NUMBER:
-  case VAR_FLOAT:
-  case VAR_BOOL:
-  case VAR_SPECIAL:
-    break;
-  case VAR_STRING:
-  case VAR_FUNC:
-    if (from->vval.v_string != NULL) {
-      to->vval.v_string = xstrdup(from->vval.v_string);
-      if (from->v_type == VAR_FUNC) {
-        func_ref(to->vval.v_string);
-      }
-    }
-    break;
-  case VAR_PARTIAL:
-    if (to->vval.v_partial != NULL) {
-      to->vval.v_partial->pt_refcount++;
-    }
-    break;
-  case VAR_BLOB:
-    if (from->vval.v_blob != NULL) {
-      to->vval.v_blob->bv_refcount++;
-    }
-    break;
-  case VAR_LIST:
-    tv_list_ref(to->vval.v_list);
-    break;
-  case VAR_DICT:
-    if (from->vval.v_dict != NULL) {
-      to->vval.v_dict->dv_refcount++;
-    }
-    break;
-  case VAR_UNKNOWN:
-    semsg(_(e_intern2), "tv_copy(UNKNOWN)");
-    break;
-  }
-}
+// tv_free, tv_copy migrated to Rust (Phase 2 of typval.c migration)
 
 //{{{2 Locks
 
@@ -1781,96 +1687,7 @@ void tv_item_lock(typval_T *const tv, const int deep, const bool lock, const boo
 
 // tv_check_lock and value_check_lock migrated to Rust (nvim-rs/typval); declared in typval.h
 
-//{{{2 Comparison
-
-static int tv_equal_recurse_limit;
-
-/// Compare two Vimscript values
-///
-/// Like "==", but strings and numbers are different, as well as floats and
-/// numbers.
-///
-/// @warning Too nested structures may be considered equal even if they are not.
-///
-/// @param[in]  tv1  First value to compare.
-/// @param[in]  tv2  Second value to compare.
-/// @param[in]  ic  True if case is to be ignored.
-///
-/// @return true if values are equal.
-bool tv_equal(typval_T *const tv1, typval_T *const tv2, const bool ic)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  // TODO(ZyX-I): Make this not recursive
-  static int recursive_cnt = 0;  // Catch recursive loops.
-
-  if (!(tv_is_func(*tv1) && tv_is_func(*tv2)) && tv1->v_type != tv2->v_type) {
-    return false;
-  }
-
-  // Catch lists and dicts that have an endless loop by limiting
-  // recursiveness to a limit.  We guess they are equal then.
-  // A fixed limit has the problem of still taking an awful long time.
-  // Reduce the limit every time running into it. That should work fine for
-  // deeply linked structures that are not recursively linked and catch
-  // recursiveness quickly.
-  if (recursive_cnt == 0) {
-    tv_equal_recurse_limit = 1000;
-  }
-  if (recursive_cnt >= tv_equal_recurse_limit) {
-    tv_equal_recurse_limit--;
-    return true;
-  }
-
-  switch (tv1->v_type) {
-  case VAR_LIST: {
-    recursive_cnt++;
-    const bool r = tv_list_equal(tv1->vval.v_list, tv2->vval.v_list, ic);
-    recursive_cnt--;
-    return r;
-  }
-  case VAR_DICT: {
-    recursive_cnt++;
-    const bool r = tv_dict_equal(tv1->vval.v_dict, tv2->vval.v_dict, ic);
-    recursive_cnt--;
-    return r;
-  }
-  case VAR_PARTIAL:
-  case VAR_FUNC: {
-    if ((tv1->v_type == VAR_PARTIAL && tv1->vval.v_partial == NULL)
-        || (tv2->v_type == VAR_PARTIAL && tv2->vval.v_partial == NULL)) {
-      return false;
-    }
-    recursive_cnt++;
-    const bool r = rs_func_equal(tv1, tv2, ic);
-    recursive_cnt--;
-    return r;
-  }
-  case VAR_BLOB:
-    return tv_blob_equal(tv1->vval.v_blob, tv2->vval.v_blob);
-  case VAR_NUMBER:
-    return tv1->vval.v_number == tv2->vval.v_number;
-  case VAR_FLOAT:
-    return tv1->vval.v_float == tv2->vval.v_float;
-  case VAR_STRING: {
-    char buf1[NUMBUFLEN];
-    char buf2[NUMBUFLEN];
-    const char *s1 = tv_get_string_buf(tv1, buf1);
-    const char *s2 = tv_get_string_buf(tv2, buf2);
-    return mb_strcmp_ic(ic, s1, s2) == 0;
-  }
-  case VAR_BOOL:
-    return tv1->vval.v_bool == tv2->vval.v_bool;
-  case VAR_SPECIAL:
-    return tv1->vval.v_special == tv2->vval.v_special;
-  case VAR_UNKNOWN:
-    // VAR_UNKNOWN can be the result of an invalid expression, let’s say it
-    // does not equal anything, not even self.
-    return false;
-  }
-
-  abort();
-  return false;
-}
+// tv_equal migrated to Rust (Phase 2 of typval.c migration)
 
 //{{{2 Get
 
@@ -2915,3 +2732,25 @@ void nvim_partial_inc_refcount(partial_T *pt) { pt->pt_refcount++; }
 
 /// Set vval.v_string (takes ownership) on a typval without changing type (accessor for Rust).
 void nvim_tv_set_vstring_owned(typval_T *tv, char *s) { tv->vval.v_string = s; }
+
+// Phase 2 (typval migration): accessors for tv_copy, tv_free, tv_equal.
+
+// nvim_tv_get_partial: already defined in eval/vars.c
+
+/// Get vval.v_string as mutable (accessor for Rust tv_free/tv_copy).
+char *nvim_tv_get_string_mutable(typval_T *tv) { return tv->vval.v_string; }
+
+/// Copy the vval union from one typval to another (memmove accessor for Rust tv_copy).
+void nvim_tv_copy_vval(typval_T *to, const typval_T *from)
+{
+  memmove(&to->vval, &from->vval, sizeof(to->vval));
+}
+
+/// Get bv_refcount from a blob (accessor for Rust tv_copy blob refcount bump).
+int nvim_blob_get_bv_refcount(const blob_T *b) { return b->bv_refcount; }
+
+/// Increment bv_refcount on a blob (accessor for Rust tv_copy).
+void nvim_blob_inc_refcount(blob_T *b) { b->bv_refcount++; }
+
+/// mb_strcmp_ic wrapper for Rust (accessible by Rust for tv_equal string comparison).
+int nvim_mb_strcmp_ic(bool ic, const char *s1, const char *s2) { return mb_strcmp_ic(ic, s1, s2); }

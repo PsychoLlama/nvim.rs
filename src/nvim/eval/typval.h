@@ -613,4 +613,9 @@ extern void callback_put(Callback *cb, typval_T *tv);
 extern void callback_copy(Callback *dest, Callback *src);
 extern char *callback_to_string(Callback *cb, Arena *arena);
 
+// Core typval operations (migrated to Rust, Phase 2 of typval.c migration)
+extern void tv_free(typval_T *tv);
+extern void tv_copy(const typval_T *from, typval_T *to);
+extern bool tv_equal(typval_T *tv1, typval_T *tv2, bool ic);
+
 #include "eval/typval.h.generated.h"

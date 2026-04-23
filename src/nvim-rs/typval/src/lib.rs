@@ -5098,6 +5098,247 @@ pub unsafe extern "C" fn rs_callback_to_string(cb: *mut c_void, arena: *mut c_vo
     msg
 }
 
+// =============================================================================
+// Phase 2: tv_copy, tv_free, tv_equal (migrated from typval.c)
+// =============================================================================
+
+use std::cell::Cell;
+
+// Thread-local state for tv_equal recursion tracking.
+// These replicate the C static variables:
+//   static int recursive_cnt = 0;
+//   static int tv_equal_recurse_limit;
+thread_local! {
+    static TV_EQUAL_RECURSIVE_CNT: Cell<i32> = const { Cell::new(0) };
+    static TV_EQUAL_RECURSE_LIMIT: Cell<i32> = const { Cell::new(1000) };
+}
+
+extern "C" {
+    // Phase 2 accessors
+    fn nvim_tv_get_partial(tv: TypevalHandle) -> *mut c_void;
+    fn nvim_tv_get_string_mutable(tv: TypevalHandle) -> *mut c_char;
+    fn nvim_tv_copy_vval(to: TypevalHandle, from: TypevalHandle);
+    fn nvim_blob_inc_refcount(b: BlobHandle);
+    fn nvim_mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_int;
+
+    // tv_dict_unref (still in C, Phase 4 will migrate it)
+    fn tv_dict_unref(d: DictHandle);
+
+    // tv_list_equal (in Rust via export_name, callable via extern)
+    fn tv_list_equal(l1: ListHandle, l2: ListHandle, ic: bool) -> bool;
+
+    // tv_dict_equal (still in C, called from tv_equal)
+    fn tv_dict_equal(d1: DictHandle, d2: DictHandle, ic: bool) -> bool;
+
+    // tv_blob_equal (in Rust via export_name)
+    fn tv_blob_equal(b1: BlobHandle, b2: BlobHandle) -> bool;
+
+    // rs_func_equal (in Rust)
+    fn rs_func_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
+
+}
+
+/// Free allocated Vimscript object and value stored inside.
+///
+/// Migrated from C `tv_free`.
+///
+/// # Safety
+///
+/// `tv` must be a valid pointer to a heap-allocated `typval_T`, or null.
+#[export_name = "tv_free"]
+pub unsafe extern "C" fn rs_tv_free(tv: TypevalHandle) {
+    if tv.is_null() {
+        return;
+    }
+    let v_type = nvim_tv_get_type(tv);
+    match VarType::from_c_int(v_type) {
+        Some(VarType::Partial) => {
+            let pt = nvim_tv_get_partial(tv);
+            partial_unref(pt);
+        }
+        Some(VarType::Func) => {
+            let s = nvim_tv_get_string_mutable(tv);
+            func_unref(s);
+            nvim_xfree(s.cast());
+        }
+        Some(VarType::String) => {
+            let s = nvim_tv_get_string_mutable(tv);
+            nvim_xfree(s.cast());
+        }
+        Some(VarType::Blob) => {
+            let b = nvim_tv_get_blob(tv);
+            // tv_blob_unref is in Rust
+            rs_tv_blob_unref(b);
+        }
+        Some(VarType::List) => {
+            let l = nvim_tv_get_list(tv);
+            // tv_list_unref is in Rust
+            rs_tv_list_unref(l);
+        }
+        Some(VarType::Dict) => {
+            let d = nvim_tv_get_dict(tv);
+            tv_dict_unref(d);
+        }
+        _ => {}
+    }
+    nvim_xfree(tv.as_ptr().cast_mut());
+}
+
+/// Copy typval from one location to another (shallow copy with refcount bumps).
+///
+/// Migrated from C `tv_copy`.
+///
+/// # Safety
+///
+/// `from` and `to` must be valid non-null pointers to `typval_T`.
+#[export_name = "tv_copy"]
+pub unsafe extern "C" fn rs_tv_copy(from: TypevalHandle, to: TypevalHandle) {
+    // Copy v_type
+    let v_type_int = nvim_tv_get_type(from);
+    nvim_tv_set_type(to, v_type_int);
+    // Set v_lock = VAR_UNLOCKED (0)
+    nvim_tv_set_lock(to, 0);
+    // Copy the vval union via memmove
+    nvim_tv_copy_vval(to, from);
+
+    // Per-type fixups
+    match VarType::from_c_int(v_type_int) {
+        Some(VarType::Number | VarType::Float | VarType::Bool | VarType::Special) => {
+            // No refcount or pointer fixups needed
+        }
+        Some(VarType::String | VarType::Func) => {
+            let s = nvim_tv_get_string_ptr(from);
+            if !s.is_null() {
+                let new_s = nvim_xstrdup(s);
+                nvim_tv_set_vstring_owned(to.as_ptr().cast_mut(), new_s);
+                if v_type_int == VarType::Func as c_int {
+                    func_ref(new_s);
+                }
+            }
+        }
+        Some(VarType::Partial) => {
+            let pt = nvim_tv_get_partial(to);
+            if !pt.is_null() {
+                nvim_partial_inc_refcount(pt);
+            }
+        }
+        Some(VarType::Blob) => {
+            let b = nvim_tv_get_blob(from);
+            if !b.is_null() {
+                nvim_blob_inc_refcount(b);
+            }
+        }
+        Some(VarType::List) => {
+            let l = nvim_tv_get_list(to);
+            // tv_list_ref increments refcount
+            rs_tv_list_ref(l);
+        }
+        Some(VarType::Dict) => {
+            let d = nvim_tv_get_dict(from);
+            if !d.is_null() {
+                nvim_dict_inc_refcount(d);
+            }
+        }
+        Some(VarType::Unknown) | None => {
+            // Warn about UNKNOWN copy
+            let fmt = b"E340: Internal error: %s\0".as_ptr().cast::<c_char>();
+            let arg = b"tv_copy(UNKNOWN)\0".as_ptr().cast::<c_char>();
+            semsg_typval(fmt, arg);
+        }
+    }
+}
+
+/// Compare two Vimscript values for equality.
+///
+/// Migrated from C `tv_equal`.
+/// Uses thread-local state to track recursion depth.
+///
+/// # Safety
+///
+/// `tv1` and `tv2` must be valid non-null pointers to `typval_T`.
+#[export_name = "tv_equal"]
+pub unsafe extern "C" fn rs_tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool {
+    let t1 = VarType::from_c_int(nvim_tv_get_type(tv1)).unwrap_or(VarType::Unknown);
+    let t2 = VarType::from_c_int(nvim_tv_get_type(tv2)).unwrap_or(VarType::Unknown);
+
+    // Type mismatch check (except func/partial both count as func)
+    let is_func1 = matches!(t1, VarType::Func | VarType::Partial);
+    let is_func2 = matches!(t2, VarType::Func | VarType::Partial);
+    if !(is_func1 && is_func2) && t1 != t2 {
+        return false;
+    }
+
+    // Recursion limit tracking
+    let cnt = TV_EQUAL_RECURSIVE_CNT.get();
+    if cnt == 0 {
+        TV_EQUAL_RECURSE_LIMIT.set(1000);
+    }
+    let limit = TV_EQUAL_RECURSE_LIMIT.get();
+    if cnt >= limit {
+        TV_EQUAL_RECURSE_LIMIT.set(limit - 1);
+        return true;
+    }
+
+    match t1 {
+        VarType::List => {
+            TV_EQUAL_RECURSIVE_CNT.set(cnt + 1);
+            let l1 = nvim_tv_get_list(tv1);
+            let l2 = nvim_tv_get_list(tv2);
+            let r = tv_list_equal(l1, l2, ic);
+            TV_EQUAL_RECURSIVE_CNT.set(cnt);
+            r
+        }
+        VarType::Dict => {
+            TV_EQUAL_RECURSIVE_CNT.set(cnt + 1);
+            let d1 = nvim_tv_get_dict(tv1);
+            let d2 = nvim_tv_get_dict(tv2);
+            let r = tv_dict_equal(d1, d2, ic);
+            TV_EQUAL_RECURSIVE_CNT.set(cnt);
+            r
+        }
+        VarType::Partial | VarType::Func => {
+            // Check for null partial
+            let p1_null = t1 == VarType::Partial && nvim_tv_get_partial(tv1).is_null();
+            let p2_null = t2 == VarType::Partial && nvim_tv_get_partial(tv2).is_null();
+            if p1_null || p2_null {
+                return false;
+            }
+            TV_EQUAL_RECURSIVE_CNT.set(cnt + 1);
+            let r = rs_func_equal(tv1, tv2, ic);
+            TV_EQUAL_RECURSIVE_CNT.set(cnt);
+            r
+        }
+        VarType::Blob => {
+            let b1 = nvim_tv_get_blob(tv1);
+            let b2 = nvim_tv_get_blob(tv2);
+            tv_blob_equal(b1, b2)
+        }
+        VarType::Number => nvim_tv_get_number(tv1) == nvim_tv_get_number(tv2),
+        #[allow(clippy::float_cmp)] // Match C behavior: exact float equality
+        VarType::Float => nvim_tv_get_float(tv1) == nvim_tv_get_float(tv2),
+        VarType::String => {
+            let mut buf1 = [0u8; NUMBUFLEN];
+            let mut buf2 = [0u8; NUMBUFLEN];
+            let s1 = nvim_tv_get_string_buf(tv1, buf1.as_mut_ptr().cast());
+            let s2 = nvim_tv_get_string_buf(tv2, buf2.as_mut_ptr().cast());
+            nvim_mb_strcmp_ic(ic, s1, s2) == 0
+        }
+        VarType::Bool => nvim_tv_get_bool(tv1) == nvim_tv_get_bool(tv2),
+        VarType::Special => nvim_tv_get_bool(tv1) == nvim_tv_get_bool(tv2), // same union offset
+        VarType::Unknown => false,
+    }
+}
+
+// Helpers: call the Rust-exported functions internally by their Rust names
+// (avoiding need to go through FFI for functions we own)
+
+// tv_list_ref increments refcount; use the one we already have
+unsafe fn rs_tv_list_ref(l: ListHandle) {
+    if !l.is_null() {
+        nvim_list_ref(l);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
