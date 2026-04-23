@@ -326,3 +326,75 @@ unsafe fn libc_strlen(s: *const c_char) -> usize {
     }
     len
 }
+
+// =============================================================================
+// check_user_func_argcount
+// =============================================================================
+
+// FCERR constants used by check_user_func_argcount (matches C enum FnameTransError)
+const FCERR_UNKNOWN_OK: c_int = 0; // FCERR_UNKNOWN -- used as "OK" here
+const FCERR_TOOMANY: c_int = 1;
+const FCERR_TOOFEW: c_int = 2;
+
+/// Check the argument count for user function "fp".
+/// Returns FCERR_UNKNOWN (0) if OK, FCERR_TOOFEW (2) or FCERR_TOOMANY (1) otherwise.
+///
+/// # Safety
+/// `fp` must be a valid non-null ufunc_T pointer.
+#[unsafe(export_name = "check_user_func_argcount")]
+pub unsafe extern "C" fn rs_check_user_func_argcount(fp: *mut c_void, argcount: c_int) -> c_int {
+    let regular_args = unsafe { nvim_ufunc_get_args_len(fp) };
+    let def_args_len = unsafe { nvim_ufunc_get_def_args_len(fp) };
+    let varargs = unsafe { nvim_ufunc_get_varargs(fp) };
+
+    if argcount < regular_args - def_args_len {
+        FCERR_TOOFEW
+    } else if varargs == 0 && argcount > regular_args {
+        FCERR_TOOMANY
+    } else {
+        FCERR_UNKNOWN_OK
+    }
+}
+
+// =============================================================================
+// argv_add_base
+// =============================================================================
+
+/// Size of typval_T in bytes (i32 v_type + i32 v_lock + 8-byte union = 16).
+const SIZEOF_TYPVAL: usize = 16;
+
+/// Add method base (if any) to a function argument list as the first argument.
+///
+/// # Safety
+/// All pointers must be valid. `new_argvars` must have room for `*argcount + 1` typval_T values.
+#[unsafe(export_name = "argv_add_base")]
+pub unsafe extern "C" fn rs_argv_add_base(
+    basetv: *const c_void,
+    argvars: *mut *mut c_void,
+    argcount: *mut c_int,
+    new_argvars: *mut c_void,
+    argv_base: *mut c_int,
+) {
+    if !basetv.is_null() {
+        // memmove(&new_argvars[1], *argvars, sizeof(typval_T) * *argcount)
+        let count = unsafe { *argcount } as usize;
+        unsafe {
+            std::ptr::copy(
+                (*argvars).cast::<u8>(),
+                new_argvars.cast::<u8>().add(SIZEOF_TYPVAL),
+                SIZEOF_TYPVAL * count,
+            );
+        };
+        // new_argvars[0] = *basetv  (copy 16 bytes)
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                basetv.cast::<u8>(),
+                new_argvars.cast::<u8>(),
+                SIZEOF_TYPVAL,
+            );
+        };
+        unsafe { *argcount += 1 };
+        unsafe { *argvars = new_argvars };
+        unsafe { *argv_base = 1 };
+    }
+}

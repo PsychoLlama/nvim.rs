@@ -1162,20 +1162,8 @@ void call_user_func(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rett
 /// using function() does not count as a reference, because the function is
 /// looked up by name.
 
-/// Check the argument count for user function "fp".
-/// @return  FCERR_UNKNOWN if OK, FCERR_TOOFEW or FCERR_TOOMANY otherwise.
-static int check_user_func_argcount(ufunc_T *fp, int argcount)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const int regular_args = fp->uf_args.ga_len;
-
-  if (argcount < regular_args - fp->uf_def_args.ga_len) {
-    return FCERR_TOOFEW;
-  } else if (!fp->uf_varargs && argcount > regular_args) {
-    return FCERR_TOOMANY;
-  }
-  return FCERR_UNKNOWN;
-}
+// check_user_func_argcount migrated to Rust (lookup.rs Phase 18)
+extern int check_user_func_argcount(ufunc_T *fp, int argcount);
 
 /// Call a user function after checking the arguments.
 static int call_user_func_check(ufunc_T *fp, int argcount, typval_T *argvars, typval_T *rettv,
@@ -1326,21 +1314,9 @@ func_call_skip_call:
 // nvim_user_func_error_impl inlined into rs_user_func_error (Rust, Phase 14)
 
 
-/// Used by call_func to add a method base (if any) to a function argument list
-/// as the first argument. @see call_func
-static void argv_add_base(typval_T *const basetv, typval_T **const argvars, int *const argcount,
-                          typval_T *const new_argvars, int *const argv_base)
-  FUNC_ATTR_NONNULL_ARG(2, 3, 4, 5)
-{
-  if (basetv != NULL) {
-    // Method call: base->Method()
-    memmove(&new_argvars[1], *argvars, sizeof(typval_T) * (size_t)(*argcount));
-    new_argvars[0] = *basetv;
-    (*argcount)++;
-    *argvars = new_argvars;
-    *argv_base = 1;
-  }
-}
+// argv_add_base migrated to Rust (lookup.rs Phase 18)
+extern void argv_add_base(typval_T *const basetv, typval_T **const argvars, int *const argcount,
+                          typval_T *const new_argvars, int *const argv_base);
 
 /// Call a function with its resolved parameters
 ///
