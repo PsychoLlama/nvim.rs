@@ -43,14 +43,18 @@ extern "C" {
     fn nvim_rt_expand_env(src: *mut c_char, dst: *mut c_char, dstlen: c_int);
     #[link_name = "do_exedit"]
     fn do_exedit_c(eap: *mut c_void, old_curwin: *mut c_void);
-    fn nvim_rt_emsg_invarg();
+    // emsg/gettext for e_invarg (inline)
+    fn emsg(s: *const c_char);
+    fn gettext(msgid: *const c_char) -> *const c_char;
     // NameBuff and IObuff are declared in statics block below
     fn nvim_rt_home_replace(name: *const c_char, buf: *mut c_char, len: usize);
     fn nvim_rt_format_script_entry(i: c_int, namebuff: *const c_char);
     #[link_name = "message_filtered"]
     fn nvim_rt_message_filtered(msg: *const c_char) -> bool;
-    fn nvim_rt_msg_putchar_nl();
-    fn nvim_rt_msg_outtrans(msg: *const c_char);
+    #[link_name = "msg_putchar"]
+    fn nvim_rt_msg_putchar(c: c_int);
+    #[link_name = "msg_outtrans"]
+    fn nvim_rt_msg_outtrans(msg: *const c_char, hl_id: c_int, hist: bool);
     #[link_name = "line_breakcheck"]
     fn nvim_rt_line_breakcheck();
 
@@ -102,6 +106,10 @@ extern "C" {
     /// IObuff[IOSIZE] buffer for sprintf, I/O
     #[link_name = "IObuff"]
     static nvim_rt_iobuff_arr: [c_char; 1025]; // IOSIZE
+
+    /// e_invarg error string
+    #[link_name = "e_invarg"]
+    static e_invarg: [c_char; 1];
 }
 
 // =============================================================================
@@ -314,7 +322,7 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
         if addr_count > 0 {
             let line2 = nvim_rt_exarg_get_line2(eap);
             if !rs_script_id_is_valid(line2) {
-                nvim_rt_emsg_invarg();
+                emsg(gettext(e_invarg.as_ptr()));
                 return;
             }
             let si = globals::script_item_get(line2);
@@ -344,8 +352,8 @@ pub unsafe extern "C" fn rs_ex_scriptnames(eap: *mut c_void) {
             nvim_rt_home_replace(sn_name, namebuff, MAXPATHL);
             nvim_rt_format_script_entry(i, namebuff);
             if !nvim_rt_message_filtered(iobuff) {
-                nvim_rt_msg_putchar_nl();
-                nvim_rt_msg_outtrans(iobuff);
+                nvim_rt_msg_putchar(c_int::from(b'\n'));
+                nvim_rt_msg_outtrans(iobuff, 0, false);
                 nvim_rt_line_breakcheck();
             }
         }

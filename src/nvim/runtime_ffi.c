@@ -296,7 +296,7 @@ bool nvim_exarg_arg_is_nul(void *eap) { return *((exarg_T *)eap)->arg == NUL; }
 
 // Deleted: nvim_rt_do_exedit — Rust calls do_exedit(eap, NULL) directly via link_name.
 
-void nvim_rt_emsg_invarg(void) { emsg(_(e_invarg)); }
+// Deleted: nvim_rt_emsg_invarg — Rust calls emsg(gettext(e_invarg)) directly.
 
 // Deleted: nvim_rt_get_namebuff — Rust imports NameBuff directly as extern static.
 // Deleted: nvim_rt_get_iobuff — Rust imports IObuff directly as extern static.
@@ -309,11 +309,8 @@ void nvim_rt_format_script_entry(int i, const char *namebuff)
   vim_snprintf(IObuff, (size_t)IOSIZE, "%3d: %s", i, namebuff);
 }
 
-/// Output a newline.
-void nvim_rt_msg_putchar_nl(void) { msg_putchar('\n'); }
-
-/// Output a translated string.
-void nvim_rt_msg_outtrans(const char *msg) { msg_outtrans(msg, 0, false); }
+// Deleted: nvim_rt_msg_putchar_nl — Rust calls msg_putchar('\n') directly via link_name.
+// Deleted: nvim_rt_msg_outtrans — Rust calls msg_outtrans(msg, 0, false) directly via link_name.
 
 /// Allocate a list and set it as the return value.
 
@@ -509,11 +506,8 @@ void nvim_rt_cstack_set_pending(void *cstack, int idx, int val)
 /// report_make_pending wrapper (for CSTP_FINISH).
 void nvim_rt_report_make_pending_finish(void) { report_make_pending(CSTP_FINISH, NULL); }
 
-/// emsg for E167.
-void nvim_rt_emsg_scriptencoding_outside(void) { emsg(_("E167: :scriptencoding used outside of a sourced file")); }
-
-/// emsg for E168.
-void nvim_rt_emsg_finish_outside(void) { emsg(_("E168: :finish used outside of a sourced file")); }
+// Deleted: nvim_rt_emsg_scriptencoding_outside — Rust calls emsg(gettext(...)) directly.
+// Deleted: nvim_rt_emsg_finish_outside — Rust calls emsg(gettext(...)) directly.
 
 // =============================================================================
 // Phase 4: Accessors for do_source_ext and related functions
@@ -536,20 +530,13 @@ int nvim_rt_EVENT_SOURCEPOST(void) { return EVENT_SOURCEPOST; }
 
 /// fclose wrapper.
 
-/// smsg wrapper for do_source verbose messages.
-void nvim_rt_smsg_cannot_source(const char *fname) { smsg(0, _("Cannot source a directory: \"%s\""), fname); }
-void nvim_rt_smsg_could_not_source(const char *fname) { smsg(0, _("could not source \"%s\""), fname); }
-void nvim_rt_smsg_could_not_source_lnum(int64_t lnum, const char *fname)
-{
-  smsg(0, _("line %" PRId64 ": could not source \"%s\""), lnum, fname);
-}
-void nvim_rt_smsg_sourcing(const char *fname) { smsg(0, _("sourcing \"%s\""), fname); }
-void nvim_rt_smsg_sourcing_lnum(int64_t lnum, const char *fname)
-{
-  smsg(0, _("line %" PRId64 ": sourcing \"%s\""), lnum, fname);
-}
-void nvim_rt_smsg_finished_sourcing(const char *fname) { smsg(0, _("finished sourcing %s"), fname); }
-void nvim_rt_smsg_continuing_in(const char *name) { smsg(0, _("continuing in %s"), name); }
+// Deleted: nvim_rt_smsg_cannot_source — Rust calls smsg(0, gettext(...), fname) directly.
+// Deleted: nvim_rt_smsg_could_not_source — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_could_not_source_lnum — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_sourcing — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_sourcing_lnum — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_finished_sourcing — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_continuing_in — Rust calls smsg directly.
 
 /// verbose_enter/leave wrappers.
 
@@ -611,8 +598,7 @@ void nvim_rt_si_set_pr_start(void *si, uint64_t tm)
 // Deleted: nvim_rt_si_set_sn_lua, nvim_rt_si_set_sn_name —
 //          replaced by direct ScriptitemT field writes in Rust.
 
-/// emsg for E_INTERR.
-void nvim_rt_emsg_interr(void) { emsg(_(e_interr)); }
+// Deleted: nvim_rt_emsg_interr — Rust calls emsg(gettext(e_interr)) directly.
 
 // Deleted: nvim_rt_get_curbuf — Rust imports curbuf directly as extern static.
 
@@ -681,14 +667,9 @@ void nvim_rt_snprintf_source_buffer_name(char *buf, int size, bool ex_lua, int f
 }
 
 
-/// emsg_norange: signal "E16: Invalid range" for :source with range+file.
-void nvim_rt_emsg_norange(void) { emsg(_(e_norange)); }
-
-/// semsg for "can't open file".
-void nvim_rt_semsg_notopen(const char *fname) { semsg(_(e_notopen), fname); }
-
-/// emsg_argreq: "E471: Argument required".
-void nvim_rt_emsg_argreq(void) { emsg(_(e_argreq)); }
+// Deleted: nvim_rt_emsg_norange — Rust calls emsg(gettext(e_norange)) directly.
+// Deleted: nvim_rt_semsg_notopen — Rust calls semsg(gettext(e_notopen), fname) directly.
+// Deleted: nvim_rt_emsg_argreq — Rust calls emsg(gettext(e_argreq)) directly.
 
 /// SOURCING_NAME check: if not NULL, return it.
 const char *nvim_rt_get_sourcing_name_if_set(void)
@@ -716,47 +697,13 @@ int nvim_rt_STRICMP(const char *a, const char *b) { return STRICMP(a, b); }
 
 /// path_is_after: check if a path is in an "after" directory.
 
-/// smsg wrapper: "Searching for %s under %s in %s".
-void nvim_rt_smsg_searching_prefix(const char *name, const char *prefix, const char *path)
-{
-  smsg(0, _("Searching for \"%s\" under \"%s\" in \"%s\""), name, prefix, path);
-}
-
-/// smsg wrapper: "Searching for %s in %s".
-void nvim_rt_smsg_searching_in(const char *name, const char *path)
-{
-  smsg(0, _("Searching for \"%s\" in \"%s\""), name, path);
-}
-
-/// smsg wrapper: "Searching for %s".
-void nvim_rt_smsg_searching(const char *buf)
-{
-  smsg(0, _("Searching for \"%s\""), buf);
-}
-
-/// semsg wrapper for e_dirnotf: "not found in '%s': \"%s\"".
-void nvim_rt_semsg_dirnotf(const char *basepath, const char *name)
-{
-  semsg(_(e_dirnotf), basepath, name);
-}
-
-/// smsg wrapper: "not found in '%s': \"%s\"".
-void nvim_rt_smsg_notfound_in(const char *basepath, const char *name)
-{
-  smsg(0, _("not found in '%s': \"%s\""), basepath, name);
-}
-
-/// smsg wrapper: "not found in runtime path: \"%s\"".
-void nvim_rt_smsg_notfound_rtp(const char *name)
-{
-  smsg(0, _("not found in runtime path: \"%s\""), name);
-}
-
-/// smsg wrapper: "Searching for \"%s\" in runtime path".
-void nvim_rt_smsg_searching_rtp(const char *name)
-{
-  smsg(0, _("Searching for \"%s\" in runtime path"), name);
-}
+// Deleted: nvim_rt_smsg_searching_prefix — Rust calls smsg(0, gettext(...), ...) directly.
+// Deleted: nvim_rt_smsg_searching_in — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_searching — Rust calls smsg directly.
+// Deleted: nvim_rt_semsg_dirnotf — Rust calls semsg(gettext(e_dirnotf), ...) directly.
+// Deleted: nvim_rt_smsg_notfound_in — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_notfound_rtp — Rust calls smsg directly.
+// Deleted: nvim_rt_smsg_searching_rtp — Rust calls smsg directly.
 
 // Deleted: nvim_rt_copy_option_part — Rust uses copy_option_part directly via link_name.
 

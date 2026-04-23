@@ -38,18 +38,16 @@ extern "C" {
     #[link_name = "verbose_leave"]
     fn nvim_rt_verbose_leave();
 
-    // Smsg wrappers for search messages
-    fn nvim_rt_smsg_searching_prefix(
-        name: *const c_char,
-        prefix: *const c_char,
-        path: *const c_char,
-    );
-    fn nvim_rt_smsg_searching_in(name: *const c_char, path: *const c_char);
-    fn nvim_rt_smsg_searching(buf: *const c_char);
-    fn nvim_rt_semsg_dirnotf(basepath: *const c_char, name: *const c_char);
-    fn nvim_rt_smsg_notfound_in(basepath: *const c_char, name: *const c_char);
-    fn nvim_rt_smsg_notfound_rtp(name: *const c_char);
-    fn nvim_rt_smsg_searching_rtp(name: *const c_char);
+    // Direct message functions (replacing smsg/semsg wrappers)
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn semsg(fmt: *const c_char, ...) -> bool;
+    fn gettext(msgid: *const c_char) -> *const c_char;
+}
+
+extern "C" {
+    /// e_dirnotf error string
+    #[link_name = "e_dirnotf"]
+    static e_dirnotf: [c_char; 1];
 
     // copy_option_part: advance pointer through comma-separated value
     #[link_name = "copy_option_part"]
@@ -104,6 +102,7 @@ const OK: c_int = 1;
 /// # Safety
 /// This function is called from C and manipulates raw pointers.
 #[unsafe(export_name = "do_in_path")]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_do_in_path(
     path: *const c_char,
     prefix: *const c_char,
@@ -122,9 +121,20 @@ pub unsafe extern "C" fn rs_do_in_path(
         if globals::get_p_verbose() > 10 && !name.is_null() {
             nvim_rt_verbose_enter();
             if unsafe { *prefix } != 0 {
-                nvim_rt_smsg_searching_prefix(name, prefix, path);
+                smsg(
+                    0,
+                    gettext(c"Searching for \"%s\" under \"%s\" in \"%s\"".as_ptr()),
+                    name,
+                    prefix,
+                    path,
+                );
             } else {
-                nvim_rt_smsg_searching_in(name, path);
+                smsg(
+                    0,
+                    gettext(c"Searching for \"%s\" in \"%s\"".as_ptr()),
+                    name,
+                    path,
+                );
             }
             nvim_rt_verbose_leave();
         }
@@ -170,7 +180,7 @@ pub unsafe extern "C" fn rs_do_in_path(
 
                     if globals::get_p_verbose() > 10 {
                         nvim_rt_verbose_enter();
-                        nvim_rt_smsg_searching(buf);
+                        smsg(0, gettext(c"Searching for \"%s\"".as_ptr()), buf);
                         nvim_rt_verbose_leave();
                     }
 
@@ -209,10 +219,15 @@ pub unsafe extern "C" fn rs_do_in_path(
         };
 
         if (flags & dip::ERR) != 0 {
-            nvim_rt_semsg_dirnotf(basepath, name);
+            semsg(gettext(e_dirnotf.as_ptr()), basepath, name);
         } else if globals::get_p_verbose() > 1 {
             nvim_rt_verbose_enter();
-            nvim_rt_smsg_notfound_in(basepath, name);
+            smsg(
+                0,
+                gettext(c"not found in '%s': \"%s\"".as_ptr()),
+                basepath,
+                name,
+            );
             nvim_rt_verbose_leave();
         }
     }
@@ -247,7 +262,11 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
 
     if globals::get_p_verbose() > 10 && !name.is_null() {
         nvim_rt_verbose_enter();
-        nvim_rt_smsg_searching_rtp(name);
+        smsg(
+            0,
+            gettext(c"Searching for \"%s\" in runtime path".as_ptr()),
+            name,
+        );
         nvim_rt_verbose_leave();
     }
 
@@ -300,7 +319,7 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
 
                 if globals::get_p_verbose() > 10 {
                     nvim_rt_verbose_enter();
-                    nvim_rt_smsg_searching(buf);
+                    smsg(0, gettext(c"Searching for \"%s\"".as_ptr()), buf);
                     nvim_rt_verbose_leave();
                 }
 
@@ -330,10 +349,14 @@ pub unsafe extern "C" fn rs_do_in_cached_path(
 
     if !did_one && !name.is_null() {
         if (flags & dip::ERR) != 0 {
-            nvim_rt_semsg_dirnotf(c"runtime path".as_ptr(), name);
+            semsg(gettext(e_dirnotf.as_ptr()), c"runtime path".as_ptr(), name);
         } else if globals::get_p_verbose() > 1 {
             nvim_rt_verbose_enter();
-            nvim_rt_smsg_notfound_rtp(name);
+            smsg(
+                0,
+                gettext(c"not found in runtime path: \"%s\"".as_ptr()),
+                name,
+            );
             nvim_rt_verbose_leave();
         }
     }

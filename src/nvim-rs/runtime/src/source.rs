@@ -44,9 +44,9 @@ extern "C" {
     fn nvim_rt_cstack_set_pending(cstack: *mut c_void, idx: c_int, val: c_int);
     fn nvim_rt_report_make_pending_finish();
 
-    // Error messages
-    fn nvim_rt_emsg_scriptencoding_outside();
-    fn nvim_rt_emsg_finish_outside();
+    // Error messages (called inline with emsg + gettext)
+    fn emsg(s: *const c_char);
+    fn gettext(msgid: *const c_char) -> *const c_char;
 
     // exarg_T helpers
     fn nvim_rt_exarg_get_arg(eap: *mut c_void) -> *mut c_char;
@@ -107,7 +107,9 @@ pub unsafe extern "C" fn rs_sourcing_a_script(eap: *mut c_void) -> c_int {
 #[unsafe(export_name = "ex_scriptencoding")]
 pub unsafe extern "C" fn rs_ex_scriptencoding(eap: *mut c_void) {
     if !nvim_rt_exarg_is_sourcing(eap) {
-        nvim_rt_emsg_scriptencoding_outside();
+        emsg(gettext(
+            c"E167: :scriptencoding used outside of a sourced file".as_ptr(),
+        ));
         return;
     }
 
@@ -137,7 +139,9 @@ pub unsafe extern "C" fn rs_ex_finish(eap: *mut c_void) {
     if nvim_rt_exarg_is_sourcing(eap) {
         rs_do_finish(eap, false);
     } else {
-        nvim_rt_emsg_finish_outside();
+        emsg(gettext(
+            c"E168: :finish used outside of a sourced file".as_ptr(),
+        ));
     }
 }
 

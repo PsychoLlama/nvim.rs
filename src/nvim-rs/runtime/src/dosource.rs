@@ -94,13 +94,12 @@ extern "C" {
     fn nvim_rt_verbose_leave();
     fn nvim_rt_get_sourcing_name() -> *const c_char;
     fn nvim_rt_get_sourcing_lnum() -> c_int;
-    fn nvim_rt_smsg_cannot_source(fname: *const c_char);
-    fn nvim_rt_smsg_could_not_source(fname: *const c_char);
-    fn nvim_rt_smsg_could_not_source_lnum(lnum: i64, fname: *const c_char);
-    fn nvim_rt_smsg_sourcing(fname: *const c_char);
-    fn nvim_rt_smsg_sourcing_lnum(lnum: i64, fname: *const c_char);
-    fn nvim_rt_smsg_finished_sourcing(fname: *const c_char);
-    fn nvim_rt_smsg_continuing_in(name: *const c_char);
+
+    // Message functions (direct calls, replacing wrappers)
+    fn smsg(hl_id: c_int, fmt: *const c_char, ...) -> c_int;
+    fn emsg(s: *const c_char);
+    fn semsg(fmt: *const c_char, ...) -> bool;
+    fn gettext(msgid: *const c_char) -> *const c_char;
 
     // Debug/breakpoints
     fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LinenrT) -> LinenrT;
@@ -180,7 +179,7 @@ extern "C" {
     // p_enc is accessed via static below
 
     // IObuff / getsourceline passthrough
-    fn nvim_rt_emsg_interr();
+    // emsg via error globals (inline below with gettext)
 
     // Buffer init helpers
     fn nvim_rt_curbuf_get_ffname() -> *const c_char;
@@ -201,10 +200,7 @@ extern "C" {
     #[link_name = "xmemdupz"]
     fn nvim_rt_xmemdupz(s: *const c_char, len: usize) -> *mut c_char;
 
-    // cmd_source helpers
-    fn nvim_rt_emsg_norange();
-    fn nvim_rt_emsg_argreq();
-    fn nvim_rt_semsg_notopen(fname: *const c_char);
+    // cmd_source helpers (emsg/semsg called inline)
     fn openscript(fname: *const c_char, directly: bool);
     fn nvim_rt_exarg_get_nextcmd(eap: *mut c_void) -> *const c_char;
     fn nvim_rt_exarg_get_cstack_idx(eap: *mut c_void) -> c_int;
@@ -232,6 +228,18 @@ extern "C" {
     // File I/O helpers (for rs_fopen_noinh_readbin)
     fn os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
     fn os_set_cloexec(fd: c_int) -> c_int;
+}
+
+// Error string globals (EXTERN const char[]) from errors.h
+extern "C" {
+    #[link_name = "e_interr"]
+    static e_interr: [c_char; 1];
+    #[link_name = "e_norange"]
+    static e_norange: [c_char; 1];
+    #[link_name = "e_argreq"]
+    static e_argreq: [c_char; 1];
+    #[link_name = "e_notopen"]
+    static e_notopen: [c_char; 1];
 }
 
 // Global variables imported directly
@@ -381,7 +389,11 @@ pub unsafe extern "C" fn rs_do_source_ext(
             return retval;
         }
         if nvim_rt_src_os_isdir(fname_exp) {
-            nvim_rt_smsg_cannot_source(fname);
+            smsg(
+                0,
+                gettext(c"Cannot source a directory: \"%s\"".as_ptr()),
+                fname,
+            );
             // goto theend
             xfree(fname_exp.cast());
             nvim_rt_cookie_free_full(cookie);
@@ -453,9 +465,14 @@ pub unsafe extern "C" fn rs_do_source_ext(
             nvim_rt_verbose_enter();
             let sname = nvim_rt_get_sourcing_name();
             if sname.is_null() {
-                nvim_rt_smsg_could_not_source(fname);
+                smsg(0, gettext(c"could not source \"%s\"".as_ptr()), fname);
             } else {
-                nvim_rt_smsg_could_not_source_lnum(i64::from(nvim_rt_get_sourcing_lnum()), fname);
+                smsg(
+                    0,
+                    gettext(c"line %ld: could not source \"%s\"".as_ptr()),
+                    i64::from(nvim_rt_get_sourcing_lnum()),
+                    fname,
+                );
             }
             nvim_rt_verbose_leave();
         }
@@ -469,9 +486,14 @@ pub unsafe extern "C" fn rs_do_source_ext(
         nvim_rt_verbose_enter();
         let sname = nvim_rt_get_sourcing_name();
         if sname.is_null() {
-            nvim_rt_smsg_sourcing(fname);
+            smsg(0, gettext(c"sourcing \"%s\"".as_ptr()), fname);
         } else {
-            nvim_rt_smsg_sourcing_lnum(i64::from(nvim_rt_get_sourcing_lnum()), fname);
+            smsg(
+                0,
+                gettext(c"line %ld: sourcing \"%s\"".as_ptr()),
+                i64::from(nvim_rt_get_sourcing_lnum()),
+                fname,
+            );
         }
         nvim_rt_verbose_leave();
     }
@@ -621,16 +643,16 @@ pub unsafe extern "C" fn rs_do_source_ext(
     }
 
     if globals::got_int {
-        nvim_rt_emsg_interr();
+        emsg(gettext(e_interr.as_ptr()));
     }
     estack_pop();
 
     if globals::get_p_verbose() > 1 {
         nvim_rt_verbose_enter();
-        nvim_rt_smsg_finished_sourcing(fname);
+        smsg(0, gettext(c"finished sourcing %s".as_ptr()), fname);
         let cont_name = nvim_rt_get_sourcing_name();
         if !cont_name.is_null() {
-            nvim_rt_smsg_continuing_in(cont_name);
+            smsg(0, gettext(c"continuing in %s".as_ptr()), cont_name);
         }
         nvim_rt_verbose_leave();
     }
@@ -755,13 +777,13 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
         nvim_rt_exarg_get_addr_count(eap)
     };
     if !fname.is_null() && *fname != 0 && !eap.is_null() && addr_count > 0 {
-        nvim_rt_emsg_norange();
+        emsg(gettext(e_norange.as_ptr()));
         return;
     }
 
     if !eap.is_null() && (fname.is_null() || *fname == 0) {
         if nvim_rt_exarg_get_forceit(eap) {
-            nvim_rt_emsg_argreq();
+            emsg(gettext(e_argreq.as_ptr()));
         } else {
             rs_cmd_source_buffer(eap, false);
         }
@@ -773,7 +795,7 @@ pub unsafe extern "C" fn rs_cmd_source(fname: *mut c_char, eap: *mut c_void) {
             || nvim_rt_exarg_get_cstack_idx(eap) >= 0;
         openscript(fname, directly);
     } else if rs_do_source(fname, false, doso::NONE, ptr::null_mut()) == FAIL {
-        nvim_rt_semsg_notopen(fname);
+        semsg(gettext(e_notopen.as_ptr()), fname);
     }
 }
 
