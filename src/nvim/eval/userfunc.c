@@ -3174,14 +3174,8 @@ int nvim_partial_get_argc(const partial_T *pt) { return pt ? pt->pt_argc : 0; }
 
 dict_T *nvim_partial_get_dict(const partial_T *pt) { return pt ? pt->pt_dict : NULL; }
 
-/// Check if partial was auto-created.
-int nvim_partial_is_auto(const partial_T *pt) { return pt && pt->pt_auto; }
-
-partial_T *nvim_funcexe_get_partial(const funcexe_T *fe) { return fe ? fe->fe_partial : NULL; }
-
-dict_T *nvim_funcexe_get_selfdict(const funcexe_T *fe) { return fe ? fe->fe_selfdict : NULL; }
-
-int nvim_funcexe_get_evaluate(const funcexe_T *fe) { return fe ? fe->fe_evaluate : 0; }
+// nvim_partial_is_auto, nvim_funcexe_get_partial, nvim_funcexe_get_selfdict,
+// nvim_funcexe_get_evaluate -- dead, no Rust callers (Phase 17)
 
 /// Apply FuncUndefined autocmd and return result.
 int apply_autocmds_for_funcundefined(const char *name)
@@ -3332,7 +3326,7 @@ const char *nvim_ufunc_get_funcline(const ufunc_T *fp, int i)
   return FUNCLINE(fp, i);
 }
 
-const hashitem_T *nvim_func_ht_array(void) { return func_hashtab.ht_array; }
+// nvim_func_ht_array -- dead, no Rust callers (Phase 17)
 
 int nvim_func_ht_changed(void) { return func_hashtab.ht_changed; }
 
@@ -3341,13 +3335,7 @@ int nvim_ufunc_name_refcount(const char *name)
   return rs_func_name_refcount(name) ? 1 : 0;
 }
 
-ufunc_T *nvim_func_hi_to_uf(const hashitem_T *hi)
-{
-  if (hi == NULL) {
-    return NULL;
-  }
-  return HI2UF(hi);
-}
+// nvim_func_hi_to_uf -- dead, no Rust callers (Phase 17)
 
 void nvim_func_ht_foreach(void (*cb)(ufunc_T *fp, void *ctx), void *ctx)
 {
@@ -3450,7 +3438,7 @@ void nvim_partial_set_name(partial_T *pt, char *name) { if (pt) { pt->pt_name = 
 void nvim_partial_set_func(partial_T *pt, ufunc_T *fp) { if (pt) { pt->pt_func = fp; } }
 void nvim_partial_set_argv(partial_T *pt, typval_T *argv) { if (pt) { pt->pt_argv = argv; } }
 void nvim_partial_set_argc(partial_T *pt, int argc) { if (pt) { pt->pt_argc = argc; } }
-char *nvim_tv_get_vstring_mut(typval_T *tv) { return tv ? tv->vval.v_string : NULL; }
+// nvim_tv_get_vstring_mut -- dead, no callers (Phase 17)
 
 // Phase 12: funccall_T field accessors for inlining GC shims into Rust
 funccall_T *nvim_get_previous_funccal(void) { return previous_funccal; }

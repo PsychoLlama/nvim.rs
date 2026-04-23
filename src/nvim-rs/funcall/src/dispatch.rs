@@ -148,12 +148,7 @@ extern "C" {
     fn nvim_partial_get_func(partial: PartialHandle) -> UfuncHandle;
     fn nvim_partial_get_argc(partial: PartialHandle) -> c_int;
     fn nvim_partial_get_dict(partial: PartialHandle) -> *mut c_void;
-    fn nvim_partial_is_auto(partial: PartialHandle) -> c_int;
-
-    // Funcexe access
-    fn nvim_funcexe_get_partial(fe: FuncexeHandle) -> PartialHandle;
-    fn nvim_funcexe_get_selfdict(fe: FuncexeHandle) -> *mut c_void;
-    fn nvim_funcexe_get_evaluate(fe: FuncexeHandle) -> c_int;
+    // nvim_partial_is_auto, nvim_funcexe_get_partial/selfdict/evaluate -- dead (Phase 17)
 
     // Function type checks
     fn nvim_is_builtin_function(name: *const c_char, len: c_int) -> c_int;
