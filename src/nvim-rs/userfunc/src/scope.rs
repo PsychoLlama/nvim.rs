@@ -12,13 +12,25 @@ extern "C" {
     // nvim_find_hi_in_scoped_ht_impl inlined into Rust (Phase 29)
     // nvim_find_var_in_scoped_ht_impl inlined into Rust (Phase 29)
     // nvim_ex_return_impl moved to Rust (funccal.rs Phase 28)
-    fn nvim_do_return_impl(
-        eap: *mut c_void,
-        reanimate: c_int,
-        is_cmd: c_int,
-        rettv: *mut c_void,
-    ) -> c_int;
-    fn nvim_get_return_cmd_impl(rettv: *mut c_void) -> *mut c_char;
+    // nvim_do_return_impl migrated to Rust (Phase 34)
+    // nvim_get_return_cmd_impl migrated to Rust (Phase 34)
+
+    // Phase 34: shims for do_return and get_return_cmd migration
+    fn nvim_fc_set_returned(fc: *mut c_void, v: c_int);
+    fn nvim_fc_get_rettv(fc: *mut c_void) -> *mut c_void;
+    fn nvim_eap_get_cstack(eap: *const c_void) -> *mut c_void;
+    fn nvim_cstack_set_pending(cs: *mut c_void, idx: c_int, val: c_int);
+    fn nvim_cstack_set_rv(cs: *mut c_void, idx: c_int, val: *mut c_void);
+    fn nvim_xcalloc_typval() -> *mut c_void;
+    fn nvim_tv_reset_to_number_zero(tv: *mut c_void);
+    fn cleanup_conditionals(cstack: *mut c_void, searched_cond: c_int, inclusive: c_int) -> c_int;
+    fn report_make_pending(pending: c_int, value: *mut c_void);
+    fn tv_clear(tv: *mut c_void);
+    fn xfree(ptr: *mut c_void);
+    fn nvim_encode_tv2echo(tv: *mut c_void) -> *mut c_char;
+    fn xstrlcpy(dst: *mut c_char, src: *const c_char, dstsize: usize) -> usize;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+    static mut IObuff: [c_char; 1025];
 
     // Phase 13: accessors for inlining scope shims
     fn nvim_get_current_funccal() -> *mut c_void;
@@ -338,22 +350,142 @@ pub unsafe extern "C" fn rs_ex_return(eap: *mut c_void) {
 // =============================================================================
 // do_return
 // =============================================================================
+//
+// Phase 34: inlined from nvim_do_return_impl.
+
+// CSTP_RETURN = 24 (matches C define in ex_eval_defs.h)
+const CSTP_RETURN: c_int = 24;
+// SIZEOF_TYPVAL = 16 bytes (matches C sizeof(typval_T))
+const SIZEOF_TYPVAL_RETURN: usize = 16;
 
 #[unsafe(export_name = "do_return")]
 pub unsafe extern "C" fn rs_do_return(
     eap: *mut c_void,
     reanimate: c_int,
     is_cmd: c_int,
-    rettv: *mut c_void,
+    mut rettv: *mut c_void,
 ) -> c_int {
-    unsafe { nvim_do_return_impl(eap, reanimate, is_cmd, rettv) }
+    let fc = unsafe { nvim_get_current_funccal() };
+    let cstack = unsafe { nvim_eap_get_cstack(eap) };
+
+    if reanimate != 0 {
+        // Undo the return.
+        unsafe { nvim_fc_set_returned(fc, 0) };
+    }
+
+    // Cleanup (and deactivate) conditionals, but stop when a try conditional
+    // not in its finally clause (which then is to be executed next) is found.
+    // In this case, make the ":return" pending for execution at the ":endtry".
+    // Otherwise, return normally.
+    let idx = unsafe { cleanup_conditionals(cstack, 0, 1) };
+    if idx >= 0 {
+        unsafe { nvim_cstack_set_pending(cstack, idx, CSTP_RETURN) };
+
+        if is_cmd == 0 && reanimate == 0 {
+            // A pending return again gets pending.  "rettv" points to an
+            // allocated variable with the rettv of the original ":return"'s
+            // argument if present or is NULL else.
+            unsafe { nvim_cstack_set_rv(cstack, idx, rettv) };
+        } else {
+            // When undoing a return in order to make it pending, get the stored
+            // return rettv.
+            if reanimate != 0 {
+                rettv = unsafe { nvim_fc_get_rettv(fc) };
+                // assert(current_funccal->fc_rettv) - rettv is non-null
+            }
+
+            if rettv.is_null() {
+                unsafe { nvim_cstack_set_rv(cstack, idx, std::ptr::null_mut()) };
+            } else {
+                // Store the value of the pending return.
+                let new_tv = unsafe { nvim_xcalloc_typval() };
+                // Copy typval: *new_tv = *rettv (16-byte copy)
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        rettv.cast::<u8>(),
+                        new_tv.cast::<u8>(),
+                        SIZEOF_TYPVAL_RETURN,
+                    );
+                }
+                unsafe { nvim_cstack_set_rv(cstack, idx, new_tv) };
+            }
+
+            if reanimate != 0 {
+                // The pending return value could be overwritten by a ":return"
+                // without argument in a finally clause; reset the default
+                // return value.
+                let fc_rettv = unsafe { nvim_fc_get_rettv(fc) };
+                unsafe { nvim_tv_reset_to_number_zero(fc_rettv) };
+            }
+        }
+        unsafe { report_make_pending(CSTP_RETURN, rettv) };
+    } else {
+        unsafe { nvim_fc_set_returned(fc, 1) };
+
+        // If the return is carried out now, store the return value.  For
+        // a return immediately after reanimation, the value is already
+        // there.
+        if reanimate == 0 && !rettv.is_null() {
+            let fc_rettv = unsafe { nvim_fc_get_rettv(fc) };
+            unsafe { tv_clear(fc_rettv) };
+            // Copy typval: *fc_rettv = *rettv
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    rettv.cast::<u8>(),
+                    fc_rettv.cast::<u8>(),
+                    SIZEOF_TYPVAL_RETURN,
+                );
+            }
+            if is_cmd == 0 {
+                unsafe { xfree(rettv) };
+            }
+        }
+    }
+
+    c_int::from(idx < 0)
 }
 
 // =============================================================================
 // get_return_cmd
 // =============================================================================
+//
+// Phase 34: inlined from nvim_get_return_cmd_impl.
+
+const IOSIZE_RETURN: usize = 1025;
 
 #[unsafe(export_name = "get_return_cmd")]
+#[allow(clippy::cast_possible_truncation)]
 pub unsafe extern "C" fn rs_get_return_cmd(rettv: *mut c_void) -> *mut c_char {
-    unsafe { nvim_get_return_cmd_impl(rettv) }
+    let mut s: *const c_char = std::ptr::null();
+    let mut tofree: *mut c_char = std::ptr::null_mut();
+    let mut slen: usize = 0;
+
+    if !rettv.is_null() {
+        tofree = unsafe { nvim_encode_tv2echo(rettv) };
+        s = tofree;
+    }
+    if s.is_null() {
+        s = c"".as_ptr();
+    } else {
+        // strlen
+        let mut len = 0usize;
+        while unsafe { *s.add(len) } != 0 {
+            len += 1;
+        }
+        slen = len;
+    }
+
+    let iobuff = std::ptr::addr_of_mut!(IObuff).cast::<c_char>();
+    unsafe { xstrlcpy(iobuff, c":return ".as_ptr(), IOSIZE_RETURN) };
+    unsafe { xstrlcpy(iobuff.add(8), s, IOSIZE_RETURN - 8) };
+    let mut iobufflen = 8 + slen;
+    if iobufflen >= IOSIZE_RETURN {
+        // STRCPY(IObuff + IOSIZE - 4, "...")
+        let dot_ptr = c"...".as_ptr();
+        let dst = unsafe { iobuff.add(IOSIZE_RETURN - 4) };
+        unsafe { std::ptr::copy_nonoverlapping(dot_ptr.cast::<u8>(), dst.cast::<u8>(), 4) };
+        iobufflen = IOSIZE_RETURN - 1;
+    }
+    unsafe { xfree(tofree.cast::<c_void>()) };
+    unsafe { xstrnsave(iobuff, iobufflen) }
 }

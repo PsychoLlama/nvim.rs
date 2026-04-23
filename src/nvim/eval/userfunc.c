@@ -2084,98 +2084,11 @@ end:
 ///
 /// @return  true when the return can be carried out,
 ///          false when the return gets pending.
-/// Phase 6: C implementation shim for do_return (called from Rust).
-int nvim_do_return_impl(exarg_T *eap, int reanimate, int is_cmd, void *rettv)
-{
-  cstack_T *const cstack = eap->cstack;
+// nvim_do_return_impl migrated to Rust (scope.rs Phase 34).
+// rs_do_return now implements the logic directly.
 
-  if (reanimate) {
-    // Undo the return.
-    current_funccal->fc_returned = false;
-  }
-
-  // Cleanup (and deactivate) conditionals, but stop when a try conditional
-  // not in its finally clause (which then is to be executed next) is found.
-  // In this case, make the ":return" pending for execution at the ":endtry".
-  // Otherwise, return normally.
-  int idx = cleanup_conditionals(eap->cstack, 0, true);
-  if (idx >= 0) {
-    cstack->cs_pending[idx] = CSTP_RETURN;
-
-    if (!is_cmd && !reanimate) {
-      // A pending return again gets pending.  "rettv" points to an
-      // allocated variable with the rettv of the original ":return"'s
-      // argument if present or is NULL else.
-      cstack->cs_rettv[idx] = rettv;
-    } else {
-      // When undoing a return in order to make it pending, get the stored
-      // return rettv.
-      if (reanimate) {
-        assert(current_funccal->fc_rettv);
-        rettv = current_funccal->fc_rettv;
-      }
-
-      if (rettv != NULL) {
-        // Store the value of the pending return.
-        cstack->cs_rettv[idx] = xcalloc(1, sizeof(typval_T));
-        *(typval_T *)cstack->cs_rettv[idx] = *(typval_T *)rettv;
-      } else {
-        cstack->cs_rettv[idx] = NULL;
-      }
-
-      if (reanimate) {
-        // The pending return value could be overwritten by a ":return"
-        // without argument in a finally clause; reset the default
-        // return value.
-        current_funccal->fc_rettv->v_type = VAR_NUMBER;
-        current_funccal->fc_rettv->vval.v_number = 0;
-      }
-    }
-    report_make_pending(CSTP_RETURN, rettv);
-  } else {
-    current_funccal->fc_returned = true;
-
-    // If the return is carried out now, store the return value.  For
-    // a return immediately after reanimation, the value is already
-    // there.
-    if (!reanimate && rettv != NULL) {
-      tv_clear(current_funccal->fc_rettv);
-      *current_funccal->fc_rettv = *(typval_T *)rettv;
-      if (!is_cmd) {
-        xfree(rettv);
-      }
-    }
-  }
-
-  return idx < 0;
-}
-
-/// Phase 6: C implementation shim for get_return_cmd (called from Rust).
-char *nvim_get_return_cmd_impl(void *rettv)
-{
-  char *s = NULL;
-  char *tofree = NULL;
-  size_t slen = 0;
-
-  if (rettv != NULL) {
-    tofree = s = encode_tv2echo((typval_T *)rettv, NULL);
-  }
-  if (s == NULL) {
-    s = "";
-  } else {
-    slen = strlen(s);
-  }
-
-  xstrlcpy(IObuff, ":return ", IOSIZE);
-  xstrlcpy(IObuff + 8, s, IOSIZE - 8);
-  size_t IObufflen = 8 + slen;
-  if (IObufflen >= IOSIZE) {
-    STRCPY(IObuff + IOSIZE - 4, "...");
-    IObufflen = IOSIZE - 1;
-  }
-  xfree(tofree);
-  return xstrnsave(IObuff, IObufflen);
-}
+// nvim_get_return_cmd_impl migrated to Rust (scope.rs Phase 34).
+// rs_get_return_cmd now implements the logic directly.
 
 /// Get next function line.
 /// Called by do_cmdline() to get the next line.
@@ -2892,3 +2805,22 @@ int nvim_fc_get_linenr(const funccall_T *fc) { return fc ? fc->fc_linenr : 0; }
 void nvim_fc_set_linenr(funccall_T *fc, int v) { if (fc) { fc->fc_linenr = v; } }
 // Increment fc_linenr and return the post-increment value.
 int nvim_fc_postincrement_linenr(funccall_T *fc) { return fc ? fc->fc_linenr++ : 0; }
+
+// Phase 34: accessors for nvim_do_return_impl and nvim_get_return_cmd_impl migration (scope.rs)
+void nvim_fc_set_returned(funccall_T *fc, int v) { if (fc) { fc->fc_returned = (bool)v; } }
+typval_T *nvim_fc_get_rettv(funccall_T *fc) { return fc ? fc->fc_rettv : NULL; }
+cstack_T *nvim_eap_get_cstack(const exarg_T *eap) { return eap ? eap->cstack : NULL; }
+void nvim_cstack_set_pending(cstack_T *cs, int idx, int val)
+{
+  if (cs && idx >= 0 && idx < CSTACK_LEN) { cs->cs_pending[idx] = (char)val; }
+}
+void nvim_cstack_set_rv(cstack_T *cs, int idx, void *val)
+{
+  if (cs && idx >= 0 && idx < CSTACK_LEN) { cs->cs_rettv[idx] = val; }
+}
+typval_T *nvim_xcalloc_typval(void) { return xcalloc(1, sizeof(typval_T)); }
+void nvim_tv_reset_to_number_zero(typval_T *tv)
+{
+  if (tv) { tv->v_type = VAR_NUMBER; tv->vval.v_number = 0; }
+}
+char *nvim_encode_tv2echo(void *tv) { return encode_tv2echo((typval_T *)tv, NULL); }
