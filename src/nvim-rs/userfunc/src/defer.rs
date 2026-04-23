@@ -19,14 +19,30 @@ extern "C" {
         argvars: *mut c_void,
     );
     fn nvim_handle_defer_one_impl(fc: *mut c_void);
-    fn nvim_ex_defer_inner_impl(
-        name: *mut c_char,
-        arg: *mut *mut c_char,
-        partial: *const c_void,
-        evalarg: *mut c_void,
-    ) -> c_int;
     fn xstrdup(s: *const c_char) -> *mut c_char;
     fn nvim_emsg_defer_not_in_function();
+
+    // Phase 24: for rs_ex_defer_inner migration
+    fn nvim_partial_get_dict(pt: *const c_void) -> *mut c_void;
+    fn nvim_partial_get_argc(pt: *const c_void) -> c_int;
+    fn nvim_partial_get_argv(pt: *const c_void) -> *mut c_void;
+    fn tv_copy(from: *const c_void, to: *mut c_void);
+    fn tv_clear(tv: *mut c_void);
+    fn find_func(name: *const c_char) -> *mut c_void;
+    fn check_user_func_argcount(fp: *mut c_void, argcount: c_int) -> c_int;
+    fn nvim_emsg_cannot_use_partial_with_dict();
+    fn nvim_check_defer_builtin(name: *const c_char, argcount: c_int) -> c_int;
+    // get_func_arguments is Rust (parsing.rs)
+    fn get_func_arguments(
+        arg: *mut *mut c_char,
+        evalarg: *mut c_void,
+        partial_argc: c_int,
+        argvars: *mut c_void,
+        argcount: *mut c_int,
+    ) -> c_int;
+    fn rs_builtin_function(name: *const c_char, len: c_int) -> c_int;
+    fn rs_user_func_error(error: c_int, name: *const c_char, found_var: c_int);
+    // add_defer is Rust (defer.rs), exported as "add_defer"
 }
 
 // =============================================================================
@@ -104,17 +120,112 @@ pub unsafe extern "C" fn rs_invoke_all_defer() {
 // ex_defer_inner
 // =============================================================================
 
+// Size of typval_T in bytes (matches C's sizeof(typval_T)).
+const SIZEOF_TYPVAL: usize = 16;
+// MAX_FUNC_ARGS must match C's MAX_FUNC_ARGS.
+const MAX_FUNC_ARGS: usize = 20;
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+// FCERR_UNKNOWN = 0: no-error return from check_user_func_argcount.
+const FCERR_UNKNOWN: c_int = 0;
+
 /// Core part of `:defer func(arg)`. `arg` points to `(` and is advanced.
 /// Returns OK or FAIL.
+///
+/// Phase 24: migrated from C `nvim_ex_defer_inner_impl`.
 ///
 /// # Safety
 /// All pointers must be valid.
 #[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
 pub unsafe extern "C" fn rs_ex_defer_inner(
     name: *mut c_char,
     arg: *mut *mut c_char,
     partial: *const c_void,
     evalarg: *mut c_void,
 ) -> c_int {
-    unsafe { nvim_ex_defer_inner_impl(name, arg, partial, evalarg) }
+    // Stack buffer: typval_T argvars[MAX_FUNC_ARGS + 1]
+    let mut argvars = [0u8; (MAX_FUNC_ARGS + 1) * SIZEOF_TYPVAL];
+    let argvars_ptr = argvars.as_mut_ptr().cast::<c_void>();
+
+    let mut partial_argc: c_int = 0;
+    let mut argcount: c_int = 0;
+
+    // Must be inside a function call.
+    if unsafe { get_current_funccal() }.is_null() {
+        unsafe { nvim_emsg_defer_not_in_function() };
+        return FAIL;
+    }
+
+    // Handle partial arguments.
+    if !partial.is_null() {
+        if !unsafe { nvim_partial_get_dict(partial) }.is_null() {
+            unsafe { nvim_emsg_cannot_use_partial_with_dict() };
+            return FAIL;
+        }
+        let argc = unsafe { nvim_partial_get_argc(partial) };
+        if argc > 0 {
+            partial_argc = argc;
+            let pt_argv = unsafe { nvim_partial_get_argv(partial) };
+            for i in 0..argc as usize {
+                let src = unsafe { pt_argv.cast::<u8>().add(i * SIZEOF_TYPVAL) }.cast::<c_void>();
+                let dst =
+                    unsafe { argvars_ptr.cast::<u8>().add(i * SIZEOF_TYPVAL) }.cast::<c_void>();
+                unsafe { tv_copy(src, dst) };
+            }
+        }
+    }
+
+    // Parse function arguments from `(...)`.
+    let argvars_after_partial = unsafe {
+        argvars_ptr
+            .cast::<u8>()
+            .add(partial_argc as usize * SIZEOF_TYPVAL)
+    }
+    .cast::<c_void>();
+    let r = unsafe {
+        get_func_arguments(
+            arg,
+            evalarg,
+            partial_argc,
+            argvars_after_partial,
+            &raw mut argcount,
+        )
+    };
+    argcount += partial_argc;
+
+    let mut r = r;
+    if r == OK {
+        if unsafe { rs_builtin_function(name, -1) } != 0 {
+            // Builtin function: check arity.
+            if unsafe { nvim_check_defer_builtin(name, argcount) } == -1 {
+                r = FAIL;
+            }
+        } else {
+            // User function: check arity if it exists.
+            let ufunc = unsafe { find_func(name) };
+            if !ufunc.is_null() {
+                let error = unsafe { check_user_func_argcount(ufunc, argcount) };
+                if error != FCERR_UNKNOWN {
+                    unsafe { rs_user_func_error(error, name, 0) };
+                    r = FAIL;
+                }
+            }
+        }
+    }
+
+    if r == FAIL {
+        let mut i = argcount - 1;
+        while i >= 0 {
+            let slot = unsafe { argvars_ptr.cast::<u8>().add(i as usize * SIZEOF_TYPVAL) }
+                .cast::<c_void>();
+            unsafe { tv_clear(slot) };
+            i -= 1;
+        }
+        return FAIL;
+    }
+
+    unsafe { rs_add_defer(name, argcount, argvars_ptr) };
+    OK
 }

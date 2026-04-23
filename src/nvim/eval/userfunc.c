@@ -2245,63 +2245,8 @@ static int ex_call_inner(exarg_T *eap, char *name, char **arg, char *startarg,
   return failed;
 }
 
-/// Phase 3: C implementation shim for ex_defer_inner (called from Rust).
-int nvim_ex_defer_inner_impl(char *name, char **arg, const partial_T *const partial,
-                             evalarg_T *const evalarg)
-{
-  typval_T argvars[MAX_FUNC_ARGS + 1];
-  int partial_argc = 0;
-  int argcount = 0;
-
-  if (current_funccal == NULL) {
-    semsg(_(e_str_not_inside_function), "defer");
-    return FAIL;
-  }
-  if (partial != NULL) {
-    if (partial->pt_dict != NULL) {
-      emsg(_(e_cannot_use_partial_with_dictionary_for_defer));
-      return FAIL;
-    }
-    if (partial->pt_argc > 0) {
-      partial_argc = partial->pt_argc;
-      for (int i = 0; i < partial_argc; i++) {
-        tv_copy(&partial->pt_argv[i], &argvars[i]);
-      }
-    }
-  }
-  int r = get_func_arguments(arg, evalarg, false, argvars + partial_argc, &argcount);
-  argcount += partial_argc;
-
-  if (r == OK) {
-    if (rs_builtin_function(name, -1)) {
-      const EvalFuncDef *const fdef = find_internal_func(name);
-      if (fdef == NULL) {
-        emsg_funcname(e_unknown_function_str, name);
-        r = FAIL;
-      } else if (check_internal_func(fdef, argcount) == -1) {
-        r = FAIL;
-      }
-    } else {
-      ufunc_T *ufunc = find_func(name);
-      if (ufunc != NULL) {
-        int error = check_user_func_argcount(ufunc, argcount);
-        if (error != FCERR_UNKNOWN) {
-          rs_user_func_error(error, name, 0);
-          r = FAIL;
-        }
-      }
-    }
-  }
-
-  if (r == FAIL) {
-    while (--argcount >= 0) {
-      tv_clear(&argvars[argcount]);
-    }
-    return FAIL;
-  }
-  add_defer(name, argcount, argvars);
-  return OK;
-}
+// nvim_ex_defer_inner_impl migrated to Rust (defer.rs Phase 24).
+// rs_ex_defer_inner now implements the logic directly.
 
 
 /// Return true if currently inside a function call.
@@ -3167,3 +3112,19 @@ int nvim_funcexe_call_argv_func(funcexe_T *fe, int argcount, typval_T *argvars,
   return argcount;
 }
 bool nvim_partial_get_auto(const partial_T *pt) { return pt ? pt->pt_auto : false; }
+
+// Phase 24: accessors for nvim_ex_defer_inner_impl migration (defer.rs)
+void nvim_emsg_cannot_use_partial_with_dict(void)
+{
+  emsg(_(e_cannot_use_partial_with_dictionary_for_defer));
+}
+/// Returns 0 if builtin function check passes, -1 if it fails.
+int nvim_check_defer_builtin(const char *name, int argcount)
+{
+  const EvalFuncDef *const fdef = find_internal_func(name);
+  if (fdef == NULL) {
+    emsg_funcname(e_unknown_function_str, name);
+    return -1;
+  }
+  return check_internal_func(fdef, argcount);
+}
