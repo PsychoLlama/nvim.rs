@@ -389,7 +389,6 @@ static inline bool eval_fname_sid(const char *const name)
   return *name == 's' || TOUPPER_ASC(name[2]) == 'I';
 }
 
-
 // get_func_arity migrated to Rust (lookup.rs Phase 6)
 
 /// Find a function by name, return pointer to it in ufuncs.
@@ -404,7 +403,6 @@ ufunc_T *find_func(const char *name)
   return NULL;
 }
 
-
 /// Add a number variable "name" to dict "dp" with value "nr".
 static void add_nr_var(dict_T *dp, dictitem_T *v, char *name, varnumber_T nr)
 {
@@ -416,20 +414,7 @@ static void add_nr_var(dict_T *dp, dictitem_T *v, char *name, varnumber_T nr)
   v->di_tv.vval.v_number = nr;
 }
 
-/// Phase 7: C implementation shim for free_funccal (called from Rust).
-// nvim_free_funccal_impl inlined into rs_free_funccal (Rust, Phase 13)
-
-
-// nvim_free_funccal_contents_impl migrated to Rust (funccal.rs Phase 31).
-// rs_free_funccal_contents now implements the logic directly.
-
-// nvim_cleanup_function_call_impl migrated to Rust (funccal.rs Phase 31).
-// rs_cleanup_function_call now implements the logic directly.
-
-
-// nvim_funccal_unref_impl migrated to Rust (funccal.rs Phase 27).
-// rs_funccal_unref now implements the logic directly.
-
+// Phase 7-31: free_funccal, free_funccal_contents, cleanup_function_call, funccal_unref migrated to Rust.
 
 /// Phase 4: C implementation shim for func_remove (called from Rust).
 int nvim_func_remove_impl(ufunc_T *fp)
@@ -947,28 +932,11 @@ void free_all_functions(void)
 extern int func_call(char *name, typval_T *args, partial_T *partial, dict_T *selfdict,
                      typval_T *rettv);
 
-// callback_call_retnr migrated to Rust (funccal.rs Phase 15)
-
-/// Phase 7: C implementation shim for user_func_error (called from Rust).
-// nvim_user_func_error_impl inlined into rs_user_func_error (Rust, Phase 14)
-
-
+// Phase 14-15: callback_call_retnr, user_func_error migrated to Rust.
 // argv_add_base migrated to Rust (lookup.rs Phase 18)
 extern void argv_add_base(typval_T *const basetv, typval_T **const argvars, int *const argcount,
                           typval_T *const new_argvars, int *const argv_base);
 
-/// Call a function with its resolved parameters
-///
-/// @param funcname  name of the function
-/// @param len  length of "name" or -1 to use strlen()
-/// @param rettv  [out] value goes here
-/// @param argcount_in  number of "argvars"
-/// @param argvars_in  vars for arguments, must have "argcount" PLUS ONE elements!
-/// @param funcexe  more arguments
-///
-/// @return FAIL if function cannot be called, else OK (even if an error
-///         occurred while executing the function! Set `msg_list` to capture
-///         the error, see do_cmdline()).
 // call_func migrated to Rust (Phase 22, funccal.rs)
 extern int call_func(const char *funcname, int len, typval_T *rettv, int argcount_in,
                      typval_T *argvars_in, funcexe_T *funcexe);
@@ -2075,34 +2043,14 @@ end:
 
 // func_name, func_breakpoint, func_dbg_tick, func_level migrated to Rust (lookup.rs Phase 6)
 
-// C accessor for current_funccal->fc_returned (used by Rust)
-int nvim_get_current_funccal_fc_returned(void) { return current_funccal->fc_returned; }
-
-// Implemented in Rust (nvim-eval crate)
-extern int current_func_returned(void);
+// nvim_get_current_funccal_fc_returned inlined into rs_current_func_returned (eval/src/lib.rs Phase 36)
 
 // nvim_free_unref_funccal_impl migrated to Rust (gc.rs Phase 26).
 // rs_free_unref_funccal now implements the logic directly.
 
-// nvim_get_funccal_impl inlined into rs_get_funccal (Rust, Phase 13)
-// nvim_get_funccal_local_dict_impl inlined into rs_get_funccal_local_dict (Rust, Phase 13)
-// nvim_get_funccal_local_ht_impl inlined into rs_get_funccal_local_ht (Rust, Phase 13)
-// nvim_get_funccal_local_var_impl inlined into rs_get_funccal_local_var (Rust, Phase 13)
-// nvim_get_funccal_args_dict_impl inlined into rs_get_funccal_args_dict (Rust, Phase 13)
-// nvim_get_funccal_args_ht_impl inlined into rs_get_funccal_args_ht (Rust, Phase 13)
-// nvim_get_funccal_args_var_impl inlined into rs_get_funccal_args_var (Rust, Phase 13)
-// nvim_list_func_vars_impl inlined into rs_list_func_vars (Rust, Phase 13)
-// nvim_get_current_funccal_dict_impl inlined into rs_get_current_funccal_dict (Rust, Phase 13)
-
-// nvim_find_hi_in_scoped_ht_impl inlined into rs_find_hi_in_scoped_ht (Rust, Phase 29)
-
-// nvim_find_var_in_scoped_ht_impl inlined into rs_find_var_in_scoped_ht (Rust, Phase 29)
-
-// nvim_set_ref_in_previous_funccal_impl inlined into rs_set_ref_in_previous_funccal (Rust, Phase 12)
-
-// nvim_set_ref_in_funccal_impl inlined into rs_set_ref_in_funccal (Rust, Phase 12)
-
-// nvim_set_ref_in_call_stack_impl inlined into rs_set_ref_in_call_stack (Rust, Phase 12)
+// Phase 12-13: funccal scope accessors inlined into Rust (scope.rs).
+// Phase 12: GC funccal impls inlined into Rust (gc.rs).
+// Phase 29: scoped_ht impls inlined into Rust (scope.rs).
 
 /// Phase 5: C implementation shim for set_ref_in_functions.
 /// Cannot inline: requires HASHITEM_EMPTY and HI2UF macros for hash iteration.

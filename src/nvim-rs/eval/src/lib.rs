@@ -36,7 +36,7 @@ pub mod timer;
 pub mod types;
 pub mod typval;
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 use std::sync::atomic::{AtomicI32, Ordering};
 
 // =============================================================================
@@ -294,17 +294,22 @@ pub unsafe extern "C" fn rs_var_flavour(varname: *const c_char) -> VarFlavour {
 }
 
 extern "C" {
-    fn nvim_get_current_funccal_fc_returned() -> c_int;
+    fn nvim_get_current_funccal() -> *mut c_void;
+    fn nvim_fc_get_returned(fc: *mut c_void) -> c_int;
 }
 
 /// Check if the current function was ended by a ":return" command.
 ///
 /// # Safety
-/// Calls C accessor function for function call state.
+/// Calls C accessor functions for function call state.
 #[unsafe(export_name = "current_func_returned")]
 #[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_current_func_returned() -> c_int {
-    nvim_get_current_funccal_fc_returned()
+    let fc = unsafe { nvim_get_current_funccal() };
+    if fc.is_null() {
+        return 0;
+    }
+    unsafe { nvim_fc_get_returned(fc) }
 }
 
 // =============================================================================
