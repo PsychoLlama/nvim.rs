@@ -55,48 +55,18 @@ _Static_assert(VV_EXCEPTION == 30, "VV_EXCEPTION changed - update Rust constants
 _Static_assert(VV_TESTING == 76, "VV_TESTING changed - update Rust constants");
 
 #include "eval/vars.c.generated.h"
-extern int rs_valid_tabpage(tabpage_T *tpc);
 
-// Rust FFI declarations (typval functions migrated to Rust)
-extern const char *tv_list_find_str(list_T *l, int n);
-extern varnumber_T tv_list_find_nr(list_T *l, int n, bool *ret_error);
-
-// Rust FFI declarations (window wrappers removed)
-extern tabpage_T *rs_find_tabpage(int n);
-
-extern void rs_optval_free(OptVal o);
-extern int rs_is_tty_option(const char *name);
-extern int64_t rs_num_divide(int64_t n1, int64_t n2);
-extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
-extern bool rs_eval_isnamec1(int c);
-extern int rs_get_env_len(const char **arg);
-extern const char *rs_find_name_end(const char *arg, const char **expr_start,
-                                    const char **expr_end, int flags);
+// Rust function declarations
 extern bool rs_set_ref_in_ht(hashtab_T *ht, int copyID, list_stack_T **list_stack);
-
-// Phase 1: eval_helpers migrated to Rust
-extern const char *rs_skip_var_list(const char *arg, int *var_count, int *semicolon,
-                                    bool silent);
+extern const char *rs_skip_var_list(const char *arg, int *var_count, int *semicolon, bool silent);
 extern char *rs_eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate);
 extern int rs_get_spellword(list_T *list, const char **ret_word);
-
-// Phase 9: misc utility functions migrated to Rust
 extern bool rs_garbage_collect_scriptvars(int copy_id);
 extern void rs_set_internal_string_var(const char *name, char *value);
-
-// Phase 3 partial: ex_let_env, ex_let_register migrated to Rust
-extern char *rs_ex_let_env(char *arg, typval_T *tv, bool is_const,
-                            const char *endchars, const char *op);
-extern char *rs_ex_let_register(char *arg, typval_T *tv, bool is_const,
-                                 const char *endchars, const char *op);
-
-// Phase 10: ex_let_one, ex_let_vars migrated to Rust
 extern char *rs_ex_let_one(char *arg, typval_T *tv, bool copy, bool is_const,
                             const char *endchars, const char *op);
 extern int rs_ex_let_vars(char *arg_start, typval_T *tv, int copy, int semicolon,
                            int var_count, int is_const, char *op);
-
-// Phase 12: eval_variable, check_vars, list_arg_vars, del_menutrans_vars, eval_spell_expr migrated
 extern const char *rs_get_var_value(const char *name);
 extern int rs_eval_variable(const char *name, int len, void *rettv, void **dip, bool verbose,
                              bool no_autoload);
@@ -104,21 +74,17 @@ extern void rs_check_vars(const char *name, size_t len);
 extern const char *rs_list_arg_vars(exarg_T *eap, const char *arg, int *first);
 extern void rs_del_menutrans_vars(void);
 extern list_T *rs_eval_spell_expr(const char *badword, char *expr);
-
-// Phase 11: eval_charconvert, eval_diff, eval_patch migrated to Rust
 extern int rs_eval_charconvert(const char *enc_from, const char *enc_to,
                                 const char *fname_from, const char *fname_to);
 extern void rs_eval_diff(const char *origfile, const char *newfile, const char *outfile);
 extern void rs_eval_patch(const char *origfile, const char *difffile, const char *outfile);
-
-// Phase 1: variable validation/check functions migrated to Rust
 extern bool rs_var_check_ro(int flags, const char *name, size_t name_len);
 extern bool rs_var_check_lock(int flags, const char *name, size_t name_len);
 extern bool rs_var_check_fixed(int flags, const char *name, size_t name_len);
 extern bool rs_var_wrong_func_name(const char *name, bool new_var);
 extern bool rs_valid_varname(const char *varname);
 
-// Phase 4: v: variable accessor functions migrated to Rust
+// v: variable accessor functions in Rust
 extern typval_T *rs_get_vim_var_tv(VimVarIndex idx);
 extern char *rs_get_vim_var_name(VimVarIndex idx);
 extern varnumber_T rs_get_vim_var_nr(VimVarIndex idx);
@@ -146,8 +112,6 @@ extern char *rs_ex_let_option(char *arg, typval_T *tv, bool is_const, const char
                               const char *op);
 
 // Phase 2: VimL f_ functions migrated to Rust
-extern void rs_get_var_from(const char *varname, typval_T *rettv, typval_T *deftv, int htname,
-                             tabpage_T *tp, win_T *win, buf_T *buf);
 // (rs_f_* functions are declared below)
 
 // Phase 4/5: heredoc, script_get and unlet functions migrated to Rust
@@ -167,9 +131,6 @@ extern char *rs_cat_prefix_varname(int prefix, const char *name);
 extern char *rs_get_user_var_name(expand_T *xp, int idx);
 extern void rs_var_redir_str(const char *value, int value_len);
 extern void rs_list_hashtable_vars(hashtab_T *ht, const char *prefix, int empty, int *first);
-extern void rs_list_one_var(dictitem_T *v, const char *prefix, int *first);
-extern void rs_list_one_var_a(const char *prefix, const char *name, ptrdiff_t name_len,
-                               VarType type, const char *string, int *first);
 extern void rs_f_gettabvar(typval_T *argvars, typval_T *rettv);
 extern void rs_f_gettabwinvar(typval_T *argvars, typval_T *rettv);
 extern void rs_f_getwinvar(typval_T *argvars, typval_T *rettv);
@@ -192,13 +153,8 @@ extern void rs_assert_error(const char *ga_data, int ga_len);
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
 
 static const char *e_letunexp = N_("E18: Unexpected characters in :let");
-static const char e_double_semicolon_in_list_of_variables[]
-  = N_("E452: Double ; in list of variables");
-static const char *e_lock_unlock = N_("E940: Cannot lock or unlock variable %s");
 static const char e_setting_v_str_to_value_with_wrong_type[]
   = N_("E963: Setting v:%s to value with wrong type");
-static const char e_missing_end_marker_str[] = N_("E990: Missing end marker '%s'");
-static const char e_cannot_use_heredoc_here[] = N_("E991: Cannot use =<< here");
 
 /// Variable used for g:
 static ScopeDictDictItem globvars_var;
@@ -631,10 +587,10 @@ void ex_let(exarg_T *eap)
       arg = (char *)rs_list_arg_vars(eap, arg, &first);
     } else if (!eap->skip) {
       // ":let"
-      list_glob_vars(&first);
-      list_buf_vars(&first);
-      list_win_vars(&first);
-      list_tab_vars(&first);
+      rs_list_hashtable_vars(&globvarht, "", true, &first);
+      rs_list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, &first);
+      rs_list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, &first);
+      rs_list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, &first);
       nvim_list_script_vars(&first);
       list_func_vars(&first);
       nvim_list_vim_vars(&first);
@@ -723,25 +679,6 @@ const char *skip_var_list(const char *arg, int *var_count, int *semicolon, bool 
   return rs_skip_var_list(arg, var_count, semicolon, silent);
 }
 
-/// List variables for hashtab "ht" with prefix "prefix".
-///
-/// @param empty  if true also list NULL strings as empty strings.
-void list_hashtable_vars(hashtab_T *ht, const char *prefix, int empty, int *first)
-{
-  rs_list_hashtable_vars(ht, prefix, empty, first);
-}
-
-/// List global variables.
-static void list_glob_vars(int *first) { list_hashtable_vars(&globvarht, "", true, first); }
-
-/// List buffer variables.
-static void list_buf_vars(int *first) { list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, first); }
-
-/// List window variables.
-static void list_win_vars(int *first) { list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, first); }
-
-/// List tab page variables.
-static void list_tab_vars(int *first) { list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, first); }
 
 /// ":unlet[!] var1 ... " command.
 void ex_unlet(exarg_T *eap) { rs_ex_unlet(eap); }
@@ -779,10 +716,7 @@ char *get_vim_var_str(const VimVarIndex idx) FUNC_ATTR_PURE FUNC_ATTR_NONNULL_RE
 partial_T *get_vim_var_partial(const VimVarIndex idx) FUNC_ATTR_PURE
 { return rs_get_vim_var_partial(idx); }
 
-/// Local string buffer for the next two functions to store a variable name
-/// with its prefix. Allocated in cat_prefix_varname(), freed later in
-/// get_user_var_name().
-
+// Buffer for cat_prefix_varname(), freed in get_user_var_name().
 static char *varnamebuf = NULL;
 static size_t varnamebuflen = 0;
 
@@ -1113,20 +1047,6 @@ static void delete_var(hashtab_T *ht, hashitem_T *hi)
   xfree(di);
 }
 
-/// List the value of one internal variable.
-static void list_one_var(dictitem_T *v, const char *prefix, int *first)
-{
-  rs_list_one_var(v, prefix, first);
-}
-
-/// @param[in]  name_len  Length of the name. May be -1, in this case strlen()
-///                       will be used.
-/// @param[in,out]  first  When true clear rest of screen and set to false.
-static void list_one_var_a(const char *prefix, const char *name, const ptrdiff_t name_len,
-                           const VarType type, const char *string, int *first)
-{
-  rs_list_one_var_a(prefix, name, name_len, type, string, first);
-}
 
 /// Additional handling for setting a v: variable.
 ///
@@ -1912,15 +1832,15 @@ int nvim_vars_eval_variable_full(const char *name, int len, void *rettv, void **
 
 /// List b: variables.
 void nvim_list_buf_vars(int *first)
-{ list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, first); }
+{ rs_list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, first); }
 
 /// List w: variables.
 void nvim_list_win_vars(int *first)
-{ list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, first); }
+{ rs_list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, first); }
 
 /// List t: variables.
 void nvim_list_tab_vars(int *first)
-{ list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, first); }
+{ rs_list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, first); }
 
 /// List v: variables.
 void nvim_list_vim_vars(int *first) { rs_list_hashtable_vars(&vimvarht, "v:", false, first); }
@@ -1958,10 +1878,6 @@ const char *nvim_e_invarg2(void) { return _(e_invarg2); }
 
 /// E488 trailing chars error string.
 const char *nvim_e_trailing_arg(void) { return _(e_trailing_arg); }
-
-/// rs_eval_variable extern declaration for use from C.
-extern int rs_eval_variable(const char *name, int len, void *rettv, void **dip, bool verbose,
-                             bool no_autoload);
 
 /// prepare_vimvar wrapper.
 void nvim_prepare_vimvar(int idx, void *save_tv) { prepare_vimvar(idx, (typval_T *)save_tv); }

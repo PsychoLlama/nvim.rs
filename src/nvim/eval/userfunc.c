@@ -70,6 +70,8 @@ extern bool rs_set_ref_in_list_items(list_T *l, int copyID, ht_stack_T **ht_stac
 extern bool rs_set_ref_in_item(typval_T *tv, int copyID, ht_stack_T **ht_stack,
                                list_stack_T **list_stack);
 
+extern void rs_list_hashtable_vars(hashtab_T *ht, const char *prefix, int empty, int *first);
+
 // Phase 1: Function Listing (implemented in Rust userfunc/src/listing.rs)
 extern int rs_cat_func_name(char *buf, size_t bufsize, ufunc_T *fp);
 extern int rs_function_list_modified(int prev_ht_changed);
@@ -2419,7 +2421,7 @@ ScopeDictDictItem *nvim_fc_l_vars_var_ptr(funccall_T *fc) { return fc ? &fc->fc_
 ScopeDictDictItem *nvim_fc_l_avars_var_ptr(funccall_T *fc) { return fc ? &fc->fc_l_avars_var : NULL; }
 void nvim_list_hashtable_vars(hashtab_T *ht, const char *prefix, int *first)
 {
-  list_hashtable_vars(ht, prefix, false, first);
+  rs_list_hashtable_vars(ht, prefix, false, first);
 }
 // funccall_T setter for current_funccal
 void nvim_set_current_funccal(funccall_T *fc) { current_funccal = fc; }
