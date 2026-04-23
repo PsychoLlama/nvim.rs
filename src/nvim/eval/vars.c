@@ -121,6 +121,19 @@ extern void rs_optval_as_tv(OptVal value, bool numbool, typval_T *rettv);
 extern void rs_set_option_from_tv(const char *varname, typval_T *varp);
 extern char *rs_set_cmdarg(exarg_T *eap, char *oldarg);
 
+// Phase 2: VimL f_ functions migrated to Rust
+extern void rs_get_var_from(const char *varname, typval_T *rettv, typval_T *deftv, int htname,
+                             tabpage_T *tp, win_T *win, buf_T *buf);
+// (rs_f_* functions are declared below)
+extern void rs_f_gettabvar(typval_T *argvars, typval_T *rettv);
+extern void rs_f_gettabwinvar(typval_T *argvars, typval_T *rettv);
+extern void rs_f_getwinvar(typval_T *argvars, typval_T *rettv);
+extern void rs_f_getbufvar(typval_T *argvars, typval_T *rettv);
+extern void rs_f_settabvar(typval_T *argvars);
+extern void rs_f_settabwinvar(typval_T *argvars);
+extern void rs_f_setwinvar(typval_T *argvars);
+extern void rs_f_setbufvar(typval_T *argvars);
+
 // Phase 5: helper and utility functions migrated to Rust
 extern void rs_set_reg_var(int c);
 extern char *rs_v_exception(char *oldval);
@@ -2414,89 +2427,7 @@ bool valid_varname(const char *varname)
 static void get_var_from(const char *varname, typval_T *rettv, typval_T *deftv, int htname,
                          tabpage_T *tp, win_T *win, buf_T *buf)
 {
-  bool done = false;
-  const bool do_change_curbuf = buf != NULL && htname == 'b';
-
-  emsg_off++;
-
-  rettv->v_type = VAR_STRING;
-  rettv->vval.v_string = NULL;
-
-  if (varname != NULL && tp != NULL && win != NULL && (htname != 'b' || buf != NULL)) {
-    // Set curwin to be our win, temporarily.  Also set the tabpage,
-    // otherwise the window is not valid. Only do this when needed,
-    // autocommands get blocked.
-    // If we have a buffer reference avoid the switching, we're saving and
-    // restoring curbuf directly.
-    const bool need_switch_win = !(tp == curtab && win == curwin) && !do_change_curbuf;
-    switchwin_T switchwin;
-    if (!need_switch_win || switch_win(&switchwin, win, tp, true) == OK) {
-      if (*varname == '&' && htname != 't') {
-        buf_T *const save_curbuf = curbuf;
-
-        // Change curbuf so the option is read from the correct buffer.
-        if (do_change_curbuf) {
-          curbuf = buf;
-        }
-
-        if (varname[1] == NUL) {
-          // get all window-local or buffer-local options in a dict
-          dict_T *opts = get_winbuf_options(htname == 'b');
-
-          if (opts != NULL) {
-            tv_dict_set_ret(rettv, opts);
-            done = true;
-          }
-        } else if (eval_option(&varname, rettv, true) == OK) {
-          // Local option
-          done = true;
-        }
-
-        curbuf = save_curbuf;
-      } else if (*varname == NUL) {
-        const ScopeDictDictItem *v;
-        // Empty string: return a dict with all the local variables.
-        if (htname == 'b') {
-          v = &buf->b_bufvar;
-        } else if (htname == 'w') {
-          v = &win->w_winvar;
-        } else {
-          v = &tp->tp_winvar;
-        }
-        tv_copy(&v->di_tv, rettv);
-        done = true;
-      } else {
-        hashtab_T *ht;
-
-        if (htname == 'b') {
-          ht = &buf->b_vars->dv_hashtab;
-        } else if (htname == 'w') {
-          ht = &win->w_vars->dv_hashtab;
-        } else {
-          ht = &tp->tp_vars->dv_hashtab;
-        }
-
-        // Look up the variable.
-        const dictitem_T *const v = find_var_in_ht(ht, htname, varname, strlen(varname), false);
-        if (v != NULL) {
-          tv_copy(&v->di_tv, rettv);
-          done = true;
-        }
-      }
-    }
-
-    if (need_switch_win) {
-      // restore previous notion of curwin
-      restore_win(&switchwin, true);
-    }
-  }
-
-  if (!done && deftv->v_type != VAR_UNKNOWN) {
-    // use the default value
-    tv_copy(deftv, rettv);
-  }
-
-  emsg_off--;
+  rs_get_var_from(varname, rettv, deftv, htname, tp, win, buf);
 }
 
 /// getwinvar() and gettabwinvar()
@@ -2504,17 +2435,11 @@ static void get_var_from(const char *varname, typval_T *rettv, typval_T *deftv, 
 /// @param off  1 for gettabwinvar()
 static void getwinvar(typval_T *argvars, typval_T *rettv, int off)
 {
-  tabpage_T *tp;
-
   if (off == 1) {
-    tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
+    rs_f_gettabwinvar(argvars, rettv);
   } else {
-    tp = curtab;
+    rs_f_getwinvar(argvars, rettv);
   }
-  win_T *const win = find_win_by_nr(&argvars[off], tp);
-  const char *const varname = tv_get_string_chk(&argvars[off + 1]);
-
-  get_var_from(varname, rettv, &argvars[off + 2], 'w', tp, win, NULL);
 }
 
 /// Convert typval to option value for a particular option.
@@ -2554,40 +2479,10 @@ static void set_option_from_tv(const char *varname, typval_T *varp)
 /// "setwinvar()" and "settabwinvar()" functions
 static void setwinvar(typval_T *argvars, int off)
 {
-  if (rs_check_secure()) {
-    return;
-  }
-
-  tabpage_T *tp = NULL;
   if (off == 1) {
-    tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
+    rs_f_settabwinvar(argvars);
   } else {
-    tp = curtab;
-  }
-  win_T *const win = find_win_by_nr(&argvars[off], tp);
-  const char *varname = tv_get_string_chk(&argvars[off + 1]);
-  typval_T *varp = &argvars[off + 2];
-
-  if (win == NULL || varname == NULL) {
-    return;
-  }
-
-  bool need_switch_win = !(tp == curtab && win == curwin);
-  switchwin_T switchwin;
-  if (!need_switch_win || switch_win(&switchwin, win, tp, true) == OK) {
-    if (*varname == '&') {
-      set_option_from_tv(varname + 1, varp);
-    } else {
-      const size_t varname_len = strlen(varname);
-      char *const winvarname = xmalloc(varname_len + 3);
-      memcpy(winvarname, "w:", 2);
-      memcpy(winvarname + 2, varname, varname_len + 1);
-      set_var(winvarname, varname_len + 2, varp, true);
-      xfree(winvarname);
-    }
-  }
-  if (need_switch_win) {
-    restore_win(&switchwin, true);
+    rs_f_setwinvar(argvars);
   }
 }
 
@@ -2747,17 +2642,7 @@ void var_redir_stop(void)
 
 /// "gettabvar()" function
 void f_gettabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *const varname = tv_get_string_chk(&argvars[1]);
-  tabpage_T *const tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
-  win_T *win = NULL;
-
-  if (tp != NULL) {
-    win = tp == curtab || tp->tp_firstwin == NULL ? firstwin : tp->tp_firstwin;
-  }
-
-  get_var_from(varname, rettv, &argvars[2], 't', tp, win, NULL);
-}
+{ rs_f_gettabvar(argvars, rettv); }
 
 /// "gettabwinvar()" function
 void f_gettabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getwinvar(argvars, rettv, 1); }
@@ -2767,47 +2652,11 @@ void f_getwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { getwin
 
 /// "getbufvar()" function
 void f_getbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  const char *const varname = tv_get_string_chk(&argvars[1]);
-  buf_T *const buf = tv_get_buf_from_arg(&argvars[0]);
-
-  get_var_from(varname, rettv, &argvars[2], 'b', curtab, curwin, buf);
-}
+{ rs_f_getbufvar(argvars, rettv); }
 
 /// "settabvar()" function
 void f_settabvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (rs_check_secure()) {
-    return;
-  }
-
-  tabpage_T *const tp = rs_find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
-  const char *const varname = tv_get_string_chk(&argvars[1]);
-  typval_T *const varp = &argvars[2];
-
-  if (varname == NULL || tp == NULL) {
-    return;
-  }
-
-  tabpage_T *const save_curtab = curtab;
-  tabpage_T *const save_lu_tp = lastused_tabpage;
-  goto_tabpage_tp(tp, false, false);
-
-  const size_t varname_len = strlen(varname);
-  char *const tabvarname = xmalloc(varname_len + 3);
-  memcpy(tabvarname, "t:", 2);
-  memcpy(tabvarname + 2, varname, varname_len + 1);
-  set_var(tabvarname, varname_len + 2, varp, true);
-  xfree(tabvarname);
-
-  // Restore current tabpage and last accessed tabpage.
-  if (rs_valid_tabpage(save_curtab)) {
-    goto_tabpage_tp(save_curtab, false, false);
-    if (rs_valid_tabpage(save_lu_tp)) {
-      lastused_tabpage = save_lu_tp;
-    }
-  }
-}
+{ rs_f_settabvar(argvars); }
 
 /// "settabwinvar()" function
 void f_settabwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { setwinvar(argvars, 1); }
@@ -2817,41 +2666,7 @@ void f_setwinvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { setwin
 
 /// "setbufvar()" function
 void f_setbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (rs_check_secure()
-      || !tv_check_str_or_nr(&argvars[0])) {
-    return;
-  }
-  const char *varname = tv_get_string_chk(&argvars[1]);
-  buf_T *const buf = tv_get_buf(&argvars[0], false);
-  typval_T *varp = &argvars[2];
-
-  if (buf == NULL || varname == NULL) {
-    return;
-  }
-
-  if (*varname == '&') {
-    aco_save_T aco;
-
-    // Set curbuf to be our buf, temporarily.
-    aucmd_prepbuf(&aco, buf);
-
-    set_option_from_tv(varname + 1, varp);
-
-    // reset notion of buffer
-    aucmd_restbuf(&aco);
-  } else {
-    const size_t varname_len = strlen(varname);
-    char *const bufvarname = xmalloc(varname_len + 3);
-    buf_T *const save_curbuf = curbuf;
-    curbuf = buf;
-    memcpy(bufvarname, "b:", 2);
-    memcpy(bufvarname + 2, varname, varname_len + 1);
-    set_var(bufvarname, varname_len + 2, varp, true);
-    xfree(bufvarname);
-    curbuf = save_curbuf;
-  }
-}
+{ rs_f_setbufvar(argvars); }
 
 // Rust FFI Accessor Functions
 
@@ -2954,6 +2769,72 @@ void nvim_vars_emsg_e5700(void)
 {
   emsg(_("E5700: Expression from 'spellsuggest' must yield lists with "
          "exactly two values"));
+}
+
+// Phase 2: buf_T / win_T / tabpage_T field accessors for Rust FFI
+// Using void* to avoid exposing buffer_defs.h types in generated headers.
+
+/// Non-inline wrapper for tv_dict_set_ret (for Rust FFI).
+void nvim_tv_dict_set_ret(typval_T *tv, dict_T *d) { tv_dict_set_ret(tv, d); }
+
+/// Get buf->b_vars (variables dict).
+void *nvim_buf_get_vars(void *buf) { return buf ? ((buf_T *)buf)->b_vars : NULL; }
+
+/// Get win->w_vars (variables dict).
+void *nvim_win_get_vars(void *win) { return win ? ((win_T *)win)->w_vars : NULL; }
+
+/// Get tp->tp_vars (variables dict).
+void *nvim_tab_get_vars(void *tp) { return tp ? ((tabpage_T *)tp)->tp_vars : NULL; }
+
+/// Get &buf->b_bufvar.di_tv (scope dict item tv).
+void *nvim_buf_get_bufvar_tv(void *buf) { return buf ? &((buf_T *)buf)->b_bufvar.di_tv : NULL; }
+
+/// Get &win->w_winvar.di_tv (scope dict item tv).
+void *nvim_win_get_winvar_tv(void *win) { return win ? &((win_T *)win)->w_winvar.di_tv : NULL; }
+
+/// Get &tp->tp_winvar.di_tv (scope dict item tv).
+void *nvim_tab_get_winvar_tv(void *tp) { return tp ? &((tabpage_T *)tp)->tp_winvar.di_tv : NULL; }
+
+/// Get tp->tp_firstwin.
+void *nvim_tab_get_firstwin(void *tp) { return tp ? ((tabpage_T *)tp)->tp_firstwin : NULL; }
+
+/// Increment emsg_off.
+void nvim_emsg_off_inc(void) { emsg_off++; }
+
+/// Decrement emsg_off.
+void nvim_emsg_off_dec(void) { emsg_off--; }
+
+/// Heap-allocate a switchwin_T and call switch_win; returns opaque pointer or NULL on fail.
+/// Caller must call nvim_vars_switch_win_restore() later.
+void *nvim_vars_switch_win(void *win, void *tp)
+{
+  switchwin_T *sw = xcalloc(1, sizeof(switchwin_T));
+  if (switch_win(sw, (win_T *)win, (tabpage_T *)tp, true) != OK) {
+    xfree(sw);
+    return NULL;
+  }
+  return sw;
+}
+
+/// Call restore_win on a heap-allocated switchwin_T and free it.
+void nvim_vars_switch_win_restore(void *sw)
+{
+  if (sw != NULL) {
+    restore_win((switchwin_T *)sw, true);
+    xfree(sw);
+  }
+}
+
+/// Check if win and tp are the current win/tab pair.
+bool nvim_is_curwin_curtab(void *win, void *tp)
+{
+  return (tabpage_T *)tp == curtab && (win_T *)win == curwin;
+}
+
+/// Call goto_tabpage_tp (wraps bool args as int).
+void nvim_goto_tabpage_tp(void *tp, int trigger_enter, int trigger_leave)
+{
+  goto_tabpage_tp((tabpage_T *)tp, (bool)trigger_enter, (bool)trigger_leave);
 }
 
 /// Get a script line to execute, from a heredoc (<<) or regular string.

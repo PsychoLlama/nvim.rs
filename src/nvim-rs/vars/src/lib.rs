@@ -42,6 +42,7 @@ pub mod checks;
 pub mod eval_helpers;
 pub mod lookup;
 pub mod option_conv;
+pub mod viml_funcs;
 pub mod vimvar_accessors;
 
 // Re-export typval types for convenience
