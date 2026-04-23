@@ -745,16 +745,8 @@ void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr) { do_sort_uni
 //{{{1 Dictionaries
 //{{{2 Dictionary watchers
 
-/// Perform all necessary cleanup for a `DictWatcher` instance
-///
-/// @param  watcher  Watcher to free.
-static void tv_dict_watcher_free(DictWatcher *watcher)
-  FUNC_ATTR_NONNULL_ALL
-{
-  callback_free(&watcher->callback);
-  xfree(watcher->key_pattern);
-  xfree(watcher);
-}
+// tv_dict_watcher_free migrated to Rust (Phase 5)
+extern void tv_dict_watcher_free(DictWatcher *watcher);
 
 /// Add watcher to a dictionary
 ///
@@ -827,24 +819,8 @@ bool tv_dict_watcher_remove(dict_T *const dict, const char *const key_pattern,
   return true;
 }
 
-/// Test if `key` matches with with `watcher->key_pattern`
-///
-/// @param[in]  watcher  Watcher to check key pattern from.
-/// @param[in]  key  Key to check.
-///
-/// @return true if key matches, false otherwise.
-static bool tv_dict_watcher_matches(DictWatcher *watcher, const char *const key)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
-{
-  // For now only allow very simple globbing in key patterns: a '*' at the end
-  // of the string means it should match everything up to the '*' instead of the
-  // whole string.
-  const size_t len = watcher->key_pattern_len;
-  if (len && watcher->key_pattern[len - 1] == '*') {
-    return strncmp(key, watcher->key_pattern, len - 1) == 0;
-  }
-  return strcmp(key, watcher->key_pattern) == 0;
-}
+// tv_dict_watcher_matches migrated to Rust (Phase 5)
+extern bool tv_dict_watcher_matches(DictWatcher *watcher, const char *key);
 
 /// Send a change notification to all dictionary watchers that match given key
 ///
@@ -942,48 +918,11 @@ void tv_dict_watcher_notify(dict_T *const dict, const char *const key, typval_T 
 // tv_dict_get_string_buf: migrated to Rust (nvim-rs/typval)
 // tv_dict_get_string_buf_chk: migrated to Rust (nvim-rs/typval)
 
-/// Get a function from a dictionary
-///
-/// @param[in]  d  Dictionary to get callback from.
-/// @param[in]  key  Dictionary key.
-/// @param[in]  key_len  Key length, may be -1 to use strlen().
-/// @param[out]  result  The address where a pointer to the wanted callback
-///                      will be left.
-///
-/// @return true/false on success/failure.
-bool tv_dict_get_callback(dict_T *const d, const char *const key, const ptrdiff_t key_len,
-                          Callback *const result)
-  FUNC_ATTR_NONNULL_ARG(2, 4) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  result->type = kCallbackNone;
+// tv_dict_get_callback migrated to Rust (Phase 5)
+extern bool tv_dict_get_callback(dict_T *d, const char *key, ptrdiff_t key_len, Callback *result);
 
-  dictitem_T *const di = tv_dict_find(d, key, key_len);
-
-  if (di == NULL) {
-    return true;
-  }
-
-  if (!tv_is_func(di->di_tv) && di->di_tv.v_type != VAR_STRING) {
-    emsg(_("E6000: Argument is not a function or function name"));
-    return false;
-  }
-
-  typval_T tv;
-  tv_copy(&di->di_tv, &tv);
-  set_selfdict(&tv, d);
-  const bool res = rs_callback_from_typval(result, &tv);
-  tv_clear(&tv);
-  return res;
-}
-
-/// Check for adding a function to g: or l:.
-/// If the name is wrong give an error message and return true.
-int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name)
-{
-  return (d == get_globvar_dict() || &d->dv_hashtab == get_funccal_local_ht())
-         && tv_is_func(*tv)
-         && var_wrong_func_name(name, true);
-}
+// tv_dict_wrong_func_name migrated to Rust (Phase 5)
+extern int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name);
 
 //{{{2 dict_add*
 // tv_dict_add, tv_dict_add_list, tv_dict_add_tv, tv_dict_add_dict,
@@ -2528,3 +2467,52 @@ void nvim_blob_inc_refcount(blob_T *b) { b->bv_refcount++; }
 
 /// mb_strcmp_ic wrapper for Rust (accessible by Rust for tv_equal string comparison).
 int nvim_mb_strcmp_ic(bool ic, const char *s1, const char *s2) { return mb_strcmp_ic(ic, s1, s2); }
+
+// Phase 5 (typval migration): dict helpers and tv_dict2list accessors
+
+/// Return pointer to dv_hashtab field (accessor for Rust tv_dict_wrong_func_name).
+hashtab_T *nvim_dict_get_hashtab_ptr(const dict_T *d) { return (hashtab_T *)&d->dv_hashtab; }
+
+/// Return global var dict pointer (accessor for Rust tv_dict_wrong_func_name).
+dict_T *nvim_get_globvar_dict(void) { return get_globvar_dict(); }
+
+/// Return current funccal local hashtab (accessor for Rust tv_dict_wrong_func_name).
+hashtab_T *nvim_get_funccal_local_ht(void) { return get_funccal_local_ht(); }
+
+/// Check if typval is a func/partial type (accessor for Rust).
+bool nvim_tv_is_func(const typval_T *tv) { return tv_is_func(*tv); }
+
+/// var_wrong_func_name(name, true) wrapper for Rust.
+bool nvim_var_wrong_func_name(const char *name) { return var_wrong_func_name(name, true); }
+
+/// Get key_pattern pointer from a DictWatcher (accessor for Rust).
+const char *nvim_watcher_get_key_pattern(const DictWatcher *w) { return w->key_pattern; }
+
+/// Get key_pattern_len from a DictWatcher (accessor for Rust).
+size_t nvim_watcher_get_key_pattern_len(const DictWatcher *w) { return w->key_pattern_len; }
+
+/// Get pointer to callback field in a DictWatcher (accessor for Rust tv_dict_watcher_free).
+Callback *nvim_watcher_get_callback_ptr(DictWatcher *w) { return &w->callback; }
+
+/// Call set_selfdict(tv, d) (accessor for Rust tv_dict_get_callback).
+void nvim_set_selfdict(typval_T *tv, dict_T *d) { set_selfdict(tv, d); }
+
+/// Emit E6000 error (accessor for Rust tv_dict_get_callback).
+void nvim_emsg_not_func_or_funcname(void)
+{
+  emsg(_("E6000: Argument is not a function or function name"));
+}
+
+/// Check typval is func or string (accessor for Rust tv_dict_get_callback).
+bool nvim_tv_is_func_or_string(const typval_T *tv)
+{
+  return tv_is_func(*tv) || tv->v_type == VAR_STRING;
+}
+
+/// call rs_callback_from_typval for Rust callers that only have C linkage.
+/// Returns true on success.
+bool nvim_callback_from_typval_impl(Callback *result, typval_T *tv)
+{
+  return rs_callback_from_typval(result, tv);
+}
+

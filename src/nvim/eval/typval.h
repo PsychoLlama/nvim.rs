@@ -500,6 +500,12 @@ extern bool tv_dict_equal(dict_T *d1, dict_T *d2, bool ic);
 extern void tv_dict_extend(dict_T *d1, dict_T *d2, const char *action);
 extern dict_T *tv_dict_copy(const vimconv_T *conv, dict_T *orig, bool deep, int copyID);
 
+// Dict helpers (migrated to Rust, Phase 5)
+extern bool tv_dict_get_callback(dict_T *d, const char *key, ptrdiff_t key_len, Callback *result);
+extern int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name);
+extern bool tv_dict_watcher_matches(DictWatcher *watcher, const char *key);
+extern void tv_dict_watcher_free(DictWatcher *watcher);
+
 // Float getter (migrated to Rust)
 extern float_T tv_get_float(const typval_T *tv);
 

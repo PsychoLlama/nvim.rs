@@ -5889,6 +5889,151 @@ pub unsafe extern "C" fn rs_tv_dict_copy(
     copy
 }
 
+// =============================================================================
+// Phase 5 (typval migration): dict helpers and tv_dict2list
+// =============================================================================
+
+/// Opaque handle to a DictWatcher.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct DictWatcherHandle(*const std::ffi::c_void);
+
+impl DictWatcherHandle {
+    pub const fn null() -> Self {
+        Self(std::ptr::null())
+    }
+    pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+    pub const fn as_ptr(self) -> *const std::ffi::c_void {
+        self.0
+    }
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+extern "C" {
+    // Phase 5 accessors
+    fn nvim_dict_get_hashtab_ptr(d: DictHandle) -> *const std::ffi::c_void;
+    fn nvim_get_globvar_dict() -> DictHandle;
+    fn nvim_get_funccal_local_ht() -> *const std::ffi::c_void;
+    fn nvim_tv_is_func(tv: TypevalHandle) -> bool;
+    fn nvim_var_wrong_func_name(name: *const c_char) -> bool;
+    fn nvim_watcher_get_key_pattern(w: DictWatcherHandle) -> *const c_char;
+    fn nvim_watcher_get_key_pattern_len(w: DictWatcherHandle) -> usize;
+    fn nvim_watcher_get_callback_ptr(w: DictWatcherHandle) -> *mut c_void;
+    fn nvim_set_selfdict(tv: TypevalHandle, d: DictHandle);
+    fn nvim_emsg_not_func_or_funcname();
+    fn nvim_tv_is_func_or_string(tv: TypevalHandle) -> bool;
+    fn nvim_callback_from_typval_impl(result: *mut c_void, tv: TypevalHandle) -> bool;
+    fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
+}
+
+/// Check if a key matches a watcher's pattern (migrated from C `tv_dict_watcher_matches`).
+///
+/// # Safety
+///
+/// `watcher` and `key` must be valid non-null pointers.
+#[export_name = "tv_dict_watcher_matches"]
+pub unsafe extern "C" fn rs_tv_dict_watcher_matches(
+    watcher: DictWatcherHandle,
+    key: *const c_char,
+) -> bool {
+    let pattern = nvim_watcher_get_key_pattern(watcher);
+    let pattern_len = nvim_watcher_get_key_pattern_len(watcher);
+
+    if pattern_len > 0 {
+        let last_byte = *pattern.add(pattern_len - 1) as u8;
+        if last_byte == b'*' {
+            return strncmp(key, pattern, pattern_len - 1) == 0;
+        }
+    }
+    strcmp(key, pattern) == 0
+}
+
+/// Free a DictWatcher struct (migrated from C `tv_dict_watcher_free`).
+///
+/// # Safety
+///
+/// `watcher` must be a valid non-null pointer to a DictWatcher.
+#[export_name = "tv_dict_watcher_free"]
+pub unsafe extern "C" fn rs_tv_dict_watcher_free(watcher: DictWatcherHandle) {
+    let cb_ptr = nvim_watcher_get_callback_ptr(watcher);
+    rs_callback_free(cb_ptr);
+    let key_pattern = nvim_watcher_get_key_pattern(watcher) as *mut c_void;
+    nvim_xfree(key_pattern);
+    nvim_xfree(watcher.as_ptr().cast_mut());
+}
+
+/// Check for adding a function to g: or l: (migrated from C `tv_dict_wrong_func_name`).
+///
+/// # Safety
+///
+/// `d`, `tv`, and `name` must be valid non-null pointers.
+#[export_name = "tv_dict_wrong_func_name"]
+pub unsafe extern "C" fn rs_tv_dict_wrong_func_name(
+    d: DictHandle,
+    tv: TypevalHandle,
+    name: *const c_char,
+) -> c_int {
+    let globvar_dict = nvim_get_globvar_dict();
+    let funccal_ht = nvim_get_funccal_local_ht();
+    let dict_ht = nvim_dict_get_hashtab_ptr(d);
+
+    let is_global_or_local =
+        d.as_ptr() == globvar_dict.as_ptr() || dict_ht.cast_mut() == funccal_ht.cast_mut();
+
+    c_int::from(is_global_or_local && nvim_tv_is_func(tv) && nvim_var_wrong_func_name(name))
+}
+
+/// Get a callback from a dict key (migrated from C `tv_dict_get_callback`).
+///
+/// # Safety
+///
+/// `d`, `key`, and `result` must be valid pointers as required by the C signature.
+#[export_name = "tv_dict_get_callback"]
+pub unsafe extern "C" fn rs_tv_dict_get_callback(
+    d: DictHandle,
+    key: *const c_char,
+    key_len: isize,
+    result: *mut c_void,
+) -> bool {
+    // Initialize result->type to kCallbackNone (0) at offset 8 (after 8-byte union)
+    // result is Callback*: first 8 bytes are data union, next 4 bytes are type int.
+    *(result.add(8).cast::<c_int>()) = 0; // kCallbackNone = 0
+
+    let di = nvim_dict_find(d, key, key_len);
+    if di.is_null() {
+        return true;
+    }
+
+    let di_tv = nvim_dictitem_get_tv(di);
+    if !nvim_tv_is_func_or_string(di_tv) {
+        nvim_emsg_not_func_or_funcname();
+        return false;
+    }
+
+    // Allocate stack space for a temporary typval_T (16 bytes, 8-byte aligned)
+    let mut tv_buf = [0u64; 2];
+    let tv_ptr = tv_buf.as_mut_ptr().cast::<c_void>();
+    let tv_handle = TypevalHandle::from_ptr(tv_ptr);
+
+    // tv_copy(&di->di_tv, &tv)
+    rs_tv_copy(di_tv, tv_handle);
+
+    // set_selfdict(&tv, d)
+    nvim_set_selfdict(tv_handle, d);
+
+    // rs_callback_from_typval(result, &tv)
+    let ok = nvim_callback_from_typval_impl(result, tv_handle);
+
+    // tv_clear(&tv)
+    tv_clear(tv_handle);
+
+    ok
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
