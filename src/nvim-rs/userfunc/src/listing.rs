@@ -93,6 +93,9 @@ extern "C" {
     // exarg_T accessors (already in ex_docmd.c / indent_ffi.c)
     fn nvim_eap_get_forceit(eap: ExargHandle) -> c_int;
 
+    // vim_regexec for regmatch-based listing (Phase 4)
+    fn vim_regexec(rmp: *mut c_void, line: *const c_char, col: c_int) -> c_int;
+
     // globals
     static mut got_int: c_int;
     static p_verbose: c_int;
@@ -459,4 +462,66 @@ pub unsafe extern "C" fn rs_list_one_function(
     }
 
     fp
+}
+
+// =============================================================================
+// rs_list_functions_regmatch
+// =============================================================================
+//
+// Phase 4 (plan db85cc6b): migrate the regmatch branch of list_functions to Rust.
+// Previously `nvim_list_functions_matching_pat` (C) built a regmatch_T and called
+// C `list_functions(&regmatch)`.  Now it calls `rs_list_functions_regmatch(regmatch)`
+// and the C `list_functions` static helper is deleted.
+
+/// Context for the regmatch-based listing callback.
+struct ListFunctionsRegmatchCtx {
+    prev_ht_changed: c_int,
+    regmatch: *mut c_void,
+    done: bool,
+}
+
+unsafe extern "C" fn list_functions_regmatch_cb(fp: UfuncHandle, ctx_ptr: *mut c_void) {
+    let ctx = &mut *ctx_ptr.cast::<ListFunctionsRegmatchCtx>();
+    if ctx.done || got_int != 0 {
+        return;
+    }
+    let name = nvim_ufunc_get_name(fp);
+    if name.is_null() {
+        return;
+    }
+    // Skip functions whose names start with a digit
+    let first_byte = *name as u8;
+    if first_byte.is_ascii_digit() {
+        return;
+    }
+    // Test regmatch
+    if vim_regexec(ctx.regmatch, name, 0) == 0 {
+        return;
+    }
+    if rs_list_func_head(fp, 0, 0) != 0 {
+        ctx.done = true;
+        return;
+    }
+    if rs_function_list_modified(ctx.prev_ht_changed) != 0 {
+        ctx.done = true;
+    }
+}
+
+/// List functions matching a compiled regmatch.
+/// `regmatch` is an opaque `regmatch_T *` built by the caller.
+///
+/// # Safety
+/// `regmatch` must be a valid, non-null `regmatch_T *`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_list_functions_regmatch(regmatch: *mut c_void) {
+    let prev_ht_changed = nvim_func_ht_changed();
+    let mut ctx = ListFunctionsRegmatchCtx {
+        prev_ht_changed,
+        regmatch,
+        done: false,
+    };
+    nvim_func_ht_foreach(
+        list_functions_regmatch_cb,
+        std::ptr::addr_of_mut!(ctx).cast::<c_void>(),
+    );
 }

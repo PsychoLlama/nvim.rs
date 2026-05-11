@@ -77,6 +77,7 @@ extern int rs_cat_func_name(char *buf, size_t bufsize, ufunc_T *fp);
 extern int rs_function_list_modified(int prev_ht_changed);
 extern int rs_list_func_head(ufunc_T *fp, int indent, int force);
 extern void rs_list_functions(void);
+extern void rs_list_functions_regmatch(regmatch_T *regmatch);
 extern char *rs_list_functions_matching_pat(exarg_T *eap);
 extern ufunc_T *rs_list_one_function(exarg_T *eap, const char *name, char *p);
 
@@ -1128,42 +1129,8 @@ theend:
   return name;
 }
 
-/// If the "funcname" starts with "s:" or "<SID>", expands it to the current
-/// script ID. Thin wrapper — logic lives in Rust (names.rs).
-/// List functions.
-///
-/// @param regmatch  When NULL, all of them.
-///                  Otherwise functions matching "regmatch".
-static void list_functions(regmatch_T *regmatch)
-{
-  if (regmatch == NULL) {
-    rs_list_functions();
-  } else {
-    // For pattern-based listing, use Rust via the hash iteration callback
-    // but we need to pass regmatch -- call list_functions_matching_pat path
-    // which uses C's regmatch. Iterate directly here with C regmatch.
-    const int prev_ht_changed = func_hashtab.ht_changed;
-    size_t todo = func_hashtab.ht_used;
-    const hashitem_T *const ht_array = func_hashtab.ht_array;
-
-    for (const hashitem_T *hi = ht_array; todo > 0 && !got_int; hi++) {
-      if (!HASHITEM_EMPTY(hi)) {
-        ufunc_T *fp = HI2UF(hi);
-        todo--;
-        if (!isdigit((uint8_t)(*fp->uf_name))
-            && vim_regexec(regmatch, fp->uf_name, 0)) {
-          if (rs_list_func_head(fp, 0, 0) != 0) {
-            return;
-          }
-          if (rs_function_list_modified(prev_ht_changed)) {
-            return;
-          }
-        }
-      }
-    }
-  }
-}
-
+// list_functions deleted (Phase 4): logic moved to Rust rs_list_functions and
+// rs_list_functions_regmatch (listing.rs).
 
 #define MAX_FUNC_NESTING 50
 
@@ -1464,7 +1431,7 @@ void ex_function(exarg_T *eap)
   // ":function" without argument: list functions.
   if (ends_excmd(*eap->arg)) {
     if (!eap->skip) {
-      list_functions(NULL);
+      rs_list_functions();
     }
     eap->nextcmd = check_nextcmd(eap->arg);
     return;
@@ -2205,7 +2172,7 @@ void nvim_list_functions_matching_pat(const char *pat, bool ic)
   regmatch.regprog = vim_regcomp(pat, RE_MAGIC);
   if (regmatch.regprog != NULL) {
     regmatch.rm_ic = ic;
-    list_functions(&regmatch);
+    rs_list_functions_regmatch(&regmatch);
     vim_regfree(regmatch.regprog);
   }
 }
