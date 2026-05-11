@@ -35,7 +35,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | edit           | Edit mode (state, insert, keys, abbreviations, completion) |
 | encoding       | Text encoding (base64, hashing)         |
 | eval           | VimL built-in functions (math, bitwise, type, random) |
-| eval_codec     | VimL value encoding/decoding (JSON, blob, escape)   |
+| eval_codec     | VimL value encoding/decoding (JSON, blob, escape, JSON/msgpack decode) |
 | eval_exec      | VimL expression evaluation (eval0-eval5, operators, comparisons, error handling) |
 | event          | Event loop and libuv integration        |
 | extmark        | Extended marks for plugins              |
