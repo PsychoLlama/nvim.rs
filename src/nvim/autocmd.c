@@ -853,11 +853,11 @@ char *nvim_autocmd_get_handler_str_verbose(int event, size_t idx)
   return aucmd_handler_to_string(&kv_A(*acs, idx));
 }
 
-/// Execute the callback from an AutoCmd copy (for safe oneshot handling).
-/// ac_copy_raw is a pointer to an AutoCmd copy (stack allocated by Rust via xcalloc or similar).
-bool nvim_autocmd_execute_callback_copy(const void *ac_copy_raw, const void *apc_raw)
+/// Execute the autocmd callback from an AutoCmd/AutoPatCmd copy.
+/// Called from Rust (getnextac) for safe oneshot handling.
+bool nvim_au_callback(const void *ac_raw, const void *apc_raw)
 {
-  return au_callback((const AutoCmd *)ac_copy_raw, (const AutoPatCmd *)apc_raw);
+  return au_callback((const AutoCmd *)ac_raw, (const AutoPatCmd *)apc_raw);
 }
 
 /// Get the size of AutoCmd struct (for Rust allocation).

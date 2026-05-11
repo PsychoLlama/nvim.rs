@@ -2288,8 +2288,8 @@ extern "C" {
     // Temporarily set ac->pat = NULL (for oneshot hide-during-callback trick)
     fn nvim_autocmd_set_pat_null(event: c_int, idx: usize);
 
-    // Execute the callback from an AutoCmd copy
-    fn nvim_autocmd_execute_callback_copy(ac_copy: *const c_void, apc: *const c_void) -> bool;
+    // Execute the autocmd callback from an AutoCmd/AutoPatCmd copy
+    fn nvim_au_callback(ac: *const c_void, apc: *const c_void) -> bool;
 
     // Restore pat from copy
     fn nvim_autocmd_restore_pat(event: c_int, idx: usize, ac_copy: *mut c_void);
@@ -2382,7 +2382,7 @@ pub unsafe extern "C" fn rs_getnextac(
         }
 
         // Execute callback (may reallocate acs vector, invalidating pointers)
-        let rv = nvim_autocmd_execute_callback_copy(ac_copy.cast_const(), apc.cast_const());
+        let rv = nvim_au_callback(ac_copy.cast_const(), apc.cast_const());
 
         if oneshot {
             // Restore pat. Use event/idx because acs may have been reallocated.
