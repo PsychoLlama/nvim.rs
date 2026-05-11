@@ -45,5 +45,6 @@ Object nlua_pop_Object(lua_State *lstate, bool ref, Arena *arena, Error *err);
 void nlua_pop_keydict(lua_State *lstate, void *retval, FieldHashfn hashy, char **err_opt,
                       Arena *arena, Error *err);
 void nlua_push_keydict(lua_State *lstate, void *value, KeySetLink *table);
+bool nlua_push_typval(lua_State *lstate, typval_T *const tv, int flags);
 
 #include "lua/converter.h.generated.h"

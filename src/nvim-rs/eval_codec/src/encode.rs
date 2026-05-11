@@ -678,12 +678,17 @@ unsafe fn convert_one_value<E: Encoder>(
         }
         t if t == VAR_FUNC => {
             let fun = tv_get_vstring(tv);
-            if enc.conv_func_start(tv, fun, mpstack, objname) != OK {
+            // NOTDONE means "handled, skip before_args/before_self/end"
+            // (models C's goto typval_encode_stop_converting_one_item).
+            let ret = enc.conv_func_start(tv, fun, mpstack, objname);
+            if ret == FAIL {
                 return FAIL;
             }
-            enc.conv_func_before_args(tv, 0);
-            enc.conv_func_before_self(tv, -1);
-            enc.conv_func_end(tv);
+            if ret == OK {
+                enc.conv_func_before_args(tv, 0);
+                enc.conv_func_before_self(tv, -1);
+                enc.conv_func_end(tv);
+            }
         }
         t if t == VAR_PARTIAL => {
             let pt = tv_get_vpartial(tv);
@@ -692,18 +697,23 @@ unsafe fn convert_one_value<E: Encoder>(
             } else {
                 rs_partial_name(pt) as *const c_char
             };
-            if enc.conv_func_start(tv, fun, mpstack, objname) != OK {
+            // NOTDONE means "handled, skip partial stack push"
+            let ret = enc.conv_func_start(tv, fun, mpstack, objname);
+            if ret == FAIL {
                 return FAIL;
             }
-            mpstack.push(StackEntry {
-                ty: StackEntryType::Partial,
-                tv,
-                saved_copyid: copyid - 1,
-                data: StackData::Partial {
-                    stage: PartialStage::Args,
-                    pt,
-                },
-            });
+            if ret == OK {
+                mpstack.push(StackEntry {
+                    ty: StackEntryType::Partial,
+                    tv,
+                    saved_copyid: copyid - 1,
+                    data: StackData::Partial {
+                        stage: PartialStage::Args,
+                        pt,
+                    },
+                });
+            }
+            // NOTDONE: encoder handled the function reference, skip partial push.
         }
         t if t == VAR_LIST => {
             let list = tv_get_vlist(tv);
@@ -2395,6 +2405,275 @@ pub unsafe extern "C" fn rs_encode_vim_list_to_buf(
 }
 
 // =============================================================================
+// LuaEncoder: encode typval_T to Lua stack values
+// =============================================================================
+
+/// Opaque Lua interpreter state (same layout as lua::state::LuaState).
+#[repr(C)]
+pub struct LuaState {
+    _private: [u8; 0],
+}
+
+// FC_LUAREF flag: ufunc has a Lua reference instead of a VimL body.
+const FC_LUAREF: c_int = 0x800;
+// kNluaPushSpecial flag: use typed tables for special values.
+const K_NLUA_PUSH_SPECIAL: c_int = 0x01;
+
+extern "C" {
+    // Lua C API (used only by LuaEncoder)
+    fn lua_pushnil(lstate: *mut LuaState);
+    fn lua_pushboolean(lstate: *mut LuaState, b: c_int);
+    fn lua_pushnumber(lstate: *mut LuaState, n: f64);
+    fn lua_pushlstring(lstate: *mut LuaState, s: *const c_char, len: usize);
+    fn lua_createtable(lstate: *mut LuaState, narr: c_int, nrec: c_int);
+    fn lua_rawset(lstate: *mut LuaState, idx: c_int);
+    fn lua_rawseti(lstate: *mut LuaState, idx: c_int, n: c_int);
+    fn lua_tonumber(lstate: *mut LuaState, idx: c_int) -> f64;
+    fn lua_setmetatable(lstate: *mut LuaState, objindex: c_int) -> c_int;
+    fn lua_checkstack(lstate: *mut LuaState, extra: c_int) -> c_int;
+    fn lua_gettop(lstate: *mut LuaState) -> c_int;
+    fn lua_pushvalue(lstate: *mut LuaState, idx: c_int);
+
+    // Neovim nlua (Rust symbols from nvim-lua crate)
+    fn nlua_pushref(lstate: *mut LuaState, ref_: c_int);
+    fn rs_nlua_get_nil_ref(lstate: *mut LuaState) -> c_int;
+    fn rs_nlua_get_empty_dict_ref(lstate: *mut LuaState) -> c_int;
+
+    // User function lookup
+    fn find_func(name: *const c_char) -> *mut c_void; // ufunc_T*
+    fn nvim_ufunc_get_flags(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_get_luaref(fp: *const c_void) -> c_int;
+}
+
+/// Encoder that converts typval_T values to Lua stack values.
+///
+/// Mirrors the C macro-generated `encode_vim_to_lua` function from converter.c.
+struct LuaEncoder {
+    lstate: *mut LuaState,
+    /// True when kNluaPushSpecial is set (use typed tables for special values).
+    allow_special: bool,
+}
+
+impl LuaEncoder {
+    /// Push the type-index key (true) onto the stack.
+    #[inline]
+    unsafe fn push_type_idx(&self) {
+        lua_pushboolean(self.lstate, 1);
+    }
+
+    /// Push the type number onto the stack.
+    #[inline]
+    unsafe fn push_type_num(&self, ty: c_int) {
+        lua_pushnumber(self.lstate, f64::from(ty));
+    }
+
+    /// Create a typed table: {[type_idx] = ty}.
+    #[inline]
+    unsafe fn create_typed_table(&self, narr: c_int, nrec: c_int, ty: c_int) {
+        lua_createtable(self.lstate, narr, 1 + nrec);
+        self.push_type_idx();
+        self.push_type_num(ty);
+        lua_rawset(self.lstate, -3);
+    }
+}
+
+// kObjectType constants mirrored from api/private/defs.h
+const K_OBJECT_TYPE_FLOAT_LUA: c_int = 3;
+const K_OBJECT_TYPE_ARRAY_LUA: c_int = 5;
+const K_OBJECT_TYPE_DICT_LUA: c_int = 6;
+
+impl Encoder for LuaEncoder {
+    unsafe fn check_before(&mut self) {}
+
+    unsafe fn conv_nil(&mut self, _tv: TypevalHandle) {
+        if self.allow_special {
+            lua_pushnil(self.lstate);
+        } else {
+            let nil_ref = rs_nlua_get_nil_ref(self.lstate);
+            nlua_pushref(self.lstate, nil_ref);
+        }
+    }
+
+    unsafe fn conv_bool(&mut self, _tv: TypevalHandle, val: bool) {
+        lua_pushboolean(self.lstate, c_int::from(val));
+    }
+
+    unsafe fn conv_number(&mut self, _tv: TypevalHandle, num: i64) {
+        #[allow(clippy::cast_precision_loss)]
+        lua_pushnumber(self.lstate, num as f64);
+    }
+
+    unsafe fn conv_unsigned_number(&mut self, tv: TypevalHandle, num: u64) {
+        #[allow(clippy::cast_precision_loss)]
+        self.conv_number(tv, num as i64);
+    }
+
+    unsafe fn conv_float(&mut self, _tv: TypevalHandle, flt: f64) -> c_int {
+        lua_pushnumber(self.lstate, flt);
+        OK
+    }
+
+    unsafe fn conv_string(&mut self, _tv: TypevalHandle, buf: *const c_char, len: usize) -> c_int {
+        lua_pushlstring(self.lstate, buf, len);
+        OK
+    }
+
+    unsafe fn conv_str_string(
+        &mut self,
+        tv: TypevalHandle,
+        buf: *const c_char,
+        len: usize,
+    ) -> c_int {
+        self.conv_string(tv, buf, len)
+    }
+
+    unsafe fn conv_ext_string(
+        &mut self,
+        tv: TypevalHandle,
+        _buf: *const c_char,
+        _len: usize,
+        _ty: i64,
+    ) -> c_int {
+        self.conv_nil(tv);
+        OK
+    }
+
+    unsafe fn conv_blob(&mut self, _tv: TypevalHandle, blob: BlobHandle, len: c_int) -> c_int {
+        let data: *const c_char = if blob.is_null() || len == 0 {
+            b"\0".as_ptr() as *const c_char
+        } else {
+            nvim_blob_get_ga_data(blob) as *const c_char
+        };
+        lua_pushlstring(self.lstate, data, len as usize);
+        OK
+    }
+
+    /// Push a function reference onto the Lua stack.
+    ///
+    /// Returns NOTDONE if the function was handled (modelling C's
+    /// `goto typval_encode_stop_converting_one_item`), or OK/FAIL otherwise.
+    unsafe fn conv_func_start(
+        &mut self,
+        tv: TypevalHandle,
+        fun: *const c_char,
+        _mpstack: &[StackEntry],
+        _objname: *const c_char,
+    ) -> c_int {
+        let fp = if fun.is_null() {
+            std::ptr::null_mut()
+        } else {
+            find_func(fun)
+        };
+        if !fp.is_null() && (nvim_ufunc_get_flags(fp) & FC_LUAREF) != 0 {
+            let luaref = nvim_ufunc_get_luaref(fp);
+            nlua_pushref(self.lstate, luaref);
+        } else {
+            self.conv_nil(tv);
+        }
+        // NOTDONE: we've already pushed the value; tell the template to skip
+        // the remaining conv_func_before_args/before_self/end calls.
+        NOTDONE
+    }
+
+    unsafe fn conv_func_before_args(&mut self, _tv: TypevalHandle, _len: c_int) {}
+    unsafe fn conv_func_before_self(&mut self, _tv: TypevalHandle, _len: isize) {}
+    unsafe fn conv_func_end(&mut self, _tv: TypevalHandle) {}
+
+    unsafe fn conv_empty_list(&mut self, _tv: TypevalHandle) {
+        lua_createtable(self.lstate, 0, 0);
+    }
+
+    unsafe fn conv_list_start(&mut self, _tv: TypevalHandle, len: c_int) {
+        if lua_checkstack(self.lstate, lua_gettop(self.lstate) + 3) == 0 {
+            semsg(
+                b"E5102: Lua failed to grow stack to %i\0".as_ptr() as *const c_char,
+                lua_gettop(self.lstate) + 3,
+            );
+        }
+        lua_createtable(self.lstate, len, 0);
+        lua_pushnumber(self.lstate, 1.0); // current list index (pushed as sentinel)
+    }
+
+    unsafe fn conv_real_list_after_start(&mut self, _tv: TypevalHandle) {}
+
+    unsafe fn conv_list_between_items(&mut self, _tv: TypevalHandle) {
+        // Stack: [..., table, idx, value]
+        // Read idx from -2, rawset table[-3][idx] = value, then push idx+1.
+        let idx = lua_tonumber(self.lstate, -2);
+        lua_rawset(self.lstate, -3); // table[idx] = value; pops key and value
+        lua_pushnumber(self.lstate, idx + 1.0);
+    }
+
+    unsafe fn conv_list_end(&mut self, _tv: TypevalHandle) {
+        // Stack: [..., table, idx, last_value]
+        // rawset(-3): table[idx] = last_value; pops both idx and last_value.
+        // Stack after: [..., table]
+        lua_rawset(self.lstate, -3);
+    }
+
+    unsafe fn conv_empty_dict(&mut self, _tv: TypevalHandle, _dict: DictHandle) {
+        if self.allow_special {
+            self.create_typed_table(0, 0, K_OBJECT_TYPE_DICT_LUA);
+        } else {
+            lua_createtable(self.lstate, 0, 0);
+            let empty_ref = rs_nlua_get_empty_dict_ref(self.lstate);
+            nlua_pushref(self.lstate, empty_ref);
+            lua_setmetatable(self.lstate, -2);
+        }
+    }
+
+    unsafe fn conv_dict_start(&mut self, _tv: TypevalHandle, _dict: DictHandle, len: usize) {
+        if lua_checkstack(self.lstate, lua_gettop(self.lstate) + 3) == 0 {
+            semsg(
+                b"E5102: Lua failed to grow stack to %i\0".as_ptr() as *const c_char,
+                lua_gettop(self.lstate) + 3,
+            );
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        lua_createtable(self.lstate, 0, len as c_int);
+    }
+
+    unsafe fn conv_real_dict_after_start(&mut self, _tv: TypevalHandle, _dict: DictHandle) {}
+
+    unsafe fn conv_dict_after_key(&mut self, _tv: TypevalHandle, _dict: DictHandle) {}
+
+    unsafe fn conv_dict_between_items(&mut self, _tv: TypevalHandle, _dict: DictHandle) {
+        lua_rawset(self.lstate, -3);
+    }
+
+    unsafe fn conv_dict_end(&mut self, tv: TypevalHandle, dict: DictHandle) {
+        self.conv_dict_between_items(tv, dict);
+    }
+
+    unsafe fn conv_recurse(
+        &mut self,
+        val: *const c_void,
+        conv_type: StackEntryType,
+        mpstack: &[StackEntry],
+        _objname: *const c_char,
+    ) -> c_int {
+        // Find the backref index (0-based from start of mpstack).
+        let backref_i = find_backref(val, conv_type, mpstack);
+        // C formula: lua_pushvalue(lstate, -((kv_size(*mpstack) - backref + 1) * 2))
+        // where backref is 1-based from end, i.e. backref = mpstack.len() - backref_i.
+        // Simplified: offset = -((backref_i + 1) * 2)
+        // Each mpstack entry adds 2 Lua stack slots (container + key/index counter).
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        let offset = -(((backref_i + 1) * 2) as c_int);
+        lua_pushvalue(self.lstate, offset);
+        OK
+    }
+
+    unsafe fn special_dict_key_check(&mut self, _key_tv: TypevalHandle) -> bool {
+        false
+    }
+
+    fn allow_specials(&self) -> bool {
+        self.allow_special
+    }
+}
+
+// =============================================================================
 // Public exported entry points
 // =============================================================================
 
@@ -2534,5 +2813,25 @@ pub unsafe extern "C" fn rs_encode_vim_to_msgpack(
     objname: *const c_char,
 ) -> c_int {
     let mut enc = MsgpackEncoder { packer };
+    encode_vim_to(&mut enc, tv, objname)
+}
+
+/// Encode a typval to the Lua stack.
+///
+/// Pushes exactly one value onto the Lua stack. `allow_special` is true when
+/// `kNluaPushSpecial` is set in the caller's flags (types become typed tables).
+///
+/// Exported as `encode_vim_to_lua`.
+#[unsafe(export_name = "encode_vim_to_lua")]
+pub unsafe extern "C" fn rs_encode_vim_to_lua(
+    lstate: *mut LuaState,
+    tv: TypevalHandle,
+    objname: *const c_char,
+    allow_special: bool,
+) -> c_int {
+    let mut enc = LuaEncoder {
+        lstate,
+        allow_special,
+    };
     encode_vim_to(&mut enc, tv, objname)
 }

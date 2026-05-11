@@ -74,10 +74,9 @@ pub struct OptKeySet {
 // =============================================================================
 
 extern "C" {
-    // Typval conversion
-    fn nlua_push_typval(lstate: *mut LuaState, tv: *const c_void, flags: c_int) -> bool;
-
-    // Lua C API needed for keydict operations
+    // Lua C API needed for keydict and push_typval operations
+    fn lua_gettop(lstate: *mut LuaState) -> c_int;
+    fn lua_checkstack(lstate: *mut LuaState, extra: c_int) -> c_int;
     fn lua_type(lstate: *mut LuaState, idx: c_int) -> c_int;
     fn lua_settop(lstate: *mut LuaState, idx: c_int);
     fn lua_tolstring(lstate: *mut LuaState, idx: c_int, len: *mut usize) -> *const c_char;
@@ -91,6 +90,17 @@ extern "C" {
 
     // Highlight group name → id
     fn syn_check_group(name: *const c_char, len: usize) -> c_int;
+
+    // Message output
+    fn semsg(fmt: *const c_char, ...);
+
+    // Lua encoder (provided by nvim-eval-codec Rust crate)
+    fn encode_vim_to_lua(
+        lstate: *mut LuaState,
+        tv: *const c_void,
+        objname: *const c_char,
+        allow_special: bool,
+    ) -> c_int;
 }
 
 // api_set_error is also declared in from_lua.rs with a different local Error type;
@@ -104,25 +114,46 @@ extern "C" {
 // Rust FFI exports
 // =============================================================================
 
+// kNluaPushSpecial flag: use typed tables for nil/special values.
+const K_NLUA_PUSH_SPECIAL: c_int = 0x01;
+// FAIL constant: matches encode.c's FAIL = 0.
+const ENCODE_FAIL: c_int = 0;
+
 /// Push a typval (VimL value) onto the Lua stack.
 ///
-/// Converts a typval_T to its Lua equivalent.
-///
-/// # Arguments
-/// * `tv` - Pointer to a typval_T
-/// * `flags` - Conversion flags (kNluaPushSpecial, kNluaPushFreeRefs)
+/// Converts a typval_T to its Lua equivalent. Should leave exactly one
+/// value on the Lua stack. May only fail if Lua failed to grow its stack.
 ///
 /// # Safety
 ///
 /// - `lstate` must be a valid Lua state pointer.
 /// - `tv` must be a valid typval_T pointer.
-#[no_mangle]
+#[unsafe(export_name = "nlua_push_typval")]
 pub unsafe extern "C" fn rs_nlua_push_typval(
     lstate: *mut LuaState,
     tv: *const c_void,
     flags: c_int,
 ) -> bool {
-    nlua_push_typval(lstate, tv, flags)
+    let allow_special = (flags & K_NLUA_PUSH_SPECIAL) != 0;
+    let initial_size = lua_gettop(lstate);
+    if lua_checkstack(lstate, initial_size + 2) == 0 {
+        semsg(
+            c"E1502: Lua failed to grow stack to %i".as_ptr(),
+            initial_size + 4,
+        );
+        return false;
+    }
+    if encode_vim_to_lua(
+        lstate,
+        tv,
+        c"nlua_push_typval argument".as_ptr(),
+        allow_special,
+    ) == ENCODE_FAIL
+    {
+        return false;
+    }
+    debug_assert_eq!(lua_gettop(lstate), initial_size + 1);
+    true
 }
 
 /// Pop a LuaRef from the Lua stack.
