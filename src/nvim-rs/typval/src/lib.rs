@@ -7501,6 +7501,21 @@ pub unsafe extern "C" fn rs_tv_dict_watcher_notify(
     ));
 }
 
+// =============================================================================
+// Phase 1: filter/map/mapnew/foreach in Rust
+// =============================================================================
+
+/// Crate-internal accessor: get v_lock from a typval_T.
+#[inline]
+pub(crate) fn get_v_lock(tv: TypevalHandle) -> c_int {
+    if tv.is_null() {
+        return 0;
+    }
+    unsafe { nvim_tv_get_v_lock(tv) }
+}
+
+pub mod filter_map;
+
 #[cfg(test)]
 mod tests {
     use super::*;

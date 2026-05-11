@@ -654,4 +654,10 @@ extern void f_uniq(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_join(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 extern void f_list2str(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 
+// filter/map/mapnew/foreach VimL functions (migrated to Rust, Phase 1 of f39b5673)
+extern void f_filter(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_map(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_mapnew(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+extern void f_foreach(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+
 #include "eval/typval.h.generated.h"
