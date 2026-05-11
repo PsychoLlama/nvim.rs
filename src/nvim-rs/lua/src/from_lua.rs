@@ -105,8 +105,6 @@ extern "C" {
     fn api_free_dict(value: Dict);
     fn api_free_object(value: Object);
 
-    // Still-C pop functions (Phase 10 will replace)
-    fn nlua_pop_typval(lstate: *mut LuaState, ret_tv: *mut std::ffi::c_void) -> bool;
 }
 
 // lua_pop is a macro: #define lua_pop(L,n) lua_settop(L, -(n)-1)
@@ -123,10 +121,10 @@ unsafe fn lua_pop(lstate: *mut LuaState, n: c_int) {
 const K_OBJECT_TYPE_NIL: c_int = 0;
 const K_OBJECT_TYPE_BOOLEAN: c_int = 1;
 const K_OBJECT_TYPE_INTEGER: c_int = 2;
-const K_OBJECT_TYPE_FLOAT: c_int = 3;
+pub(crate) const K_OBJECT_TYPE_FLOAT: c_int = 3;
 const K_OBJECT_TYPE_STRING: c_int = 4;
-const K_OBJECT_TYPE_ARRAY: c_int = 5;
-const K_OBJECT_TYPE_DICT: c_int = 6;
+pub(crate) const K_OBJECT_TYPE_ARRAY: c_int = 5;
+pub(crate) const K_OBJECT_TYPE_DICT: c_int = 6;
 const K_OBJECT_TYPE_LUAREF: c_int = 7;
 
 // TYPE_IDX_VALUE is `true` (boolean true = 1 from lua_toboolean)
@@ -137,19 +135,19 @@ const TYPE_IDX_VALUE: c_int = 1;
 ///
 /// Mirrors the C `LuaTableProps` struct.
 #[derive(Debug, Clone, Copy, Default)]
-struct LuaTableProps {
+pub(crate) struct LuaTableProps {
     /// Maximum positive integral key found (= length if sequential).
-    maxidx: usize,
+    pub(crate) maxidx: usize,
     /// Number of string-typed keys.
-    string_keys_num: usize,
+    pub(crate) string_keys_num: usize,
     /// True if at least one string key contains a NUL byte.
-    has_string_with_nul: bool,
+    pub(crate) has_string_with_nul: bool,
     /// Inferred object type of the table.
-    obj_type: c_int,
+    pub(crate) obj_type: c_int,
     /// If has_type_key && has_val_key && val is number: the float value.
-    val: f64,
+    pub(crate) val: f64,
     /// True if a boolean-true key (type_idx) was found.
-    has_type_key: bool,
+    pub(crate) has_type_key: bool,
 }
 
 /// Inspect a Lua table on top of the stack and classify its type.
@@ -158,6 +156,11 @@ struct LuaTableProps {
 ///
 /// # Safety
 /// `lstate` must be a valid Lua state with a table at the top.
+#[allow(clippy::too_many_lines)]
+pub(crate) unsafe fn traverse_table_pub(lstate: *mut LuaState) -> LuaTableProps {
+    traverse_table(lstate)
+}
+
 #[allow(clippy::too_many_lines)]
 unsafe fn traverse_table(lstate: *mut LuaState) -> LuaTableProps {
     let mut props = LuaTableProps {
@@ -923,15 +926,6 @@ pub unsafe extern "C" fn rs_nlua_pop_object(
     err: *mut Error,
 ) -> Object {
     rs_nlua_pop_Object(lstate, ref_, arena, err)
-}
-
-/// Pop a typval from the Lua stack. (Phase 10 will replace with real impl)
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_typval(
-    lstate: *mut LuaState,
-    ret_tv: *mut std::ffi::c_void,
-) -> bool {
-    nlua_pop_typval(lstate, ret_tv)
 }
 
 // =============================================================================

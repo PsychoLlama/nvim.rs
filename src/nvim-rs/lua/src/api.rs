@@ -8,6 +8,40 @@ use std::ffi::{c_char, c_int, c_void};
 use crate::state::LuaState;
 use nvim_api::{Arena, Error, LuaRef, NvimString, Object};
 
+// VarType constants (matching C's VarType enum)
+const VAR_UNKNOWN: c_int = 0;
+const VAR_NUMBER: c_int = 1;
+// VAR_STRING = 2 (not needed here)
+// VAR_FUNC = 3
+const VAR_FUNC: c_int = 3;
+const VAR_LIST: c_int = 4;
+const VAR_DICT: c_int = 5;
+const VAR_FLOAT: c_int = 6;
+const VAR_BOOL: c_int = 7;
+const VAR_SPECIAL: c_int = 8;
+const VAR_UNLOCKED: c_int = 0;
+
+// SpecialVarValue / BoolVarValue constants
+const K_SPECIAL_VAR_NULL: c_int = 0;
+const K_BOOL_VAR_TRUE: c_int = 1;
+const K_BOOL_VAR_FALSE: c_int = 0;
+
+// VARNUMBER limits
+const VARNUMBER_MAX: f64 = 9_223_372_036_854_775_807.0_f64; // INT64_MAX
+const VARNUMBER_MIN: f64 = -9_223_372_036_854_775_808.0_f64; // INT64_MIN
+
+// LUA_NOREF = -2
+const LUA_NOREF: c_int = -2;
+
+// TypevalHandle = opaque pointer (same as *mut c_void in typval crate)
+type TypevalHandle = *mut c_void;
+// ListHandle = opaque pointer
+type ListHandle = *mut c_void;
+// DictHandle = opaque pointer
+type DictHandle = *mut c_void;
+// DictItemHandle = opaque pointer
+type DictItemHandle = *mut c_void;
+
 /// Handle type (buffer, window, tabpage)
 pub type HandleT = c_int;
 
@@ -87,6 +121,13 @@ extern "C" {
     fn lua_pushnumber(lstate: *mut LuaState, n: f64);
     fn lua_pushboolean(lstate: *mut LuaState, b: c_int);
     fn lua_rawset(lstate: *mut LuaState, idx: c_int);
+
+    // Additional Lua C API functions needed for Phase 10
+    fn lua_tonumber(lstate: *mut LuaState, idx: c_int) -> f64;
+    fn lua_toboolean(lstate: *mut LuaState, idx: c_int) -> c_int;
+    fn lua_rawequal(lstate: *mut LuaState, idx1: c_int, idx2: c_int) -> c_int;
+    fn lua_rawgeti(lstate: *mut LuaState, idx: c_int, n: c_int);
+    fn lua_getmetatable(lstate: *mut LuaState, idx: c_int) -> c_int;
 
     // Highlight group name → id
     fn syn_check_group(name: *const c_char, len: usize) -> c_int;
@@ -517,6 +558,447 @@ pub unsafe extern "C" fn rs_nlua_pop_tabpage(
         arena.cast::<crate::from_lua::Arena>(),
         err.cast::<crate::from_lua::Error>(),
     )
+}
+
+// =============================================================================
+// Phase 10: nlua_pop_typval
+// =============================================================================
+
+extern "C" {
+    // typval write/read accessors for Phase 10
+    fn nvim_tv_set_type(tv: TypevalHandle, v_type: c_int);
+    fn nvim_tv_set_lock(tv: TypevalHandle, v_lock: c_int);
+    fn nvim_tv_set_number(tv: TypevalHandle, n: i64);
+    fn nvim_tv_set_float(tv: TypevalHandle, f: f64);
+    fn nvim_tv_set_bool(tv: TypevalHandle, val: c_int);
+    fn nvim_tv_set_special(tv: TypevalHandle, val: c_int);
+    fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
+    fn nvim_tv_set_list(tv: TypevalHandle, l: ListHandle);
+    fn nvim_tv_set_dict(tv: TypevalHandle, d: DictHandle);
+    fn nvim_tv_get_list(tv: TypevalHandle) -> ListHandle;
+    fn nvim_tv_get_dict(tv: TypevalHandle) -> DictHandle;
+    fn tv_clear(tv: TypevalHandle);
+    fn tv_copy(from: TypevalHandle, to: TypevalHandle);
+
+    // list accessors
+    fn tv_list_alloc(len: isize) -> ListHandle;
+    #[link_name = "nvim_list_ref"]
+    fn tv_list_ref(l: ListHandle);
+    #[link_name = "nvim_list_get_len"]
+    fn tv_list_len(l: ListHandle) -> c_int;
+    fn nvim_tv_list_append_unknown_and_get(l: ListHandle) -> TypevalHandle;
+    fn tv_list_append_list(l: ListHandle, itemlist: ListHandle);
+    fn nvim_list_set_lua_table_ref(l: ListHandle, ref_: c_int);
+
+    // dict accessors
+    fn tv_dict_alloc() -> DictHandle;
+    fn tv_dict_item_alloc_len(key: *const c_char, len: usize) -> DictItemHandle;
+    fn tv_dict_add(d: DictHandle, item: DictItemHandle) -> c_int;
+    fn tv_dict_find(d: DictHandle, key: *const c_char, keylen: c_int) -> DictItemHandle;
+    fn nvim_dictitem_di_tv(di: DictItemHandle) -> TypevalHandle;
+    fn nvim_dict_set_lua_table_ref(d: DictHandle, ref_: c_int);
+    fn nvim_dict_inc_refcount(d: DictHandle);
+
+    // Lua function registration (from userfunc crate)
+    fn register_luafunc(func: c_int) -> *mut c_char;
+
+    // Vimscript string helpers
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    // message functions
+    fn emsg(fmt: *const c_char) -> c_int;
+
+    // decode_string via the Rust pointer-out form.
+    // Parameters: (s, len, force_blob, s_allocated, rettv)
+    // force_blob=true → create blob even without NUL.
+    // s_allocated=false → copy the string data (don't take ownership).
+    fn rs_decode_string_into(
+        s: *const c_char,
+        len: usize,
+        force_blob: bool,
+        s_allocated: bool,
+        rettv: TypevalHandle,
+    );
+
+    // decode_create_map_special_dict: creates {_TYPE: map, _VAL: list} and returns the _VAL list.
+    fn decode_create_map_special_dict(ret_tv: TypevalHandle, len: isize) -> ListHandle;
+}
+
+// Lua type constants (duplicated locally to avoid cross-module confusion)
+const LUA_TNIL_PH10: c_int = 0;
+const LUA_TBOOLEAN_PH10: c_int = 1;
+const LUA_TNUMBER_PH10: c_int = 3;
+const LUA_TSTRING_PH10: c_int = 4;
+const LUA_TTABLE_PH10: c_int = 5;
+const LUA_TFUNCTION_PH10: c_int = 6;
+const LUA_TUSERDATA_PH10: c_int = 7;
+
+/// Helper: lua_pop for Phase 10 (avoid name collision with the api.rs lua_pop defined above)
+#[inline]
+unsafe fn lua_pop_ph10(lstate: *mut LuaState, n: c_int) {
+    lua_settop(lstate, -n - 1);
+}
+
+/// Internal: get the inline LuaRef from leaf.rs (nil ref)
+#[inline]
+unsafe fn get_nil_ref(lstate: *mut LuaState) -> c_int {
+    crate::leaf::rs_nlua_get_nil_ref(lstate)
+}
+
+/// Helper item for the iterative stack in nlua_pop_typval.
+///
+/// Mirrors the C `TVPopStackItem` struct. The `is_dict` field replaces reading
+/// `cur.tv->v_type == VAR_DICT` at iteration time (since we know at push time).
+#[derive(Copy, Clone)]
+struct TVPopStackItem {
+    /// Pointer to the typval slot being filled.
+    tv: TypevalHandle,
+    /// Maximum length when tv is a list (only valid when container=true, is_dict=false).
+    list_len: usize,
+    /// True if tv is a container (list or dict) that needs further iteration.
+    container: bool,
+    /// True if tv is the _VAL part of a special dict (NUL-key mapping).
+    special: bool,
+    /// True if the container is a dict (vs a list). Used instead of reading tv->v_type.
+    is_dict: bool,
+    /// Lua stack index of this container table (for self-reference detection).
+    idx: c_int,
+}
+
+/// Convert a Lua value to a Vimscript typval_T.
+///
+/// Pops exactly one value from the Lua stack. Returns `true` on success,
+/// `false` on error (error is reported and `*ret_tv` is cleared to VAR_NUMBER(0)).
+///
+/// Mirrors C's `nlua_pop_typval` in `src/nvim/lua/converter.c`.
+///
+/// # Safety
+/// - `lstate` must be a valid Lua state.
+/// - `ret_tv` must be a valid pointer to a typval_T.
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "nlua_pop_typval")]
+pub unsafe extern "C" fn rs_nlua_pop_typval(lstate: *mut LuaState, ret_tv: TypevalHandle) -> bool {
+    let mut ret = true;
+    let initial_size = lua_gettop(lstate);
+
+    // Pre-initialize ret_tv so tv_clear is safe on error.
+    nvim_tv_set_type(ret_tv, VAR_NUMBER);
+    nvim_tv_set_lock(ret_tv, VAR_UNLOCKED);
+    nvim_tv_set_number(ret_tv, 0);
+
+    let mut stack: Vec<TVPopStackItem> = Vec::with_capacity(2);
+    stack.push(TVPopStackItem {
+        tv: ret_tv,
+        list_len: 0,
+        container: false,
+        special: false,
+        is_dict: false,
+        idx: 0,
+    });
+
+    while ret && !stack.is_empty() {
+        if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
+            semsg(
+                c"E1502: Lua failed to grow stack to %i".as_ptr(),
+                lua_gettop(lstate) + 3,
+            );
+            ret = false;
+            break;
+        }
+
+        let mut cur = stack.pop().unwrap();
+
+        if cur.container {
+            // Container iteration: cur.special means iterating string keys into a list (_VAL),
+            // cur.is_dict means iterating string keys into a VAR_DICT.
+            if cur.special || cur.is_dict {
+                // Dict-like iteration: find the next string key via lua_next.
+                // Stack: [table, key] (key = nil on first call, previous key otherwise)
+                let mut next_key_found = false;
+                while lua_next(lstate, -2) != 0 {
+                    // Stack: [table, new_key, value]
+                    if lua_type(lstate, -2) == LUA_TSTRING_PH10 {
+                        next_key_found = true;
+                        break;
+                    }
+                    lua_pop_ph10(lstate, 1); // pop value, keep key for lua_next
+                }
+                if next_key_found {
+                    // Stack: [table, key, value]
+                    let mut len: usize = 0;
+                    let s = lua_tolstring(lstate, -2, &raw mut len);
+                    if cur.special {
+                        // Append key/value pair to the special _VAL list.
+                        // cur.tv is a VAR_LIST typval pointing to the _VAL list.
+                        let outer_val_list = nvim_tv_get_list(cur.tv);
+                        let kv_pair_list = tv_list_alloc(2);
+                        tv_list_ref(kv_pair_list);
+
+                        // Append key as blob typval (force_blob=true because key may have NUL).
+                        let key_tv = nvim_tv_list_append_unknown_and_get(kv_pair_list);
+                        rs_decode_string_into(s, len, true, false, key_tv);
+
+                        // Append placeholder for value.
+                        let val_tv = nvim_tv_list_append_unknown_and_get(kv_pair_list);
+                        nvim_tv_set_type(val_tv, VAR_UNKNOWN);
+
+                        // Append kv_pair_list to the _VAL outer list.
+                        tv_list_append_list(outer_val_list, kv_pair_list);
+
+                        // Re-push cur to continue iterating string keys.
+                        stack.push(cur);
+
+                        // The value slot is val_tv; push a new item for it.
+                        cur = TVPopStackItem {
+                            tv: val_tv,
+                            list_len: 0,
+                            container: false,
+                            special: false,
+                            is_dict: false,
+                            idx: 0,
+                        };
+                    } else {
+                        // Normal dict: allocate a new dict item and push.
+                        let di = tv_dict_item_alloc_len(s, len);
+                        let dict = nvim_tv_get_dict(cur.tv);
+                        let add_rc = tv_dict_add(dict, di);
+                        if add_rc == 0 {
+                            // tv_dict_add returned FAIL — key already exists or internal error.
+                            // Treat as conversion error so callers see a clean failure.
+                            ret = false;
+                            break;
+                        }
+                        stack.push(cur);
+                        let di_tv = nvim_dictitem_di_tv(di);
+                        cur = TVPopStackItem {
+                            tv: di_tv,
+                            list_len: 0,
+                            container: false,
+                            special: false,
+                            is_dict: false,
+                            idx: 0,
+                        };
+                    }
+                } else {
+                    // No more string keys: done with this container.
+                    // Stack: [table] (lua_next consumed the nil, or we exhausted all keys).
+                    lua_pop_ph10(lstate, 1); // pop table
+                    continue;
+                }
+            } else {
+                // List iteration: fetch the next element by index.
+                // cur.tv is a VAR_LIST typval.
+                let list = nvim_tv_get_list(cur.tv);
+                #[allow(clippy::cast_sign_loss)]
+                let cur_len = tv_list_len(list) as usize;
+                if cur_len == cur.list_len {
+                    // All elements filled.
+                    lua_pop_ph10(lstate, 1); // pop table
+                    continue;
+                }
+                #[allow(clippy::cast_possible_truncation)]
+                lua_rawgeti(lstate, -1, cur_len as c_int + 1);
+                // Append a placeholder and get its tv pointer.
+                let item_tv = nvim_tv_list_append_unknown_and_get(list);
+                nvim_tv_set_type(item_tv, VAR_UNKNOWN);
+
+                stack.push(cur);
+                cur = TVPopStackItem {
+                    tv: item_tv,
+                    list_len: 0,
+                    container: false,
+                    special: false,
+                    is_dict: false,
+                    idx: 0,
+                };
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // Leaf: fill cur.tv from the Lua value on top of the stack.
+        // ----------------------------------------------------------------
+        debug_assert!(!cur.container);
+
+        // Pre-initialize cur.tv
+        nvim_tv_set_type(cur.tv, VAR_NUMBER);
+        nvim_tv_set_lock(cur.tv, VAR_UNLOCKED);
+        nvim_tv_set_number(cur.tv, 0);
+
+        // Use a labeled block to model the C `goto nlua_pop_typval_table_processing_end`.
+        'leaf: {
+            match lua_type(lstate, -1) {
+                t if t == LUA_TNIL_PH10 => {
+                    nvim_tv_set_type(cur.tv, VAR_SPECIAL);
+                    nvim_tv_set_special(cur.tv, K_SPECIAL_VAR_NULL);
+                }
+                t if t == LUA_TBOOLEAN_PH10 => {
+                    nvim_tv_set_type(cur.tv, VAR_BOOL);
+                    let bval = if lua_toboolean(lstate, -1) != 0 {
+                        K_BOOL_VAR_TRUE
+                    } else {
+                        K_BOOL_VAR_FALSE
+                    };
+                    nvim_tv_set_bool(cur.tv, bval);
+                }
+                t if t == LUA_TSTRING_PH10 => {
+                    let mut len: usize = 0;
+                    let s = lua_tolstring(lstate, -1, &raw mut len);
+                    rs_decode_string_into(s, len, false, false, cur.tv);
+                }
+                t if t == LUA_TNUMBER_PH10 => {
+                    let n = lua_tonumber(lstate, -1);
+                    if !(VARNUMBER_MIN..=VARNUMBER_MAX).contains(&n) || n.fract() != 0.0 {
+                        nvim_tv_set_type(cur.tv, VAR_FLOAT);
+                        nvim_tv_set_float(cur.tv, n);
+                    } else {
+                        nvim_tv_set_type(cur.tv, VAR_NUMBER);
+                        #[allow(clippy::cast_possible_truncation)]
+                        nvim_tv_set_number(cur.tv, n as i64);
+                    }
+                }
+                t if t == LUA_TTABLE_PH10 => {
+                    // Grab a lua_table_ref if there is a metatable.
+                    let table_ref: c_int = if lua_getmetatable(lstate, -1) != 0 {
+                        lua_pop_ph10(lstate, 1); // pop the metatable
+                                                 // rs_nlua_ref_global returns LuaRef (i64); lua_table_ref is c_int.
+                        #[allow(clippy::cast_possible_truncation)]
+                        let r = crate::refs::rs_nlua_ref_global(lstate, -1) as c_int;
+                        r
+                    } else {
+                        LUA_NOREF
+                    };
+
+                    let props: crate::from_lua::LuaTableProps =
+                        crate::from_lua::traverse_table_pub(lstate);
+
+                    // Self-reference detection: check if any container on our stack
+                    // has the same Lua table (same stack index value, compared with lua_rawequal).
+                    for item in &stack {
+                        if item.container && lua_rawequal(lstate, -1, item.idx) != 0 {
+                            // Re-use the already-allocated typval.
+                            tv_copy(item.tv, cur.tv);
+                            cur.container = false;
+                            break 'leaf; // goto nlua_pop_typval_table_processing_end
+                        }
+                    }
+
+                    match props.obj_type {
+                        k if k == K_OBJECT_TYPE_ARRAY => {
+                            let list = tv_list_alloc(props.maxidx as isize);
+                            tv_list_ref(list);
+                            nvim_list_set_lua_table_ref(list, table_ref);
+                            nvim_tv_set_type(cur.tv, VAR_LIST);
+                            nvim_tv_set_list(cur.tv, list);
+                            cur.list_len = props.maxidx;
+                            if props.maxidx != 0 {
+                                cur.container = true;
+                                cur.is_dict = false;
+                                cur.idx = lua_gettop(lstate);
+                                stack.push(cur);
+                            }
+                        }
+                        k if k == K_OBJECT_TYPE_DICT => {
+                            if props.string_keys_num == 0 {
+                                // Empty dict.
+                                let dict = tv_dict_alloc();
+                                nvim_dict_inc_refcount(dict);
+                                nvim_dict_set_lua_table_ref(dict, table_ref);
+                                nvim_tv_set_type(cur.tv, VAR_DICT);
+                                nvim_tv_set_dict(cur.tv, dict);
+                            } else if props.has_string_with_nul {
+                                // Special dict for NUL-keyed mappings.
+                                let val_list = decode_create_map_special_dict(
+                                    cur.tv,
+                                    props.string_keys_num as isize,
+                                );
+                                // _VAL list: set lua_table_ref
+                                nvim_list_set_lua_table_ref(val_list, table_ref);
+                                // Navigate to the _VAL list typval.
+                                let val_di = tv_dict_find(cur.tv, c"_VAL".as_ptr(), 4);
+                                debug_assert!(!val_di.is_null());
+                                let val_di_tv = nvim_dictitem_di_tv(val_di);
+                                cur.tv = val_di_tv;
+                                cur.special = true;
+                                cur.is_dict = false;
+                                cur.list_len = props.string_keys_num;
+                                cur.container = true;
+                                cur.idx = lua_gettop(lstate);
+                                stack.push(cur);
+                                lua_pushnil(lstate); // push nil sentinel for lua_next
+                            } else {
+                                // Normal dict with string keys.
+                                let dict = tv_dict_alloc();
+                                nvim_dict_inc_refcount(dict);
+                                nvim_dict_set_lua_table_ref(dict, table_ref);
+                                nvim_tv_set_type(cur.tv, VAR_DICT);
+                                nvim_tv_set_dict(cur.tv, dict);
+                                cur.special = false;
+                                cur.is_dict = true;
+                                cur.container = true;
+                                cur.idx = lua_gettop(lstate);
+                                stack.push(cur);
+                                lua_pushnil(lstate); // push nil sentinel for lua_next
+                            }
+                        }
+                        k if k == K_OBJECT_TYPE_FLOAT => {
+                            nvim_tv_set_type(cur.tv, VAR_FLOAT);
+                            nvim_tv_set_float(cur.tv, props.val);
+                        }
+                        _ => {
+                            // kObjectTypeNil: mixed or invalid table
+                            emsg(
+                                c"E5100: Cannot convert given Lua table: table should contain either only integer keys or only string keys".as_ptr(),
+                            );
+                            ret = false;
+                        }
+                    }
+                    // goto nlua_pop_typval_table_processing_end (break the labeled block)
+                    break 'leaf;
+                }
+                t if t == LUA_TFUNCTION_PH10 => {
+                    let func = crate::refs::rs_nlua_ref_global(lstate, -1);
+                    #[allow(clippy::cast_possible_truncation)]
+                    let name = register_luafunc(func as c_int);
+                    nvim_tv_set_type(cur.tv, VAR_FUNC);
+                    nvim_tv_set_string(cur.tv, xstrdup(name));
+                }
+                t if t == LUA_TUSERDATA_PH10 => {
+                    let nil_ref = get_nil_ref(lstate);
+                    crate::refs::rs_nlua_pushref(lstate, nil_ref);
+                    let is_nil = lua_rawequal(lstate, -2, -1) != 0;
+                    lua_pop_ph10(lstate, 1);
+                    if is_nil {
+                        nvim_tv_set_type(cur.tv, VAR_SPECIAL);
+                        nvim_tv_set_special(cur.tv, K_SPECIAL_VAR_NULL);
+                    } else {
+                        emsg(c"E5101: Cannot convert given Lua type".as_ptr());
+                        ret = false;
+                    }
+                }
+                _ => {
+                    emsg(c"E5101: Cannot convert given Lua type".as_ptr());
+                    ret = false;
+                }
+            }
+        } // end 'leaf
+
+        if !cur.container {
+            lua_pop_ph10(lstate, 1);
+        }
+    }
+
+    if !ret {
+        tv_clear(ret_tv);
+        nvim_tv_set_type(ret_tv, VAR_NUMBER);
+        nvim_tv_set_lock(ret_tv, VAR_UNLOCKED);
+        nvim_tv_set_number(ret_tv, 0);
+        let excess = lua_gettop(lstate) - initial_size + 1;
+        if excess > 0 {
+            lua_pop_ph10(lstate, excess);
+        }
+    }
+
+    debug_assert_eq!(lua_gettop(lstate), initial_size - 1);
+    ret
 }
 
 #[cfg(test)]

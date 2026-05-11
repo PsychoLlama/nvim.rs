@@ -1422,3 +1422,14 @@ bool nvim_callback_equal_raw(const Callback *cb1, const Callback *cb2)
   return tv_callback_equal(cb1, cb2);
 }
 
+// Phase 10: lua_table_ref write accessors for nlua_pop_typval.
+
+/// Set lua_table_ref on a list (accessor for Rust nlua_pop_typval).
+void nvim_list_set_lua_table_ref(list_T *l, LuaRef ref_) { l->lua_table_ref = ref_; }
+
+/// Set lua_table_ref on a dict (accessor for Rust nlua_pop_typval).
+void nvim_dict_set_lua_table_ref(dict_T *d, LuaRef ref_) { d->lua_table_ref = ref_; }
+
+/// Increment dv_refcount on a dict (for nlua_pop_typval dict allocation).
+void nvim_dict_inc_refcount_wrapped(dict_T *d) { d->dv_refcount++; }
+
