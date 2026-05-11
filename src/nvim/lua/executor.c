@@ -608,6 +608,59 @@ void nvim_lua_fprintf_stderr(const char *fmt, int len, const char *str)
   fprintf(stderr, "\n");
 }
 
+// C accessors for Phase C (exec.rs)
+size_t nvim_lua_get_iosize(void) { return IOSIZE; }
+
+void nvim_lua_api_set_error_validation(Error *err, int len, const char *str)
+{
+  api_set_error(err, kErrorTypeValidation, "Lua: %.*s", len, str);
+}
+
+void nvim_lua_api_set_error_exception(Error *err, int len, const char *str)
+{
+  api_set_error(err, kErrorTypeException, "Lua: %.*s", len, str);
+}
+
+void nvim_lua_push_all_typvals(lua_State *lstate, typval_T *args, int argcount, bool special)
+{
+  PUSH_ALL_TYPVALS(lstate, args, argcount, special);
+}
+
+bool nvim_lua_funcref_info(lua_State *lstate, char **src_out, int *line_out)
+{
+  lua_Debug ar;
+  if (lua_getinfo(lstate, ">S", &ar) && *ar.source == '@' && ar.linedefined >= 0) {
+    *src_out = home_replace_save(NULL, ar.source + 1);
+    *line_out = ar.linedefined;
+    return true;
+  }
+  return false;
+}
+
+char *nvim_callback_arena_printf_luaref(Arena *arena, int ref_)
+{
+  return arena_printf(arena, "<Lua %d>", ref_).data;
+}
+
+char *nvim_callback_arena_printf_luaref_src(Arena *arena, int ref_, const char *src, int line)
+{
+  return arena_printf(arena, "<Lua %d: %s:%d>", ref_, src, line).data;
+}
+
+void nvim_lua_expand_push_args(lua_State *lstate, const expand_T *xp)
+{
+  nlua_pushref(lstate, xp->xp_luaref);
+  lua_pushstring(lstate, xp->xp_pattern);
+  lua_pushstring(lstate, xp->xp_line);
+  lua_pushinteger(lstate, xp->xp_col);
+}
+
+void nvim_lua_init_typval_zero(typval_T *ret_tv)
+{
+  ret_tv->v_type = VAR_NUMBER;
+  ret_tv->vval.v_number = 0;
+}
+
 // Implemented in Rust (nvim-lua crate)
 extern int nlua_get_global_ref_count(void);
 
@@ -1329,185 +1382,10 @@ static int nlua_getenv(lua_State *lstate)
 // nlua_ref, nlua_ref_global, nlua_unref, nlua_unref_global, nlua_pushref,
 // api_free_luaref, api_new_luaref: implemented in Rust (refs.rs, Phase A)
 
-/// Evaluate lua string
-///
-/// Used for luaeval().
-///
-/// @param[in]  str  String to execute.
-/// @param[in]  arg  Second argument to `luaeval()`.
-/// @param[out]  ret_tv  Location where result will be saved.
-///
-/// @return Result of the execution.
-void nlua_typval_eval(const String str, typval_T *const arg, typval_T *const ret_tv)
-  FUNC_ATTR_NONNULL_ALL
-{
-#define EVALHEADER "local _A=select(1,...) return ("
-  const size_t lcmd_len = rs_lua_eval_cmd_size(str.size);
-  char *lcmd;
-  if (rs_lcmd_fits_iosize(lcmd_len, IOSIZE)) {
-    lcmd = IObuff;
-  } else {
-    lcmd = xmalloc(lcmd_len);
-  }
-  memcpy(lcmd, EVALHEADER, sizeof(EVALHEADER) - 1);
-  memcpy(lcmd + sizeof(EVALHEADER) - 1, str.data, str.size);
-  lcmd[lcmd_len - 1] = ')';
-#undef EVALHEADER
-  nlua_typval_exec(lcmd, lcmd_len, "luaeval()", arg, 1, true, ret_tv);
+// nlua_typval_eval, nlua_typval_call, nlua_call_user_expand_func,
+// nlua_typval_exec, nlua_exec_ga: implemented in Rust (exec.rs, Phase C)
 
-  if (lcmd != IObuff) {
-    xfree(lcmd);
-  }
-}
-
-void nlua_typval_call(const char *str, size_t len, typval_T *const args, int argcount,
-                      typval_T *ret_tv)
-  FUNC_ATTR_NONNULL_ALL
-{
-#define CALLHEADER "return "
-#define CALLSUFFIX "(...)"
-  const size_t lcmd_len = rs_lua_call_cmd_size(len);
-  char *lcmd;
-  if (rs_lcmd_fits_iosize(lcmd_len, IOSIZE)) {
-    lcmd = IObuff;
-  } else {
-    lcmd = xmalloc(lcmd_len);
-  }
-  memcpy(lcmd, CALLHEADER, sizeof(CALLHEADER) - 1);
-  memcpy(lcmd + sizeof(CALLHEADER) - 1, str, len);
-  memcpy(lcmd + sizeof(CALLHEADER) - 1 + len, CALLSUFFIX,
-         sizeof(CALLSUFFIX) - 1);
-#undef CALLHEADER
-#undef CALLSUFFIX
-
-  nlua_typval_exec(lcmd, lcmd_len, "v:lua", args, argcount, false, ret_tv);
-
-  if (lcmd != IObuff) {
-    xfree(lcmd);
-  }
-}
-
-void nlua_call_user_expand_func(expand_T *xp, typval_T *ret_tv)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_State *const lstate = global_lstate;
-
-  nlua_pushref(lstate, xp->xp_luaref);
-  lua_pushstring(lstate, xp->xp_pattern);
-  lua_pushstring(lstate, xp->xp_line);
-  lua_pushinteger(lstate, xp->xp_col);
-
-  if (nlua_pcall(lstate, 3, 1)) {
-    nlua_error(lstate, _("E5108: Lua function: %.*s"));
-    return;
-  }
-
-  nlua_pop_typval(lstate, ret_tv);
-}
-
-static void nlua_typval_exec(const char *lcmd, size_t lcmd_len, const char *name,
-                             typval_T *const args, int argcount, bool special, typval_T *ret_tv)
-{
-  if (rs_check_secure()) {
-    if (ret_tv) {
-      ret_tv->v_type = VAR_NUMBER;
-      ret_tv->vval.v_number = 0;
-    }
-    return;
-  }
-
-  lua_State *const lstate = global_lstate;
-  if (luaL_loadbuffer(lstate, lcmd, lcmd_len, name)) {
-    nlua_error(lstate, _("E5107: Lua: %.*s"));
-    return;
-  }
-
-  PUSH_ALL_TYPVALS(lstate, args, argcount, special);
-
-  if (nlua_pcall(lstate, argcount, ret_tv ? 1 : 0)) {
-    nlua_error(lstate, _("E5108: Lua: %.*s"));
-    return;
-  }
-
-  if (ret_tv) {
-    nlua_pop_typval(lstate, ret_tv);
-  }
-}
-
-void nlua_exec_ga(garray_T *ga, char *name)
-{
-  char *code = ga_concat_strings(ga, "\n");
-  size_t len = strlen(code);
-  nlua_typval_exec(code, len, name, NULL, 0, false, NULL);
-  xfree(code);
-}
-
-/// Call a LuaCallable given some typvals
-///
-/// Used to call any Lua callable passed from Lua into Vimscript.
-///
-/// @param[in]  lstate Lua State
-/// @param[in]  lua_cb Lua Callable
-/// @param[in]  argcount Count of typval arguments
-/// @param[in]  argvars Typval Arguments
-/// @param[out] rettv The return value from the called function.
-int typval_exec_lua_callable(LuaRef lua_cb, int argcount, typval_T *argvars, typval_T *rettv)
-{
-  lua_State *lstate = global_lstate;
-
-  nlua_pushref(lstate, lua_cb);
-
-  PUSH_ALL_TYPVALS(lstate, argvars, argcount, false);
-
-  if (nlua_pcall(lstate, argcount, 1)) {
-    nlua_error(lstate, _("Lua callback: %.*s"));
-    return FCERR_OTHER;
-  }
-
-  nlua_pop_typval(lstate, rettv);
-
-  return FCERR_NONE;
-}
-
-/// Execute Lua string
-///
-/// Used for nvim_exec_lua() and internally to execute a lua string.
-///
-/// @param[in]  str  String to execute.
-/// @param[in]  chunkname Chunkname, defaults to "<nvim>".
-/// @param[in]  args array of ... args
-/// @param[in]  mode Whether and how the the return value should be converted to Object
-/// @param[in] arena  can be NULL, then nested allocations are used
-/// @param[out]  err  Location where error will be saved.
-///
-/// @return Return value of the execution.
-Object nlua_exec(const String str, const char *chunkname, const Array args, LuaRetMode mode,
-                 Arena *arena, Error *err)
-{
-  lua_State *const lstate = global_lstate;
-
-  int top = lua_gettop(lstate);
-  const char *name = (chunkname && chunkname[0]) ? chunkname : "<nvim>";
-  if (luaL_loadbuffer(lstate, str.data, str.size, name)) {
-    size_t len;
-    const char *errstr = lua_tolstring(lstate, -1, &len);
-    api_set_error(err, kErrorTypeValidation, "Lua: %.*s", (int)len, errstr);
-    return NIL;
-  }
-
-  for (size_t i = 0; i < args.size; i++) {
-    nlua_push_Object(lstate, &args.items[i], 0);
-  }
-
-  if (nlua_pcall(lstate, (int)args.size, 1)) {
-    size_t len;
-    const char *errstr = lua_tolstring(lstate, -1, &len);
-    api_set_error(err, kErrorTypeException, "Lua: %.*s", (int)len, errstr);
-    return NIL;
-  }
-
-  return nlua_call_pop_retval(lstate, mode, arena, top, err);
-}
+// typval_exec_lua_callable, nlua_exec: implemented in Rust (exec.rs, Phase C)
 
 // nlua_ref_is_function: implemented in Rust (refs.rs, Phase A)
 
@@ -1564,46 +1442,7 @@ Object nlua_call_ref_ctx(bool fast, LuaRef ref, const char *name, Array args, Lu
   return nlua_call_pop_retval(lstate, mode, arena, top, err);
 }
 
-static Object nlua_call_pop_retval(lua_State *lstate, LuaRetMode mode, Arena *arena, int pretop,
-                                   Error *err)
-{
-  if (mode != kRetMulti && lua_isnil(lstate, -1)) {
-    lua_pop(lstate, 1);
-    return NIL;
-  }
-  Error dummy = ERROR_INIT;
-  Error *perr = err ? err : &dummy;
-
-  switch (mode) {
-  case kRetNilBool: {
-    bool bool_value = lua_toboolean(lstate, -1);
-    lua_pop(lstate, 1);
-
-    return BOOLEAN_OBJ(bool_value);
-  }
-  case kRetLuaref: {
-    LuaRef ref = nlua_ref_global(lstate, -1);
-    lua_pop(lstate, 1);
-
-    return LUAREF_OBJ(ref);
-  }
-  case kRetObject:
-    return nlua_pop_Object(lstate, false, arena, perr);
-  case kRetMulti:
-    ;
-    int nres = lua_gettop(lstate) - pretop;
-    Array res = arena_array(arena, (size_t)nres);
-    for (int i = 0; i < nres; i++) {
-      res.items[nres - i - 1] = nlua_pop_Object(lstate, false, arena, perr);
-      if (ERROR_SET(perr)) {
-        return NIL;
-      }
-    }
-    res.size = (size_t)nres;
-    return ARRAY_OBJ(res);
-  }
-  UNREACHABLE;
-}
+// nlua_call_pop_retval: implemented in Rust (exec.rs, Phase C)
 
 /// check if the current execution context is safe for calling deferred API
 /// Executes Lua code.
@@ -2289,33 +2128,7 @@ int nlua_do_ucmd(ucmd_T *cmd, exarg_T *eap, bool preview)
   return retv;
 }
 
-/// String representation of a Lua function reference
-///
-/// @return Allocated string
-char *nlua_funcref_str(LuaRef ref, Arena *arena)
-{
-  lua_State *const lstate = global_lstate;
-
-  if (!lua_checkstack(lstate, 1)) {
-    goto plain;
-  }
-  nlua_pushref(lstate, ref);
-  if (!lua_isfunction(lstate, -1)) {
-    lua_pop(lstate, 1);
-    goto plain;
-  }
-
-  lua_Debug ar;
-  if (lua_getinfo(lstate, ">S", &ar) && *ar.source == '@' && ar.linedefined >= 0) {
-    char *src = home_replace_save(NULL, ar.source + 1);
-    String str = arena_printf(arena, "<Lua %d: %s:%d>", ref, src, ar.linedefined);
-    xfree(src);
-    return str.data;
-  }
-
-plain: {}
-  return arena_printf(arena, "<Lua %d>", ref).data;
-}
+// nlua_funcref_str: implemented in Rust (exec.rs, Phase C)
 
 /// Execute the vim._defaults module to set up default mappings and autocommands
 void nlua_init_defaults(void)

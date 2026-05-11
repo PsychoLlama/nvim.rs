@@ -71,6 +71,21 @@ void nlua_error(lua_State *const lstate, const char *const msg);
 int nlua_nil_tostring(lua_State *lstate);
 int nlua_empty_dict_tostring(lua_State *lstate);
 
+// Phase C: typval exec paths and funcref_str implemented in Rust (exec.rs)
+void nlua_typval_exec(const char *lcmd, size_t lcmd_len, const char *name, typval_T *args,
+                      int argcount, bool special, typval_T *ret_tv);
+void nlua_typval_eval(String str, typval_T *arg, typval_T *ret_tv);
+void nlua_typval_call(const char *str, size_t len, typval_T *args, int argcount,
+                      typval_T *ret_tv);
+void nlua_call_user_expand_func(expand_T *xp, typval_T *ret_tv);
+void nlua_exec_ga(garray_T *gap, char *name);
+int typval_exec_lua_callable(LuaRef lua_cb, int argcount, typval_T *argvars, typval_T *rettv);
+Object nlua_exec(String str, const char *chunkname, Array args, LuaRetMode mode, Arena *arena,
+                 Error *err);
+Object nlua_call_pop_retval(lua_State *lstate, LuaRetMode mode, Arena *arena, int pretop,
+                            Error *err);
+char *nlua_funcref_str(LuaRef ref, Arena *arena);
+
 #include "lua/executor.h.generated.h"
 
 EXTERN nlua_ref_state_t *nlua_global_refs INIT( = NULL);
