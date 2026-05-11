@@ -12,4 +12,7 @@
 /// Array mapping values from MessagePackType to corresponding list pointers
 extern const list_T *eval_msgpack_type_lists[NUM_MSGPACK_TYPES];
 
+/// Accessor for eval_msgpack_type_lists[idx] used by Rust decode module.
+list_T *nvim_eval_msgpack_type_list(int idx);
+
 #include "eval/vars.h.generated.h"

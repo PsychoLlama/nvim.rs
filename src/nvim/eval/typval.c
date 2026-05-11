@@ -145,6 +145,22 @@ typval_T *tv_list_append_owned_tv(list_T *const l, typval_T tv)
 // tv_list_append_list, tv_list_append_dict, tv_list_append_string,
 // tv_list_append_allocated_string, tv_list_append_number migrated to Rust (Phase 5)
 
+/// Append a typval by pointer (accessor for Rust decode module, Phase 1).
+/// Copies *tv into a new list item; caller must not use tv after this.
+void nvim_tv_list_append_typval_ptr(list_T *l, typval_T *tv)
+  FUNC_ATTR_NONNULL_ALL
+{
+  tv_list_append_owned_tv(l, *tv);
+}
+
+/// Append VAR_UNKNOWN to list and return pointer to the new item's typval
+/// (accessor for Rust mpack decoder, Phase 3).
+typval_T *nvim_tv_list_append_unknown_and_get(list_T *l)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return tv_list_append_owned_tv(l, (typval_T) { .v_type = VAR_UNKNOWN });
+}
+
 //{{{2 Operations on the whole list
 
 /// Make a copy of list

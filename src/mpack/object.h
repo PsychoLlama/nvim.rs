@@ -83,4 +83,10 @@ MPACK_API int mpack_unparse(mpack_parser_t *parser, char **b, size_t *bl,
 MPACK_API void mpack_parser_copy(mpack_parser_t *d, mpack_parser_t *s)
   FUNUSED FNONULL;
 
+// Accessor functions for Rust decode module (Phase 3 of eval/decode.c migration).
+void **nvim_mpack_parser_data_ptr(mpack_parser_t *parser);
+mpack_uint32_t nvim_mpack_parser_size(mpack_parser_t *parser);
+mpack_node_t *nvim_mpack_parser_item(mpack_parser_t *parser, mpack_uint32_t idx);
+size_t nvim_mpack_parser_alloc_size(void);
+
 #endif  /* MPACK_OBJECT_H */

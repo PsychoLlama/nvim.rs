@@ -163,6 +163,39 @@ static mpack_node_t *mpack_parser_push(mpack_parser_t *p)
   return top;
 }
 
+// =============================================================================
+// Accessor functions for Rust decode module (Phase 3)
+// =============================================================================
+
+/// Return a pointer to parser->data.p (mpack_data_t.p field).
+/// Rust stores the rettv TypevalHandle here.
+void **nvim_mpack_parser_data_ptr(mpack_parser_t *parser)
+{
+  return &parser->data.p;
+}
+
+/// Return parser->size (number of active nodes on the stack).
+mpack_uint32_t nvim_mpack_parser_size(mpack_parser_t *parser)
+{
+  return parser->size;
+}
+
+/// Return a pointer to parser->items[idx+1] (1-based like the C stack).
+mpack_node_t *nvim_mpack_parser_item(mpack_parser_t *parser, mpack_uint32_t idx)
+{
+  mpack_one_parser_t *p = (mpack_one_parser_t *)parser;
+  return &p->items[idx + 1];
+}
+
+/// Return the number of bytes needed to allocate a mpack_parser_t.
+/// Used by Rust to xmalloc the right size.
+size_t nvim_mpack_parser_alloc_size(void)
+{
+  return sizeof(mpack_parser_t);
+}
+
+// =============================================================================
+
 static mpack_node_t *mpack_parser_pop(mpack_parser_t *p)
 {
   mpack_one_parser_t *parser = (mpack_one_parser_t *)p;

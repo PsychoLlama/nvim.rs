@@ -23,6 +23,7 @@
 #![allow(clippy::doc_markdown)]
 
 pub mod blob;
+pub mod decode;
 pub mod escape;
 pub mod json;
 
