@@ -127,25 +127,9 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
   return &autocmds[(int)event];
 }
 
-extern void rs_free_augroup_maps(void);
-
-#if defined(EXITFREE)
-void free_all_autocmds(void)
-{
-  FOR_ALL_AUEVENTS(event) {
-    AutoCmdVec *const acs = &autocmds[(int)event];
-    for (size_t i = 0; i < kv_size(*acs); i++) {
-      aucmd_del(&kv_A(*acs, i));
-    }
-    kv_destroy(*acs);
-    au_need_clean = false;
-  }
-
-  rs_free_augroup_maps();
-
-  // aucmd_win[] is freed in win_free_all()
-}
-#endif
+// free_all_autocmds is now implemented in Rust (rs_free_all_autocmds in lib.rs),
+// exported directly under the name "free_all_autocmds" via #[unsafe(export_name)].
+// The C declaration in autocmd.h still covers external callers gated by #if EXITFREE.
 
 /// Registers an autocmd. The handler may be a Ex command or callback function, decided by
 /// the `handler_cmd` or `handler_fn` args.
@@ -637,6 +621,13 @@ void nvim_autocmd_del_at(int event, size_t idx)
   if (idx < kv_size(*acs)) {
     aucmd_del(&kv_A(*acs, idx));
   }
+}
+
+/// Destroy the AutoCmd vector for an event (kv_destroy wrapper for Rust).
+/// Used by free_all_autocmds in Rust.
+void nvim_autocmd_destroy_event_vec(int event)
+{
+  kv_destroy(autocmds[event]);
 }
 
 /// Get all pattern info for autocmd at (event, idx) in one call.

@@ -139,6 +139,8 @@ extern "C" {
     // nvim_get_autocmd_busy replaced by direct global access
     fn nvim_apc_invalidate_bufnr(bufnr: c_int);
     fn nvim_verbose_buflocal_remove(event: c_int, bufnr: c_int);
+    // Phase 2: destroy vector accessor
+    fn nvim_autocmd_destroy_event_vec(event: c_int);
 
     // Phase 5: :augroup command + arg parsing accessors
     #[link_name = "emsg"]
@@ -669,6 +671,30 @@ pub unsafe extern "C" fn rs_au_cleanup() {
     }
 
     au_need_clean = false;
+}
+
+/// Free all autocommands (EXITFREE path).
+///
+/// Called only during process exit (`#if defined(EXITFREE)`).
+/// Deletes every autocmd for every event and destroys their storage vectors.
+///
+/// # Safety
+/// Must be called from the main Neovim thread. Accesses `au_need_clean` global.
+/// Only valid during the EXITFREE shutdown path.
+#[unsafe(export_name = "free_all_autocmds")]
+pub unsafe extern "C" fn rs_free_all_autocmds() {
+    for event in 0..NUM_EVENTS {
+        let size = nvim_get_autocmds_count(event);
+        for i in 0..size {
+            nvim_autocmd_del_at(event, i);
+        }
+        nvim_autocmd_destroy_event_vec(event);
+        au_need_clean = false;
+    }
+
+    group::rs_free_augroup_maps();
+
+    // aucmd_win[] is freed in win_free_all()
 }
 
 /// Remove/invalidate buffer-local autocommands when a buffer is freed.
