@@ -104,7 +104,6 @@ pub struct AutoHandlerInfo {
 
 // C accessors for static data
 extern "C" {
-    fn nvim_get_autocmd_blocked() -> c_int;
     fn nvim_get_event_name(event: c_int) -> *const c_char;
     fn nvim_get_event_sign(event: c_int) -> c_int;
     fn nvim_get_autocmds_count(event: c_int) -> usize;
@@ -119,17 +118,15 @@ extern "C" {
     fn rs_get_real_state() -> c_int;
 
     // Accessors for trigger_cursorhold
-    fn nvim_get_did_cursorhold() -> c_int;
-    fn nvim_get_reg_recording() -> c_int;
     fn nvim_get_typebuf_len() -> c_int;
 
     // From insexpand crate - check if completion is active
     fn rs_ins_compl_active() -> c_int;
 
     // Buffer/autocmd state accessors (Phase 1)
+    // nvim_get_curbuf_fnum/handle/autocmd_bufnr replaced by direct global access
     fn nvim_get_curbuf_fnum() -> c_int;
     fn nvim_get_curbuf_handle() -> c_int;
-    fn nvim_get_autocmd_bufnr() -> c_int;
 
     // Event name resolution (Phase 1)
     fn nvim_event_name2nr(start: *const c_char, len: usize) -> c_int;
@@ -138,9 +135,8 @@ extern "C" {
     fn nvim_autocmd_del_at(event: c_int, idx: usize);
     fn nvim_autocmd_get_pat_info(event: c_int, idx: usize) -> AutoPatInfo;
     fn nvim_autocmd_compact_event(event: c_int);
-    fn nvim_get_au_need_clean() -> c_int;
-    fn nvim_set_au_need_clean(val: c_int);
-    fn nvim_get_autocmd_busy() -> bool;
+    // nvim_get_au_need_clean/nvim_set_au_need_clean replaced by direct global access
+    // nvim_get_autocmd_busy replaced by direct global access
     fn nvim_apc_invalidate_bufnr(bufnr: c_int);
     fn nvim_verbose_buflocal_remove(event: c_int, bufnr: c_int);
 
@@ -214,10 +210,28 @@ extern "C" {
     // Phase 8a: Simple wrappers + blocking accessors
     #[link_name = "get_vim_var_str"]
     fn nvim_autocmd_get_vim_var_str(vv: c_int) -> *const c_char;
-    // Global variables now accessed directly
+    // Global variables accessed directly (Phase 1 cleanup)
     static mut autocmd_blocked: c_int;
     static mut current_augroup: c_int;
     static mut old_termresponse: *const c_char;
+    // Phase 1: promoted globals (previously static in autocmd.c)
+    static mut au_need_clean: bool;
+    static mut autocmd_nested: bool;
+    static mut autocmd_nesting: c_int;
+    static mut filechangeshell_busy: bool;
+    // Phase 1: EXTERN globals from autocmd.h / globals.h / option_vars.h
+    static mut autocmd_busy: bool;
+    static mut autocmd_fname: *mut c_char;
+    static mut autocmd_fname_full: bool;
+    static mut autocmd_bufnr: c_int;
+    static mut autocmd_match: *mut c_char;
+    static mut autocmd_no_enter: c_int;
+    static mut autocmd_no_leave: c_int;
+    static mut did_cursorhold: bool;
+    static mut reg_recording: c_int;
+    static mut KeyTyped: bool;
+    static mut RedrawingDisabled: c_int;
+    static p_ei: *const c_char;
     #[link_name = "should_abort"]
     fn nvim_autocmd_should_abort(retval: c_int) -> bool;
     #[link_name = "aborting"]
@@ -290,9 +304,12 @@ const E_CANNOT_DEFINE_FOR_ALL: &CStr = c"E1155: Cannot define autocommands for A
 /// Check if autocommands are blocked.
 ///
 /// Returns true if autocmd_blocked != 0.
+///
+/// # Safety
+/// Reads the global `autocmd_blocked` from the main Neovim thread only.
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_autocmd_blocked() -> c_int {
-    c_int::from(nvim_get_autocmd_blocked() != 0)
+    c_int::from(autocmd_blocked != 0)
 }
 
 /// Return the name for an event.
@@ -380,9 +397,9 @@ pub unsafe extern "C" fn rs_has_cursorhold() -> c_int {
 pub unsafe extern "C" fn rs_trigger_cursorhold() -> c_int {
     // Check preconditions: cursorhold not yet triggered, has autocommand,
     // not recording, type-ahead buffer empty, and completion not active
-    if nvim_get_did_cursorhold() != 0
+    if did_cursorhold
         || rs_has_cursorhold() == 0
-        || nvim_get_reg_recording() != 0
+        || reg_recording != 0
         || nvim_get_typebuf_len() != 0
         || rs_ins_compl_active() != 0
     {
@@ -555,7 +572,7 @@ pub unsafe extern "C" fn rs_aupat_get_buflocal_nr(pat: *const c_char, patlen: c_
         if patlen == 13 {
             let slice = std::slice::from_raw_parts(pat.cast::<u8>(), 13);
             if slice.eq_ignore_ascii_case(b"<buffer=abuf>") {
-                return nvim_get_autocmd_bufnr();
+                return autocmd_bufnr;
             }
         }
 
@@ -637,9 +654,13 @@ pub unsafe extern "C" fn rs_aucmd_del_for_event_and_group(event: c_int, group: c
 
 /// Cleanup autocommands that have been deleted.
 /// Only runs when not executing autocommands and cleanup is needed.
+///
+/// # Safety
+/// Reads and writes `autocmd_busy` and `au_need_clean` globals. Must be called
+/// from the main Neovim thread only.
 #[unsafe(export_name = "au_cleanup")]
 pub unsafe extern "C" fn rs_au_cleanup() {
-    if nvim_get_autocmd_busy() || nvim_get_au_need_clean() == 0 {
+    if autocmd_busy || !au_need_clean {
         return;
     }
 
@@ -647,7 +668,7 @@ pub unsafe extern "C" fn rs_au_cleanup() {
         nvim_autocmd_compact_event(event);
     }
 
-    nvim_set_au_need_clean(0);
+    au_need_clean = false;
 }
 
 /// Remove/invalidate buffer-local autocommands when a buffer is freed.
@@ -2216,8 +2237,7 @@ extern "C" {
     // Set current_sctx from ac->script_ctx + update apc->script_ctx
     fn nvim_autocmd_set_script_ctx(event: c_int, idx: usize, apc: *mut c_void);
 
-    // Set autocmd_nested global
-    fn nvim_set_autocmd_nested(val: bool);
+    // nvim_set_autocmd_nested removed: Rust writes autocmd_nested directly
 
     // Get xstrdup of ac->handler_cmd, or NULL if handler is function
     fn nvim_autocmd_get_ac_handler_cmd(event: c_int, idx: usize) -> *mut c_char;
@@ -2318,7 +2338,7 @@ pub unsafe extern "C" fn rs_getnextac(
     }
 
     // Set autocmd_nested and current_sctx from this autocmd
-    nvim_set_autocmd_nested(nvim_autocmd_get_ac_nested(event, idx));
+    autocmd_nested = nvim_autocmd_get_ac_nested(event, idx);
     nvim_autocmd_set_script_ctx(event, idx, apc);
 
     let handler_cmd = nvim_autocmd_get_ac_handler_cmd(event, idx);
@@ -2423,15 +2443,6 @@ extern "C" {
     fn nvim_autocmd_ctx_get_old_curbuf(ctx: *const c_void) -> *mut c_void;
     fn nvim_autocmd_ctx_get_save_changed(ctx: *const c_void) -> bool;
 
-    // Individual global setters/getters
-    fn nvim_set_autocmd_fname_full(v: bool);
-    fn nvim_set_autocmd_bufnr2(v: c_int);
-    fn nvim_set_autocmd_match(m: *mut c_char);
-    fn nvim_set_autocmd_busy(v: bool);
-    fn nvim_get_autocmd_nested() -> bool;
-    fn nvim_get_autocmd_no_enter() -> c_int;
-    fn nvim_get_autocmd_no_leave() -> c_int;
-
     // curbuf field accessors
     fn nvim_set_curbuf_b_did_filetype(v: bool);
     fn nvim_get_curbuf_b_keep_filetype() -> bool;
@@ -2480,15 +2491,6 @@ extern "C" {
     fn nvim_autocmd_estack_push();
     fn nvim_autocmd_estack_pop();
 
-    // filechangeshell_busy
-    fn nvim_get_filechangeshell_busy() -> bool;
-    fn nvim_set_filechangeshell_busy(v: bool);
-
-    // nesting counter
-    fn nvim_get_autocmd_nesting() -> c_int;
-    fn nvim_inc_autocmd_nesting();
-    fn nvim_dec_autocmd_nesting();
-
     // current_sctx save/restore
     fn nvim_autocmd_save_sctx() -> *mut c_void;
     fn nvim_autocmd_restore_sctx(s: *mut c_void);
@@ -2507,14 +2509,6 @@ extern "C" {
     fn nvim_autocmd_get_pressedreturn() -> bool;
     fn nvim_autocmd_set_pressedreturn(v: bool);
 
-    // KeyTyped global
-    fn nvim_get_keytd() -> bool;
-    fn nvim_set_keytd(v: bool);
-
-    // RedrawingDisabled
-    fn nvim_inc_redrawing_disabled();
-    fn nvim_dec_redrawing_disabled();
-
     // Free pending bufs/wins
     fn nvim_autocmd_free_pending();
 
@@ -2524,9 +2518,6 @@ extern "C" {
 
     // event_ignored wrapper
     fn nvim_event_ignored(event: c_int, pat: *const c_char) -> bool;
-
-    // p_ei (eventignore option) getter
-    fn nvim_get_p_ei() -> *const c_char;
 
     // did_emsg accessors
     fn nvim_autocmd_get_did_emsg() -> c_int;
@@ -2565,7 +2556,7 @@ extern "C" {
     fn autocmd_emsg(msg: *const c_char);
 
     // Phase 3: resolve_fname and setup_afile helpers
-    fn nvim_set_autocmd_fname(f: *mut c_char);
+    // nvim_set_autocmd_fname removed: Rust writes autocmd_fname directly
     #[link_name = "xstrnsave"]
     fn nvim_autocmd_xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
 
@@ -2620,7 +2611,8 @@ unsafe fn autocmd_setup_afile_rs(
     fname_io: *mut c_char,
     fname: *mut c_char,
 ) -> *mut c_char {
-    let autocmd_fname: *mut c_char = if fname_io.is_null() {
+    // Compute the initial value for autocmd_fname (Phase 1: writes global directly)
+    let initial_fname: *mut c_char = if fname_io.is_null() {
         if event == EVENT_COLORSCHEME
             || event == EVENT_COLORSCHEMEPRE
             || event == EVENT_OPTIONSET
@@ -2638,16 +2630,16 @@ unsafe fn autocmd_setup_afile_rs(
         fname_io
     };
 
-    nvim_set_autocmd_fname(autocmd_fname);
+    autocmd_fname = initial_fname;
 
     let mut afile_orig: *mut c_char = std::ptr::null_mut();
     if !autocmd_fname.is_null() {
         afile_orig = nvim_autocmd_xstrdup(autocmd_fname);
         let maxpathl = 4096usize; // MAXPATHL
         let new_fname = nvim_autocmd_xstrnsave(autocmd_fname, maxpathl);
-        nvim_set_autocmd_fname(new_fname);
+        autocmd_fname = new_fname;
     }
-    nvim_set_autocmd_fname_full(false);
+    autocmd_fname_full = false;
     afile_orig
 }
 
@@ -2756,65 +2748,64 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
     eap: *mut c_void,
     data: *mut c_void,
 ) -> bool {
-    let save_key_typed = nvim_get_keytd();
+    // Phase 1: access KeyTyped directly
+    let save_key_typed = KeyTyped;
 
     // Quickly return if there are no autocommands for this event or
     // autocommands are blocked.
     if event == NUM_EVENTS || nvim_get_autocmds_count(event) == 0 || rs_is_autocmd_blocked() != 0 {
-        nvim_set_keytd(save_key_typed);
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
     // When autocommands are busy, new autocommands are only executed when
     // explicitly enabled with the "nested" flag.
-    if nvim_get_autocmd_busy() && !(force || nvim_get_autocmd_nested()) {
-        nvim_set_keytd(save_key_typed);
+    if autocmd_busy && !(force || autocmd_nested) {
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
     // Quickly return when immediately aborting on error, or when an interrupt
     // occurred or an exception was thrown but not caught.
     if autocmd_aborting() {
-        nvim_set_keytd(save_key_typed);
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
     // FileChangedShell never nests, because it can create an endless loop.
-    if nvim_get_filechangeshell_busy()
+    if filechangeshell_busy
         && (event == EVENT_FILECHANGEDSHELL || event == EVENT_FILECHANGEDSHELLPOST)
     {
-        nvim_set_keytd(save_key_typed);
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
     // Ignore events in 'eventignore'.
-    let p_ei_val = nvim_get_p_ei();
-    if nvim_event_ignored(event, p_ei_val) {
-        nvim_set_keytd(save_key_typed);
+    if nvim_event_ignored(event, p_ei) {
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
     // If event is allowed in 'eventignorewin', check if curwin or all windows
     // into "buf" are ignoring the event.
     if !buf.is_null() && autocmd_check_win_ignore_rs(event, buf) {
-        nvim_set_keytd(save_key_typed);
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
     // Allow nesting of autocommands, but restrict the depth, because it's
     // possible to create an endless loop.
-    if nvim_get_autocmd_nesting() == 10 {
+    if autocmd_nesting == 10 {
         autocmd_emsg(E_NESTING_TOO_DEEP.as_ptr());
-        nvim_set_keytd(save_key_typed);
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
     // Check if these autocommands are disabled.
-    if (nvim_get_autocmd_no_enter() != 0 && (event == EVENT_WINENTER || event == EVENT_BUFENTER))
-        || (nvim_get_autocmd_no_leave() != 0
-            && (event == EVENT_WINLEAVE || event == EVENT_BUFLEAVE))
+    if (autocmd_no_enter != 0 && (event == EVENT_WINENTER || event == EVENT_BUFENTER))
+        || (autocmd_no_leave != 0 && (event == EVENT_WINLEAVE || event == EVENT_BUFLEAVE))
     {
-        nvim_set_keytd(save_key_typed);
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
@@ -2838,15 +2829,13 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
         nvim_autocmd_xfree(sfname);
         nvim_autocmd_restore_ctx(ctx);
         nvim_autocmd_xfree(afile_orig);
-        nvim_set_keytd(save_key_typed);
+        KeyTyped = save_key_typed;
         return bypass_au(event, buf);
     }
 
-    // Set autocmd_fname_full from resolve result
-    nvim_set_autocmd_fname_full(fname_full);
-
-    // Set the name to be used for <amatch>.
-    nvim_set_autocmd_match(resolved_fname);
+    // Set autocmd_fname_full and autocmd_match directly
+    autocmd_fname_full = fname_full;
+    autocmd_match = resolved_fname;
 
     // Set the buffer number for <abuf>.
     let arg_bufnr = if buf.is_null() {
@@ -2854,10 +2843,10 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
     } else {
         nvim_autocmd_buf_get_fnum(buf)
     };
-    nvim_set_autocmd_bufnr2(arg_bufnr);
+    autocmd_bufnr = arg_bufnr;
 
     // Don't redraw while doing autocommands.
-    nvim_inc_redrawing_disabled();
+    RedrawingDisabled += 1;
 
     // name and lnum are filled in later
     nvim_autocmd_estack_push();
@@ -2871,7 +2860,7 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
     let funccal_save = nvim_autocmd_save_funccal();
 
     // When starting to execute autocommands, save the search patterns.
-    let autocmd_was_busy = nvim_get_autocmd_busy();
+    let autocmd_was_busy = autocmd_busy;
     let exec_save: *mut c_void = if autocmd_was_busy {
         std::ptr::null_mut()
     } else {
@@ -2881,9 +2870,9 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
     };
 
     // Note that we are applying autocmds. Some commands need to know.
-    nvim_set_autocmd_busy(true);
-    nvim_set_filechangeshell_busy(event == EVENT_FILECHANGEDSHELL);
-    nvim_inc_autocmd_nesting();
+    autocmd_busy = true;
+    filechangeshell_busy = event == EVENT_FILECHANGEDSHELL;
+    autocmd_nesting += 1;
 
     // Remember that FileType was triggered. Used for did_filetype().
     if event == EVENT_FILETYPE {
@@ -2928,8 +2917,7 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
         retval = true;
 
         // Make sure cursor and topline are valid.
-        let nesting = nvim_get_autocmd_nesting();
-        if nesting == 1 {
+        if autocmd_nesting == 1 {
             autocmd_rs_check_lnums(1);
         } else {
             autocmd_rs_check_lnums_nested(1);
@@ -2949,7 +2937,7 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
         nvim_autocmd_add_did_emsg(save_did_emsg);
         nvim_autocmd_set_pressedreturn(save_ex_pressedreturn);
 
-        if nvim_get_autocmd_nesting() == 1 {
+        if autocmd_nesting == 1 {
             // restore cursor and topline, unless they were changed
             autocmd_rs_reset_lnums();
         }
@@ -2962,28 +2950,28 @@ pub unsafe extern "C" fn rs_apply_autocmds_group(
         nvim_apc_pop_active(apc);
     }
 
-    nvim_dec_redrawing_disabled();
+    RedrawingDisabled -= 1;
     // Restore autocmd globals (frees ctx, and frees current autocmd_fname)
     nvim_autocmd_restore_ctx(ctx);
-    nvim_set_filechangeshell_busy(false);
+    filechangeshell_busy = false;
     // Free afile_orig (was stored in apc->afile_orig but we own the allocation)
     nvim_autocmd_xfree(afile_orig);
     nvim_autocmd_estack_pop();
     nvim_autocmd_xfree(resolved_fname);
     nvim_autocmd_xfree(sfname);
-    nvim_dec_autocmd_nesting();
+    autocmd_nesting -= 1;
 
     // Restore current_sctx, funccal, profiling
     nvim_autocmd_restore_sctx(sctx_save);
     nvim_autocmd_restore_funccal(funccal_save);
     nvim_autocmd_prof_exit(prof_wt);
 
-    nvim_set_keytd(save_key_typed);
+    KeyTyped = save_key_typed;
 
     // When stopping to execute autocommands, restore the search patterns and
     // the redo buffer. Free any buffers in the au_pending_free_buf list and
     // free any windows in the au_pending_free_win list.
-    if !nvim_get_autocmd_busy() {
+    if !autocmd_busy {
         if !exec_save.is_null() {
             nvim_autocmd_restore_exec(exec_save);
         }

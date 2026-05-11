@@ -87,6 +87,12 @@ extern int autocmd_blocked;    ///< nonzero when autocmds are blocked
 extern int current_augroup;    ///< ID of current augroup
 extern char *old_termresponse; ///< saved value of v:termresponse
 
+// Variables promoted from file-static in autocmd.c to allow direct Rust access.
+EXTERN bool au_need_clean INIT( = false);          ///< pending deletion cleanup needed
+EXTERN bool autocmd_nested INIT( = false);          ///< autocommand nesting enabled
+EXTERN int autocmd_nesting INIT( = 0);              ///< current autocommand nesting depth
+EXTERN bool filechangeshell_busy INIT( = false);    ///< FileChangedShell is executing
+
 /// Iterates over all the events for auto commands
 #define FOR_ALL_AUEVENTS(event) \
   for (event_T event = (event_T)0; (int)event < (int)NUM_EVENTS; event = (event_T)((int)event + 1))

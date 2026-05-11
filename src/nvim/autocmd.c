@@ -98,9 +98,9 @@ size_t nvim_get_autocmds_count(int event)
 // Patterns are reference-counted and reused for consecutive autocommands.
 static AutoPatCmd *active_apc_list = NULL;  // stack of active autocommands
 int current_augroup = AUGROUP_DEFAULT;
-static bool au_need_clean = false;  // pending deletion cleanup needed
+// au_need_clean, autocmd_nested, autocmd_nesting, filechangeshell_busy are
+// now EXTERN globals declared in autocmd.h (promoted from file-static).
 int autocmd_blocked = 0;  // block all autocmds
-static bool autocmd_nested = false;
 char *old_termresponse = NULL;
 
 static void aucmd_del(AutoCmd *ac)
@@ -578,7 +578,7 @@ static char *aucmd_handler_to_string(AutoCmd *ac)
 // do_filetype_autocmd is implemented in Rust (rs_do_filetype_autocmd in autocmd/src/lib.rs)
 // and exported directly under the name "do_filetype_autocmd" via #[unsafe(export_name)].
 
-int nvim_get_autocmd_blocked(void) { return autocmd_blocked; }
+// nvim_get_autocmd_blocked() removed: Rust accesses autocmd_blocked directly.
 int nvim_get_aucmd_win_count(void) { return AUCMD_WIN_COUNT; }
 
 /// Check if aucmd_win at index is used (used by Rust FFI).
@@ -599,12 +599,13 @@ win_T *nvim_aucmd_win_get_win(int idx)
   return aucmd_win[idx].auc_win;
 }
 
-int nvim_get_did_cursorhold(void) { return did_cursorhold ? 1 : 0; }
+// nvim_get_did_cursorhold removed: autocmd crate accesses did_cursorhold directly.
+// The following are kept because other Rust crates or the autocmd crate still call them:
 int nvim_get_reg_recording(void) { return reg_recording; }
 int nvim_get_reg_executing(void) { return reg_executing; }
+int nvim_get_autocmd_bufnr(void) { return autocmd_bufnr; }
 int nvim_get_curbuf_fnum(void) { return curbuf->b_fnum; }
 int nvim_get_curbuf_handle(void) { return curbuf->handle; }
-int nvim_get_autocmd_bufnr(void) { return autocmd_bufnr; }
 
 /// Returns NUM_EVENTS if not found.
 int nvim_event_name2nr(const char *start, size_t len)
@@ -625,6 +626,7 @@ int nvim_get_event_sign(int event)
   return event_names[event].event;
 }
 
+// nvim_get_p_ei is kept because event.rs and ex_docmd still call it.
 const char *nvim_get_p_ei(void) { return p_ei; }
 void nvim_autocmd_set_option_eventignore(const char *val) { set_option_direct(kOptEventignore, CSTR_AS_OPTVAL(val), 0, SID_NONE); }
 
@@ -693,8 +695,7 @@ void nvim_autocmd_compact_event(int event)
   }
 }
 
-int nvim_get_au_need_clean(void) { return au_need_clean ? 1 : 0; }
-void nvim_set_au_need_clean(int val) { au_need_clean = val != 0; }
+// nvim_get_au_need_clean/nvim_set_au_need_clean removed: Rust accesses au_need_clean directly.
 
 /// Walk active_apc_list and invalidate matching arg_bufnr.
 void nvim_apc_invalidate_bufnr(int bufnr)
@@ -890,8 +891,7 @@ void nvim_autocmd_restore_pat(int event, size_t idx, void *ac_copy_raw)
   }
 }
 
-/// Set autocmd_nested global.
-void nvim_set_autocmd_nested(bool val) { autocmd_nested = val; }
+// nvim_set_autocmd_nested removed: Rust accesses autocmd_nested directly.
 
 /// Temporarily set ac->pat = NULL without freeing (for oneshot hide-during-callback trick).
 void nvim_autocmd_set_pat_null(int event, size_t idx)
@@ -1035,13 +1035,9 @@ bool nvim_autocmd_ctx_get_save_changed(const void *ctx_raw)
 
 // --- Set individual autocmd globals ---
 
-void nvim_set_autocmd_fname(char *f) { autocmd_fname = f; }
-void nvim_set_autocmd_fname_full(bool v) { autocmd_fname_full = v; }
-void nvim_set_autocmd_bufnr2(int v) { autocmd_bufnr = v; }
-void nvim_set_autocmd_match(char *m) { autocmd_match = m; }
-void nvim_set_autocmd_busy(bool v) { autocmd_busy = v; }
-int nvim_get_autocmd_no_enter(void) { return autocmd_no_enter; }
-int nvim_get_autocmd_no_leave(void) { return autocmd_no_leave; }
+// nvim_set_autocmd_fname, nvim_set_autocmd_fname_full, nvim_set_autocmd_bufnr2,
+// nvim_set_autocmd_match, nvim_set_autocmd_busy removed: Rust accesses globals directly.
+// nvim_get_autocmd_no_enter, nvim_get_autocmd_no_leave removed: Rust accesses globals directly.
 
 // --- Current buffer field accessors ---
 
@@ -1212,24 +1208,9 @@ void nvim_autocmd_prof_exit(void *wt)
 void nvim_autocmd_estack_push(void) { estack_push(ETYPE_AUCMD, NULL, 0); }
 void nvim_autocmd_estack_pop(void) { xfree(SOURCING_NAME); estack_pop(); }
 
-// --- filechangeshell_busy (file-static in apply_autocmds_group) ---
-// This static is local to apply_autocmds_group. We manage it here via a separate global.
-// Since apply_autocmds_group will be in Rust, we need this static to be accessible.
-// Solution: move it to a file-level static and expose via accessors.
-
-static bool filechangeshell_busy_global = false;
-
-bool nvim_get_filechangeshell_busy(void) { return filechangeshell_busy_global; }
-void nvim_set_filechangeshell_busy(bool v) { filechangeshell_busy_global = v; }
-
-// --- nesting counter (static in apply_autocmds_group) ---
-// Same approach: move to file-level static.
-
-static int autocmd_nesting = 0;
-
-int nvim_get_autocmd_nesting(void) { return autocmd_nesting; }
-void nvim_inc_autocmd_nesting(void) { autocmd_nesting++; }
-void nvim_dec_autocmd_nesting(void) { autocmd_nesting--; }
+// filechangeshell_busy, autocmd_nesting, autocmd_nested, au_need_clean are now
+// EXTERN globals in autocmd.h; their accessor functions have been removed.
+// Rust accesses these directly via extern "C" { static mut ...; }.
 
 // --- v:cmdbang ---
 
@@ -1250,15 +1231,8 @@ char *nvim_set_cmdarg(void *eap, char *old_arg) { return set_cmdarg((exarg_T *)e
 bool nvim_autocmd_get_pressedreturn(void) { return get_pressedreturn(); }
 void nvim_autocmd_set_pressedreturn(bool v) { set_pressedreturn(v); }
 
-// --- KeyTyped global ---
-
-bool nvim_get_keytd(void) { return KeyTyped; }
-void nvim_set_keytd(bool v) { KeyTyped = v; }
-
-// --- RedrawingDisabled global ---
-
-void nvim_inc_redrawing_disabled(void) { RedrawingDisabled++; }
-void nvim_dec_redrawing_disabled(void) { RedrawingDisabled--; }
+// nvim_get_keytd, nvim_set_keytd removed: Rust accesses KeyTyped directly.
+// nvim_inc_redrawing_disabled, nvim_dec_redrawing_disabled removed: Rust accesses RedrawingDisabled directly.
 
 // --- Free pending bufs/wins ---
 
@@ -1304,9 +1278,7 @@ bool nvim_event_ignored(int event, const char *pat) { return event_ignored((even
 int nvim_autocmd_get_did_emsg(void) { return did_emsg; }
 void nvim_autocmd_add_did_emsg(int v) { did_emsg += v; }
 
-/// Get current autocmd_nested value.
-bool nvim_get_autocmd_nested(void) { return autocmd_nested; }
-
+// nvim_get_autocmd_nested removed: Rust accesses autocmd_nested directly.
 // nvim_get_autocmd_busy is already defined in change_ffi.c
 
 /// Save/restore current_sctx (for apply_autocmds_group migration).
