@@ -715,6 +715,7 @@ pub mod funcexe;
 pub mod gc;
 pub mod index;
 pub mod lval;
+pub mod mod_op;
 pub mod operators;
 pub mod provider;
 pub mod string_sub;
