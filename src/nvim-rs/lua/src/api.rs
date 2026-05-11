@@ -28,12 +28,6 @@ extern "C" {
     // Typval conversion
     fn nlua_push_typval(lstate: *mut LuaState, tv: *const c_void, flags: c_int) -> bool;
 
-    // LuaRef pop
-    fn nlua_pop_LuaRef(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> LuaRef;
-
-    // Handle pop
-    fn nlua_pop_handle(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> HandleT;
-
     // Type initialization
     fn nlua_init_types(lstate: *mut LuaState);
 
@@ -90,7 +84,16 @@ pub unsafe extern "C" fn rs_nlua_pop_luaref(
     arena: *mut Arena,
     err: *mut Error,
 ) -> LuaRef {
-    nlua_pop_LuaRef(lstate, arena, err)
+    // Delegate to from_lua real implementation (Phase 2).
+    // from_lua returns c_int (the actual C LuaRef type); nvim_api::LuaRef is i64
+    // but that is a pre-existing widening; the value fits.
+    #[allow(clippy::cast_lossless)]
+    let rv = crate::from_lua::rs_nlua_pop_LuaRef(
+        lstate,
+        arena.cast::<crate::from_lua::Arena>(),
+        err.cast::<crate::from_lua::Error>(),
+    ) as LuaRef;
+    rv
 }
 
 /// Pop a handle (Buffer/Window/Tabpage) from the Lua stack.
@@ -106,7 +109,12 @@ pub unsafe extern "C" fn rs_nlua_pop_handle(
     arena: *mut Arena,
     err: *mut Error,
 ) -> HandleT {
-    nlua_pop_handle(lstate, arena, err)
+    // Delegate to from_lua real implementation (Phase 2)
+    crate::from_lua::rs_nlua_pop_handle(
+        lstate,
+        arena.cast::<crate::from_lua::Arena>(),
+        err.cast::<crate::from_lua::Error>(),
+    )
 }
 
 /// Initialize Lua type tables.
@@ -180,7 +188,11 @@ pub unsafe extern "C" fn rs_nlua_pop_buffer(
     arena: *mut Arena,
     err: *mut Error,
 ) -> HandleT {
-    nlua_pop_handle(lstate, arena, err)
+    crate::from_lua::rs_nlua_pop_handle(
+        lstate,
+        arena.cast::<crate::from_lua::Arena>(),
+        err.cast::<crate::from_lua::Error>(),
+    )
 }
 
 /// Pop a Window handle from the Lua stack.
@@ -196,7 +208,11 @@ pub unsafe extern "C" fn rs_nlua_pop_window(
     arena: *mut Arena,
     err: *mut Error,
 ) -> HandleT {
-    nlua_pop_handle(lstate, arena, err)
+    crate::from_lua::rs_nlua_pop_handle(
+        lstate,
+        arena.cast::<crate::from_lua::Arena>(),
+        err.cast::<crate::from_lua::Error>(),
+    )
 }
 
 /// Pop a Tabpage handle from the Lua stack.
@@ -212,7 +228,11 @@ pub unsafe extern "C" fn rs_nlua_pop_tabpage(
     arena: *mut Arena,
     err: *mut Error,
 ) -> HandleT {
-    nlua_pop_handle(lstate, arena, err)
+    crate::from_lua::rs_nlua_pop_handle(
+        lstate,
+        arena.cast::<crate::from_lua::Arena>(),
+        err.cast::<crate::from_lua::Error>(),
+    )
 }
 
 #[cfg(test)]

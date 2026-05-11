@@ -664,70 +664,6 @@ String nlua_pop_String(lua_State *lstate, Arena *arena, Error *err)
   return ret;
 }
 
-/// Convert Lua value to integer
-///
-/// Always pops one value from the stack.
-Integer nlua_pop_Integer(lua_State *lstate, Arena *arena, Error *err)
-  FUNC_ATTR_NONNULL_ARG(1, 3) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (lua_type(lstate, -1) != LUA_TNUMBER) {
-    lua_pop(lstate, 1);
-    api_set_error(err, kErrorTypeValidation, "Expected Lua number");
-    return 0;
-  }
-  const lua_Number n = lua_tonumber(lstate, -1);
-  lua_pop(lstate, 1);
-  if (n > (lua_Number)API_INTEGER_MAX || n < (lua_Number)API_INTEGER_MIN
-      || ((lua_Number)((Integer)n)) != n) {
-    api_set_error(err, kErrorTypeException, "Number is not integral");
-    return 0;
-  }
-  return (Integer)n;
-}
-
-/// Convert Lua value to boolean
-///
-/// Despite the name of the function, this uses Lua semantics for booleans.
-/// thus `err` is never set as any Lua value can be co-erced into a Lua bool
-///
-/// Always pops one value from the stack.
-Boolean nlua_pop_Boolean(lua_State *lstate, Arena *arena, Error *err)
-  FUNC_ATTR_NONNULL_ARG(1, 3) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  const Boolean ret = lua_toboolean(lstate, -1);
-  lua_pop(lstate, 1);
-  return ret;
-}
-
-/// Convert Lua value to boolean
-///
-/// This follows API conventions for a Boolean value, compare api_object_to_bool
-///
-/// Always pops one value from the stack.
-Boolean nlua_pop_Boolean_strict(lua_State *lstate, Error *err)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  Boolean ret = false;
-  switch (lua_type(lstate, -1)) {
-  case LUA_TBOOLEAN:
-    ret = lua_toboolean(lstate, -1);
-    break;
-
-  case LUA_TNUMBER:
-    ret = (lua_tonumber(lstate, -1) != 0);
-    break;
-
-  case LUA_TNIL:
-    ret = false;
-    break;
-
-  default:
-    api_set_error(err, kErrorTypeValidation, "not a boolean");
-  }
-
-  lua_pop(lstate, 1);
-  return ret;
-}
 
 /// Check whether typed table on top of the stack has given type
 ///
@@ -1072,26 +1008,6 @@ type_error:
   return ret;
 }
 
-LuaRef nlua_pop_LuaRef(lua_State *const lstate, Arena *arena, Error *err)
-{
-  LuaRef rv = nlua_ref_global(lstate, -1);
-  lua_pop(lstate, 1);
-  return rv;
-}
-
-handle_T nlua_pop_handle(lua_State *lstate, Arena *arena, Error *err)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  handle_T ret;
-  if (lua_type(lstate, -1) != LUA_TNUMBER) {
-    api_set_error(err, kErrorTypeValidation, "Expected Lua number");
-    ret = (handle_T)(-1);
-  } else {
-    ret = (handle_T)lua_tonumber(lstate, -1);
-  }
-  lua_pop(lstate, 1);
-  return ret;
-}
 
 /// Record some auxiliary values in vim module
 ///

@@ -1,17 +1,33 @@
-//! Lua to Typval conversion helpers
+//! Lua to Neovim API value conversion helpers
 //!
-//! This module provides FFI helpers for converting Lua values to Neovim API values.
-//! These functions wrap the C `nlua_pop_*` functions from converter.c.
+//! This module provides real Rust implementations of nlua_pop_* functions,
+//! replacing C bodies from converter.c. Phase 2: scalar poppers.
 
-use std::ffi::c_int;
+#![allow(non_snake_case)]
+
+use std::ffi::{c_char, c_int};
 
 use crate::state::LuaState;
+use crate::types::{LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER};
 use nvim_api::{Array, Dict, NvimString, Object};
 
 /// Float type (f64)
 pub type Float = f64;
 /// Integer type (i64)
 pub type Integer = i64;
+/// Boolean type
+pub type Boolean = bool;
+
+/// LuaRef is typedef int in C
+type LuaRef = c_int;
+
+// API_INTEGER_MIN corresponds to INT64_MIN; MAX not needed (literal used instead)
+const API_INTEGER_MIN: Integer = i64::MIN;
+
+// kErrorTypeValidation = 1
+const K_ERROR_VALIDATION: c_int = 1;
+// kErrorTypeException = 0
+const K_ERROR_EXCEPTION: c_int = 0;
 
 // =============================================================================
 // Error type (matches Neovim's Error struct)
@@ -30,7 +46,7 @@ pub enum ErrorType {
 #[repr(C)]
 pub struct Error {
     pub r#type: ErrorType,
-    pub msg: *mut std::ffi::c_char,
+    pub msg: *mut c_char,
 }
 
 impl Error {
@@ -47,19 +63,29 @@ pub struct Arena {
     _private: [u8; 0],
 }
 
-/// Boolean type
-pub type Boolean = bool;
-
 // =============================================================================
-// C FFI declarations for nlua_pop_* functions
+// C FFI declarations
 // =============================================================================
 
 extern "C" {
-    fn nlua_pop_Integer(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Integer;
-    fn nlua_pop_Float(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Float;
-    fn nlua_pop_Boolean(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Boolean;
-    fn nlua_pop_Boolean_strict(lstate: *mut LuaState, err: *mut Error) -> Boolean;
+    // Lua C API functions for reading values
+    fn lua_tonumber(lstate: *mut LuaState, idx: c_int) -> f64;
+    fn lua_toboolean(lstate: *mut LuaState, idx: c_int) -> c_int;
+    fn lua_tolstring(lstate: *mut LuaState, idx: c_int, len: *mut usize) -> *const c_char;
+    fn lua_type(lstate: *mut LuaState, idx: c_int) -> c_int;
+    fn lua_settop(lstate: *mut LuaState, idx: c_int);
+    fn lua_gettop(lstate: *mut LuaState) -> c_int;
+
+    // API error function (variadic; only used with literal format strings below)
+    fn api_set_error(err: *mut Error, err_type: c_int, fmt: *const c_char, ...);
+
+    // arena_memdupz for pop_String (Phase 3; unused until then)
+    #[allow(dead_code)]
+    fn arena_memdupz(arena: *mut Arena, data: *const c_char, len: usize) -> *mut c_char;
+
+    // Still-C pop functions (Phases 3, 6, 7 will replace these)
     fn nlua_pop_String(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> NvimString;
+    fn nlua_pop_Float(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Float;
     fn nlua_pop_Array(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Array;
     fn nlua_pop_Dict(
         lstate: *mut LuaState,
@@ -74,15 +100,6 @@ extern "C" {
         err: *mut Error,
     ) -> Object;
     fn nlua_pop_typval(lstate: *mut LuaState, ret_tv: *mut std::ffi::c_void) -> bool;
-
-    // Lua C API functions for reading values
-    fn lua_tonumber(lstate: *mut LuaState, idx: c_int) -> f64;
-    fn lua_toboolean(lstate: *mut LuaState, idx: c_int) -> c_int;
-    fn lua_tolstring(lstate: *mut LuaState, idx: c_int, len: *mut usize)
-        -> *const std::ffi::c_char;
-    fn lua_type(lstate: *mut LuaState, idx: c_int) -> c_int;
-    fn lua_settop(lstate: *mut LuaState, idx: c_int);
-    fn lua_gettop(lstate: *mut LuaState) -> c_int;
 }
 
 // lua_pop is a macro: #define lua_pop(L,n) lua_settop(L, -(n)-1)
@@ -92,90 +109,121 @@ unsafe fn lua_pop(lstate: *mut LuaState, n: c_int) {
 }
 
 // =============================================================================
-// Rust FFI exports
+// Phase 2: Trivial scalar poppers (real implementations)
 // =============================================================================
 
-/// Pop an Integer from the Lua stack.
+/// Convert a Lua number to Integer.
 ///
-/// Validates that the value is a Lua number and converts to Integer.
+/// Validates the top-of-stack value is a number and fits in Integer range.
 /// Always pops one value from the stack.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_integer(
+#[unsafe(export_name = "nlua_pop_Integer")]
+pub unsafe extern "C" fn rs_nlua_pop_Integer(
     lstate: *mut LuaState,
-    arena: *mut Arena,
+    _arena: *mut Arena,
     err: *mut Error,
 ) -> Integer {
-    nlua_pop_Integer(lstate, arena, err)
+    if lua_type(lstate, -1) != LUA_TNUMBER {
+        lua_pop(lstate, 1);
+        api_set_error(err, K_ERROR_VALIDATION, c"Expected Lua number".as_ptr());
+        return 0;
+    }
+    let n = lua_tonumber(lstate, -1);
+    lua_pop(lstate, 1);
+    // i64::MAX as f64 rounds up, so compare with next-lower exact power of two
+    #[allow(clippy::cast_precision_loss)]
+    let in_range = n >= (API_INTEGER_MIN as f64) && n < 9_223_372_036_854_775_808.0_f64;
+    let is_integral = n.fract() == 0.0;
+    if !in_range || !is_integral {
+        api_set_error(err, K_ERROR_EXCEPTION, c"Number is not integral".as_ptr());
+        return 0;
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        n as Integer
+    }
 }
 
-/// Pop a Float from the Lua stack.
+/// Convert a Lua value to Boolean using Lua semantics.
 ///
-/// Accepts Lua numbers or typed float tables.
+/// Any value can be coerced to boolean (nil and false are falsy).
 /// Always pops one value from the stack.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_float(
+#[unsafe(export_name = "nlua_pop_Boolean")]
+pub unsafe extern "C" fn rs_nlua_pop_Boolean(
     lstate: *mut LuaState,
-    arena: *mut Arena,
-    err: *mut Error,
-) -> Float {
-    nlua_pop_Float(lstate, arena, err)
-}
-
-/// Pop a Boolean from the Lua stack.
-///
-/// Uses Lua semantics for booleans (any value can be coerced).
-/// Always pops one value from the stack.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_boolean(
-    lstate: *mut LuaState,
-    arena: *mut Arena,
-    err: *mut Error,
+    _arena: *mut Arena,
+    _err: *mut Error,
 ) -> Boolean {
-    nlua_pop_Boolean(lstate, arena, err)
+    let ret = lua_toboolean(lstate, -1) != 0;
+    lua_pop(lstate, 1);
+    ret
 }
 
-/// Pop a Boolean from the Lua stack with strict validation.
+/// Convert a Lua value to Boolean with strict API validation.
 ///
-/// Follows API conventions - only accepts boolean, number, or nil.
+/// Follows API conventions: only boolean, number, or nil are accepted.
 /// Always pops one value from the stack.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_boolean_strict(
+#[unsafe(export_name = "nlua_pop_Boolean_strict")]
+pub unsafe extern "C" fn rs_nlua_pop_Boolean_strict(
     lstate: *mut LuaState,
     err: *mut Error,
 ) -> Boolean {
-    nlua_pop_Boolean_strict(lstate, err)
+    let ret = match lua_type(lstate, -1) {
+        t if t == LUA_TBOOLEAN => lua_toboolean(lstate, -1) != 0,
+        t if t == LUA_TNUMBER => lua_tonumber(lstate, -1) != 0.0,
+        t if t == LUA_TNIL => false,
+        _ => {
+            api_set_error(err, K_ERROR_VALIDATION, c"not a boolean".as_ptr());
+            false
+        }
+    };
+    lua_pop(lstate, 1);
+    ret
 }
 
-/// Pop a String from the Lua stack.
+/// Pop a LuaRef from the Lua stack.
 ///
-/// Validates that the value is a Lua string.
+/// Creates a global reference to the top-of-stack value and pops it.
+#[unsafe(export_name = "nlua_pop_LuaRef")]
+pub unsafe extern "C" fn rs_nlua_pop_LuaRef(
+    lstate: *mut LuaState,
+    _arena: *mut Arena,
+    _err: *mut Error,
+) -> LuaRef {
+    let rv = crate::refs::rs_nlua_ref_global(lstate, -1);
+    lua_pop(lstate, 1);
+    rv
+}
+
+/// Pop a handle (Buffer/Window/Tabpage integer) from the Lua stack.
+///
+/// Validates the top-of-stack value is a Lua number.
 /// Always pops one value from the stack.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-/// - `arena` can be NULL for heap allocation or a valid Arena pointer.
+#[unsafe(export_name = "nlua_pop_handle")]
+pub unsafe extern "C" fn rs_nlua_pop_handle(
+    lstate: *mut LuaState,
+    _arena: *mut Arena,
+    err: *mut Error,
+) -> c_int {
+    let ret = if lua_type(lstate, -1) == LUA_TNUMBER {
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            lua_tonumber(lstate, -1) as c_int
+        }
+    } else {
+        api_set_error(err, K_ERROR_VALIDATION, c"Expected Lua number".as_ptr());
+        -1
+    };
+    lua_pop(lstate, 1);
+    ret
+}
+
+// =============================================================================
+// Still-forwarding stubs for Phases 3, 6, 7 (pop_String, pop_Float,
+// pop_Array, pop_Dict, pop_Object, pop_typval). These will be replaced
+// with real implementations in later phases.
+// =============================================================================
+
+/// Pop a String from the Lua stack. (Phase 3 will replace with real impl)
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_pop_string(
     lstate: *mut LuaState,
@@ -185,16 +233,17 @@ pub unsafe extern "C" fn rs_nlua_pop_string(
     nlua_pop_String(lstate, arena, err)
 }
 
-/// Pop an Array from the Lua stack.
-///
-/// Validates that the value is an array-like Lua table.
-/// Always pops one value from the stack.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-/// - `arena` can be NULL for heap allocation or a valid Arena pointer.
+/// Pop a Float from the Lua stack. (Phase 6 will replace with real impl)
+#[no_mangle]
+pub unsafe extern "C" fn rs_nlua_pop_float(
+    lstate: *mut LuaState,
+    arena: *mut Arena,
+    err: *mut Error,
+) -> Float {
+    nlua_pop_Float(lstate, arena, err)
+}
+
+/// Pop an Array from the Lua stack. (Phase 6 will replace with real impl)
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_pop_array(
     lstate: *mut LuaState,
@@ -204,19 +253,7 @@ pub unsafe extern "C" fn rs_nlua_pop_array(
     nlua_pop_Array(lstate, arena, err)
 }
 
-/// Pop a Dict from the Lua stack.
-///
-/// Validates that the value is a dict-like Lua table.
-/// Always pops one value from the stack.
-///
-/// # Arguments
-/// * `ref_` - If true, preserve LuaRefs in the dict; if false, convert them.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-/// - `arena` can be NULL for heap allocation or a valid Arena pointer.
+/// Pop a Dict from the Lua stack. (Phase 6 will replace with real impl)
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_pop_dict(
     lstate: *mut LuaState,
@@ -227,19 +264,7 @@ pub unsafe extern "C" fn rs_nlua_pop_dict(
     nlua_pop_Dict(lstate, ref_, arena, err)
 }
 
-/// Pop an Object from the Lua stack.
-///
-/// Converts any Lua value to the appropriate Object type.
-/// Always pops one value from the stack.
-///
-/// # Arguments
-/// * `ref_` - If true, preserve LuaRefs; if false, convert functions to nil.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `err` must be a valid Error pointer.
-/// - `arena` can be NULL for heap allocation or a valid Arena pointer.
+/// Pop an Object from the Lua stack. (Phase 7 will replace with real impl)
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_pop_object(
     lstate: *mut LuaState,
@@ -250,15 +275,7 @@ pub unsafe extern "C" fn rs_nlua_pop_object(
     nlua_pop_Object(lstate, ref_, arena, err)
 }
 
-/// Pop a typval from the Lua stack.
-///
-/// Converts a Lua value to a Vimscript typval_T.
-/// Always pops one value from the stack.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `ret_tv` must be a valid typval_T pointer.
+/// Pop a typval from the Lua stack. (Phase 10 will replace with real impl)
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_pop_typval(
     lstate: *mut LuaState,
@@ -268,76 +285,44 @@ pub unsafe extern "C" fn rs_nlua_pop_typval(
 }
 
 // =============================================================================
-// Direct Lua stack reading operations
+// Direct Lua stack reading operations (kept for Rust consumers)
 // =============================================================================
 
 /// Get a number from the Lua stack without popping.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `idx` must be a valid stack index.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_tonumber(lstate: *mut LuaState, idx: c_int) -> f64 {
     lua_tonumber(lstate, idx)
 }
 
 /// Get a boolean from the Lua stack without popping.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `idx` must be a valid stack index.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_toboolean(lstate: *mut LuaState, idx: c_int) -> bool {
     lua_toboolean(lstate, idx) != 0
 }
 
 /// Get a string from the Lua stack without popping.
-///
-/// Returns the string pointer and sets `len` to the string length.
-///
-/// # Safety
-///
-/// - `lstate` must be a valid Lua state pointer.
-/// - `idx` must be a valid stack index.
-/// - `len` can be NULL or a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_tolstring(
     lstate: *mut LuaState,
     idx: c_int,
     len: *mut usize,
-) -> *const std::ffi::c_char {
+) -> *const c_char {
     lua_tolstring(lstate, idx, len)
 }
 
 /// Get the type of a Lua value on the stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `idx` must be a valid stack index.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_type(lstate: *mut LuaState, idx: c_int) -> c_int {
     lua_type(lstate, idx)
 }
 
 /// Pop values from the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `n` must not exceed the stack size.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_pop(lstate: *mut LuaState, n: c_int) {
     lua_pop(lstate, n);
 }
 
 /// Get the top of the Lua stack (number of elements).
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_gettop(lstate: *mut LuaState) -> c_int {
     lua_gettop(lstate)
@@ -348,10 +333,6 @@ pub unsafe extern "C" fn rs_lua_gettop(lstate: *mut LuaState) -> c_int {
 // =============================================================================
 
 /// Get the type of a Lua value on the stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
 #[inline]
 #[must_use]
 pub unsafe fn get_type(lstate: *mut LuaState, idx: c_int) -> crate::types::LuaType {
@@ -359,10 +340,6 @@ pub unsafe fn get_type(lstate: *mut LuaState, idx: c_int) -> crate::types::LuaTy
 }
 
 /// Get the stack height.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
 #[inline]
 #[must_use]
 pub unsafe fn stack_height(lstate: *mut LuaState) -> c_int {
@@ -370,10 +347,6 @@ pub unsafe fn stack_height(lstate: *mut LuaState) -> c_int {
 }
 
 /// Pop n values from the stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
 #[inline]
 pub unsafe fn pop(lstate: *mut LuaState, n: c_int) {
     lua_pop(lstate, n);
@@ -407,7 +380,11 @@ mod tests {
 
     #[test]
     fn test_arena_is_opaque() {
-        // Arena should be zero-sized (opaque handle)
         assert_eq!(std::mem::size_of::<Arena>(), 0);
+    }
+
+    #[test]
+    fn test_integer_bounds() {
+        assert_eq!(API_INTEGER_MIN, i64::MIN);
     }
 }
