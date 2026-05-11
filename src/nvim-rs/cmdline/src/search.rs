@@ -1144,13 +1144,16 @@ unsafe extern "C" {
     fn nvim_get_no_hlsearch() -> c_int;
     fn nvim_get_p_hls() -> c_int;
     fn nvim_curbuf_get_ml_line_count() -> c_int;
+    // search match accessors (for nvim_set_search_match inline replacement)
+    fn nvim_get_search_match_lines() -> c_int;
+    fn nvim_get_search_match_endcol() -> c_int;
+    fn coladvance(wp: *mut c_void, wcol: c_int) -> c_int;
     // nvim_get_curwin declared at top of file with WinHandle return type
     fn nvim_get_curbuf() -> *mut c_void;
     fn nvim_win_get_status_height(wp: *mut ()) -> c_int;
     fn nvim_win_set_redr_status(wp: *mut c_void, val: c_int);
     fn nvim_win_set_valid_cursor(wp: *mut c_void, lnum: i32, col: c_int, coladd: c_int);
     fn redraw_later(wp: *mut c_void, redraw_type: c_int);
-    fn nvim_set_search_match(t: *mut PosT);
     fn rs_global_stl_height() -> c_int;
     fn msg_starthere();
     fn changed_cline_bef_curs(wp: *mut c_void);
@@ -1331,8 +1334,17 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
     get_cursor_pos(&raw mut end_pos);
     if found != 0 {
         get_cursor_pos(&raw mut (*s).match_start);
-        nvim_set_search_match(&raw mut (*s).match_start);
-        // Actually: set_search_match moves cursor to end, then call validate_cursor
+        // Inlined nvim_set_search_match(&mut match_start):
+        {
+            let t = &raw mut (*s).match_start;
+            (*t).lnum += nvim_get_search_match_lines();
+            (*t).col = nvim_get_search_match_endcol();
+            let ml_count = nvim_curbuf_get_ml_line_count();
+            if (*t).lnum > ml_count {
+                (*t).lnum = ml_count;
+                coladvance(curwin, MAXCOL);
+            }
+        }
         // Re-fetch cursor as match_end
         validate_cursor(curwin);
         get_cursor_pos(&raw mut (*s).match_end);
@@ -1509,7 +1521,17 @@ pub unsafe extern "C" fn rs_may_do_command_line_next_incsearch(
             }
         }
 
-        nvim_set_search_match(&raw mut (*s).match_end);
+        // Inlined nvim_set_search_match(&mut match_end):
+        {
+            let t = &raw mut (*s).match_end;
+            (*t).lnum += nvim_get_search_match_lines();
+            (*t).col = nvim_get_search_match_endcol();
+            let ml_count = nvim_curbuf_get_ml_line_count();
+            if (*t).lnum > ml_count {
+                (*t).lnum = ml_count;
+                coladvance(curwin, MAXCOL);
+            }
+        }
         set_cursor_pos(std::ptr::addr_of!((*s).match_start));
         changed_cline_bef_curs(curwin);
         update_topline(curwin);

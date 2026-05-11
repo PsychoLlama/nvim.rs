@@ -577,7 +577,8 @@ unsafe extern "C" {
     fn nvim_add_tab_map_normal();
 
     // History
-    fn nvim_init_history_and_get_hislen() -> c_int;
+    fn init_history();
+    fn nvim_get_hislen() -> c_int;
     fn nvim_get_hisidx(histtype: c_int) -> c_int;
     fn nvim_get_histentry_str(histtype: c_int, i: c_int) -> *const c_char;
 
@@ -803,7 +804,8 @@ pub unsafe extern "C" fn rs_nvim_open_cmdwin() -> c_int {
     nvim_curbuf_set_b_p_tw(0);
 
     // Fill the buffer with history.
-    let hislen = nvim_init_history_and_get_hislen();
+    init_history();
+    let hislen = nvim_get_hislen();
     if hislen > 0 && histtype != HIST_INVALID {
         let hisidx = nvim_get_hisidx(histtype);
         if hisidx >= 0 {

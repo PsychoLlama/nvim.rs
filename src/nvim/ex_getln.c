@@ -326,20 +326,7 @@ char *getcmdline_prompt(const int firstc, const char *const prompt, const int hl
 // getexline: implemented in Rust (cmdline crate, entry_impl.rs).
 // alloc_cmdbuff, dealloc_cmdbuff, realloc_cmdbuff: implemented in Rust (cmdline crate, cmdbuff.rs).
 
-/// Adjust ccline.xpc->xp_pattern after buffer reallocation.
-/// Called from Rust realloc_cmdbuff after the new buffer is installed.
-void nvim_realloc_cmdbuff_xp_fixup(const char *old_buff)
-{
-  if (ccline.xpc != NULL
-      && ccline.xpc->xp_pattern != NULL
-      && ccline.xpc->xp_context != EXPAND_NOTHING
-      && ccline.xpc->xp_context != EXPAND_UNSUCCESSFUL) {
-    int i = (int)(ccline.xpc->xp_pattern - old_buff);
-    if (i >= 0 && i <= ccline.cmdlen) {
-      ccline.xpc->xp_pattern = ccline.cmdbuff + i;
-    }
-  }
-}
+// nvim_realloc_cmdbuff_xp_fixup: migrated to Rust (cmdbuff.rs).
 
 /// Color the command-line (ccline).
 ///
@@ -782,18 +769,7 @@ void nvim_set_skip_redraw2(int val) { skip_redraw = (val != 0); }
 int nvim_get_key_typed_cmdline(void) { return KeyTyped ? 1 : 0; }
 int nvim_get_p_ru(void) { return p_ru; }
 
-/// Move cursor to end of search match (called from Rust).
-void nvim_set_search_match(pos_T *t)
-{
-  // First move cursor to end of match, then to the start.  This
-  // moves the whole match onto the screen when 'nowrap' is set.
-  t->lnum += search_match_lines;
-  t->col = search_match_endcol;
-  if (t->lnum > curbuf->b_ml.ml_line_count) {
-    t->lnum = curbuf->b_ml.ml_line_count;
-    coladvance(curwin, MAXCOL);
-  }
-}
+// nvim_set_search_match: migrated to Rust (search.rs).
 
 int nvim_get_new_cmdpos(void) { return new_cmdpos; }
 void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
@@ -842,23 +818,9 @@ const char *nvim_get_p_cedit(void) { return p_cedit; }
 /// Get cmdline_was_last_drawn global.
 int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 0; }
 
-/// Wrapper for wildmenu_translate_key (called from Rust).
-int nvim_wildmenu_translate_key(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  return wildmenu_translate_key(&ccline, cs->c, &cs->xpc, cs->did_wild_list);
-}
-
-/// Wrapper for wildmenu_process_key (called from Rust).
-int nvim_wildmenu_process_key(void *s)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  return wildmenu_process_key(&ccline, cs->c, &cs->xpc);
-}
-
-
-/// Call do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT) for Rust.
-void nvim_cmdline_do_cmdline_nowait(void) { do_cmdline(NULL, getcmdkeycmd, NULL, DOCMD_NOWAIT); }
+// nvim_wildmenu_translate_key: migrated to Rust (state.rs).
+// nvim_wildmenu_process_key: migrated to Rust (state.rs).
+// nvim_cmdline_do_cmdline_nowait: migrated to Rust (state.rs).
 
 // =============================================================================
 // Helpers for Rust implementations of cmdline_screen_cleared / cmdline_ui_flush
@@ -1180,12 +1142,7 @@ int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
 /// Wrapper for gotocmdline(true).
 void nvim_gotocmdline(void) { gotocmdline(true); }
 
-/// Initialize history and return hislen.
-int nvim_init_history_and_get_hislen(void)
-{
-  init_history();
-  return get_hislen();
-}
+// nvim_init_history_and_get_hislen: migrated to Rust (entry_impl.rs, cmdwin.rs).
 
 /// Get exmode_active global.
 int nvim_get_exmode_active(void) { return exmode_active ? 1 : 0; }
@@ -1262,8 +1219,7 @@ int nvim_cmdline_fire_enter_full(const char *firstcbuf, int level)
   return 0;
 }
 
-/// Wrapper to emit e_command_too_recursive error.
-void nvim_emsg_command_too_recursive(void) { emsg(_(e_command_too_recursive)); }
+// nvim_emsg_command_too_recursive: migrated to Rust (entry_impl.rs).
 
 // =============================================================================
 // Phase 3 thin C wrappers (for Rust leave_cleanup / final_teardown)
@@ -1278,6 +1234,9 @@ void nvim_ccline_clear_xpc_and_orig(void) { ccline.xpc = NULL; clear_cmdline_ori
 /// Set ccline.xpc to NULL.
 void nvim_ccline_xpc_clear(void) { ccline.xpc = NULL; }
 
+/// Get ccline.xpc as opaque pointer (for xp_pattern fixup after realloc).
+void *nvim_get_ccline_xpc_ptr(void) { return (void *)ccline.xpc; }
+
 /// Add current ccline.cmdbuff to history. histype, sep_char from Rust.
 void nvim_add_to_history_ccline(int histype, int sep_char)
 {
@@ -1291,19 +1250,9 @@ void nvim_save_last_cmdline(void)
   new_last_cmdline = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
 }
 
-/// Compute and update cmdrow if msg_scrolled is 0.
-void nvim_compute_cmdrow_if_not_scrolled(void) { if (msg_scrolled == 0) { compute_cmdrow(); } }
-
-/// Set msg("", 0) and redraw_cmdline=true (for gotesc case).
-void nvim_cmdline_gotesc_msg(void) { msg("", 0); redraw_cmdline = true; }
-
-/// Check if p_ch==0 and kUIMessages not active, and set must redraw VALID.
-void nvim_cmdline_check_must_redraw(void)
-{
-  if (p_ch == 0 && !ui_has(kUIMessages)) {
-    set_must_redraw(UPD_VALID);
-  }
-}
+// nvim_compute_cmdrow_if_not_scrolled: migrated to Rust (entry_impl.rs).
+// nvim_cmdline_gotesc_msg: migrated to Rust (entry_impl.rs).
+// nvim_cmdline_check_must_redraw: migrated to Rust (entry_impl.rs).
 
 /// Get ccline.cmdbuff (non-NULL means we have a line).
 int nvim_ccline_has_cmdbuff(void) { return ccline.cmdbuff != NULL ? 1 : 0; }
@@ -1314,8 +1263,7 @@ int nvim_ccline_get_one_key(void) { return ccline.one_key ? 1 : 0; }
 /// Get msg_scrolled global.
 int nvim_get_msg_scrolled(void) { return msg_scrolled; }
 
-/// Set need_wait_return=false.
-void nvim_clear_need_wait_return_wrap(void) { need_wait_return = false; }
+// nvim_clear_need_wait_return_wrap: migrated to Rust (entry_impl.rs).
 
 /// Free ccline.last_colors.cmdbuff and kv_destroy ccline.last_colors.colors.
 void nvim_ccline_free_last_colors(void)

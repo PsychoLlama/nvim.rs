@@ -12,6 +12,10 @@ use std::ptr;
 // C extern declarations
 // =============================================================================
 
+// EXPAND_NOTHING and EXPAND_UNSUCCESSFUL constants (from cmdexpand_defs.h)
+const EXPAND_NOTHING: c_int = 0;
+const EXPAND_UNSUCCESSFUL: c_int = -1;
+
 unsafe extern "C" {
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
@@ -23,9 +27,8 @@ unsafe extern "C" {
     fn nvim_set_ccline_cmdbufflen(len: c_int);
     fn nvim_set_ccline_cmdlen(len: c_int);
 
-    /// Adjust ccline.xpc->xp_pattern after reallocation.
-    /// old_buff is the previous value of ccline.cmdbuff before it was freed.
-    fn nvim_realloc_cmdbuff_xp_fixup(old_buff: *const c_char);
+    /// Get ccline.xpc as opaque pointer (for xp_pattern fixup after realloc).
+    fn nvim_get_ccline_xpc_ptr() -> *mut c_char;
 }
 
 // =============================================================================
@@ -107,7 +110,35 @@ pub unsafe extern "C" fn realloc_cmdbuff(len: c_int) -> c_int {
     }
 
     // Fix up xpc->xp_pattern if it pointed into the old buffer.
-    nvim_realloc_cmdbuff_xp_fixup(old_p);
+    // Inlined nvim_realloc_cmdbuff_xp_fixup:
+    // xpc points to an expand_T; xp_pattern is at offset 0, xp_context at offset 8.
+    // We read/write field bytes directly via a byte-sized accessor to avoid the
+    // C accessor round-trip.
+    {
+        let xpc = nvim_get_ccline_xpc_ptr();
+        if !xpc.is_null() {
+            // Read xp_pattern (pointer, offset 0) and xp_context (int, offset 8)
+            // using unaligned reads from the raw byte pointer.
+            #[allow(clippy::cast_ptr_alignment)]
+            let xp_pattern_ptr = xpc.cast::<*mut c_char>();
+            #[allow(clippy::cast_ptr_alignment)]
+            let xp_context_ptr = xpc.add(8).cast::<c_int>();
+            let xp_pattern = ptr::read_unaligned(xp_pattern_ptr);
+            let xp_context = ptr::read_unaligned(xp_context_ptr);
+            if !xp_pattern.is_null()
+                && xp_context != EXPAND_NOTHING
+                && xp_context != EXPAND_UNSUCCESSFUL
+            {
+                let old_p_char = old_p.cast::<c_char>();
+                let new_p = nvim_get_ccline_cmdbuff();
+                let cmdlen = nvim_get_ccline_cmdlen();
+                let i = xp_pattern.offset_from(old_p_char);
+                if i >= 0 && i <= cmdlen as isize {
+                    ptr::write_unaligned(xp_pattern_ptr, new_p.add(i as usize));
+                }
+            }
+        }
+    }
 
     // Free old buffer.
     if !old_p.is_null() {

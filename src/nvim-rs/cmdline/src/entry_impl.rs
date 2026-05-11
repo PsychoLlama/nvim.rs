@@ -62,7 +62,7 @@ unsafe extern "C" {
     fn nvim_clear_did_emsg();
     fn nvim_clear_got_int();
     fn nvim_get_did_emsg_for_redraw() -> c_int;
-    fn nvim_clear_need_wait_return_wrap();
+    static mut need_wait_return: bool;
 
     // p_icm
     fn nvim_get_p_icm_dup() -> *mut c_char;
@@ -91,7 +91,8 @@ unsafe extern "C" {
     fn set_vim_var_char(c: c_int);
 
     // History
-    fn nvim_init_history_and_get_hislen() -> c_int;
+    fn init_history();
+    fn nvim_get_hislen() -> c_int;
     fn rs_entry_hist_char2type(firstc: c_int) -> c_int;
 
     // Digraph init (direct — do_digraph(-1))
@@ -103,8 +104,22 @@ unsafe extern "C" {
 
     // command_line_check / command_line_execute are Rust functions already exported
 
-    // emsg for recursion error
-    fn nvim_emsg_command_too_recursive();
+    // emsg for recursion error (inlined from nvim_emsg_command_too_recursive)
+    fn emsg(s: *const c_char) -> c_int;
+    fn gettext(s: *const c_char) -> *const c_char;
+    static e_command_too_recursive: [u8; 0];
+
+    // compute_cmdrow (inlined from nvim_compute_cmdrow_if_not_scrolled)
+    fn compute_cmdrow();
+    static mut msg_scrolled: c_int;
+
+    // msg / redraw_cmdline / p_ch / ui_has / set_must_redraw
+    // (inlined from nvim_cmdline_gotesc_msg and nvim_cmdline_check_must_redraw)
+    fn msg(s: *const c_char, attr: c_int) -> c_int;
+    static mut redraw_cmdline: bool;
+    static p_ch: i64;
+    fn ui_has(what: c_int) -> c_int;
+    fn set_must_redraw(upd_type: c_int);
 
     // curwin accessors for RTL
     fn nvim_get_curwin_p_rl() -> c_int;
@@ -122,9 +137,6 @@ unsafe extern "C" {
     fn nvim_ccline_clear_xpc_and_orig();
     fn nvim_add_to_history_ccline(histype: c_int, sep_char: c_int);
     fn nvim_save_last_cmdline();
-    fn nvim_compute_cmdrow_if_not_scrolled();
-    fn nvim_cmdline_gotesc_msg();
-    fn nvim_cmdline_check_must_redraw();
     fn nvim_ccline_has_cmdbuff() -> c_int;
     fn nvim_ccline_get_one_key() -> c_int;
     fn nvim_ccline_free_last_colors();
@@ -254,7 +266,7 @@ pub unsafe extern "C" fn rs_command_line_enter(
 
     // Check recursion limit
     if level == 50 {
-        nvim_emsg_command_too_recursive();
+        emsg(gettext(e_command_too_recursive.as_ptr().cast()));
         return do_theend(
             std::ptr::addr_of_mut!(state),
             did_save_ccline,
@@ -312,7 +324,8 @@ pub unsafe extern "C" fn rs_command_line_enter(
     may_trigger_modechanged();
 
     // Initialize history
-    state.hiscnt = nvim_init_history_and_get_hislen();
+    init_history();
+    state.hiscnt = nvim_get_hislen();
     state.histype = rs_entry_hist_char2type(state.firstc);
 
     // Init digraph typeahead
@@ -438,15 +451,22 @@ unsafe fn leave_cleanup(state: *mut CommandLineState) -> *mut u8 {
 
         if cs.gotesc {
             dealloc_cmdbuff();
-            nvim_compute_cmdrow_if_not_scrolled();
+            if msg_scrolled == 0 {
+                compute_cmdrow();
+            }
             if nvim_ccline_get_one_key() == 0 {
-                nvim_cmdline_gotesc_msg();
+                msg(c"".as_ptr(), 0);
+                redraw_cmdline = true;
             }
         }
     }
 
     msg_check();
-    nvim_cmdline_check_must_redraw();
+    // nvim_cmdline_check_must_redraw inlined:
+    // kUIMessages = 4, UPD_VALID = 10
+    if p_ch == 0 && ui_has(4) == 0 {
+        set_must_redraw(10); // UPD_VALID
+    }
 
     nvim_get_ccline_cmdbuff().cast::<u8>()
 }
@@ -470,7 +490,7 @@ unsafe fn final_teardown(
     nvim_set_redir_off(0);
 
     if cs.some_key_typed {
-        nvim_clear_need_wait_return_wrap();
+        need_wait_return = false;
     }
 
     // Restore p_icm option (restore before free)

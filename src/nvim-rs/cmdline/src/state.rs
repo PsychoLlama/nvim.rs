@@ -1024,9 +1024,14 @@ unsafe extern "C" {
     // curwin handle for incsearch state reset
     fn nvim_get_curwin_handle() -> c_int;
 
-    // Wrappers for wildmenu functions
-    fn nvim_wildmenu_translate_key(s: *mut c_void) -> c_int;
-    fn nvim_wildmenu_process_key(s: *mut c_void) -> c_int;
+    // Direct wildmenu functions (from cmdexpand crate)
+    fn wildmenu_translate_key(
+        cclp: *mut c_void,
+        key: c_int,
+        xp: *mut c_void,
+        did_wild_list: bool,
+    ) -> c_int;
+    fn wildmenu_process_key(cclp: *mut c_void, key: c_int, xp: *mut c_void) -> c_int;
     // nvim_command_line_end_wildmenu defined in Rust below
 
     // nvim_command_line_not_changed and nvim_command_line_changed are defined in Rust below
@@ -1078,7 +1083,13 @@ unsafe extern "C" {
     fn state_handle_k_event();
     #[link_name = "map_execute_lua"]
     fn map_execute_lua_direct(may_repeat: bool, discard: bool) -> bool;
-    fn nvim_cmdline_do_cmdline_nowait();
+    fn do_cmdline(
+        cmdp: *const c_char,
+        getline: Option<unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char>,
+        cookie: *mut c_void,
+        flags: c_int,
+    ) -> c_int;
+    fn getcmdkeycmd(c: c_int, cookie: *mut c_void, indent: c_int, do_concat: bool) -> *mut c_char;
     fn msg_cursor_goto(row: c_int, col: c_int);
     fn ui_flush();
     fn ui_has(what: c_int) -> c_int;
@@ -1292,7 +1303,13 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         if c == K_EVENT {
             state_handle_k_event();
         } else if c == K_COMMAND {
-            nvim_cmdline_do_cmdline_nowait();
+            const DOCMD_NOWAIT: c_int = 0x02;
+            do_cmdline(
+                std::ptr::null(),
+                Some(getcmdkeycmd),
+                std::ptr::null_mut(),
+                DOCMD_NOWAIT,
+            );
         } else {
             map_execute_lua_direct(false, false);
         }
@@ -1398,7 +1415,8 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     }
 
     if p_wmnu != 0 {
-        let c_new = nvim_wildmenu_translate_key(s.cast::<c_void>());
+        let xp = std::ptr::addr_of_mut!((*s).xpc).cast::<c_void>();
+        let c_new = wildmenu_translate_key(std::ptr::null_mut(), (*s).c, xp, (*s).did_wild_list);
         (*s).c = c_new;
     }
 
@@ -1460,7 +1478,8 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     }
 
     if p_wmnu != 0 {
-        let c_new = nvim_wildmenu_process_key(s.cast::<c_void>());
+        let xp = std::ptr::addr_of_mut!((*s).xpc).cast::<c_void>();
+        let c_new = wildmenu_process_key(std::ptr::null_mut(), (*s).c, xp);
         (*s).c = c_new;
     }
 
