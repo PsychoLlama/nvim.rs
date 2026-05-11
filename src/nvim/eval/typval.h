@@ -643,6 +643,7 @@ extern char *callback_to_string(Callback *cb, Arena *arena);
 extern void tv_free(typval_T *tv);
 extern void tv_copy(const typval_T *from, typval_T *to);
 extern bool tv_equal(typval_T *tv1, typval_T *tv2, bool ic);
+extern void tv_clear(typval_T *tv);
 
 // Sort/uniq/join/list2str VimL functions (migrated to Rust, Phase 6)
 extern void f_sort(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

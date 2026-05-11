@@ -1224,7 +1224,7 @@ extern "C" {
     fn nvim_list_free_list_impl(l: ListHandle);
     fn nvim_list_watch_fix(l: ListHandle, item: ListItemHandle);
     fn nvim_list_item_clear_free(li: ListItemHandle);
-    fn nvim_tv_clear(tv: TypevalHandle);
+    // nvim_tv_clear deleted (Phase 2): tv_clear migrated to Rust, call rs_tv_clear directly
     fn nvim_list_item_free(li: ListItemHandle);
     fn nvim_list_init_static_impl(l: ListHandle);
     fn nvim_list_copy_shallow(l: ListHandle) -> ListHandle;
@@ -1771,7 +1771,7 @@ pub unsafe extern "C" fn rs_tv_list_free_contents(l: ListHandle) {
         let next = unsafe { nvim_listitem_get_next(item) };
         unsafe { nvim_list_set_first(l, next) };
         let li_tv = unsafe { nvim_listitem_get_tv(item) };
-        unsafe { nvim_tv_clear(li_tv) };
+        unsafe { rs_tv_clear(li_tv) };
         unsafe { nvim_list_item_free(item) };
     }
     unsafe { nvim_list_set_len(l, 0) };
@@ -1866,7 +1866,7 @@ pub unsafe extern "C" fn rs_tv_list_remove_items(
     let mut li = item;
     loop {
         let li_tv = unsafe { nvim_listitem_get_tv(li) };
-        unsafe { nvim_tv_clear(li_tv) };
+        unsafe { rs_tv_clear(li_tv) };
         let nli = unsafe { nvim_listitem_get_next(li) };
         if std::ptr::eq(li.as_ptr(), item2.as_ptr()) {
             unsafe { nvim_list_item_free(li) };
@@ -2178,7 +2178,7 @@ pub unsafe extern "C" fn rs_tv_list_slice_or_index(
             n2 = -1;
         }
         let l = unsafe { tv_list_slice_impl(list, n1, n2) };
-        unsafe { nvim_tv_clear(rettv) };
+        unsafe { rs_tv_clear(rettv) };
         unsafe { nvim_tv_list_set_ret(rettv, l) };
     } else {
         // Copy item[n1]'s TV into rettv via C accessor (handles stack alloc and clear).
@@ -2244,7 +2244,7 @@ pub unsafe extern "C" fn rs_tv_list_flatten(
             }
 
             // Free the item (its tv was a list, extended above).
-            unsafe { nvim_tv_clear(item_tv) };
+            unsafe { rs_tv_clear(item_tv) };
             unsafe { nvim_xfree(item.as_ptr().cast_mut()) };
         }
 
@@ -2374,7 +2374,7 @@ pub unsafe extern "C" fn rs_tv_list_assign_range(
         if !op.is_null() && unsafe { *op != b'=' as c_char } {
             unsafe { eexe_mod_op(dest_tv, src_tv, op) };
         } else {
-            unsafe { nvim_tv_clear(dest_tv) };
+            unsafe { rs_tv_clear(dest_tv) };
             unsafe { nvim_tv_copy(src_tv, dest_tv) };
         }
         src_li = unsafe { nvim_listitem_get_next(src_li) };
@@ -5302,6 +5302,8 @@ extern "C" {
 
     // Partial accessors
     fn nvim_partial_inc_refcount(pt: *mut c_void);
+    fn nvim_partial_dec_refcount(pt: *mut c_void);
+    fn nvim_partial_get_refcount(pt: *const c_void) -> c_int;
     fn nvim_partial_get_name(pt: *mut c_void) -> *mut c_char;
 
     // Memory and string functions
@@ -5315,11 +5317,18 @@ extern "C" {
     fn strcmp(s1: *const c_char, s2: *const c_char) -> c_int;
 }
 
-// Additional setters for callback_put
+// Additional setters for callback_put and tv_clear
 extern "C" {
     fn nvim_tv_set_partial(tv: *mut c_void, pt: *mut c_void);
     fn nvim_tv_set_vstring_owned(tv: *mut c_void, s: *mut c_char);
     fn nvim_tv_set_special(tv: *mut c_void, val: c_int);
+    fn nvim_tv_set_vpartial_null(tv: TypevalHandle);
+    fn nvim_tv_set_vblob_null(tv: TypevalHandle);
+    fn nvim_tv_set_vlist_null(tv: TypevalHandle);
+    fn nvim_tv_set_vdict_null(tv: TypevalHandle);
+    // tv_empty_string: address of the global empty-string sentinel
+    #[link_name = "tv_empty_string"]
+    static tv_empty_string_ptr: *const c_char;
 }
 
 /// Compare two Callback structs for equality.
@@ -5574,6 +5583,71 @@ pub unsafe extern "C" fn rs_tv_free(tv: TypevalHandle) {
         _ => {}
     }
     nvim_xfree(tv.as_ptr().cast_mut());
+}
+
+/// Free memory for a variable value and set the value to NULL or 0.
+///
+/// Differs from `tv_free` in that it does NOT free the typval struct itself,
+/// and handles shared (refcount > 1) lists/dicts/partials by only decrementing.
+///
+/// Migrated from C `tv_clear` (and the encode-nothing framework it used).
+///
+/// # Safety
+///
+/// `tv` must be a valid pointer to a `typval_T`, or null.
+#[export_name = "tv_clear"]
+pub unsafe extern "C" fn rs_tv_clear(tv: TypevalHandle) {
+    if tv.is_null() {
+        return;
+    }
+    let v_type = unsafe { nvim_tv_get_type(tv) };
+    if v_type == VarType::Unknown as c_int {
+        return;
+    }
+    match VarType::from_c_int(v_type) {
+        Some(VarType::Partial) => {
+            let pt = unsafe { nvim_tv_get_partial(tv) };
+            if !pt.is_null() && unsafe { nvim_partial_get_refcount(pt) } > 1 {
+                unsafe { nvim_partial_dec_refcount(pt) };
+                unsafe { nvim_tv_set_vpartial_null(tv) };
+                unsafe { nvim_tv_set_lock(tv, 0) };
+                return;
+            }
+            unsafe { partial_unref(pt) };
+            unsafe { nvim_tv_set_vpartial_null(tv) };
+        }
+        Some(VarType::Func) => {
+            let s = unsafe { nvim_tv_get_string_mutable(tv) };
+            unsafe { func_unref(s) };
+            // Only xfree if not the global tv_empty_string sentinel
+            if s.cast_const() != unsafe { tv_empty_string_ptr } {
+                unsafe { nvim_xfree(s.cast()) };
+            }
+            unsafe { nvim_tv_set_vstring_owned(tv.as_ptr().cast_mut(), core::ptr::null_mut()) };
+        }
+        Some(VarType::String) => {
+            let s = unsafe { nvim_tv_get_string_mutable(tv) };
+            unsafe { nvim_xfree(s.cast()) };
+            unsafe { nvim_tv_set_vstring_owned(tv.as_ptr().cast_mut(), core::ptr::null_mut()) };
+        }
+        Some(VarType::Blob) => {
+            let b = unsafe { nvim_tv_get_blob(tv) };
+            unsafe { rs_tv_blob_unref(b) };
+            unsafe { nvim_tv_set_vblob_null(tv) };
+        }
+        Some(VarType::List) => {
+            let l = unsafe { nvim_tv_get_list(tv) };
+            unsafe { rs_tv_list_unref(l) };
+            unsafe { nvim_tv_set_vlist_null(tv) };
+        }
+        Some(VarType::Dict) => {
+            let d = unsafe { nvim_tv_get_dict(tv) };
+            unsafe { rs_tv_dict_unref(d) };
+            unsafe { nvim_tv_set_vdict_null(tv) };
+        }
+        _ => {}
+    }
+    unsafe { nvim_tv_set_lock(tv, 0) }; // VAR_UNLOCKED
 }
 
 /// Copy typval from one location to another (shallow copy with refcount bumps).

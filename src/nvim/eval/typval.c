@@ -405,272 +405,7 @@ extern int tv_dict_wrong_func_name(dict_T *d, typval_T *tv, const char *name);
 
 // tv_blob_alloc_ret, tv_blob_copy migrated to Rust (Phase 2)
 
-//{{{3 Clear
-#define TYPVAL_ENCODE_ALLOW_SPECIALS false
-#define TYPVAL_ENCODE_CHECK_BEFORE
-
-#define TYPVAL_ENCODE_CONV_NIL(tv) \
-  do { \
-    (tv)->vval.v_special = kSpecialVarNull; \
-    (tv)->v_lock = VAR_UNLOCKED; \
-  } while (0)
-
-#define TYPVAL_ENCODE_CONV_BOOL(tv, num) \
-  do { \
-    (tv)->vval.v_bool = kBoolVarFalse; \
-    (tv)->v_lock = VAR_UNLOCKED; \
-  } while (0)
-
-#define TYPVAL_ENCODE_CONV_NUMBER(tv, num) \
-  do { \
-    (void)(num); \
-    (tv)->vval.v_number = 0; \
-    (tv)->v_lock = VAR_UNLOCKED; \
-  } while (0)
-
-#define TYPVAL_ENCODE_CONV_UNSIGNED_NUMBER(tv, num)
-
-#define TYPVAL_ENCODE_CONV_FLOAT(tv, flt) \
-  do { \
-    (tv)->vval.v_float = 0; \
-    (tv)->v_lock = VAR_UNLOCKED; \
-  } while (0)
-
-#define TYPVAL_ENCODE_CONV_STRING(tv, buf, len) \
-  do { \
-    xfree(buf); \
-    (tv)->vval.v_string = NULL; \
-    (tv)->v_lock = VAR_UNLOCKED; \
-  } while (0)
-
-#define TYPVAL_ENCODE_CONV_STR_STRING(tv, buf, len)
-
-#define TYPVAL_ENCODE_CONV_EXT_STRING(tv, buf, len, type)
-
-#define TYPVAL_ENCODE_CONV_BLOB(tv, blob, len) \
-  do { \
-    tv_blob_unref((tv)->vval.v_blob); \
-    (tv)->vval.v_blob = NULL; \
-    (tv)->v_lock = VAR_UNLOCKED; \
-  } while (0)
-
-static inline int _nothing_conv_func_start(typval_T *const tv, char *const fun)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_NONNULL_ARG(1)
-{
-  tv->v_lock = VAR_UNLOCKED;
-  if (tv->v_type == VAR_PARTIAL) {
-    partial_T *const pt_ = tv->vval.v_partial;
-    if (pt_ != NULL && pt_->pt_refcount > 1) {
-      pt_->pt_refcount--;
-      tv->vval.v_partial = NULL;
-      return OK;
-    }
-  } else {
-    func_unref(fun);
-    if (fun != tv_empty_string) {
-      xfree(fun);
-    }
-    tv->vval.v_string = NULL;
-  }
-  return NOTDONE;
-}
-#define TYPVAL_ENCODE_CONV_FUNC_START(tv, fun) \
-  do { \
-    if (_nothing_conv_func_start(tv, fun) != NOTDONE) { \
-      return OK; \
-    } \
-  } while (0)
-
-#define TYPVAL_ENCODE_CONV_FUNC_BEFORE_ARGS(tv, len)
-#define TYPVAL_ENCODE_CONV_FUNC_BEFORE_SELF(tv, len)
-
-static inline void _nothing_conv_func_end(typval_T *const tv, const int copyID)
-  FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_NONNULL_ALL
-{
-  if (tv->v_type == VAR_PARTIAL) {
-    partial_T *const pt = tv->vval.v_partial;
-    if (pt == NULL) {
-      return;
-    }
-    // Dictionary should already be freed by the time.
-    // If it was not freed then it is a part of the reference cycle.
-    assert(pt->pt_dict == NULL || pt->pt_dict->dv_copyID == copyID);
-    pt->pt_dict = NULL;
-    // As well as all arguments.
-    pt->pt_argc = 0;
-    assert(pt->pt_refcount <= 1);
-    partial_unref(pt);
-    tv->vval.v_partial = NULL;
-    assert(tv->v_lock == VAR_UNLOCKED);
-  }
-}
-#define TYPVAL_ENCODE_CONV_FUNC_END(tv) _nothing_conv_func_end(tv, copyID)
-
-#define TYPVAL_ENCODE_CONV_EMPTY_LIST(tv) \
-  do { \
-    tv_list_unref((tv)->vval.v_list); \
-    (tv)->vval.v_list = NULL; \
-    (tv)->v_lock = VAR_UNLOCKED; \
-  } while (0)
-
-static inline void _nothing_conv_empty_dict(typval_T *const tv, dict_T **const dictp)
-  FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_NONNULL_ARG(2)
-{
-  tv_dict_unref(*dictp);
-  *dictp = NULL;
-  if (tv != NULL) {
-    tv->v_lock = VAR_UNLOCKED;
-  }
-}
-#define TYPVAL_ENCODE_CONV_EMPTY_DICT(tv, dict) \
-  do { \
-    assert((void *)&(dict) != (void *)&TYPVAL_ENCODE_NODICT_VAR); \
-    _nothing_conv_empty_dict(tv, ((dict_T **)&(dict))); \
-  } while (0)
-
-static inline int _nothing_conv_real_list_after_start(typval_T *const tv,
-                                                      MPConvStackVal *const mpsv)
-  FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  assert(tv != NULL);
-  tv->v_lock = VAR_UNLOCKED;
-  if (tv->vval.v_list->lv_refcount > 1) {
-    tv->vval.v_list->lv_refcount--;
-    tv->vval.v_list = NULL;
-    mpsv->data.l.li = NULL;
-    return OK;
-  }
-  return NOTDONE;
-}
-#define TYPVAL_ENCODE_CONV_LIST_START(tv, len)
-
-#define TYPVAL_ENCODE_CONV_REAL_LIST_AFTER_START(tv, mpsv) \
-  do { \
-    if (_nothing_conv_real_list_after_start(tv, &(mpsv)) != NOTDONE) { \
-      goto typval_encode_stop_converting_one_item; \
-    } \
-  } while (0)
-
-#define TYPVAL_ENCODE_CONV_LIST_BETWEEN_ITEMS(tv)
-
-static inline void _nothing_conv_list_end(typval_T *const tv)
-  FUNC_ATTR_ALWAYS_INLINE
-{
-  if (tv == NULL) {
-    return;
-  }
-  assert(tv->v_type == VAR_LIST);
-  list_T *const list = tv->vval.v_list;
-  tv_list_unref(list);
-  tv->vval.v_list = NULL;
-}
-#define TYPVAL_ENCODE_CONV_LIST_END(tv) _nothing_conv_list_end(tv)
-
-static inline int _nothing_conv_real_dict_after_start(typval_T *const tv, dict_T **const dictp,
-                                                      const void *const nodictvar,
-                                                      MPConvStackVal *const mpsv)
-  FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (tv != NULL) {
-    tv->v_lock = VAR_UNLOCKED;
-  }
-  if ((const void *)dictp != nodictvar && (*dictp)->dv_refcount > 1) {
-    (*dictp)->dv_refcount--;
-    *dictp = NULL;
-    mpsv->data.d.todo = 0;
-    return OK;
-  }
-  return NOTDONE;
-}
-#define TYPVAL_ENCODE_CONV_DICT_START(tv, dict, len)
-
-#define TYPVAL_ENCODE_CONV_REAL_DICT_AFTER_START(tv, dict, mpsv) \
-  do { \
-    if (_nothing_conv_real_dict_after_start(tv, (dict_T **)&(dict), \
-                                            (void *)&TYPVAL_ENCODE_NODICT_VAR, &(mpsv)) \
-        != NOTDONE) { \
-      goto typval_encode_stop_converting_one_item; \
-    } \
-  } while (0)
-
-#define TYPVAL_ENCODE_SPECIAL_DICT_KEY_CHECK(tv, dict)
-#define TYPVAL_ENCODE_CONV_DICT_AFTER_KEY(tv, dict)
-#define TYPVAL_ENCODE_CONV_DICT_BETWEEN_ITEMS(tv, dict)
-
-static inline void _nothing_conv_dict_end(typval_T *const tv, dict_T **const dictp,
-                                          const void *const nodictvar)
-  FUNC_ATTR_ALWAYS_INLINE
-{
-  if ((const void *)dictp != nodictvar) {
-    tv_dict_unref(*dictp);
-    *dictp = NULL;
-  }
-}
-#define TYPVAL_ENCODE_CONV_DICT_END(tv, dict) \
-  _nothing_conv_dict_end(tv, (dict_T **)&(dict), \
-                         (void *)&TYPVAL_ENCODE_NODICT_VAR)
-
-#define TYPVAL_ENCODE_CONV_RECURSE(val, conv_type)
-
-#define TYPVAL_ENCODE_SCOPE static
-#define TYPVAL_ENCODE_NAME nothing
-#define TYPVAL_ENCODE_FIRST_ARG_TYPE const void *const
-#define TYPVAL_ENCODE_FIRST_ARG_NAME ignored
-#include "nvim/eval/typval_encode.c.h"
-
-#undef TYPVAL_ENCODE_SCOPE
-#undef TYPVAL_ENCODE_NAME
-#undef TYPVAL_ENCODE_FIRST_ARG_TYPE
-#undef TYPVAL_ENCODE_FIRST_ARG_NAME
-
-#undef TYPVAL_ENCODE_ALLOW_SPECIALS
-#undef TYPVAL_ENCODE_CHECK_BEFORE
-#undef TYPVAL_ENCODE_CONV_NIL
-#undef TYPVAL_ENCODE_CONV_BOOL
-#undef TYPVAL_ENCODE_CONV_NUMBER
-#undef TYPVAL_ENCODE_CONV_UNSIGNED_NUMBER
-#undef TYPVAL_ENCODE_CONV_FLOAT
-#undef TYPVAL_ENCODE_CONV_STRING
-#undef TYPVAL_ENCODE_CONV_STR_STRING
-#undef TYPVAL_ENCODE_CONV_EXT_STRING
-#undef TYPVAL_ENCODE_CONV_BLOB
-#undef TYPVAL_ENCODE_CONV_FUNC_START
-#undef TYPVAL_ENCODE_CONV_FUNC_BEFORE_ARGS
-#undef TYPVAL_ENCODE_CONV_FUNC_BEFORE_SELF
-#undef TYPVAL_ENCODE_CONV_FUNC_END
-#undef TYPVAL_ENCODE_CONV_EMPTY_LIST
-#undef TYPVAL_ENCODE_CONV_EMPTY_DICT
-#undef TYPVAL_ENCODE_CONV_LIST_START
-#undef TYPVAL_ENCODE_CONV_REAL_LIST_AFTER_START
-#undef TYPVAL_ENCODE_CONV_LIST_BETWEEN_ITEMS
-#undef TYPVAL_ENCODE_CONV_LIST_END
-#undef TYPVAL_ENCODE_CONV_DICT_START
-#undef TYPVAL_ENCODE_CONV_REAL_DICT_AFTER_START
-#undef TYPVAL_ENCODE_SPECIAL_DICT_KEY_CHECK
-#undef TYPVAL_ENCODE_CONV_DICT_AFTER_KEY
-#undef TYPVAL_ENCODE_CONV_DICT_BETWEEN_ITEMS
-#undef TYPVAL_ENCODE_CONV_DICT_END
-#undef TYPVAL_ENCODE_CONV_RECURSE
-
-/// Free memory for a variable value and set the value to NULL or 0
-///
-/// @param[in,out]  tv  Value to free.
-void tv_clear(typval_T *const tv)
-{
-  if (tv == NULL || tv->v_type == VAR_UNKNOWN) {
-    return;
-  }
-
-  // WARNING: do not translate the string here, gettext is slow and function
-  // is used *very* often. At the current state encode_vim_to_nothing() does
-  // not error out and does not use the argument anywhere.
-  //
-  // If situation changes and this argument will be used, translate it in the
-  // place where it is used.
-  const int evn_ret = encode_vim_to_nothing(NULL, tv, "tv_clear() argument");
-  (void)evn_ret;
-  assert(evn_ret == OK);
-}
+// tv_clear, encode-nothing framework migrated to Rust (Phase 2)
 
 // tv_free, tv_copy migrated to Rust (Phase 2 of typval.c migration)
 
@@ -861,8 +596,7 @@ void nvim_list_dec_len(list_T *l) { l->lv_len--; }
 /// Set lv_len on a list (accessor for Rust).
 void nvim_list_set_len(list_T *l, int len) { l->lv_len = len; }
 
-/// Clear a typval (tv_clear wrapper for Rust).
-void nvim_tv_clear(typval_T *tv) { tv_clear(tv); }
+// nvim_tv_clear deleted (Phase 2): tv_clear migrated to Rust
 
 /// Free a list item (xfree wrapper for Rust).
 void nvim_list_item_free(listitem_T *li) { xfree(li); }
@@ -1712,12 +1446,27 @@ int nvim_partial_get_refcount(const partial_T *pt) { return pt->pt_refcount; }
 /// Increment partial_T refcount (accessor for Rust).
 void nvim_partial_inc_refcount(partial_T *pt) { pt->pt_refcount++; }
 
+/// Decrement partial_T refcount (accessor for Rust, used by tv_clear).
+void nvim_partial_dec_refcount(partial_T *pt) { pt->pt_refcount--; }
+
 // nvim_partial_get_name: already defined in eval/userfunc.c
 
 // nvim_tv_set_partial, nvim_tv_set_special: already defined in eval/vars.c
 
 /// Set vval.v_string (takes ownership) on a typval without changing type (accessor for Rust).
 void nvim_tv_set_vstring_owned(typval_T *tv, char *s) { tv->vval.v_string = s; }
+
+/// Null vval.v_partial without changing type/lock (accessor for Rust, used by tv_clear).
+void nvim_tv_set_vpartial_null(typval_T *tv) { tv->vval.v_partial = NULL; }
+
+/// Null vval.v_blob without changing type/lock (accessor for Rust, used by tv_clear).
+void nvim_tv_set_vblob_null(typval_T *tv) { tv->vval.v_blob = NULL; }
+
+/// Null vval.v_list without changing type/lock (accessor for Rust, used by tv_clear).
+void nvim_tv_set_vlist_null(typval_T *tv) { tv->vval.v_list = NULL; }
+
+/// Null vval.v_dict without changing type/lock (accessor for Rust, used by tv_clear).
+void nvim_tv_set_vdict_null(typval_T *tv) { tv->vval.v_dict = NULL; }
 
 // Phase 2 (typval migration): accessors for tv_copy, tv_free, tv_equal.
 
