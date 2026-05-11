@@ -236,6 +236,10 @@ extern void rs_tui_option_set(TUIData *tui, const char *name, size_t name_len,
                               int obj_type, int64_t int_val, bool bool_val);
 extern void rs_tui_screenshot(TUIData *tui, const char *path, size_t path_len);
 
+// Phase 3: Rust implementations for sigwinch and terminal_after_startup
+extern void rs_tui_sigwinch_cb(SignalWatcher *watcher, int signum, void *cbdata);
+extern void rs_tui_terminal_after_startup(TUIData *tui);
+
 // TUIData Accessor Functions for Rust
 
 
@@ -687,6 +691,9 @@ bool nvim_tui_get_resize_events_enabled(TUIData *tui) { return tui->resize_event
 void nvim_tui_set_primary_device_attr_cb(TUIData *tui, void (*cb)(TUIData *)) { tui->input.callbacks.primary_device_attr = cb; }
 int nvim_tui_input_get_key_encoding(TUIData *tui) { return (int)tui->input.key_encoding; }
 
+// Phase 3 accessors: focus reporting, sigwinch/startup callback helpers
+const char *nvim_tui_get_enable_focus_reporting(TUIData *tui) { return tui->terminfo_ext.enable_focus_reporting; }
+
 /// Wrapper for tui_reset_key_encoding (static) callable from Rust
 void nvim_tui_reset_key_encoding(TUIData *tui) { tui_reset_key_encoding(tui); }
 
@@ -784,7 +791,7 @@ void tui_start(TUIData **tui_p, int *width, int *height, char **term, bool *rgb)
   kv_init(tui->invalid_regions);
   kv_init(tui->urlbuf);
   signal_watcher_init(tui->loop, &tui->winch_handle, tui);
-  signal_watcher_start(&tui->winch_handle, sigwinch_cb, SIGWINCH);
+  signal_watcher_start(&tui->winch_handle, rs_tui_sigwinch_cb, SIGWINCH);
 
   // TODO(bfredl): zero hl is empty, send this explicitly?
   kv_push(tui->attrs, HLATTRS_INIT);
@@ -1142,13 +1149,11 @@ static void after_startup_cb(uv_timer_t *handle)
   tui_terminal_after_startup(tui);
 }
 
+/// Emit focus reporting and flush after startup. Rust implementation.
 static void tui_terminal_after_startup(TUIData *tui)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Emit this after Nvim startup, not during.  This works around a tmux
-  // 2.3 bug(?) which caused slow drawing during startup.  #7649
-  out_len(tui, tui->terminfo_ext.enable_focus_reporting);
-  flush_buf(tui);
+  rs_tui_terminal_after_startup(tui);
 }
 
 void tui_stop(TUIData *tui)
@@ -1217,14 +1222,10 @@ void tui_free_all_mem(TUIData *tui)
 }
 #endif
 
+/// SIGWINCH handler. Rust implementation.
 static void sigwinch_cb(SignalWatcher *watcher, int signum, void *cbdata)
 {
-  TUIData *tui = cbdata;
-  if (tui_is_stopped(tui) || tui->resize_events_enabled) {
-    return;
-  }
-
-  tui_guess_size(tui);
+  rs_tui_sigwinch_cb(watcher, signum, cbdata);
 }
 
 /// Optimized cursor positioning. Rust implementation.

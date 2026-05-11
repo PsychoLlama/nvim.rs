@@ -2623,6 +2623,63 @@ pub unsafe extern "C" fn rs_tui_screenshot(
     libc::fclose(f);
 }
 
+// ============================================================================
+// Phase 3: sigwinch, after_startup, terminal_after_startup callbacks
+// ============================================================================
+
+/// Opaque handle for C SignalWatcher (used for sigwinch callback)
+#[repr(C)]
+pub struct SignalWatcherHandle {
+    _private: [u8; 0],
+}
+
+extern "C" {
+    fn nvim_tui_get_enable_focus_reporting(tui: *mut TuiHandle) -> *const u8;
+    fn nvim_tui_get_resize_events_enabled(tui: *mut TuiHandle) -> bool;
+}
+
+/// SIGWINCH callback. Calls rs_tui_guess_size unless stopped or resize_events_enabled.
+///
+/// # Safety
+///
+/// Callback from libuv/signal.c — cbdata is a TUIData pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_sigwinch_cb(
+    _watcher: *mut SignalWatcherHandle,
+    _signum: c_int,
+    cbdata: *mut libc::c_void,
+) {
+    let tui = cbdata as *mut TuiHandle;
+    if tui.is_null() {
+        return;
+    }
+    // Call rs_tui_is_stopped directly (same module) instead of the tui_is_stopped extern
+    // to avoid calling ourselves (rs_tui_is_stopped is exported as "tui_is_stopped")
+    if rs_tui_is_stopped(tui) || nvim_tui_get_resize_events_enabled(tui) {
+        return;
+    }
+    rs_tui_guess_size(tui);
+}
+
+/// Emit focus reporting and flush. Called after TUI startup (working around tmux 2.3 bug).
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_terminal_after_startup(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    // Emit this after Nvim startup, not during.  #7649
+    let focus_str = nvim_tui_get_enable_focus_reporting(tui);
+    nvim_tui_out_len(tui, focus_str);
+    nvim_tui_flush_buf(tui);
+}
+
+// rs_tui_after_startup_cb is implemented as a thin C wrapper in tui.c
+// (kept there because extracting handle->data requires knowledge of uv_timer_t layout)
+
 #[cfg(test)]
 mod tests {
     use super::*;
