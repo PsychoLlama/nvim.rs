@@ -111,6 +111,10 @@ extern void rs_funccal_unref(funccall_T *fc, ufunc_T *fp, int force);
 extern void rs_user_func_error(int error, const char *name, int found_var);
 extern char *get_func_line(int c, void *cookie, int indent, bool do_concat);
 
+// Phase 1 (plan db85cc6b): Small hashtab foundations (implemented in Rust userfunc/src/hashtab.rs)
+extern void rs_register_closure(ufunc_T *fp);
+extern void rs_add_nr_var(dict_T *dp, dictitem_T *v, const char *name, int64_t nr);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -157,19 +161,8 @@ extern int get_function_args(char **argp, char endchar, garray_T *newargs, int *
                              garray_T *default_args, bool skip);
 
 /// Register function "fp" as using "current_funccal" as its scope.
-static void register_closure(ufunc_T *fp)
-{
-  if (fp->uf_scoped == current_funccal) {
-    // no change
-    return;
-  }
-  rs_funccal_unref(fp->uf_scoped, fp, 0);
-  fp->uf_scoped = current_funccal;
-  current_funccal->fc_refcount++;
-  ga_grow(&current_funccal->fc_ufuncs, 1);
-  ((ufunc_T **)current_funccal->fc_ufuncs.ga_data)
-  [current_funccal->fc_ufuncs.ga_len++] = fp;
-}
+/// Logic lives in Rust (hashtab.rs Phase 1). Thin wrapper for C callers.
+static void register_closure(ufunc_T *fp) { rs_register_closure(fp); }
 
 static char lambda_name[8 + NUMBUFLEN];
 
@@ -406,28 +399,15 @@ ufunc_T *find_func(const char *name)
 }
 
 /// Add a number variable "name" to dict "dp" with value "nr".
+/// Logic lives in Rust (hashtab.rs Phase 1). Thin wrapper for C callers.
 static void add_nr_var(dict_T *dp, dictitem_T *v, char *name, varnumber_T nr)
 {
-  STRCPY(v->di_key, name);
-  v->di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
-  hash_add(&dp->dv_hashtab, v->di_key);
-  v->di_tv.v_type = VAR_NUMBER;
-  v->di_tv.v_lock = VAR_FIXED;
-  v->di_tv.vval.v_number = nr;
+  rs_add_nr_var(dp, v, name, (int64_t)nr);
 }
 
 // Phase 7-31: free_funccal, free_funccal_contents, cleanup_function_call, funccal_unref migrated to Rust.
 
-/// Phase 4: C implementation shim for func_remove (called from Rust).
-int nvim_func_remove_impl(ufunc_T *fp)
-{
-  hashitem_T *hi = hash_find(&func_hashtab, UF2HIKEY(fp));
-  if (HASHITEM_EMPTY(hi)) {
-    return false;
-  }
-  hash_remove(&func_hashtab, hi);
-  return true;
-}
+// nvim_func_remove_impl deleted: logic inlined into rs_func_remove_ht (hashtab.rs Phase 1)
 
 /// Phase 4: C implementation shim for func_clear_items.
 // nvim_func_clear_items_impl inlined into rs_func_clear_items (Rust, Phase 14)
@@ -2054,22 +2034,8 @@ end:
 // Phase 12: GC funccal impls inlined into Rust (gc.rs).
 // Phase 29: scoped_ht impls inlined into Rust (scope.rs).
 
-/// Phase 5: C implementation shim for set_ref_in_functions.
-/// Cannot inline: requires HASHITEM_EMPTY and HI2UF macros for hash iteration.
-int nvim_set_ref_in_functions_impl(int copyID)
-{
-  int todo = (int)func_hashtab.ht_used;
-  for (hashitem_T *hi = func_hashtab.ht_array; todo > 0 && !got_int; hi++) {
-    if (!HASHITEM_EMPTY(hi)) {
-      todo--;
-      ufunc_T *fp = HI2UF(hi);
-      if (!rs_func_name_refcount(fp->uf_name) && set_ref_in_func(NULL, fp, copyID)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
+// nvim_set_ref_in_functions_impl deleted: logic inlined into rs_set_ref_in_functions_inner
+// (hashtab.rs Phase 1) using nvim_func_ht_foreach.
 
 // nvim_set_ref_in_func_args_impl inlined into rs_set_ref_in_func_args (Rust, Phase 12)
 
@@ -2769,3 +2735,60 @@ int nvim_func_call_iter_args(typval_T *args, typval_T *argv, int max_args)
   return argc;
 }
 linenr_T nvim_curwin_cursor_lnum(void) { return curwin->w_cursor.lnum; }
+
+// Phase 1 (plan db85cc6b): Small hashtab foundations
+/// Convert a hashitem key pointer to the owning ufunc_T.
+ufunc_T *nvim_hi_key_to_ufunc(const hashitem_T *hi)
+{
+  return HI2UF(hi);
+}
+
+/// Look up a ufunc_T in the global function hashtab by its current HIKEY.
+/// Returns NULL if not found.
+ufunc_T *nvim_func_ht_find_uf(const ufunc_T *fp)
+{
+  hashitem_T *hi = hash_find(&func_hashtab, UF2HIKEY(fp));
+  if (HASHITEM_EMPTY(hi)) {
+    return NULL;
+  }
+  return HI2UF(hi);
+}
+
+/// Remove the hashitem for fp from the global function hashtab.
+/// Returns 1 if removed, 0 if not found.
+int nvim_func_ht_remove_fp(ufunc_T *fp)
+{
+  hashitem_T *hi = hash_find(&func_hashtab, UF2HIKEY(fp));
+  if (HASHITEM_EMPTY(hi)) {
+    return 0;
+  }
+  hash_remove(&func_hashtab, hi);
+  return 1;
+}
+
+/// Push fp onto fc->fc_ufuncs (grow by 1).
+void nvim_fc_ufuncs_push(funccall_T *fc, ufunc_T *fp)
+{
+  ga_grow(&fc->fc_ufuncs, 1);
+  ((ufunc_T **)fc->fc_ufuncs.ga_data)[fc->fc_ufuncs.ga_len++] = fp;
+}
+
+/// Increment fc->fc_refcount.
+void nvim_fc_increment_refcount(funccall_T *fc)
+{
+  if (fc) {
+    fc->fc_refcount++;
+  }
+}
+
+/// Add number variable "name" with value nr to dict dp using dictitem v.
+/// Thin wrapper around the C macro-heavy init pattern for Rust callers.
+void nvim_add_nr_var(dict_T *dp, dictitem_T *v, const char *name, int64_t nr)
+{
+  STRCPY(v->di_key, name);
+  v->di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
+  hash_add(&dp->dv_hashtab, v->di_key);
+  v->di_tv.v_type = VAR_NUMBER;
+  v->di_tv.v_lock = VAR_FIXED;
+  v->di_tv.vval.v_number = nr;
+}

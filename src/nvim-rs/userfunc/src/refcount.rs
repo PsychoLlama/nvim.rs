@@ -11,7 +11,6 @@ extern "C" {
     fn nvim_ufunc_decrement_refcount(fp: *mut c_void) -> c_int;
     fn nvim_ufunc_increment_refcount(fp: *mut c_void);
     fn nvim_ufunc_get_calls(fp: *mut c_void) -> c_int;
-    fn nvim_func_remove_impl(fp: *mut c_void) -> c_int;
 
     // Phase 14: For inlining nvim_func_clear_items_impl
     fn nvim_ufunc_get_args_ga(fp: *mut c_void) -> *mut c_void;
@@ -120,9 +119,10 @@ pub unsafe extern "C" fn rs_func_ref(name: *mut c_char) {
 
 /// Remove a function from the function hashtable.
 /// Returns true if the entry was deleted.
+/// Phase 1 (plan db85cc6b): inline via rs_func_remove_ht in hashtab.rs.
 #[no_mangle]
 pub unsafe extern "C" fn rs_func_remove(fp: *mut c_void) -> c_int {
-    unsafe { nvim_func_remove_impl(fp) }
+    unsafe { super::hashtab::rs_func_remove_ht(fp) }
 }
 
 // =============================================================================

@@ -18,8 +18,6 @@ const FCERR_NONE: c_int = 5;
 const DO_NOT_FREE_CNT: c_int = c_int::MAX / 2;
 
 extern "C" {
-    fn nvim_set_ref_in_functions_impl(copy_id: c_int) -> c_int;
-
     // Phase 26: for free_unref_funccal inlining
     fn nvim_set_previous_funccal(fc: *mut c_void);
     fn garbage_collect(testing: c_int) -> bool;
@@ -236,12 +234,12 @@ pub unsafe extern "C" fn rs_set_ref_in_call_stack(copy_id: c_int) -> c_int {
 // set_ref_in_functions
 // =============================================================================
 //
-// Cannot inline: requires HASHITEM_EMPTY and HI2UF macros for hash table iteration.
-// Remains as C impl shim.
+// Phase 1 (plan db85cc6b): inlined using nvim_func_ht_foreach in hashtab.rs.
+// C shim nvim_set_ref_in_functions_impl deleted.
 
 #[unsafe(export_name = "set_ref_in_functions")]
 pub unsafe extern "C" fn rs_set_ref_in_functions(copy_id: c_int) -> c_int {
-    unsafe { nvim_set_ref_in_functions_impl(copy_id) }
+    unsafe { super::hashtab::rs_set_ref_in_functions_inner(copy_id) }
 }
 
 // =============================================================================
