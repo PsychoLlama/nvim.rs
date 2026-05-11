@@ -1817,53 +1817,8 @@ ret_free:
   }
 }
 
-/// @return  5 if "p" starts with "<SID>" or "<SNR>" (ignoring case).
-///          2 if "p" starts with "s:".
-///          0 otherwise.
-/// Function given to ExpandGeneric() to obtain the list of user defined
-/// function names.
-char *get_user_func_name(expand_T *xp, int idx)
-{
-  static size_t done;
-  static int changed;
-  static hashitem_T *hi;
-
-  if (idx == 0) {
-    done = 0;
-    hi = func_hashtab.ht_array;
-    changed = func_hashtab.ht_changed;
-  }
-  assert(hi);
-  if (changed == func_hashtab.ht_changed && done < func_hashtab.ht_used) {
-    if (done++ > 0) {
-      hi++;
-    }
-    while (HASHITEM_EMPTY(hi)) {
-      hi++;
-    }
-    ufunc_T *fp = HI2UF(hi);
-
-    if ((fp->uf_flags & FC_DICT)
-        || strncmp(fp->uf_name, "<lambda>", 8) == 0) {
-      return "";       // don't show dict and lambda functions
-    }
-
-    if (fp->uf_namelen + 4 >= IOSIZE) {
-      return fp->uf_name;  // Prevent overflow.
-    }
-
-    int len = rs_cat_func_name(IObuff, IOSIZE, fp);
-    if (xp->xp_context != EXPAND_USER_FUNC) {
-      xstrlcpy(IObuff + len, "(", IOSIZE - (size_t)len);
-      if (!fp->uf_varargs && GA_EMPTY(&fp->uf_args)) {
-        len++;
-        xstrlcpy(IObuff + len, ")", IOSIZE - (size_t)len);
-      }
-    }
-    return IObuff;
-  }
-  return NULL;
-}
+// get_user_func_name migrated to Rust (expand.rs Phase 3).
+// rs_get_user_func_name now implements the logic directly via export_name = "get_user_func_name".
 
 /// Phase 7: C implementation shim for ex_delfunction (called from Rust).
 // nvim_ex_delfunction_impl migrated to Rust (funccal.rs Phase 32).
@@ -2815,3 +2770,32 @@ char *nvim_ufunc_get_name_ptr(ufunc_T *fp)
 
 /// Return current_sctx.
 sctx_T nvim_get_current_sctx(void) { return current_sctx; }
+
+// Phase 3 (plan db85cc6b): get_user_func_name accessors
+
+/// Return pointer to func_hashtab.ht_array (first hashitem_T slot).
+hashitem_T *nvim_func_ht_array(void) { return func_hashtab.ht_array; }
+
+/// Return func_hashtab.ht_used.
+size_t nvim_func_ht_used(void) { return func_hashtab.ht_used; }
+
+/// Convert hashitem_T * to ufunc_T * via HI2UF (same as nvim_hi_key_to_ufunc).
+ufunc_T *nvim_hashitem_to_ufunc(const hashitem_T *hi) { return HI2UF(hi); }
+
+/// Return 1 if uf_args is empty (GA_EMPTY), 0 otherwise.
+int nvim_ufunc_get_args_empty(const ufunc_T *fp) { return fp ? GA_EMPTY(&fp->uf_args) : 1; }
+
+/// Return IObuff pointer (shared global output buffer).
+char *nvim_get_iobuff(void) { return IObuff; }
+
+/// Return IOSIZE.
+int nvim_get_iosize_int(void) { return IOSIZE; }
+
+/// Return EXPAND_USER_FUNC constant.
+int nvim_expand_user_func(void) { return EXPAND_USER_FUNC; }
+
+/// xstrlcpy(IObuff + offset, src, IOSIZE - offset) wrapper.
+void nvim_iobuff_xstrlcpy_at(int offset, const char *src)
+{
+  xstrlcpy(IObuff + offset, src, (size_t)(IOSIZE - offset));
+}
