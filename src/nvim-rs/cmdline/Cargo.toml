@@ -11,6 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 libc = "0.2"
+nvim-api = { path = "../api" }
 nvim-buffer = { path = "../buffer" }
 nvim-cmdexpand = { path = "../cmdexpand" }
 nvim-window = { path = "../window" }

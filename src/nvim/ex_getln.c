@@ -172,8 +172,7 @@ static CmdlineInfo ccline;
 
 static int new_cmdpos;          // position set by setcmdpos()/setcmdline() VimL functions
 
-/// currently displayed block of context
-static Array cmdline_block = ARRAY_DICT_INIT;
+// cmdline_block: moved to Rust (cmdline crate, ui.rs phase2::CMDLINE_BLOCK).
 
 /// Flag for command_line_handle_key to ignore <C-c>
 ///
@@ -557,32 +556,8 @@ const char *nvim_color_tv_get_string_chk(const typval_T *tv)
   return tv_get_string_chk(tv);
 }
 
-void ui_ext_cmdline_block_append(size_t indent, const char *line)
-{
-  char *buf = xmallocz(indent + strlen(line));
-  memset(buf, ' ', indent);
-  memcpy(buf + indent, line, strlen(line));
-
-  Array item = ARRAY_DICT_INIT;
-  ADD(item, INTEGER_OBJ(0));
-  ADD(item, CSTR_AS_OBJ(buf));
-  ADD(item, INTEGER_OBJ(0));
-  Array content = ARRAY_DICT_INIT;
-  ADD(content, ARRAY_OBJ(item));
-  ADD(cmdline_block, ARRAY_OBJ(content));
-  if (cmdline_block.size > 1) {
-    ui_call_cmdline_block_append(content);
-  } else {
-    ui_call_cmdline_block_show(cmdline_block);
-  }
-}
-
-void ui_ext_cmdline_block_leave(void)
-{
-  api_free_array(cmdline_block);
-  cmdline_block = (Array)ARRAY_DICT_INIT;
-  ui_call_cmdline_block_hide();
-}
+// ui_ext_cmdline_block_append: migrated to Rust (cmdline crate, ui.rs).
+// ui_ext_cmdline_block_leave: migrated to Rust (cmdline crate, ui.rs).
 
 // cmdline_screen_cleared: implemented in Rust (cmdline crate, ui.rs)
 
@@ -593,12 +568,7 @@ void ui_ext_cmdline_block_leave(void)
 /// Called by ui_flush to keep cmdline updated for external UIs.
 void cmdline_ui_flush(void) { rs_cmdline_ui_flush(); }
 
-/// Thin C wrapper: emit kUICmdline special_char event (for Rust FFI).
-void nvim_ui_cmdline_special_char(int c, bool shift, int level)
-{
-  char charbuf[2] = { (char)c, 0 };
-  ui_call_cmdline_special_char(cstr_as_string(charbuf), shift, level);
-}
+// nvim_ui_cmdline_special_char: migrated to Rust (cmdline crate, ui.rs).
 
 // Put a character on the command line.  Thin C wrapper: delegates to Rust.
 void putcmdline(char c, bool shift) { rs_putcmdline((int)(unsigned char)c, shift); }
@@ -826,14 +796,9 @@ int nvim_get_cmdline_was_last_drawn(void) { return cmdline_was_last_drawn ? 1 : 
 // Helpers for Rust implementations of cmdline_screen_cleared / cmdline_ui_flush
 // =============================================================================
 
-/// Get cmdline_block.size (for Rust cmdline_screen_cleared).
-size_t nvim_get_cmdline_block_size(void) { return cmdline_block.size; }
-
-/// Call ui_call_cmdline_block_show(cmdline_block) (macro wrapper for Rust).
-void nvim_ui_call_cmdline_block_show_all(void) { ui_call_cmdline_block_show(cmdline_block); }
-
-/// Call ui_call_cmdline_block_hide() (macro wrapper for Rust).
-void nvim_ui_call_cmdline_block_hide(void) { ui_call_cmdline_block_hide(); }
+// nvim_get_cmdline_block_size: deleted (cmdline_block moved to Rust).
+// nvim_ui_call_cmdline_block_show_all: deleted (cmdline_block moved to Rust).
+// nvim_ui_call_cmdline_block_hide: deleted (cmdline_block moved to Rust).
 
 /// Get ccline.prev_ccline as opaque pointer (for Rust iteration).
 void *nvim_get_ccline_prev_ptr(void) { return (void *)ccline.prev_ccline; }
@@ -867,62 +832,27 @@ void nvim_ccline_ptr_set_redraw_none(void *p) { ((CmdlineInfo *)p)->redraw_state
 /// Get a CmdlineInfo node's cmdpos field (for Rust cmdline_ui_flush).
 int nvim_ccline_ptr_get_cmdpos(void *p) { return ((CmdlineInfo *)p)->cmdpos; }
 
-/// Update cmdline UI for the given CmdlineInfo node.
-/// show=1: call ui_call_cmdline_show (full redraw).
-/// show=0: call ui_call_cmdline_pos (position update only).
-void nvim_cmdline_ui_update_for_level(void *p, int show)
+/// Per-node accessors for nvim_cmdline_ui_update_for_level migration to Rust.
+char *nvim_ccline_ptr_get_cmdbuff(void *p) { return ((CmdlineInfo *)p)->cmdbuff; }
+int nvim_ccline_ptr_get_cmdfirstc(void *p) { return ((CmdlineInfo *)p)->cmdfirstc; }
+char *nvim_ccline_ptr_get_cmdprompt(void *p) { return ((CmdlineInfo *)p)->cmdprompt; }
+int nvim_ccline_ptr_get_cmdindent(void *p) { return ((CmdlineInfo *)p)->cmdindent; }
+int nvim_ccline_ptr_get_hl_id(void *p) { return ((CmdlineInfo *)p)->hl_id; }
+int nvim_ccline_ptr_get_special_char(void *p) { return (unsigned char)((CmdlineInfo *)p)->special_char; }
+int nvim_ccline_ptr_get_special_shift(void *p) { return ((CmdlineInfo *)p)->special_shift; }
+size_t nvim_ccline_ptr_get_colors_size(void *p)
 {
-  CmdlineInfo *line = (CmdlineInfo *)p;
-  if (!show) {
-    ui_call_cmdline_pos(line->cmdpos, line->level);
-    return;
-  }
-  Arena arena = ARENA_EMPTY;
-  Array content;
-  if (cmdline_star) {
-    content = arena_array(&arena, 1);
-    size_t len = 0;
-    for (char *q = ccline.cmdbuff; *q; MB_PTR_ADV(q)) {
-      len++;
-    }
-    char *buf = arena_alloc(&arena, len, false);
-    memset(buf, '*', len);
-    Array item = arena_array(&arena, 3);
-    ADD_C(item, INTEGER_OBJ(0));
-    ADD_C(item, STRING_OBJ(cbuf_as_string(buf, len)));
-    ADD_C(item, INTEGER_OBJ(0));
-    ADD_C(content, ARRAY_OBJ(item));
-  } else if (kv_size(line->last_colors.colors)) {
-    content = arena_array(&arena, kv_size(line->last_colors.colors));
-    for (size_t i = 0; i < kv_size(line->last_colors.colors); i++) {
-      CmdlineColorChunk chunk = kv_A(line->last_colors.colors, i);
-      Array item = arena_array(&arena, 3);
-      ADD_C(item, INTEGER_OBJ(chunk.hl_id == 0 ? 0 : syn_id2attr(chunk.hl_id)));
-      assert(chunk.end >= chunk.start);
-      ADD_C(item, STRING_OBJ(cbuf_as_string(line->cmdbuff + chunk.start,
-                                            (size_t)(chunk.end - chunk.start))));
-      ADD_C(item, INTEGER_OBJ(chunk.hl_id));
-      ADD_C(content, ARRAY_OBJ(item));
-    }
-  } else {
-    Array item = arena_array(&arena, 3);
-    ADD_C(item, INTEGER_OBJ(0));
-    ADD_C(item, CSTR_AS_OBJ(line->cmdbuff));
-    ADD_C(item, INTEGER_OBJ(0));
-    content = arena_array(&arena, 1);
-    ADD_C(content, ARRAY_OBJ(item));
-  }
-  char charbuf[2] = { (char)line->cmdfirstc, 0 };
-  ui_call_cmdline_show(content, line->cmdpos,
-                       cstr_as_string(charbuf),
-                       cstr_as_string((line->cmdprompt)),
-                       line->cmdindent, line->level, line->hl_id);
-  if (line->special_char) {
-    charbuf[0] = line->special_char;
-    ui_call_cmdline_special_char(cstr_as_string(charbuf), line->special_shift, line->level);
-  }
-  arena_mem_free(arena_finish(&arena));
+  return kv_size(((CmdlineInfo *)p)->last_colors.colors);
 }
+void nvim_ccline_ptr_get_color_chunk(void *p, size_t idx, int *start_out, int *end_out, int *hl_id_out)
+{
+  CmdlineColorChunk chunk = kv_A(((CmdlineInfo *)p)->last_colors.colors, idx);
+  *start_out = chunk.start;
+  *end_out = chunk.end;
+  *hl_id_out = chunk.hl_id;
+}
+
+// nvim_cmdline_ui_update_for_level: migrated to Rust (cmdline crate, ui.rs).
 
 // =============================================================================
 // Helpers for Rust command_line_enter (Phase 1)
@@ -1272,15 +1202,7 @@ void nvim_ccline_free_last_colors(void)
   kv_destroy(ccline.last_colors.colors);
 }
 
-/// Call ui_call_cmdline_hide if kUICmdline is active.
-void nvim_cmdline_ui_hide(int gotesc)
-{
-  if (ui_has(kUICmdline)) {
-    cmdline_was_last_drawn = false;
-    ccline.redraw_state = kCmdRedrawNone;
-    ui_call_cmdline_hide(ccline.level, gotesc);
-  }
-}
+// nvim_cmdline_ui_hide: migrated to Rust (cmdline crate, ui.rs).
 
 /// Emit status_redraw_all() and redraw_custom_title_later() if not cmd_silent.
 void nvim_cmdline_status_redraw(void)
