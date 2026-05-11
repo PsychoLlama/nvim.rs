@@ -69,6 +69,12 @@ pub struct Arena {
 // C FFI declarations
 // =============================================================================
 
+// api_set_error is also declared in api.rs with nvim_api::Error (same C function, same ABI).
+#[allow(clashing_extern_declarations)]
+extern "C" {
+    fn api_set_error(err: *mut Error, err_type: c_int, fmt: *const c_char, ...);
+}
+
 extern "C" {
     // Lua C API functions for reading values
     fn lua_tonumber(lstate: *mut LuaState, idx: c_int) -> f64;
@@ -77,9 +83,6 @@ extern "C" {
     fn lua_type(lstate: *mut LuaState, idx: c_int) -> c_int;
     fn lua_settop(lstate: *mut LuaState, idx: c_int);
     fn lua_gettop(lstate: *mut LuaState) -> c_int;
-
-    // API error function (variadic; only used with literal format strings below)
-    fn api_set_error(err: *mut Error, err_type: c_int, fmt: *const c_char, ...);
 
     // arena_memdupz: used by rs_nlua_pop_String (Phase 3)
     fn arena_memdupz(arena: *mut Arena, data: *const c_char, len: usize) -> *mut c_char;
