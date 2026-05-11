@@ -5017,3 +5017,413 @@ pub unsafe extern "C" fn rs_expand_wildcards_eval(
 
     ret
 }
+
+// =============================================================================
+// modify_fname: filename modifier engine
+// =============================================================================
+
+/// VALID_PATH / VALID_HEAD bitmask values (mirrors ex_docmd.h).
+const VALID_PATH: c_int = 1;
+const VALID_HEAD: c_int = 2;
+
+extern "C" {
+    fn home_replace(
+        buf: *const c_void,
+        src: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        one: bool,
+    );
+    fn expand_env_save(src: *const c_char) -> *mut c_char;
+    fn do_string_sub(
+        str_: *mut c_char,
+        len: usize,
+        pat: *mut c_char,
+        sub: *mut c_char,
+        expr: *const c_void,
+        flags: *const c_char,
+        ret_len: *mut usize,
+    ) -> *mut c_char;
+    fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
+    fn vim_strsave_shellescape(s: *const c_char, do_special: bool, do_newline: bool)
+        -> *mut c_char;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+}
+
+/// Advance pointer by one UTF-8 character (equivalent to MB_PTR_ADV).
+///
+/// # Safety
+/// `p` must point into a valid null-terminated buffer.
+unsafe fn mb_ptr_adv(p: *const c_char) -> *const c_char {
+    let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
+    let len = nvim_mbyte::utfc_ptr2len(slice);
+    p.add(len)
+}
+
+/// Back up pointer by one UTF-8 character (equivalent to MB_PTR_BACK(s, p)).
+///
+/// # Safety
+/// `s` must be the start of the string, `p` must be > `s`.
+unsafe fn mb_ptr_back(s: *const c_char, p: *const c_char) -> *const c_char {
+    // p is at least s+1 (caller guarantees p > s)
+    let p_offset = (p as usize) - (s as usize);
+    // We look at the byte before p (i.e., at p-1) to find the start of the
+    // character that precedes p.
+    let base_len = p_offset + 8; // generous upper bound; actual bytes accessible = p_offset
+    let base = std::slice::from_raw_parts(s.cast::<u8>(), base_len);
+    let head_off = utf_head_off(base, p_offset - 1);
+    p.sub(head_off + 1)
+}
+
+/// Adjust a filename according to a string of modifiers.
+///
+/// `*fnamep` must be NUL-terminated when called.  On return, the length is
+/// given by `*fnamelen`.  Returns a bitmask of `VALID_PATH | VALID_HEAD` flags,
+/// or -1 on failure (in which case `*fnamep` is set to NULL).
+///
+/// This is a direct port of the C `modify_fname` from `eval/funcs_shim.c`.
+///
+/// # Safety
+/// All pointer arguments must be valid.  `*fnamep` must point to a
+/// NUL-terminated string.  `src`, `usedlen`, `bufp`, and `fnamelen` must be
+/// non-NULL.
+#[unsafe(export_name = "modify_fname")]
+#[allow(non_snake_case)]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_modify_fname(
+    src: *mut c_char,
+    tilde_file: bool,
+    usedlen: *mut usize,
+    fnamep: *mut *mut c_char,
+    bufp: *mut *mut c_char,
+    fnamelen: *mut usize,
+) -> c_int {
+    let mut valid: c_int = 0;
+    let mut has_fullname = false;
+    let mut has_homerelative = false;
+    let mut dirname = [0i8; MAXPATHL];
+
+    // The `:s` modifier uses "goto repeat" in C. We model that with an outer
+    // loop: normal flow breaks at the end; `:s` sets `didit` and continues.
+    'repeat: loop {
+        // ":p" - full path/file_name
+        if *src.add(*usedlen) == b':' as i8 && *src.add(*usedlen + 1) == b'p' as i8 {
+            has_fullname = true;
+            valid |= VALID_PATH;
+            *usedlen += 2;
+
+            // Expand "~/path" for all systems, and "~user/path" for Unix.
+            let fchar0 = (*(*fnamep)) as u8;
+            let fchar1 = *(*fnamep).add(1) as u8;
+            let do_expand = fchar0 == b'~' && {
+                #[cfg(unix)]
+                {
+                    true
+                }
+                #[cfg(not(unix))]
+                {
+                    fchar1 == b'/' || fchar1 == b'\\' || fchar1 == 0
+                }
+            };
+            if do_expand && !(tilde_file && fchar1 == 0) {
+                *fnamep = expand_env_save(*fnamep);
+                nvim_path_xfree(*bufp);
+                *bufp = *fnamep;
+                if (*fnamep).is_null() {
+                    return -1;
+                }
+            }
+
+            // When "/." or "/.." is used: force expansion to get rid of it.
+            let mut p = (*fnamep).cast_const();
+            while *p != 0 {
+                if rs_vim_ispathsep(*p as c_int)
+                    && (*p.add(1) as u8 == b'.')
+                    && ((*p.add(2) as u8 == 0)
+                        || rs_vim_ispathsep(*p.add(2) as c_int)
+                        || ((*p.add(2) as u8 == b'.')
+                            && ((*p.add(3) as u8 == 0) || rs_vim_ispathsep(*p.add(3) as c_int))))
+                {
+                    break;
+                }
+                p = mb_ptr_adv(p);
+            }
+
+            // FullName_save() is slow; skip it when not needed.
+            if *p != 0 || !rs_vim_isAbsName(*fnamep) {
+                *fnamep = rs_FullName_save(*fnamep, *p != 0);
+                nvim_path_xfree(*bufp);
+                *bufp = *fnamep;
+                if (*fnamep).is_null() {
+                    return -1;
+                }
+            }
+
+            // Append a path separator to a directory.
+            if nvim_path_os_isdir((*fnamep).cast_const()) {
+                let slen = libc::strlen(*fnamep);
+                *fnamep = xstrnsave(*fnamep, slen + 2);
+                nvim_path_xfree(*bufp);
+                *bufp = *fnamep;
+                rs_add_pathsep(*fnamep);
+            }
+        }
+
+        let mut c: c_int;
+
+        // ":." / ":~" / ":8" - relative to cwd, home dir, or shortname (8.3).
+        loop {
+            let ch0 = *src.add(*usedlen) as u8;
+            if ch0 != b':' {
+                break;
+            }
+            c = *src.add(*usedlen + 1) as u8 as c_int;
+            if c != b'.' as i32 && c != b'~' as i32 && c != b'8' as i32 {
+                break;
+            }
+            *usedlen += 2;
+            if c == b'8' as i32 {
+                // shortname: no-op on non-Windows; skip.
+                continue;
+            }
+
+            let pbuf: *mut c_char;
+            // Need full path first (use expand_env() to remove a "~/").
+            if !has_fullname && !has_homerelative {
+                if **fnamep as u8 == b'~' {
+                    pbuf = expand_env_save(*fnamep);
+                } else {
+                    pbuf = rs_FullName_save(*fnamep, false);
+                }
+            } else {
+                pbuf = std::ptr::null_mut();
+            }
+
+            has_fullname = false;
+
+            let p: *const c_char = if pbuf.is_null() { *fnamep } else { pbuf };
+
+            if !p.is_null() {
+                if c == b'.' as i32 {
+                    // ":." - relative to cwd
+                    nvim_path_os_dirname(dirname.as_mut_ptr(), MAXPATHL);
+                    if has_homerelative {
+                        let s = nvim_path_xstrdup(dirname.as_ptr());
+                        home_replace(std::ptr::null(), s, dirname.as_mut_ptr(), MAXPATHL, true);
+                        nvim_path_xfree(s);
+                    }
+                    let namelen = libc::strlen(dirname.as_ptr()) as usize;
+                    if rs_path_fnamencmp(p, dirname.as_ptr(), namelen) == 0 {
+                        let mut pp = p.add(namelen);
+                        if rs_vim_ispathsep(*pp as c_int) {
+                            while *pp != 0 && rs_vim_ispathsep(*pp as c_int) {
+                                pp = pp.add(1);
+                            }
+                            *fnamep = pp.cast_mut();
+                            if !pbuf.is_null() {
+                                nvim_path_xfree(*bufp);
+                                *bufp = pbuf;
+                                // pbuf is now owned by *bufp; don't free below
+                                // (we skip the free at end of block)
+                                continue;
+                            }
+                        }
+                    }
+                } else {
+                    // ":~" - relative to home dir
+                    home_replace(std::ptr::null(), p, dirname.as_mut_ptr(), MAXPATHL, true);
+                    if *dirname.as_ptr() as u8 == b'~' {
+                        let s = nvim_path_xstrdup(dirname.as_ptr());
+                        *fnamep = s;
+                        nvim_path_xfree(*bufp);
+                        *bufp = s;
+                        has_homerelative = true;
+                        // pbuf is no longer needed (we used s, not pbuf)
+                        nvim_path_xfree(pbuf);
+                        continue;
+                    }
+                }
+                nvim_path_xfree(pbuf);
+            }
+        }
+
+        let tail: *mut c_char = rs_path_tail(*fnamep);
+        *fnamelen = libc::strlen(*fnamep) as usize;
+
+        // ":h" - head; remove "/filename", can be repeated.
+        while *src.add(*usedlen) as u8 == b':' && *src.add(*usedlen + 1) as u8 == b'h' {
+            valid |= VALID_HEAD;
+            *usedlen += 2;
+            let s = rs_get_past_head(*fnamep);
+            let mut tail_ptr = tail.cast_const();
+            let base_len = (*fnamelen) + 8;
+            // after_pathsep requires a slice spanning at least tail_ptr-*fnamep bytes
+            while tail_ptr > s.cast_const() {
+                let p_off = (tail_ptr as usize) - (*fnamep as usize);
+                let base = std::slice::from_raw_parts(*fnamep as *const u8, base_len);
+                if !after_pathsep(base, p_off) {
+                    break;
+                }
+                tail_ptr = mb_ptr_back(*fnamep, tail_ptr);
+            }
+            *fnamelen = (tail_ptr as usize) - (*fnamep as usize);
+            if *fnamelen == 0 {
+                // Result is empty. Use "." to make ":cd %:h" work.
+                nvim_path_xfree(*bufp);
+                let dot = nvim_path_xstrdup(c".".as_ptr());
+                *bufp = dot;
+                *fnamep = dot;
+                // tail_ptr not used below this branch; just set fnamelen
+                *fnamelen = 1;
+            } else {
+                let s_const = s.cast_const();
+                while tail_ptr > s_const {
+                    let p_off = (tail_ptr as usize) - (*fnamep as usize);
+                    let base = std::slice::from_raw_parts(*fnamep as *const u8, base_len);
+                    if after_pathsep(base, p_off) {
+                        break;
+                    }
+                    tail_ptr = mb_ptr_back(*fnamep, tail_ptr);
+                }
+            }
+        }
+
+        // ":8" - shortname (no-op on non-Windows).
+        if *src.add(*usedlen) as u8 == b':' && *src.add(*usedlen + 1) as u8 == b'8' {
+            *usedlen += 2;
+        }
+
+        // ":t" - tail (basename only).
+        if *src.add(*usedlen) as u8 == b':' && *src.add(*usedlen + 1) as u8 == b't' {
+            *usedlen += 2;
+            let tail_offset = (tail as usize) - (*fnamep as usize);
+            *fnamelen -= tail_offset;
+            *fnamep = tail;
+        }
+
+        // ":e" and ":r" — extension / root, can be repeated.
+        loop {
+            if *src.add(*usedlen) as u8 != b':' {
+                break;
+            }
+            let mod_char = *src.add(*usedlen + 1) as u8;
+            if mod_char != b'e' && mod_char != b'r' {
+                break;
+            }
+
+            let is_second_e = (*fnamep as usize) > (tail as usize);
+            let s_ptr: *const c_char = if mod_char == b'e' && is_second_e {
+                // Second :e — start searching from fnamep-2
+                (*fnamep).sub(2).cast_const()
+            } else {
+                (*fnamep).add(*fnamelen - 1).cast_const()
+            };
+
+            // Search backwards for '.'
+            let mut s = s_ptr;
+            while s > tail.cast_const() {
+                if *s as u8 == b'.' {
+                    break;
+                }
+                s = s.sub(1);
+            }
+
+            if mod_char == b'e' {
+                if s > tail.cast_const() {
+                    let newstart = s.add(1);
+                    let distance = (*fnamep as usize) - (newstart as usize);
+                    *fnamelen += distance;
+                    *fnamep = newstart.cast_mut();
+                } else if (*fnamep as usize) <= (tail as usize) {
+                    *fnamelen = 0;
+                }
+            } else {
+                // ":r" — remove one extension
+                let max_lower = std::cmp::max(tail as usize, *fnamep as usize);
+                if (s as usize) > max_lower {
+                    *fnamelen = (s as usize) - (*fnamep as usize);
+                }
+            }
+            *usedlen += 2;
+        }
+
+        // ":s?pat?rep?" and ":gs?pat?rep?" — substitute (then goto repeat).
+        if *src.add(*usedlen) as u8 == b':'
+            && (*src.add(*usedlen + 1) as u8 == b's'
+                || (*src.add(*usedlen + 1) as u8 == b'g' && *src.add(*usedlen + 2) as u8 == b's'))
+        {
+            let mut didit = false;
+
+            let flags: *const c_char = if *src.add(*usedlen + 1) as u8 == b'g' {
+                c"g".as_ptr()
+            } else {
+                c"".as_ptr()
+            };
+            let extra = usize::from(*src.add(*usedlen + 1) as u8 == b'g');
+            let mut s = src.add(*usedlen + 2 + extra).cast_const();
+
+            let sep = *s as u8 as c_int;
+            s = s.add(1);
+
+            if sep != 0 {
+                let p = vim_strchr(s, sep);
+                if !p.is_null() {
+                    let pat = nvim_path_xmemdupz(s, (p as usize) - (s as usize));
+                    s = p.add(1).cast_const();
+                    let p2 = vim_strchr(s, sep);
+                    if !p2.is_null() {
+                        let sub = nvim_path_xmemdupz(s, (p2 as usize) - (s as usize));
+                        let str_copy = nvim_path_xmemdupz(*fnamep, *fnamelen);
+                        *usedlen = (p2 as usize) + 1 - (src as usize);
+                        let mut slen: usize = 0;
+                        let result = do_string_sub(
+                            str_copy,
+                            *fnamelen,
+                            pat,
+                            sub,
+                            std::ptr::null(),
+                            flags,
+                            &raw mut slen,
+                        );
+                        *fnamep = result;
+                        *fnamelen = slen;
+                        nvim_path_xfree(*bufp);
+                        *bufp = result;
+                        didit = true;
+                        nvim_path_xfree(sub);
+                        nvim_path_xfree(str_copy);
+                    }
+                    nvim_path_xfree(pat);
+                }
+                if didit {
+                    // Reset state for the next iteration (mirrors "goto repeat").
+                    has_fullname = false;
+                    has_homerelative = false;
+                    continue 'repeat;
+                }
+            }
+        }
+
+        // ":S" — shell-escape the filename.
+        if *src.add(*usedlen) as u8 == b':' && *src.add(*usedlen + 1) as u8 == b'S' {
+            // vim_strsave_shellescape() needs a NUL-terminated string.
+            c = *(*fnamep).add(*fnamelen) as u8 as c_int;
+            if c != 0 {
+                *(*fnamep).add(*fnamelen) = 0;
+            }
+            let p = vim_strsave_shellescape(*fnamep, false, false);
+            if c != 0 {
+                *(*fnamep).add(*fnamelen) = c as i8;
+            }
+            nvim_path_xfree(*bufp);
+            *bufp = p;
+            *fnamep = p;
+            *fnamelen = libc::strlen(p) as usize;
+            *usedlen += 2;
+        }
+
+        break 'repeat;
+    }
+
+    valid
+}

@@ -6,6 +6,6 @@
 #include "nvim/eval/typval_defs.h"  // IWYU pragma: keep
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
-// modify_fname: filename modifier engine (defined in eval/funcs_shim.c)
+// modify_fname: filename modifier engine (implemented in src/nvim-rs/path/src/lib.rs)
 int modify_fname(char *src, bool tilde_file, size_t *usedlen, char **fnamep, char **bufp,
                  size_t *fnamelen);
