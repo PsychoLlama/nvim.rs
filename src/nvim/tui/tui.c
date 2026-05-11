@@ -221,6 +221,15 @@ extern void rs_tui_raw_line(TUIData *tui, int64_t g, int64_t linerow, int64_t st
                              int64_t endcol, int64_t clearcol, int64_t clearattr,
                              int64_t flags, const schar_T *chunk, const sattr_T *attrs);
 
+// Phase 1: Rust implementations for terminal mode / key encoding cluster
+extern void rs_tui_request_term_mode(TUIData *tui, int mode);
+extern void rs_tui_set_term_mode_impl(TUIData *tui, int mode, bool set);
+extern void rs_tui_handle_term_mode(TUIData *tui, int mode, int state);
+extern void rs_tui_query_extended_underline(TUIData *tui);
+extern void rs_tui_query_kitty_keyboard(TUIData *tui);
+extern void rs_tui_set_key_encoding_cb(TUIData *tui);
+extern void rs_tui_reset_key_encoding_impl(TUIData *tui);
+
 // TUIData Accessor Functions for Rust
 
 
@@ -662,6 +671,16 @@ bool nvim_tui_get_has_sync_mode(TUIData *tui) { return tui->has_sync_mode; }
 /// Set has_sync_mode flag
 void nvim_tui_set_has_sync_mode(TUIData *tui, bool val) { tui->has_sync_mode = val; }
 
+// Phase 1 accessors: mode flags and input callbacks
+void nvim_tui_set_modes_grapheme_clusters(TUIData *tui, bool val) { tui->modes.grapheme_clusters = val; }
+void nvim_tui_set_modes_theme_updates(TUIData *tui, bool val) { tui->modes.theme_updates = val; }
+void nvim_tui_set_modes_resize_events(TUIData *tui, bool val) { tui->modes.resize_events = val; }
+void nvim_tui_set_has_lr_margin_mode(TUIData *tui, bool val) { tui->has_left_and_right_margin_mode = val; }
+void nvim_tui_set_resize_events_enabled(TUIData *tui, bool val) { tui->resize_events_enabled = val; }
+bool nvim_tui_get_resize_events_enabled(TUIData *tui) { return tui->resize_events_enabled; }
+void nvim_tui_set_primary_device_attr_cb(TUIData *tui, void (*cb)(TUIData *)) { tui->input.callbacks.primary_device_attr = cb; }
+int nvim_tui_input_get_key_encoding(TUIData *tui) { return (int)tui->input.key_encoding; }
+
 /// Wrapper for tui_reset_key_encoding (static) callable from Rust
 void nvim_tui_reset_key_encoding(TUIData *tui) { tui_reset_key_encoding(tui); }
 
@@ -758,144 +777,57 @@ void tui_start(TUIData **tui_p, int *width, int *height, char **term, bool *rgb)
   *rgb = tui->rgb;
 }
 
-/// Request the terminal's mode (DECRQM).
-///
-/// @see handle_modereport
+/// Request the terminal's mode (DECRQM). Rust implementation.
 static void tui_request_term_mode(TUIData *tui, TermMode mode)
   FUNC_ATTR_NONNULL_ALL
 {
-  // 5 bytes for \x1b[?$p, 1 byte for null terminator, 6 bytes for mode digits (more than enough)
-  char buf[12];
-  int len = snprintf(buf, sizeof(buf), "\x1b[?%d$p", (int)mode);
-  assert((len > 0) && (len < (int)sizeof(buf)));
-  out(tui, buf, (size_t)len);
+  rs_tui_request_term_mode(tui, (int)mode);
 }
 
-/// Set (DECSET) or reset (DECRST) a terminal mode.
+/// Set (DECSET) or reset (DECRST) a terminal mode. Rust implementation.
 static void tui_set_term_mode(TUIData *tui, TermMode mode, bool set)
   FUNC_ATTR_NONNULL_ALL
 {
-  char buf[12];
-  int len = snprintf(buf, sizeof(buf), "\x1b[?%d%c", (int)mode, set ? 'h' : 'l');
-  assert((len > 0) && (len < (int)sizeof(buf)));
-  out(tui, buf, (size_t)len);
+  rs_tui_set_term_mode_impl(tui, (int)mode, set);
 }
 
-/// Handle a mode report (DECRPM) from the terminal.
+/// Handle a mode report (DECRPM) from the terminal. Rust implementation.
 void tui_handle_term_mode(TUIData *tui, TermMode mode, TermModeState state)
   FUNC_ATTR_NONNULL_ALL
 {
-  bool is_set = false;
-  switch (state) {
-  case kTermModeNotRecognized:
-  case kTermModePermanentlyReset:
-    // TODO(bfredl): This is really ILOG but we want it in all builds.
-    // add to show_verbose_terminfo() without being too racy ????
-    WLOG("TUI: terminal mode %d unavailable, state %d", mode, state);
-    // If the mode is not recognized, or if the terminal emulator does not allow it to be changed,
-    // then there is nothing to do
-    break;
-  case kTermModePermanentlySet:
-  case kTermModeSet:
-    is_set = true;
-    FALLTHROUGH;
-  case kTermModeReset:
-    // The terminal supports changing the given mode
-    WLOG("TUI: terminal mode %d detected, state %d", mode, state);
-    switch (mode) {
-    case kTermModeSynchronizedOutput:
-      // Ref: https://gist.github.com/christianparpart/d8a62cc1ab659194337d73e399004036
-      tui->has_sync_mode = true;
-      break;
-    case kTermModeGraphemeClusters:
-      if (!is_set) {
-        tui_set_term_mode(tui, mode, true);
-        tui->modes.grapheme_clusters = true;
-      }
-      break;
-    case kTermModeThemeUpdates:
-      if (!is_set) {
-        tui_set_term_mode(tui, mode, true);
-        tui->modes.theme_updates = true;
-      }
-      break;
-    case kTermModeResizeEvents:
-      if (!is_set) {
-        tui_set_term_mode(tui, mode, true);
-        tui->modes.resize_events = true;
-      }
-
-      // We track both whether the mode is enabled AND if Nvim was the one to enable it
-      tui->resize_events_enabled = true;
-      break;
-    case kTermModeLeftAndRightMargins:
-      tui->has_left_and_right_margin_mode = true;
-      break;
-    default:
-      break;
-    }
-  }
+  rs_tui_handle_term_mode(tui, (int)mode, (int)state);
 }
 
-/// Query the terminal emulator to see if it supports extended underline.
+/// Query the terminal emulator to see if it supports extended underline. Rust implementation.
 static void tui_query_extended_underline(TUIData *tui)
 {
-  // Try to set an undercurl using an SGR sequence, followed by a DECRQSS SGR query.
-  // Reset attributes first, as other code may have set attributes.
-  out(tui, S_LEN("\x1b[0m\x1b[4:3m\x1bP$qm\x1b\\"));
-  tui->print_attr_id = -1;
+  rs_tui_query_extended_underline(tui);
 }
 
 /// Enable extended underline support. Rust implementation.
 void tui_enable_extended_underline(TUIData *tui) { rs_tui_enable_extended_underline(tui); }
 
 /// Query the terminal emulator to see if it supports Kitty's keyboard protocol.
-///
-/// Write CSI ? u followed by a primary device attributes request (CSI c). If
-/// a primary device attributes response is received without first receiving an
-/// answer to the progressive enhancement query (CSI u), then the terminal does
-/// not support the Kitty keyboard protocol.
-///
-/// See https://sw.kovidgoyal.net/kitty/keyboard-protocol/#detection-of-support-for-this-protocol
+/// Rust implementation.
 static void tui_query_kitty_keyboard(TUIData *tui)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Set the key encoding whenever the Device Attributes (DA1) response is received.
-  tui->input.callbacks.primary_device_attr = tui_set_key_encoding;
-  out(tui, S_LEN("\x1b[?u\x1b[c"));
+  rs_tui_query_kitty_keyboard(tui);
 }
 
+/// Called when DA1 response is received; sets the appropriate key encoding.
+/// Rust implementation.
 void tui_set_key_encoding(TUIData *tui)
   FUNC_ATTR_NONNULL_ALL
 {
-  switch (tui->input.key_encoding) {
-  case kKeyEncodingKitty:
-    // Progressive enhancement flags:
-    //   0b01   (1) Disambiguate escape codes
-    //   0b10   (2) Report event types
-    out(tui, S_LEN("\x1b[>3u"));
-    break;
-  case kKeyEncodingXterm:
-    out(tui, S_LEN("\x1b[>4;2m"));
-    break;
-  case kKeyEncodingLegacy:
-    break;
-  }
+  rs_tui_set_key_encoding_cb(tui);
 }
 
+/// Reset the active key encoding protocol. Rust implementation.
 static void tui_reset_key_encoding(TUIData *tui)
   FUNC_ATTR_NONNULL_ALL
 {
-  switch (tui->input.key_encoding) {
-  case kKeyEncodingKitty:
-    out(tui, S_LEN("\x1b[<u"));
-    break;
-  case kKeyEncodingXterm:
-    out(tui, S_LEN("\x1b[>4;0m"));
-    break;
-  case kKeyEncodingLegacy:
-    break;
-  }
+  rs_tui_reset_key_encoding_impl(tui);
 }
 
 /// Write the OSC 11 sequence to the terminal emulator to query the current

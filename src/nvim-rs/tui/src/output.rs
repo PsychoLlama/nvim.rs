@@ -2273,6 +2273,204 @@ pub unsafe extern "C" fn rs_terminfo_disable(tui: *mut TuiHandle) {
     nvim_tui_flush_buf(tui);
 }
 
+// ============================================================================
+// Phase 1: Terminal mode / key encoding cluster
+// ============================================================================
+
+// Additional TermMode enum values (from tui_defs.h) not yet defined above.
+// TERM_MODE_LEFT_RIGHT_MARGINS, TERM_MODE_GRAPHEME_CLUSTERS, TERM_MODE_THEME_UPDATES,
+// and TERM_MODE_RESIZE_EVENTS are already defined in the terminfo_disable section above.
+const TERM_MODE_SYNCHRONIZED_OUTPUT: c_int = 2026; // kTermModeSynchronizedOutput
+
+// KeyEncoding enum values (from input.h)
+// KEY_ENCODING_LEGACY = 0 is the default (falls through to `_ => {}`)
+const KEY_ENCODING_KITTY: c_int = 1; // kKeyEncodingKitty
+const KEY_ENCODING_XTERM: c_int = 2; // kKeyEncodingXterm
+
+extern "C" {
+    fn nvim_tui_set_modes_grapheme_clusters(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_modes_theme_updates(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_modes_resize_events(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_has_lr_margin_mode(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_resize_events_enabled(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_has_sync_mode(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_primary_device_attr_cb(
+        tui: *mut TuiHandle,
+        cb: unsafe extern "C" fn(*mut TuiHandle),
+    );
+    fn nvim_tui_input_get_key_encoding(tui: *mut TuiHandle) -> c_int;
+    // nvim_tui_set_print_attr_id already declared in the earlier extern "C" block
+}
+
+/// Request the terminal's mode (DECRQM). Emits \x1b[?<mode>$p.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_request_term_mode(tui: *mut TuiHandle, mode: c_int) {
+    if tui.is_null() {
+        return;
+    }
+    let mut buf = [0u8; 12];
+    let s = format!("\x1b[?{}$p", mode);
+    let bytes = s.as_bytes();
+    let len = bytes.len().min(buf.len());
+    buf[..len].copy_from_slice(&bytes[..len]);
+    nvim_tui_out(tui, buf.as_ptr(), len);
+}
+
+/// Set (DECSET) or reset (DECRST) a terminal private mode.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_set_term_mode_impl(tui: *mut TuiHandle, mode: c_int, set: bool) {
+    if tui.is_null() {
+        return;
+    }
+    let ch = if set { b'h' } else { b'l' };
+    let s = format!("\x1b[?{}{}", mode, ch as char);
+    let bytes = s.as_bytes();
+    nvim_tui_out(tui, bytes.as_ptr(), bytes.len());
+}
+
+/// Handle a mode report (DECRPM) from the terminal.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_handle_term_mode(tui: *mut TuiHandle, mode: c_int, state: c_int) {
+    if tui.is_null() {
+        return;
+    }
+
+    // kTermModeState values from tui_defs.h:
+    // kTermModeNotRecognized = 0, kTermModeSet = 1, kTermModeReset = 2,
+    // kTermModePermanentlySet = 3, kTermModePermanentlyReset = 4
+    if state == 0 || state == 4 {
+        // kTermModeNotRecognized or kTermModePermanentlyReset — nothing to do
+        return;
+    }
+
+    // kTermModeSet (1), kTermModeReset (2), kTermModePermanentlySet (3) reach here
+    // "is currently set" means the terminal already has the mode active
+    let is_set = state == 1 || state == 3; // kTermModeSet or kTermModePermanentlySet
+
+    match mode {
+        TERM_MODE_SYNCHRONIZED_OUTPUT => {
+            nvim_tui_set_has_sync_mode(tui, true);
+        }
+        TERM_MODE_GRAPHEME_CLUSTERS => {
+            if !is_set {
+                nvim_tui_set_term_mode(tui, TERM_MODE_GRAPHEME_CLUSTERS, true);
+                nvim_tui_set_modes_grapheme_clusters(tui, true);
+            }
+        }
+        TERM_MODE_THEME_UPDATES => {
+            if !is_set {
+                nvim_tui_set_term_mode(tui, TERM_MODE_THEME_UPDATES, true);
+                nvim_tui_set_modes_theme_updates(tui, true);
+            }
+        }
+        TERM_MODE_RESIZE_EVENTS => {
+            if !is_set {
+                nvim_tui_set_term_mode(tui, TERM_MODE_RESIZE_EVENTS, true);
+                nvim_tui_set_modes_resize_events(tui, true);
+            }
+            // Track whether resize events are enabled regardless of who enabled it
+            nvim_tui_set_resize_events_enabled(tui, true);
+        }
+        TERM_MODE_LEFT_RIGHT_MARGINS => {
+            nvim_tui_set_has_lr_margin_mode(tui, true);
+        }
+        _ => {}
+    }
+}
+
+/// Query terminal for extended underline support (DECRQSS SGR probe).
+///
+/// Emits reset + SGR undercurl + DECRQSS, and resets print_attr_id.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_query_extended_underline(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    let seq = b"\x1b[0m\x1b[4:3m\x1bP$qm\x1b\\";
+    nvim_tui_out(tui, seq.as_ptr(), seq.len());
+    nvim_tui_set_print_attr_id(tui, -1);
+}
+
+/// Query the terminal for Kitty keyboard protocol support.
+///
+/// Emits CSI ? u CSI c and registers tui_set_key_encoding as the DA1 callback.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_query_kitty_keyboard(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    nvim_tui_set_primary_device_attr_cb(tui, rs_tui_set_key_encoding_cb);
+    let seq = b"\x1b[?u\x1b[c";
+    nvim_tui_out(tui, seq.as_ptr(), seq.len());
+}
+
+/// Called when DA1 response is received; sets the appropriate key encoding.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_set_key_encoding_cb(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    let encoding = nvim_tui_input_get_key_encoding(tui);
+    match encoding {
+        e if e == KEY_ENCODING_KITTY => {
+            // Progressive enhancement flags:
+            //   0b01   (1) Disambiguate escape codes
+            //   0b10   (2) Report event types
+            nvim_tui_out(tui, b"\x1b[>3u".as_ptr(), 5);
+        }
+        e if e == KEY_ENCODING_XTERM => {
+            nvim_tui_out(tui, b"\x1b[>4;2m".as_ptr(), 7);
+        }
+        _ => {} // kKeyEncodingLegacy: no action
+    }
+}
+
+/// Reset the key encoding to legacy.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_reset_key_encoding_impl(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    let encoding = nvim_tui_input_get_key_encoding(tui);
+    match encoding {
+        e if e == KEY_ENCODING_KITTY => {
+            nvim_tui_out(tui, b"\x1b[<u".as_ptr(), 4);
+        }
+        e if e == KEY_ENCODING_XTERM => {
+            nvim_tui_out(tui, b"\x1b[>4;0m".as_ptr(), 7);
+        }
+        _ => {} // kKeyEncodingLegacy: no action
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
