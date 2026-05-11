@@ -57,8 +57,8 @@ extern "C" {
     static mut cmdline_row: c_int;
 
     // Globals
-    fn nvim_get_key_typed_cmdline() -> c_int;
-    fn nvim_set_msg_no_more(val: c_int);
+    static mut KeyTyped: bool;
+    static mut msg_no_more: bool;
     fn msg_check();
 
     // Abbreviation support
@@ -958,7 +958,7 @@ pub unsafe extern "C" fn rs_putcmdline(c: c_int, shift: bool) {
         return;
     }
     if ui_has(K_UI_CMDLINE) == 0 {
-        nvim_set_msg_no_more(1);
+        msg_no_more = true;
         msg_putchar(c);
         if shift {
             draw_cmdline(
@@ -966,7 +966,7 @@ pub unsafe extern "C" fn rs_putcmdline(c: c_int, shift: bool) {
                 nvim_get_ccline_cmdlen() - nvim_get_ccline_cmdpos(),
             );
         }
-        nvim_set_msg_no_more(0);
+        msg_no_more = false;
     } else if nvim_get_ccline_redraw_state() != K_CMD_REDRAW_ALL {
         nvim_ui_cmdline_special_char(c, shift, nvim_get_ccline_level());
     }
@@ -988,7 +988,7 @@ pub unsafe extern "C" fn rs_unputcmdline() {
     if cmd_silent {
         return;
     }
-    nvim_set_msg_no_more(1);
+    msg_no_more = true;
     let cmdpos = nvim_get_ccline_cmdpos();
     let cmdlen = nvim_get_ccline_cmdlen();
     let cmdbuff = nvim_get_ccline_cmdbuff();
@@ -998,7 +998,7 @@ pub unsafe extern "C" fn rs_unputcmdline() {
         let char_len = utfc_ptr2len(cmdbuff.add(cmdpos as usize));
         draw_cmdline(cmdpos, char_len);
     }
-    nvim_set_msg_no_more(0);
+    msg_no_more = false;
     cursorcmd();
     nvim_set_ccline_special_char(NUL as c_int);
     ui_cursor_shape();
@@ -1250,7 +1250,7 @@ pub unsafe extern "C" fn put_on_cmdline_rs(str: *const c_char, mut len: c_int, r
     let cur_pos = nvim_get_ccline_cmdpos();
 
     if redraw && !cmd_silent {
-        nvim_set_msg_no_more(1);
+        msg_no_more = true;
         let old_row = cmdline_row;
         cursorcmd();
         let draw_len = nvim_get_ccline_cmdlen();
@@ -1259,10 +1259,10 @@ pub unsafe extern "C" fn put_on_cmdline_rs(str: *const c_char, mut len: c_int, r
         if cmdline_row != old_row || nvim_get_ccline_overstrike() != 0 {
             msg_clr_eos();
         }
-        nvim_set_msg_no_more(0);
+        msg_no_more = false;
     }
 
-    let screen_limit = if nvim_get_key_typed_cmdline() != 0 {
+    let screen_limit = if KeyTyped {
         let cols = Columns;
         let rows = Rows;
         let prod = cols.saturating_mul(rows);

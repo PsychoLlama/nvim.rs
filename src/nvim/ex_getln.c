@@ -746,9 +746,6 @@ void nvim_apply_pending_hl_callback(void)
   pending_prompt_hl_callback = (Callback)CALLBACK_INIT;
 }
 
-/// Increment last_prompt_id and return new value.
-unsigned int nvim_get_ccline_prompt_id_inc(void) { return ++last_prompt_id; }
-
 int nvim_get_key_typed(void) { return KeyTyped; }
 int nvim_get_cmdline_star(void) { return cmdline_star; }
 int nvim_cmdline_win_is_active(void) { return cmdline_win != NULL; }
@@ -784,17 +781,10 @@ void nvim_get_ccline_color_chunk(size_t idx, int *start_out, int *end_out, int *
   *hl_id_out = chunk.hl_id;
 }
 
-void nvim_set_redrawing_cmdline(int val) { redrawing_cmdline = (val != 0); }
-void nvim_set_msg_no_more(int val) { msg_no_more = (val != 0); }
-void nvim_set_skip_redraw2(int val) { skip_redraw = (val != 0); }
-int nvim_get_key_typed_cmdline(void) { return KeyTyped ? 1 : 0; }
-int nvim_get_p_ru(void) { return p_ru; }
-
 // nvim_set_search_match: migrated to Rust (search.rs).
 
 int nvim_get_new_cmdpos(void) { return new_cmdpos; }
 void nvim_set_new_cmdpos(int val) { new_cmdpos = val; }
-void nvim_set_key_typed(int val) { KeyTyped = (val != 0); }
 
 
 
@@ -1117,9 +1107,6 @@ void nvim_set_cmdmsg_rl(int val) { cmdmsg_rl = (val != 0); }
 /// Set redir_off global.
 void nvim_set_redir_off(int val) { redir_off = (val != 0); }
 
-/// Get redir_off global.
-int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
-
 /// Wrapper for gotocmdline(true).
 void nvim_gotocmdline(void) { gotocmdline(true); }
 
@@ -1142,9 +1129,6 @@ void nvim_wildmenu_cleanup_ccline(void) { wildmenu_cleanup(&ccline); }
 
 /// Clear xpc pointer in ccline and clear cmdline_orig.
 void nvim_ccline_clear_xpc_and_orig(void) { ccline.xpc = NULL; clear_cmdline_orig(); }
-
-/// Set ccline.xpc to NULL.
-void nvim_ccline_xpc_clear(void) { ccline.xpc = NULL; }
 
 /// Get ccline.xpc as opaque pointer (for xp_pattern fixup after realloc).
 void *nvim_get_ccline_xpc_ptr(void) { return (void *)ccline.xpc; }
@@ -1171,9 +1155,6 @@ int nvim_ccline_has_cmdbuff(void) { return ccline.cmdbuff != NULL ? 1 : 0; }
 
 /// Get ccline.one_key (for gotesc handling).
 int nvim_ccline_get_one_key(void) { return ccline.one_key ? 1 : 0; }
-
-/// Get msg_scrolled global.
-int nvim_get_msg_scrolled(void) { return msg_scrolled; }
 
 // nvim_clear_need_wait_return_wrap: migrated to Rust (entry_impl.rs).
 

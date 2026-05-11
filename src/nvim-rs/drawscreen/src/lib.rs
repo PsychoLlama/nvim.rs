@@ -2863,7 +2863,6 @@ extern "C" {
     static mut cmdline_row: c_int;
     fn msg_clr_cmdline();
     static mut msg_no_more: bool;
-    fn nvim_set_msg_no_more(val: c_int);
     static mut lines_left: c_int;
     // nvim_drawscreen_edit_submode_*: inlined (Phase 38, use extern statics directly)
     #[link_name = "edit_submode"]
@@ -3053,7 +3052,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         msg_pos_mode();
         let hl_id = HLF_CM;
 
-        nvim_set_msg_no_more(1);
+        msg_no_more = true;
         let save_lines_left = lines_left;
         lines_left = 0;
 
@@ -3074,7 +3073,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         msg_didout = false;
         length = msg_col;
         msg_col = 0;
-        nvim_set_msg_no_more(0);
+        msg_no_more = false;
         lines_left = save_lines_left;
         need_wait_return = nwr_save;
     } else if clear_cmdline && msg_silent == 0 {

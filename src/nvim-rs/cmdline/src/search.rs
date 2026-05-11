@@ -1140,7 +1140,7 @@ unsafe extern "C" {
     ) -> c_int;
     fn nvim_get_search_first_line() -> i32;
     fn nvim_get_search_last_line() -> i32;
-    fn nvim_get_p_ru() -> c_int;
+    static p_ru: c_int;
     fn nvim_get_no_hlsearch() -> c_int;
     fn nvim_get_p_hls() -> c_int;
     fn nvim_curbuf_get_ml_line_count() -> c_int;
@@ -1368,7 +1368,7 @@ pub unsafe extern "C" fn rs_may_do_incsearch_highlighting(
     validate_cursor(curwin);
 
     // May redraw the status line to show cursor position.
-    if nvim_get_p_ru() != 0
+    if p_ru != 0
         && (nvim_win_get_status_height(curwin.cast::<()>()) > 0 || rs_global_stl_height() > 0)
     {
         nvim_win_set_redr_status(curwin, 1);

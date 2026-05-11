@@ -421,10 +421,10 @@ extern "C" {
     // For redrawcmd
     fn sb_text_restart_cmdline();
     fn putcmdline(c: c_char, shift: bool);
-    fn nvim_set_redrawing_cmdline(val: c_int);
-    fn nvim_set_msg_no_more(val: c_int);
+    static mut redrawing_cmdline: bool;
+    static mut msg_no_more: bool;
     static mut msg_scroll: c_int;
-    fn nvim_set_skip_redraw2(val: c_int);
+    static mut skip_redraw: bool;
     fn nvim_get_ccline_special_char() -> c_int;
     fn nvim_get_ccline_special_shift() -> c_int;
     fn nvim_set_ccline_special_char(val: c_int);
@@ -675,17 +675,17 @@ pub unsafe extern "C" fn redrawcmd_rs() {
         return;
     }
 
-    nvim_set_redrawing_cmdline(1);
+    redrawing_cmdline = true;
 
     sb_text_restart_cmdline();
     msg_start();
     rs_redrawcmdprompt();
 
     // Don't use more prompt; truncate cmdline if it doesn't fit
-    nvim_set_msg_no_more(1);
+    msg_no_more = true;
     draw_cmdline_rs(0, nvim_get_ccline_cmdlen());
     msg_clr_eos();
-    nvim_set_msg_no_more(0);
+    msg_no_more = false;
 
     let new_cmdspos = cmd_screencol(nvim_get_ccline_cmdpos());
     nvim_set_ccline_cmdspos(new_cmdspos);
@@ -700,9 +700,9 @@ pub unsafe extern "C" fn redrawcmd_rs() {
     msg_scroll = 0;
 
     // Typing ':' at the more prompt may set skip_redraw. Reset it.
-    nvim_set_skip_redraw2(0);
+    skip_redraw = false;
 
-    nvim_set_redrawing_cmdline(0);
+    redrawing_cmdline = false;
 }
 
 /// Direct C replacement for redrawcmdline().

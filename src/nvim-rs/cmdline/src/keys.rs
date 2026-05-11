@@ -655,8 +655,7 @@ unsafe extern "C" {
     fn nvim_get_cmdline_star() -> c_int;
     fn nvim_get_new_cmdpos() -> c_int;
     fn nvim_set_new_cmdpos(val: c_int);
-    fn nvim_get_key_typed_cmdline() -> c_int;
-    fn nvim_set_key_typed(val: c_int);
+    static mut KeyTyped: bool;
     fn nvim_inc_textlock();
     fn nvim_dec_textlock();
     static mut no_mapping: c_int;
@@ -706,7 +705,7 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
     if c != CTRL_N
         && c != CTRL_G
         && (c != b'e' as c_int
-            || (nvim_get_ccline_cmdfirstc() == b'=' as c_int && nvim_get_key_typed_cmdline() != 0)
+            || (nvim_get_ccline_cmdfirstc() == b'=' as c_int && KeyTyped)
             || nvim_get_cmdline_star() > 0)
     {
         vungetc(c);
@@ -749,7 +748,7 @@ pub unsafe extern "C" fn rs_command_line_handle_ctrl_bsl(
                     nvim_get_ccline_cmdlen()
                 };
                 nvim_set_ccline_cmdpos(new_pos);
-                nvim_set_key_typed(0); // Don't do p_wc completion.
+                KeyTyped = false; // Don't do p_wc completion.
                 crate::screen::redrawcmd_rs();
                 return CMDLINE_CHANGED;
             }
@@ -822,7 +821,7 @@ pub unsafe extern "C" fn rs_command_line_insert_reg(
             *gotesc_ptr = true; // will free ccline.cmdbuff after putting it in history
             return GOTO_NORMAL_MODE;
         }
-        nvim_set_key_typed(0); // Don't do p_wc completion.
+        KeyTyped = false; // Don't do p_wc completion.
         let new_pos = nvim_get_new_cmdpos();
         if new_pos >= 0 {
             // set_cmdline_pos() was used
@@ -1206,7 +1205,7 @@ pub unsafe extern "C" fn rs_command_line_handle_key(s: *mut c_void) -> c_int {
                 let cols = Columns;
                 let rows = Rows;
                 let cmdspos = nvim_get_ccline_cmdspos();
-                if nvim_get_key_typed_cmdline() != 0 && cmdspos + cells >= cols * rows {
+                if KeyTyped && cmdspos + cells >= cols * rows {
                     break;
                 }
                 nvim_set_ccline_cmdspos(cmdspos + cells);

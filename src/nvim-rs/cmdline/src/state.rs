@@ -1050,7 +1050,7 @@ unsafe extern "C" {
     static p_wc: i64;
     static p_wcm: i64;
     static p_wmnu: c_int;
-    fn nvim_get_key_typed_cmdline() -> c_int;
+    static mut KeyTyped: bool;
     static mut cmdmsg_rl: bool;
     static KeyStuffed: c_int;
     static cmd_silent: bool;
@@ -1352,7 +1352,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         return 1;
     }
 
-    if nvim_get_key_typed_cmdline() != 0 {
+    if KeyTyped {
         (*s).some_key_typed = true;
 
         if cmdmsg_rl && KeyStuffed == 0 {
@@ -1423,7 +1423,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     let c_curr = (*s).c;
     let wc = p_wc as c_int;
     let wcm = p_wcm as c_int;
-    let key_is_wc = (c_curr == wc && nvim_get_key_typed_cmdline() != 0) || c_curr == wcm;
+    let key_is_wc = (c_curr == wc && KeyTyped) || c_curr == wcm;
 
     let mut wild_type = 0_i32;
     if (cmdline_pum_active() != 0 || wild_menu_showing != 0 || (*s).did_wild_list) && !key_is_wc {
@@ -1443,7 +1443,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     // Trigger CmdlineLeavePre autocommand
     {
         let c_check = (*s).c;
-        if (nvim_get_key_typed_cmdline() != 0
+        if (KeyTyped
             && (c_check == b'\n' as c_int
                 || c_check == b'\r' as c_int
                 || c_check == K_KENTER
@@ -1538,8 +1538,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
             || c_check == b'\r' as c_int
             || c_check == K_KENTER
             || (c_check == ESC
-                && (nvim_get_key_typed_cmdline() == 0
-                    || !vim_strchr(nvim_get_p_cpo(), CPO_ESC_CHAR).is_null()))
+                && (!KeyTyped || !vim_strchr(nvim_get_p_cpo(), CPO_ESC_CHAR).is_null()))
         {
             let exmode = exmode_active;
             let cmdpos = nvim_get_ccline_cmdpos();
@@ -1576,7 +1575,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
         let c_check = (*s).c;
         let wc = p_wc as c_int;
         let wcm = p_wcm as c_int;
-        if (c_check == wc && !(*s).gotesc && nvim_get_key_typed_cmdline() != 0)
+        if (c_check == wc && !(*s).gotesc && KeyTyped)
             || c_check == wcm
             || c_check == K_WILD
             || c_check == CTRL_Z
@@ -1602,7 +1601,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
     // <S-Tab> goes to last match, in a clumsy way
     {
         let c_check = (*s).c;
-        if c_check == K_S_TAB && nvim_get_key_typed_cmdline() != 0 {
+        if c_check == K_S_TAB && KeyTyped {
             let xp = std::ptr::addr_of_mut!((*s).xpc).cast::<c_void>();
             let firstc = (*s).firstc;
             if nextwild(xp, WILD_EXPAND_KEEP, 0, firstc != b'@' as c_int) == OK {
@@ -1642,7 +1641,7 @@ pub unsafe extern "C" fn rs_command_line_execute(state: *mut c_void, key: c_int)
                 crate::search::rs_init_incsearch_state(is_state_ptr);
             }
         }
-        if nvim_get_key_typed_cmdline() != 0 || vpeekc() == NUL_INT {
+        if KeyTyped || vpeekc() == NUL_INT {
             // Inlined nvim_cls_may_do_incsearch
             {
                 let firstc = (*s).firstc;
