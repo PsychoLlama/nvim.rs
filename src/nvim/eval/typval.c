@@ -698,91 +698,8 @@ void tv_clear(typval_T *const tv)
 /// Used by Rust to safely index into typval arrays.
 const void *nvim_typval_array_get(const typval_T *args, int idx) { return &args[idx]; }
 
-void nvim_typval_error_string_required(int idx) { semsg(_(e_string_required_for_argument_nr), idx); }
-
-void nvim_typval_error_nonempty_string_required(int idx) { semsg(_(e_non_empty_string_required_for_argument_nr), idx); }
-
-void nvim_typval_error_number_required(int idx) { semsg(_(e_number_required_for_argument_nr), idx); }
-
-void nvim_typval_error_float_or_number_required(int idx) { semsg(_(e_float_or_number_required_for_argument_nr), idx); }
-
-void nvim_typval_error_bool_required(int idx) { semsg(_(e_bool_required_for_argument_nr), idx); }
-
-void nvim_typval_error_blob_required(int idx) { semsg(_(e_blob_required_for_argument_nr), idx); }
-
-void nvim_typval_error_list_required(int idx) { semsg(_(e_list_required_for_argument_nr), idx); }
-
-void nvim_typval_error_dict_required(int idx) { semsg(_(e_dict_required_for_argument_nr), idx); }
-
-void nvim_typval_error_nonnull_dict_required(int idx) { semsg(_(e_non_null_dict_required_for_argument_nr), idx); }
-
-void nvim_typval_error_string_or_number_required(int idx)
-{
-  semsg(_(e_string_or_number_required_for_argument_nr), idx);
-}
-
-void nvim_typval_error_string_or_list_required(int idx) { semsg(_(e_string_or_list_required_for_argument_nr), idx); }
-
-void nvim_typval_error_string_list_or_blob_required(int idx)
-{
-  semsg(_(e_string_list_or_blob_required_for_argument_nr), idx);
-}
-
-void nvim_typval_error_string_list_or_dict_required(int idx)
-{
-  semsg(_(e_string_list_or_dict_required_for_argument_nr), idx);
-}
-
-void nvim_typval_error_string_or_func_required(int idx)
-{
-  semsg(_(e_string_or_function_required_for_argument_nr), idx);
-}
-
-void nvim_typval_error_list_or_blob_required(int idx) { semsg(_(e_list_or_blob_required_for_argument_nr), idx); }
-
-// tv_check_num error messages (type-specific)
-
-void nvim_typval_error_using_funcref_as_number(void) { emsg(_("E703: Using a Funcref as a Number")); }
-
-void nvim_typval_error_using_list_as_number(void) { emsg(_("E745: Using a List as a Number")); }
-
-void nvim_typval_error_using_dict_as_number(void) { emsg(_("E728: Using a Dictionary as a Number")); }
-
-void nvim_typval_error_using_float_as_number(void) { emsg(_("E805: Using a Float as a Number")); }
-
-void nvim_typval_error_using_blob_as_number(void) { emsg(_("E974: Using a Blob as a Number")); }
-
-void nvim_typval_error_using_invalid_as_number(void) { emsg(_("E685: using an invalid value as a Number")); }
-
-// tv_check_str error messages (type-specific)
-
-void nvim_typval_error_using_funcref_as_string(void) { emsg(_("E729: Using a Funcref as a String")); }
-
-void nvim_typval_error_using_list_as_string(void) { emsg(_("E730: Using a List as a String")); }
-
-void nvim_typval_error_using_dict_as_string(void) { emsg(_("E731: Using a Dictionary as a String")); }
-
-void nvim_typval_error_using_blob_as_string(void) { emsg(_("E976: Using a Blob as a String")); }
-
-void nvim_typval_error_using_invalid_as_string(void) { emsg(_(e_using_invalid_value_as_string)); }
-
-// tv_check_str_or_nr error messages (type-specific)
-
-void nvim_typval_error_str_or_nr_float(void) { emsg(_("E805: Expected a Number or a String, Float found")); }
-
-void nvim_typval_error_str_or_nr_funcref(void) { emsg(_("E703: Expected a Number or a String, Funcref found")); }
-
-void nvim_typval_error_str_or_nr_list(void) { emsg(_("E745: Expected a Number or a String, List found")); }
-
-void nvim_typval_error_str_or_nr_dict(void) { emsg(_("E728: Expected a Number or a String, Dictionary found")); }
-
-void nvim_typval_error_str_or_nr_blob(void) { emsg(_("E974: Expected a Number or a String, Blob found")); }
-
-void nvim_typval_error_str_or_nr_bool(void) { emsg(_("E5299: Expected a Number or a String, Boolean found")); }
-
-void nvim_typval_error_str_or_nr_special(void) { emsg(_("E5300: Expected a Number or a String")); }
-
-void nvim_typval_error_str_or_nr_unknown(void) { semsg(_(e_intern2), "tv_check_str_or_nr(UNKNOWN)"); }
+// nvim_typval_error_* wrappers deleted (Phase 9): Rust calls emsg/semsg directly
+// via typval_err_* inline helpers in nvim-rs/typval/src/lib.rs.
 
 // tv_get_string_buf_chk, tv_get_string_chk, tv_get_string, tv_get_string_buf
 // migrated to Rust (Phase 1)
@@ -1091,31 +1008,31 @@ const char *nvim_gettext_value_locked(void) { return _(N_("E741: Value is locked
 const char *nvim_gettext_value_fixed(void) { return _(N_("E742: Cannot change value of %.*s")); }
 /// Get translated "Unknown" string (accessor for Rust).
 const char *nvim_gettext_unknown(void) { return _("Unknown"); }
-/// Emit tv_item_lock nested too deep error (accessor for Rust).
-void nvim_emsg_item_lock_nested(void) { emsg(_(e_variable_nested_too_deep_for_unlock)); }
 
-/// Emit blob index out of range error (accessor for Rust).
-void nvim_semsg_blobidx(int64_t idx) { semsg(_(e_blobidx), idx); }
+// Phase 9: translated string accessors for static-local error strings.
+// These are needed because the static strings are defined with N_() and translated at runtime
+// via _(). They must be accessed through C so gettext can do the lookup.
+const char *nvim_gettext_e_string_required_for_argument_nr(void) { return _(e_string_required_for_argument_nr); }
+const char *nvim_gettext_e_nonempty_string_required_for_argument_nr(void) { return _(e_non_empty_string_required_for_argument_nr); }
+const char *nvim_gettext_e_number_required_for_argument_nr(void) { return _(e_number_required_for_argument_nr); }
+const char *nvim_gettext_e_float_or_number_required_for_argument_nr(void) { return _(e_float_or_number_required_for_argument_nr); }
+const char *nvim_gettext_e_bool_required_for_argument_nr(void) { return _(e_bool_required_for_argument_nr); }
+const char *nvim_gettext_e_blob_required_for_argument_nr(void) { return _(e_blob_required_for_argument_nr); }
+const char *nvim_gettext_e_list_required_for_argument_nr(void) { return _(e_list_required_for_argument_nr); }
+const char *nvim_gettext_e_dict_required_for_argument_nr(void) { return _(e_dict_required_for_argument_nr); }
+const char *nvim_gettext_e_nonnull_dict_required_for_argument_nr(void) { return _(e_non_null_dict_required_for_argument_nr); }
+const char *nvim_gettext_e_string_or_number_required_for_argument_nr(void) { return _(e_string_or_number_required_for_argument_nr); }
+const char *nvim_gettext_e_string_or_list_required_for_argument_nr(void) { return _(e_string_or_list_required_for_argument_nr); }
+const char *nvim_gettext_e_string_list_or_blob_required_for_argument_nr(void) { return _(e_string_list_or_blob_required_for_argument_nr); }
+const char *nvim_gettext_e_string_list_or_dict_required_for_argument_nr(void) { return _(e_string_list_or_dict_required_for_argument_nr); }
+const char *nvim_gettext_e_string_or_func_required_for_argument_nr(void) { return _(e_string_or_function_required_for_argument_nr); }
+const char *nvim_gettext_e_list_or_blob_required_for_argument_nr(void) { return _(e_list_or_blob_required_for_argument_nr); }
+const char *nvim_gettext_e_using_invalid_value_as_string(void) { return _(e_using_invalid_value_as_string); }
+const char *nvim_gettext_e_variable_nested_too_deep_for_unlock(void) { return _(e_variable_nested_too_deep_for_unlock); }
+const char *nvim_gettext_e_invalid_value_for_blob_nr(void) { return _(e_invalid_value_for_blob_nr); }
 
-/// Emit blob wrong number of bytes error (accessor for Rust).
-void nvim_emsg_blob_wrong_bytes(void) { emsg(_("E972: Blob value does not have the right number of bytes")); }
-
-/// Emit tv_get_float error for funcref (accessor for Rust).
-void nvim_emsg_float_funcref(void) { emsg(_("E891: Using a Funcref as a Float")); }
-/// Emit tv_get_float error for string (accessor for Rust).
-void nvim_emsg_float_string(void) { emsg(_("E892: Using a String as a Float")); }
-/// Emit tv_get_float error for list (accessor for Rust).
-void nvim_emsg_float_list(void) { emsg(_("E893: Using a List as a Float")); }
-/// Emit tv_get_float error for dict (accessor for Rust).
-void nvim_emsg_float_dict(void) { emsg(_("E894: Using a Dictionary as a Float")); }
-/// Emit tv_get_float error for bool (accessor for Rust).
-void nvim_emsg_float_bool(void) { emsg(_("E362: Using a boolean value as a Float")); }
-/// Emit tv_get_float error for special (accessor for Rust).
-void nvim_emsg_float_special(void) { emsg(_("E907: Using a special value as a Float")); }
-/// Emit tv_get_float error for blob (accessor for Rust).
-void nvim_emsg_float_blob(void) { emsg(_("E975: Using a Blob as a Float")); }
-/// Emit tv_get_float error for unknown (accessor for Rust).
-void nvim_emsg_float_unknown(void) { semsg(_(e_intern2), "tv_get_float(UNKNOWN)"); }
+// nvim_semsg_blobidx, nvim_emsg_blob_wrong_bytes, nvim_emsg_float_* deleted (Phase 9):
+// Rust calls emsg/semsg directly via typval_err_* inline helpers.
 
 /// Thin C stub for nvim_value_check_lock: calls the Rust value_check_lock.
 /// Required because other crates (eval_exec, vars) still call this by name.
@@ -1227,8 +1144,7 @@ int32_t nvim_tv_to_lnum_pos(const typval_T *tv, int *ret_fnum)
 }
 
 
-/// Emit the E685 intern2 error for tv_get_number(UNKNOWN).
-void nvim_emsg_get_number_unknown(void) { semsg(_(e_intern2), "tv_get_number(UNKNOWN)"); }
+// nvim_emsg_get_number_unknown deleted (Phase 9): Rust calls semsg directly.
 
 // Phase 2 accessor helpers for Rust blob operations
 
@@ -1290,11 +1206,7 @@ void nvim_blob_ga_clear_only(blob_T *b)
   ga_clear(&b->bv_ga);
 }
 
-/// Emit e_invalid_value_for_blob_nr error (accessor for Rust).
-void nvim_semsg_blob_invalid_value(int64_t n)
-{
-  semsg(_(e_invalid_value_for_blob_nr), (int)n);
-}
+// nvim_semsg_blob_invalid_value deleted (Phase 9): Rust calls semsg directly.
 
 // Dict item accessor functions for Rust (Phase 3)
 // These are self-contained to avoid circular calls with Rust exports.
@@ -1447,8 +1359,7 @@ void nvim_dict_hash_remove(dict_T *d, hashitem_T *hi) { hash_remove(&d->dv_hasht
 /// Get di_key from a dictitem as mutable (accessor for Rust).
 const char *nvim_dictitem_get_key_ptr(const dictitem_T *di) { return di->di_key; }
 
-/// Emit "E737: Key already exists" error (accessor for Rust tv_dict_extend).
-void nvim_semsg_key_exists(const char *key) { semsg(_("E737: Key already exists: %s"), key); }
+// nvim_semsg_key_exists deleted (Phase 9): Rust calls semsg directly.
 
 /// string_convert wrapper for tv_dict_copy (accessor for Rust).
 /// Converts key using vimconv, writing new length to len_out. Returns NULL if no conversion.
@@ -1689,8 +1600,7 @@ int nvim_got_int(void) { return got_int; }
 /// Call fast_breakcheck() (accessor for Rust).
 void nvim_fast_breakcheck(void) { fast_breakcheck(); }
 
-/// Emit e_invrange error (accessor for Rust).
-void nvim_emsg_invrange(void) { emsg(_(e_invrange)); }
+// nvim_emsg_invrange deleted (Phase 9): Rust calls emsg directly.
 
 /// tv_list_slice_or_index index case: copy item[n1] into rettv (for Rust).
 /// Copies item TV to stack, clears rettv (freeing the list), then assigns.
@@ -1712,11 +1622,8 @@ void nvim_tv_listitem_move_to_rettv(typval_T *rettv, listitem_T *item)
 
 // Phase 6d: tv_list_assign_range accessors
 
-/// Emit "E710: List value has more items than target" (accessor for Rust).
-void nvim_emsg_list_more_items(void) { emsg(_("E710: List value has more items than target")); }
-
-/// Emit "E711: List value has not enough items" (accessor for Rust).
-void nvim_emsg_list_not_enough_items(void) { emsg(_("E711: List value has not enough items")); }
+// nvim_emsg_list_more_items, nvim_emsg_list_not_enough_items deleted (Phase 9):
+// Rust calls emsg directly.
 
 /// Get listitem v_lock field via TV_LIST_ITEM_TV (accessor for Rust).
 /// Needed by tv_list_assign_range lock check.
@@ -1863,11 +1770,7 @@ Callback *nvim_watcher_get_callback_ptr(DictWatcher *w) { return &w->callback; }
 /// Call set_selfdict(tv, d) (accessor for Rust tv_dict_get_callback).
 void nvim_set_selfdict(typval_T *tv, dict_T *d) { set_selfdict(tv, d); }
 
-/// Emit E6000 error (accessor for Rust tv_dict_get_callback).
-void nvim_emsg_not_func_or_funcname(void)
-{
-  emsg(_("E6000: Argument is not a function or function name"));
-}
+// nvim_emsg_not_func_or_funcname deleted (Phase 9): Rust calls emsg directly.
 
 /// Check typval is func or string (accessor for Rust tv_dict_get_callback).
 bool nvim_tv_is_func_or_string(const typval_T *tv)
@@ -1884,17 +1787,8 @@ bool nvim_callback_from_typval_impl(Callback *result, typval_T *tv)
 
 // Phase 6 (typval migration): sort/uniq, join, list2str, tv_list_init_static10 accessors
 
-/// Emit E702 sort compare function failed (accessor for Rust do_sort).
-void nvim_emsg_sort_failed(void) { emsg(_("E702: Sort compare function failed")); }
-
-/// Emit E882 uniq compare function failed (accessor for Rust do_uniq).
-void nvim_emsg_uniq_failed(void) { emsg(_("E882: Uniq compare function failed")); }
-
-/// semsg(_(e_listarg), fname) wrapper for Rust do_sort_uniq.
-void nvim_emsg_listarg(const char *fname) { semsg(_(e_listarg), fname); }
-
-/// emsg(_(e_invarg)) wrapper for Rust (accessor for parse_sort_uniq_args, f_list2str).
-void nvim_emsg_invarg(void) { emsg(_(e_invarg)); }
+// nvim_emsg_sort_failed, nvim_emsg_uniq_failed, nvim_emsg_listarg, nvim_emsg_invarg
+// deleted (Phase 9): Rust calls emsg/semsg directly.
 
 /// tv_check_for_dict_arg wrapper: returns OK (1) or FAIL (0) (accessor for Rust).
 int nvim_tv_check_for_dict_arg(typval_T *argvars, int idx)
@@ -1908,8 +1802,7 @@ const char *nvim_tv_get_string_checked(const typval_T *tv)
   return tv_get_string_chk(tv);
 }
 
-/// emsg(_(e_listreq)) wrapper for Rust f_join.
-void nvim_emsg_e_listreq(void) { emsg(_(e_listreq)); }
+// nvim_emsg_e_listreq deleted (Phase 9): Rust calls emsg directly.
 
 /// Join list into a newly allocated NUL-terminated string.
 /// Returns "" for empty lists, NULL if encoding any item fails.

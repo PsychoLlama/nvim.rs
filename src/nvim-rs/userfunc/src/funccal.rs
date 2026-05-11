@@ -188,7 +188,11 @@ extern "C" {
     fn nvim_eap_get_addr_count(eap: *const c_void) -> c_int;
     fn nvim_ex_call_check_advance_cursor(lnum: i32) -> c_int;
     fn nvim_handle_subscript_eval_evaluate(arg: *mut *mut c_char, rettv: *mut c_void) -> c_int;
-    fn nvim_emsg_invrange();
+    // nvim_emsg_invrange deleted (Phase 9): use emsg(gettext(e_invrange)) directly
+    fn emsg(s: *const c_char);
+    fn gettext(msgid: *const c_char) -> *const c_char;
+    #[link_name = "e_invrange"]
+    static e_invrange_uf: [u8; 0];
     // get_func_tv is Rust (funccal.rs), linked by name -- already declared above
 
     // Phase 28: for nvim_ex_return_impl migration
@@ -1362,7 +1366,7 @@ pub unsafe extern "C" fn rs_ex_call_inner(
             // Check line count; advance cursor if valid.
             if unsafe { nvim_ex_call_check_advance_cursor(lnum) } != 0 {
                 // lnum > line count: function deleted lines or switched buffer
-                unsafe { nvim_emsg_invrange() };
+                unsafe { emsg(gettext(e_invrange_uf.as_ptr().cast())) };
                 failed = true;
                 break;
             }

@@ -1119,8 +1119,8 @@ extern "C" {
     fn nvim_blob_ga_grow(b: BlobHandle, n: c_int);
     fn nvim_tv_set_blob(tv: TypevalHandle, b: BlobHandle);
     // nvim_value_check_lock_translated removed: value_check_lock_impl is now native Rust (Phase 3)
-    fn nvim_semsg_blobidx(idx: i64);
-    fn nvim_emsg_blob_wrong_bytes();
+    // nvim_semsg_blobidx: deleted (Phase 9), use typval_err_blobidx directly
+    // nvim_emsg_blob_wrong_bytes: deleted (Phase 9), use typval_err_blob_wrong_bytes directly
 
     // Functions called by blob ops
     fn tv_blob_alloc() -> BlobHandle;
@@ -1137,14 +1137,7 @@ extern "C" {
     static e_list_index_out_of_range_nr_tv: [u8; 0];
 
     // Functions for Phase 3 (tv_get_float, value_check_lock, tv_check_lock)
-    fn nvim_emsg_float_funcref();
-    fn nvim_emsg_float_string();
-    fn nvim_emsg_float_list();
-    fn nvim_emsg_float_dict();
-    fn nvim_emsg_float_bool();
-    fn nvim_emsg_float_special();
-    fn nvim_emsg_float_blob();
-    fn nvim_emsg_float_unknown();
+    // nvim_emsg_float_*: deleted (Phase 9), use typval_err_float_* inline helpers directly
     // nvim_value_check_lock removed: value_check_lock is now native Rust (Phase 3)
     fn nvim_tv_get_v_lock(tv: TypevalHandle) -> c_int;
 
@@ -1152,7 +1145,7 @@ extern "C" {
     fn nvim_gettext_value_locked() -> *const c_char;
     fn nvim_gettext_value_fixed() -> *const c_char;
     fn nvim_gettext_unknown() -> *const c_char;
-    fn nvim_emsg_item_lock_nested();
+    // nvim_emsg_item_lock_nested: deleted (Phase 9), use typval_err_item_lock_nested directly
     fn nvim_list_set_lock(l: ListHandle, lock: c_int);
     fn nvim_blob_set_lock(b: BlobHandle, lock: c_int);
     fn nvim_list_get_refcount(l: ListHandle) -> c_int;
@@ -1168,7 +1161,7 @@ extern "C" {
     fn nvim_tv_to_lnum_pos(tv: TypevalHandle, ret_fnum: *mut c_int) -> i32;
     static mut did_emsg: c_int;
     fn nvim_buf_get_ml_line_count(buf: *const std::ffi::c_void) -> i32;
-    fn nvim_emsg_get_number_unknown();
+    // nvim_emsg_get_number_unknown: deleted (Phase 9), use typval_err_get_number_unknown directly
 
     // Phase 2 accessor helpers for blob alloc/free/copy/f_blob2list/f_list2blob
     fn nvim_blob_alloc_impl() -> BlobHandle;
@@ -1181,7 +1174,7 @@ extern "C" {
     fn nvim_tv_list_append_number(l: *mut std::ffi::c_void, n: c_int);
     fn nvim_blob_ga_append(b: BlobHandle, c: u8);
     fn nvim_blob_ga_clear_only(b: BlobHandle);
-    fn nvim_semsg_blob_invalid_value(n: i64);
+    // nvim_semsg_blob_invalid_value: deleted (Phase 9), use typval_err_blob_invalid_value directly
     fn nvim_tv_set_lock(tv: TypevalHandle, lock: c_int);
 
     // Phase 3 accessor helpers for dict item alloc/free/add
@@ -1243,13 +1236,13 @@ extern "C" {
     fn nvim_xfree(ptr: *mut std::ffi::c_void);
     fn nvim_got_int() -> c_int;
     fn nvim_fast_breakcheck();
-    fn nvim_emsg_invrange();
+    // nvim_emsg_invrange: deleted (Phase 9), use typval_err_invrange directly
     fn nvim_tv_list_index_into_rettv(rettv: TypevalHandle, item: ListItemHandle);
     fn nvim_tv_listitem_move_to_rettv(rettv: TypevalHandle, item: ListItemHandle);
 
     // Phase 6d: tv_list_assign_range
-    fn nvim_emsg_list_more_items();
-    fn nvim_emsg_list_not_enough_items();
+    // nvim_emsg_list_more_items: deleted (Phase 9), use typval_err_list_more_items directly
+    // nvim_emsg_list_not_enough_items: deleted (Phase 9), use typval_err_list_not_enough_items directly
     fn nvim_listitem_get_v_lock(li: ListItemHandle) -> c_int;
     fn eexe_mod_op(tv1: TypevalHandle, tv2: TypevalHandle, op: *const c_char) -> c_int;
 
@@ -2323,7 +2316,7 @@ pub unsafe extern "C" fn rs_tv_list_remove(
 
         if li.is_null() {
             // item2 not found after item.
-            unsafe { nvim_emsg_invrange() };
+            unsafe { typval_err_invrange() };
         } else {
             let ret_list = unsafe { rs_tv_list_alloc_ret(rettv, cnt as isize) };
             unsafe { rs_tv_list_move_items(l, item, item2, ret_list, cnt) };
@@ -2399,7 +2392,7 @@ pub unsafe extern "C" fn rs_tv_list_assign_range(
     }
 
     if !src_li.is_null() {
-        unsafe { nvim_emsg_list_more_items() };
+        unsafe { typval_err_list_more_items() };
         return FAIL;
     }
     if if empty_idx2 {
@@ -2407,7 +2400,7 @@ pub unsafe extern "C" fn rs_tv_list_assign_range(
     } else {
         idx != idx2
     } {
-        unsafe { nvim_emsg_list_not_enough_items() };
+        unsafe { typval_err_list_not_enough_items() };
         return FAIL;
     }
     OK
@@ -3413,7 +3406,7 @@ unsafe fn tv_blob_index_impl(
         let rettv_ptr = rettv.as_ptr().cast_mut();
         unsafe { nvim_tv_set_number(TypevalHandle(rettv_ptr), v) };
     } else {
-        unsafe { nvim_semsg_blobidx(idx) };
+        unsafe { typval_err_blobidx(idx) };
         return FAIL;
     }
     OK
@@ -3442,7 +3435,7 @@ pub unsafe extern "C" fn rs_tv_blob_slice_or_index(
 pub unsafe extern "C" fn rs_tv_blob_check_index(bloblen: c_int, n1: i64, quiet: bool) -> c_int {
     if n1 < 0 || n1 > i64::from(bloblen) {
         if !quiet {
-            unsafe { nvim_semsg_blobidx(n1) };
+            unsafe { typval_err_blobidx(n1) };
         }
         return FAIL;
     }
@@ -3459,7 +3452,7 @@ pub unsafe extern "C" fn rs_tv_blob_check_range(
 ) -> c_int {
     if n2 < 0 || n2 >= i64::from(bloblen) || n2 < n1 {
         if !quiet {
-            unsafe { nvim_semsg_blobidx(n2) };
+            unsafe { typval_err_blobidx(n2) };
         }
         return FAIL;
     }
@@ -3479,7 +3472,7 @@ pub unsafe extern "C" fn rs_tv_blob_set_range(
     let src_blob = unsafe { nvim_tv_get_blob(src) };
     let src_len = i64::from(tv_blob_len_impl(src_blob));
     if n2 - n1 + 1 != src_len {
-        unsafe { nvim_emsg_blob_wrong_bytes() };
+        unsafe { typval_err_blob_wrong_bytes() };
         return FAIL;
     }
     let mut ir = 0i64;
@@ -3535,7 +3528,7 @@ pub unsafe extern "C" fn rs_tv_blob_remove(
             idx += len;
         }
         if idx < 0 || idx >= len {
-            unsafe { nvim_semsg_blobidx(idx) };
+            unsafe { typval_err_blobidx(idx) };
             return;
         }
 
@@ -3565,7 +3558,7 @@ pub unsafe extern "C" fn rs_tv_blob_remove(
                 end += len;
             }
             if end >= len || idx > end {
-                unsafe { nvim_semsg_blobidx(end) };
+                unsafe { typval_err_blobidx(end) };
                 return;
             }
             let blob = unsafe { tv_blob_alloc() };
@@ -3739,35 +3732,35 @@ fn tv_get_float_impl(tv: TypevalHandle) -> f64 {
         }
         VarType::Float => unsafe { nvim_tv_get_float(tv) },
         VarType::Partial | VarType::Func => {
-            unsafe { nvim_emsg_float_funcref() };
+            unsafe { typval_err_float_funcref() };
             0.0
         }
         VarType::String => {
-            unsafe { nvim_emsg_float_string() };
+            unsafe { typval_err_float_string() };
             0.0
         }
         VarType::List => {
-            unsafe { nvim_emsg_float_list() };
+            unsafe { typval_err_float_list() };
             0.0
         }
         VarType::Dict => {
-            unsafe { nvim_emsg_float_dict() };
+            unsafe { typval_err_float_dict() };
             0.0
         }
         VarType::Bool => {
-            unsafe { nvim_emsg_float_bool() };
+            unsafe { typval_err_float_bool() };
             0.0
         }
         VarType::Special => {
-            unsafe { nvim_emsg_float_special() };
+            unsafe { typval_err_float_special() };
             0.0
         }
         VarType::Blob => {
-            unsafe { nvim_emsg_float_blob() };
+            unsafe { typval_err_float_blob() };
             0.0
         }
         VarType::Unknown => {
-            unsafe { nvim_emsg_float_unknown() };
+            unsafe { typval_err_float_unknown() };
             0.0
         }
     }
@@ -3958,53 +3951,347 @@ pub extern "C" fn rs_tv_get_blob(tv: TypevalHandle) -> BlobHandle {
 // Type checking functions (tv_check_for_* family)
 // =============================================================================
 
-// C accessor functions for error message reporting.
-// These wrap semsg() calls since semsg is variadic and hard to call from Rust.
+// Direct emsg/semsg/gettext bindings used throughout this module.
 extern "C" {
     /// Get a pointer to args[idx] in a typval array.
     /// This avoids needing to know sizeof(typval_T) in Rust.
     fn nvim_typval_array_get(args: TypevalHandle, idx: c_int) -> TypevalHandle;
 
-    fn nvim_typval_error_string_required(idx: c_int);
-    fn nvim_typval_error_nonempty_string_required(idx: c_int);
-    fn nvim_typval_error_number_required(idx: c_int);
-    fn nvim_typval_error_float_or_number_required(idx: c_int);
-    fn nvim_typval_error_bool_required(idx: c_int);
-    fn nvim_typval_error_blob_required(idx: c_int);
-    fn nvim_typval_error_list_required(idx: c_int);
-    fn nvim_typval_error_dict_required(idx: c_int);
-    fn nvim_typval_error_nonnull_dict_required(idx: c_int);
-    fn nvim_typval_error_string_or_number_required(idx: c_int);
-    fn nvim_typval_error_string_or_list_required(idx: c_int);
-    fn nvim_typval_error_string_list_or_blob_required(idx: c_int);
-    fn nvim_typval_error_string_list_or_dict_required(idx: c_int);
-    fn nvim_typval_error_string_or_func_required(idx: c_int);
-    fn nvim_typval_error_list_or_blob_required(idx: c_int);
+    // Direct error dispatch (Phase 1: replaces ~50 nvim_typval_error_* / nvim_emsg_* wrappers)
+    fn emsg(s: *const c_char);
+    // gettext for translated error strings
+    fn gettext(msgid: *const c_char) -> *const c_char;
 
-    // tv_check_num error messages (type-specific)
-    fn nvim_typval_error_using_funcref_as_number();
-    fn nvim_typval_error_using_list_as_number();
-    fn nvim_typval_error_using_dict_as_number();
-    fn nvim_typval_error_using_float_as_number();
-    fn nvim_typval_error_using_blob_as_number();
-    fn nvim_typval_error_using_invalid_as_number();
+    // Translated format strings for argument-index errors (static-local in typval.c;
+    // must go through _() in C so these tiny C accessors are kept).
+    fn nvim_gettext_e_string_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_nonempty_string_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_number_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_float_or_number_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_bool_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_blob_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_list_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_dict_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_nonnull_dict_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_string_or_number_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_string_or_list_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_string_list_or_blob_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_string_list_or_dict_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_string_or_func_required_for_argument_nr() -> *const c_char;
+    fn nvim_gettext_e_list_or_blob_required_for_argument_nr() -> *const c_char;
+    // Static-local translated string: e_using_invalid_value_as_string
+    fn nvim_gettext_e_using_invalid_value_as_string() -> *const c_char;
+    // Static-local translated string: e_variable_nested_too_deep_for_unlock
+    fn nvim_gettext_e_variable_nested_too_deep_for_unlock() -> *const c_char;
+    // Static-local: e_invalid_value_for_blob_nr (has %d format specifier)
+    fn nvim_gettext_e_invalid_value_for_blob_nr() -> *const c_char;
+    // Global error strings (from errors.h; translated via gettext at call site)
+    #[link_name = "e_intern2"]
+    static e_intern2_tv: [u8; 0];
+    #[link_name = "e_blobidx"]
+    static e_blobidx_tv: [u8; 0];
+    #[link_name = "e_invarg"]
+    static e_invarg_tv: [u8; 0];
+    #[link_name = "e_listreq"]
+    static e_listreq_tv: [u8; 0];
+    #[link_name = "e_listarg"]
+    static e_listarg_tv: [u8; 0];
+    #[link_name = "e_invrange"]
+    static e_invrange_tv: [u8; 0];
+}
 
-    // tv_check_str error messages (type-specific)
-    fn nvim_typval_error_using_funcref_as_string();
-    fn nvim_typval_error_using_list_as_string();
-    fn nvim_typval_error_using_dict_as_string();
-    fn nvim_typval_error_using_blob_as_string();
-    fn nvim_typval_error_using_invalid_as_string();
+// Inline helper: translate a C string via gettext.
+#[inline]
+unsafe fn gt(s: *const c_char) -> *const c_char {
+    gettext(s)
+}
 
-    // tv_check_str_or_nr error messages (type-specific)
-    fn nvim_typval_error_str_or_nr_float();
-    fn nvim_typval_error_str_or_nr_funcref();
-    fn nvim_typval_error_str_or_nr_list();
-    fn nvim_typval_error_str_or_nr_dict();
-    fn nvim_typval_error_str_or_nr_blob();
-    fn nvim_typval_error_str_or_nr_bool();
-    fn nvim_typval_error_str_or_nr_special();
-    fn nvim_typval_error_str_or_nr_unknown();
+// Inline error helpers replacing the ~50 deleted C wrapper functions.
+// Argument-index errors (format: semsg(fmt, idx)).
+// These use the `semsg_typval` variadic binding that already exists.
+#[inline]
+unsafe fn typval_err_string_required(idx: c_int) {
+    semsg_typval(gt(nvim_gettext_e_string_required_for_argument_nr()), idx);
+}
+#[inline]
+unsafe fn typval_err_nonempty_string_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_nonempty_string_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_number_required(idx: c_int) {
+    semsg_typval(gt(nvim_gettext_e_number_required_for_argument_nr()), idx);
+}
+#[inline]
+unsafe fn typval_err_float_or_number_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_float_or_number_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_bool_required(idx: c_int) {
+    semsg_typval(gt(nvim_gettext_e_bool_required_for_argument_nr()), idx);
+}
+#[inline]
+unsafe fn typval_err_blob_required(idx: c_int) {
+    semsg_typval(gt(nvim_gettext_e_blob_required_for_argument_nr()), idx);
+}
+#[inline]
+unsafe fn typval_err_list_required(idx: c_int) {
+    semsg_typval(gt(nvim_gettext_e_list_required_for_argument_nr()), idx);
+}
+#[inline]
+unsafe fn typval_err_dict_required(idx: c_int) {
+    semsg_typval(gt(nvim_gettext_e_dict_required_for_argument_nr()), idx);
+}
+#[inline]
+unsafe fn typval_err_nonnull_dict_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_nonnull_dict_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_string_or_number_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_string_or_number_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_string_or_list_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_string_or_list_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_string_list_or_blob_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_string_list_or_blob_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_string_list_or_dict_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_string_list_or_dict_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_string_or_func_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_string_or_func_required_for_argument_nr()),
+        idx,
+    );
+}
+#[inline]
+unsafe fn typval_err_list_or_blob_required(idx: c_int) {
+    semsg_typval(
+        gt(nvim_gettext_e_list_or_blob_required_for_argument_nr()),
+        idx,
+    );
+}
+// Type-mismatch errors (no index argument)
+#[inline]
+unsafe fn typval_err_funcref_as_number() {
+    emsg(gt(c"E703: Using a Funcref as a Number".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_list_as_number() {
+    emsg(gt(c"E745: Using a List as a Number".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_dict_as_number() {
+    emsg(gt(c"E728: Using a Dictionary as a Number".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_as_number() {
+    emsg(gt(c"E805: Using a Float as a Number".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_blob_as_number() {
+    emsg(gt(c"E974: Using a Blob as a Number".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_invalid_as_number() {
+    emsg(gt(c"E685: using an invalid value as a Number".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_funcref_as_string() {
+    emsg(gt(c"E729: Using a Funcref as a String".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_list_as_string() {
+    emsg(gt(c"E730: Using a List as a String".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_dict_as_string() {
+    emsg(gt(c"E731: Using a Dictionary as a String".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_blob_as_string() {
+    emsg(gt(c"E976: Using a Blob as a String".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_invalid_as_string() {
+    emsg(gt(nvim_gettext_e_using_invalid_value_as_string()));
+}
+// str_or_nr errors
+#[inline]
+unsafe fn typval_err_str_or_nr_float() {
+    emsg(gt(
+        c"E805: Expected a Number or a String, Float found".as_ptr()
+    ));
+}
+#[inline]
+unsafe fn typval_err_str_or_nr_funcref() {
+    emsg(gt(
+        c"E703: Expected a Number or a String, Funcref found".as_ptr()
+    ));
+}
+#[inline]
+unsafe fn typval_err_str_or_nr_list() {
+    emsg(gt(
+        c"E745: Expected a Number or a String, List found".as_ptr()
+    ));
+}
+#[inline]
+unsafe fn typval_err_str_or_nr_dict() {
+    emsg(gt(
+        c"E728: Expected a Number or a String, Dictionary found".as_ptr()
+    ));
+}
+#[inline]
+unsafe fn typval_err_str_or_nr_blob() {
+    emsg(gt(
+        c"E974: Expected a Number or a String, Blob found".as_ptr()
+    ));
+}
+#[inline]
+unsafe fn typval_err_str_or_nr_bool() {
+    emsg(gt(
+        c"E5299: Expected a Number or a String, Boolean found".as_ptr()
+    ));
+}
+#[inline]
+unsafe fn typval_err_str_or_nr_special() {
+    emsg(gt(c"E5300: Expected a Number or a String".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_str_or_nr_unknown() {
+    semsg_typval(
+        gt(e_intern2_tv.as_ptr().cast()),
+        c"tv_check_str_or_nr(UNKNOWN)".as_ptr(),
+    );
+}
+// Float errors
+#[inline]
+unsafe fn typval_err_float_funcref() {
+    emsg(gt(c"E891: Using a Funcref as a Float".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_string() {
+    emsg(gt(c"E892: Using a String as a Float".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_list() {
+    emsg(gt(c"E893: Using a List as a Float".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_dict() {
+    emsg(gt(c"E894: Using a Dictionary as a Float".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_bool() {
+    emsg(gt(c"E362: Using a boolean value as a Float".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_special() {
+    emsg(gt(c"E907: Using a special value as a Float".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_blob() {
+    emsg(gt(c"E975: Using a Blob as a Float".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_float_unknown() {
+    semsg_typval(
+        gt(e_intern2_tv.as_ptr().cast()),
+        c"tv_get_float(UNKNOWN)".as_ptr(),
+    );
+}
+// Blob / list / sort / misc errors
+#[inline]
+unsafe fn typval_err_blob_wrong_bytes() {
+    emsg(gt(
+        c"E972: Blob value does not have the right number of bytes".as_ptr(),
+    ));
+}
+#[inline]
+unsafe fn typval_err_item_lock_nested() {
+    emsg(gt(nvim_gettext_e_variable_nested_too_deep_for_unlock()));
+}
+#[inline]
+unsafe fn typval_err_invrange() {
+    emsg(gt(e_invrange_tv.as_ptr().cast()));
+}
+#[inline]
+unsafe fn typval_err_list_more_items() {
+    emsg(gt(c"E710: List value has more items than target".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_list_not_enough_items() {
+    emsg(gt(c"E711: List value has not enough items".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_sort_failed() {
+    emsg(gt(c"E702: Sort compare function failed".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_uniq_failed() {
+    emsg(gt(c"E882: Uniq compare function failed".as_ptr()));
+}
+#[inline]
+unsafe fn typval_err_listarg(fname: *const c_char) {
+    semsg_typval(gt(e_listarg_tv.as_ptr().cast()), fname);
+}
+#[inline]
+unsafe fn typval_err_invarg() {
+    emsg(gt(e_invarg_tv.as_ptr().cast()));
+}
+#[inline]
+unsafe fn typval_err_e_listreq() {
+    emsg(gt(e_listreq_tv.as_ptr().cast()));
+}
+#[inline]
+unsafe fn typval_err_not_func_or_funcname() {
+    emsg(gt(
+        c"E6000: Argument is not a function or function name".as_ptr()
+    ));
+}
+#[inline]
+unsafe fn typval_err_get_number_unknown() {
+    semsg_typval(
+        gt(e_intern2_tv.as_ptr().cast()),
+        c"tv_get_number(UNKNOWN)".as_ptr(),
+    );
+}
+#[inline]
+unsafe fn typval_err_blobidx(idx: i64) {
+    semsg_typval(gt(e_blobidx_tv.as_ptr().cast()), idx);
+}
+#[inline]
+unsafe fn typval_err_blob_invalid_value(n: i64) {
+    semsg_typval(gt(nvim_gettext_e_invalid_value_for_blob_nr()), n as c_int);
+}
+#[inline]
+unsafe fn typval_err_key_exists(key: *const c_char) {
+    semsg_typval(gt(c"E737: Key already exists: %s".as_ptr()), key);
 }
 
 /// OK return value (1) matching C's OK from vim_defs.h.
@@ -4026,7 +4313,7 @@ fn tv_check_for_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
     if tv_type_impl(tv) == VarType::String {
         OK
     } else {
-        unsafe { nvim_typval_error_string_required(idx + 1) };
+        unsafe { typval_err_string_required(idx + 1) };
         FAIL
     }
 }
@@ -4046,7 +4333,7 @@ fn tv_check_for_nonempty_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_i
     let tv = get_arg(args, idx);
     let s = unsafe { nvim_tv_get_string_ptr(tv) };
     if s.is_null() || unsafe { *s == 0 } {
-        unsafe { nvim_typval_error_nonempty_string_required(idx + 1) };
+        unsafe { typval_err_nonempty_string_required(idx + 1) };
         return FAIL;
     }
     OK
@@ -4082,7 +4369,7 @@ fn tv_check_for_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
     if tv_type_impl(tv) == VarType::Number {
         OK
     } else {
-        unsafe { nvim_typval_error_number_required(idx + 1) };
+        unsafe { typval_err_number_required(idx + 1) };
         FAIL
     }
 }
@@ -4118,7 +4405,7 @@ fn tv_check_for_float_or_nr_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
     if t == VarType::Float || t == VarType::Number {
         OK
     } else {
-        unsafe { nvim_typval_error_float_or_number_required(idx + 1) };
+        unsafe { typval_err_float_or_number_required(idx + 1) };
         FAIL
     }
 }
@@ -4144,7 +4431,7 @@ fn tv_check_for_bool_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
             return OK;
         }
     }
-    unsafe { nvim_typval_error_bool_required(idx + 1) };
+    unsafe { typval_err_bool_required(idx + 1) };
     FAIL
 }
 
@@ -4178,7 +4465,7 @@ fn tv_check_for_blob_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
     if tv_type_impl(tv) == VarType::Blob {
         OK
     } else {
-        unsafe { nvim_typval_error_blob_required(idx + 1) };
+        unsafe { typval_err_blob_required(idx + 1) };
         FAIL
     }
 }
@@ -4196,7 +4483,7 @@ fn tv_check_for_list_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
     if tv_type_impl(tv) == VarType::List {
         OK
     } else {
-        unsafe { nvim_typval_error_list_required(idx + 1) };
+        unsafe { typval_err_list_required(idx + 1) };
         FAIL
     }
 }
@@ -4214,7 +4501,7 @@ fn tv_check_for_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
     if tv_type_impl(tv) == VarType::Dict {
         OK
     } else {
-        unsafe { nvim_typval_error_dict_required(idx + 1) };
+        unsafe { typval_err_dict_required(idx + 1) };
         FAIL
     }
 }
@@ -4233,7 +4520,7 @@ fn tv_check_for_nonnull_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int 
     }
     let tv = get_arg(args, idx);
     if unsafe { nvim_tv_dict_is_null(tv) != 0 } {
-        unsafe { nvim_typval_error_nonnull_dict_required(idx + 1) };
+        unsafe { typval_err_nonnull_dict_required(idx + 1) };
         return FAIL;
     }
     OK
@@ -4270,7 +4557,7 @@ fn tv_check_for_string_or_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_
     if t == VarType::String || t == VarType::Number {
         OK
     } else {
-        unsafe { nvim_typval_error_string_or_number_required(idx + 1) };
+        unsafe { typval_err_string_or_number_required(idx + 1) };
         FAIL
     }
 }
@@ -4301,7 +4588,7 @@ fn tv_check_for_string_or_list_arg_impl(args: TypevalHandle, idx: c_int) -> c_in
     if t == VarType::String || t == VarType::List {
         OK
     } else {
-        unsafe { nvim_typval_error_string_or_list_required(idx + 1) };
+        unsafe { typval_err_string_or_list_required(idx + 1) };
         FAIL
     }
 }
@@ -4337,7 +4624,7 @@ fn tv_check_for_string_or_list_or_blob_arg_impl(args: TypevalHandle, idx: c_int)
     if t == VarType::String || t == VarType::List || t == VarType::Blob {
         OK
     } else {
-        unsafe { nvim_typval_error_string_list_or_blob_required(idx + 1) };
+        unsafe { typval_err_string_list_or_blob_required(idx + 1) };
         FAIL
     }
 }
@@ -4359,7 +4646,7 @@ fn tv_check_for_string_or_list_or_dict_arg_impl(args: TypevalHandle, idx: c_int)
     if t == VarType::String || t == VarType::List || t == VarType::Dict {
         OK
     } else {
-        unsafe { nvim_typval_error_string_list_or_dict_required(idx + 1) };
+        unsafe { typval_err_string_list_or_dict_required(idx + 1) };
         FAIL
     }
 }
@@ -4381,7 +4668,7 @@ fn tv_check_for_string_or_func_arg_impl(args: TypevalHandle, idx: c_int) -> c_in
     if t == VarType::Partial || t == VarType::Func || t == VarType::String {
         OK
     } else {
-        unsafe { nvim_typval_error_string_or_func_required(idx + 1) };
+        unsafe { typval_err_string_or_func_required(idx + 1) };
         FAIL
     }
 }
@@ -4400,7 +4687,7 @@ fn tv_check_for_list_or_blob_arg_impl(args: TypevalHandle, idx: c_int) -> c_int 
     if t == VarType::List || t == VarType::Blob {
         OK
     } else {
-        unsafe { nvim_typval_error_list_or_blob_required(idx + 1) };
+        unsafe { typval_err_list_or_blob_required(idx + 1) };
         FAIL
     }
 }
@@ -4425,27 +4712,27 @@ fn tv_check_num_impl(tv: TypevalHandle) -> bool {
     match t {
         VarType::Number | VarType::Bool | VarType::Special | VarType::String => true,
         VarType::Func | VarType::Partial => {
-            unsafe { nvim_typval_error_using_funcref_as_number() };
+            unsafe { typval_err_funcref_as_number() };
             false
         }
         VarType::List => {
-            unsafe { nvim_typval_error_using_list_as_number() };
+            unsafe { typval_err_list_as_number() };
             false
         }
         VarType::Dict => {
-            unsafe { nvim_typval_error_using_dict_as_number() };
+            unsafe { typval_err_dict_as_number() };
             false
         }
         VarType::Float => {
-            unsafe { nvim_typval_error_using_float_as_number() };
+            unsafe { typval_err_float_as_number() };
             false
         }
         VarType::Blob => {
-            unsafe { nvim_typval_error_using_blob_as_number() };
+            unsafe { typval_err_blob_as_number() };
             false
         }
         VarType::Unknown => {
-            unsafe { nvim_typval_error_using_invalid_as_number() };
+            unsafe { typval_err_invalid_as_number() };
             false
         }
     }
@@ -4469,23 +4756,23 @@ fn tv_check_str_impl(tv: TypevalHandle) -> bool {
             true
         }
         VarType::Func | VarType::Partial => {
-            unsafe { nvim_typval_error_using_funcref_as_string() };
+            unsafe { typval_err_funcref_as_string() };
             false
         }
         VarType::List => {
-            unsafe { nvim_typval_error_using_list_as_string() };
+            unsafe { typval_err_list_as_string() };
             false
         }
         VarType::Dict => {
-            unsafe { nvim_typval_error_using_dict_as_string() };
+            unsafe { typval_err_dict_as_string() };
             false
         }
         VarType::Blob => {
-            unsafe { nvim_typval_error_using_blob_as_string() };
+            unsafe { typval_err_blob_as_string() };
             false
         }
         VarType::Unknown => {
-            unsafe { nvim_typval_error_using_invalid_as_string() };
+            unsafe { typval_err_invalid_as_string() };
             false
         }
     }
@@ -4507,35 +4794,35 @@ fn tv_check_str_or_nr_impl(tv: TypevalHandle) -> bool {
     match t {
         VarType::Number | VarType::String => true,
         VarType::Float => {
-            unsafe { nvim_typval_error_str_or_nr_float() };
+            unsafe { typval_err_str_or_nr_float() };
             false
         }
         VarType::Func | VarType::Partial => {
-            unsafe { nvim_typval_error_str_or_nr_funcref() };
+            unsafe { typval_err_str_or_nr_funcref() };
             false
         }
         VarType::List => {
-            unsafe { nvim_typval_error_str_or_nr_list() };
+            unsafe { typval_err_str_or_nr_list() };
             false
         }
         VarType::Dict => {
-            unsafe { nvim_typval_error_str_or_nr_dict() };
+            unsafe { typval_err_str_or_nr_dict() };
             false
         }
         VarType::Blob => {
-            unsafe { nvim_typval_error_str_or_nr_blob() };
+            unsafe { typval_err_str_or_nr_blob() };
             false
         }
         VarType::Bool => {
-            unsafe { nvim_typval_error_str_or_nr_bool() };
+            unsafe { typval_err_str_or_nr_bool() };
             false
         }
         VarType::Special => {
-            unsafe { nvim_typval_error_str_or_nr_special() };
+            unsafe { typval_err_str_or_nr_special() };
             false
         }
         VarType::Unknown => {
-            unsafe { nvim_typval_error_str_or_nr_unknown() };
+            unsafe { typval_err_str_or_nr_unknown() };
             false
         }
     }
@@ -4685,7 +4972,7 @@ pub unsafe extern "C" fn rs_f_list2blob(
         let n = tv_get_number_chk_impl(item_tv, &raw mut error);
         if error || !(0..=255).contains(&n) {
             if !error {
-                unsafe { nvim_semsg_blob_invalid_value(n) };
+                unsafe { typval_err_blob_invalid_value(n) };
             }
             unsafe { nvim_blob_ga_clear_only(blob) };
             return;
@@ -4714,19 +5001,19 @@ const NUMBUFLEN: usize = 65;
 fn tv_get_number_chk_impl(tv: TypevalHandle, ret_error: *mut bool) -> i64 {
     match tv_type_impl(tv) {
         VarType::Func | VarType::Partial => {
-            unsafe { nvim_typval_error_using_funcref_as_number() };
+            unsafe { typval_err_funcref_as_number() };
         }
         VarType::List => {
-            unsafe { nvim_typval_error_using_list_as_number() };
+            unsafe { typval_err_list_as_number() };
         }
         VarType::Dict => {
-            unsafe { nvim_typval_error_using_dict_as_number() };
+            unsafe { typval_err_dict_as_number() };
         }
         VarType::Float => {
-            unsafe { nvim_typval_error_using_float_as_number() };
+            unsafe { typval_err_float_as_number() };
         }
         VarType::Blob => {
-            unsafe { nvim_typval_error_using_blob_as_number() };
+            unsafe { typval_err_blob_as_number() };
         }
         VarType::Number => {
             return unsafe { nvim_tv_get_number(tv) };
@@ -4745,7 +5032,7 @@ fn tv_get_number_chk_impl(tv: TypevalHandle, ret_error: *mut bool) -> i64 {
             return 0;
         }
         VarType::Unknown => {
-            unsafe { nvim_emsg_get_number_unknown() };
+            unsafe { typval_err_get_number_unknown() };
         }
     }
     // Type error path
@@ -4828,23 +5115,23 @@ unsafe fn tv_get_string_buf_chk_impl(tv: TypevalHandle, buf: *mut c_char) -> *co
             buf
         }
         VarType::Partial | VarType::Func => {
-            unsafe { nvim_typval_error_using_funcref_as_string() };
+            unsafe { typval_err_funcref_as_string() };
             std::ptr::null()
         }
         VarType::List => {
-            unsafe { nvim_typval_error_using_list_as_string() };
+            unsafe { typval_err_list_as_string() };
             std::ptr::null()
         }
         VarType::Dict => {
-            unsafe { nvim_typval_error_using_dict_as_string() };
+            unsafe { typval_err_dict_as_string() };
             std::ptr::null()
         }
         VarType::Blob => {
-            unsafe { nvim_typval_error_using_blob_as_string() };
+            unsafe { typval_err_blob_as_string() };
             std::ptr::null()
         }
         VarType::Unknown => {
-            unsafe { nvim_typval_error_using_invalid_as_string() };
+            unsafe { typval_err_invalid_as_string() };
             std::ptr::null()
         }
     }
@@ -5484,7 +5771,7 @@ pub unsafe extern "C" fn rs_tv_item_lock(
     let recurse = TV_ITEM_LOCK_RECURSE.get();
     if recurse >= 100 {
         // DICT_MAXNEST = 100
-        nvim_emsg_item_lock_nested();
+        typval_err_item_lock_nested();
         return;
     }
     if deep == 0 {
@@ -5583,7 +5870,7 @@ extern "C" {
     fn nvim_dict_hash_unlock(d: DictHandle);
     fn nvim_dict_hash_remove(d: DictHandle, hi: HashItemHandle);
     fn nvim_dictitem_get_key_ptr(di: DictItemHandle) -> *const c_char;
-    fn nvim_semsg_key_exists(key: *const c_char);
+    // nvim_semsg_key_exists: deleted (Phase 9), use typval_err_key_exists directly
     fn nvim_dict_copy_key_convert(
         conv: *const c_void,
         key: *const c_char,
@@ -5794,7 +6081,7 @@ pub unsafe extern "C" fn rs_tv_dict_extend(d1: DictHandle, d2: DictHandle, actio
                     }
                 }
             } else if action_char == b'e' {
-                nvim_semsg_key_exists(di2_key);
+                typval_err_key_exists(di2_key);
                 should_break = true;
             } else if action_char == b'f' && di2 != di1 {
                 let di1_tv = nvim_dictitem_get_tv(di1);
@@ -5974,7 +6261,7 @@ extern "C" {
     fn nvim_watcher_get_key_pattern_len(w: DictWatcherHandle) -> usize;
     fn nvim_watcher_get_callback_ptr(w: DictWatcherHandle) -> *mut c_void;
     fn nvim_set_selfdict(tv: TypevalHandle, d: DictHandle);
-    fn nvim_emsg_not_func_or_funcname();
+    // nvim_emsg_not_func_or_funcname: deleted (Phase 9), use typval_err_not_func_or_funcname directly
     fn nvim_tv_is_func_or_string(tv: TypevalHandle) -> bool;
     fn nvim_callback_from_typval_impl(result: *mut c_void, tv: TypevalHandle) -> bool;
     fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> c_int;
@@ -6060,7 +6347,7 @@ pub unsafe extern "C" fn rs_tv_dict_get_callback(
 
     let di_tv = nvim_dictitem_get_tv(di);
     if !nvim_tv_is_func_or_string(di_tv) {
-        nvim_emsg_not_func_or_funcname();
+        typval_err_not_func_or_funcname();
         return false;
     }
 
@@ -6091,10 +6378,10 @@ pub unsafe extern "C" fn rs_tv_dict_get_callback(
 extern "C" {
     // Phase 6 sort/uniq accessors
     fn encode_tv2string(tv: TypevalHandle, len: *mut usize) -> *mut c_char;
-    fn nvim_emsg_sort_failed();
-    fn nvim_emsg_uniq_failed();
-    fn nvim_emsg_listarg(fname: *const c_char);
-    fn nvim_emsg_invarg();
+    // nvim_emsg_sort_failed: deleted (Phase 9), use typval_err_sort_failed directly
+    // nvim_emsg_uniq_failed: deleted (Phase 9), use typval_err_uniq_failed directly
+    // nvim_emsg_listarg: deleted (Phase 9), use typval_err_listarg directly
+    // nvim_emsg_invarg: deleted (Phase 9), use typval_err_invarg directly
     fn nvim_tv_check_for_dict_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
     fn nvim_tv_get_string_checked(tv: TypevalHandle) -> *const c_char;
     // call_func for sort/uniq item_compare2
@@ -6116,7 +6403,7 @@ extern "C" {
     // tv_get_number / tv_get_float for sort (C exported versions)
     fn tv_get_number(tv: TypevalHandle) -> i64;
     fn tv_get_float(tv: TypevalHandle) -> f64;
-    fn nvim_emsg_e_listreq();
+    // nvim_emsg_e_listreq: deleted (Phase 9), use typval_err_e_listreq directly
     // argvars[i] indexing
     fn nvim_tv_idx(argvars: *mut c_void, i: c_int) -> TypevalHandle;
 }
@@ -6387,7 +6674,7 @@ unsafe fn do_sort_impl(l: ListHandle, info: &mut SortInfo) {
         }
     }
     if info.func_err {
-        nvim_emsg_sort_failed();
+        typval_err_sort_failed();
     }
 }
 
@@ -6425,7 +6712,7 @@ unsafe fn do_uniq_impl(l: ListHandle, info: &mut SortInfo) {
         }
 
         if info.func_err {
-            nvim_emsg_uniq_failed();
+            typval_err_uniq_failed();
             break;
         }
     }
@@ -6467,7 +6754,7 @@ unsafe fn parse_sort_uniq_args_impl(argvars: TypevalHandle, info: &mut SortInfo)
             }
             info.func = s;
         } else if nr != 0 {
-            nvim_emsg_invarg();
+            typval_err_invarg();
             return false;
         }
 
@@ -6513,7 +6800,7 @@ unsafe fn do_sort_uniq_impl(argvars: TypevalHandle, rettv: TypevalHandle, sort: 
         } else {
             b"uniq()\0".as_ptr().cast::<c_char>()
         };
-        nvim_emsg_listarg(fname);
+        typval_err_listarg(fname);
         return;
     }
 
@@ -6589,7 +6876,7 @@ pub unsafe extern "C" fn rs_f_join(
 ) {
     let arg0 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 0);
     if nvim_tv_get_type(arg0) != VarType::List as c_int {
-        nvim_emsg_e_listreq();
+        typval_err_e_listreq();
         return;
     }
 
@@ -6624,7 +6911,7 @@ pub unsafe extern "C" fn rs_f_list2str(
 
     let arg0 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 0);
     if nvim_tv_get_type(arg0) != VarType::List as c_int {
-        nvim_emsg_invarg();
+        typval_err_invarg();
         return;
     }
 
