@@ -369,62 +369,118 @@ typedef struct {
   bool arg_allocated;
   typval_T tv;
 } ColorCmdlineHelperState;
-static ColorCmdlineHelperState ccs;
+_Static_assert(sizeof(ColorCmdlineHelperState) == 96,
+               "ColorCmdlineHelperState size must match Rust CCS_SIZE");
+// Field offset assertions for Rust raw-pointer access
+_Static_assert(offsetof(ColorCmdlineHelperState, can_free_cb) == 16, "ccs can_free_cb offset");
+_Static_assert(offsetof(ColorCmdlineHelperState, err) == 24, "ccs err offset");
+_Static_assert(offsetof(ColorCmdlineHelperState, err_errmsg) == 40, "ccs err_errmsg offset");
+_Static_assert(offsetof(ColorCmdlineHelperState, dgc_ret) == 48, "ccs dgc_ret offset");
+_Static_assert(offsetof(ColorCmdlineHelperState, arg) == 56, "ccs arg offset");
+_Static_assert(offsetof(ColorCmdlineHelperState, arg_allocated) == 72, "ccs arg_allocated offset");
+_Static_assert(offsetof(ColorCmdlineHelperState, tv) == 80, "ccs tv offset");
+// ccs storage is now owned by Rust (color.rs `ccs` static), accessed via extern.
+extern ColorCmdlineHelperState ccs;
 
 // nvim_color_cache_valid: inlined into Rust nvim_color_cmdline (color.rs).
 
-/// Reset ccline.last_colors.colors kvec to size 0 and reset helper state.
+/// Reset ccline.last_colors.colors kvec to size 0.
+/// Rust resets `ccs` separately via nvim_color_ccs_init().
 void nvim_ccline_reset_colors(void)
 {
   kv_size(ccline.last_colors.colors) = 0;
-  // Reset helper state for a fresh call.
+}
+
+/// Initialize ccs state for a fresh nvim_color_cmdline call.
+/// Called from Rust instead of the old compound-literal assignment.
+void nvim_color_ccs_init(void)
+{
   ccs = (ColorCmdlineHelperState){
     .color_cb = CALLBACK_NONE,
     .can_free_cb = false,
     .err = ERROR_INIT,
-    .err_errmsg = "",
+    .err_errmsg = e_intern2,
     .dgc_ret = true,
-    .arg = { .v_type = VAR_UNKNOWN },
+    .arg = { .v_type = VAR_STRING, .vval.v_string = ccline.cmdbuff },
     .arg_allocated = false,
     .tv = { .v_type = VAR_UNKNOWN },
   };
 }
 
 // nvim_color_is_empty: inlined into Rust nvim_color_cmdline (color.rs).
+// nvim_color_acquire_callback: migrated to Rust (color.rs).
 
-/// Acquire the coloring callback.
-/// Returns: 0=none, 1=highlight_callback, 2=ex callback(':'), 3=expr path('=').
-/// -1 on error (check nvim_color_has_acquire_err).
-int nvim_color_acquire_callback(void)
+/// Returns 1 if ccline has a non-None highlight_callback type.
+int nvim_color_ccline_has_highlight_cb(void)
 {
-  ccs.color_cb = CALLBACK_NONE;
-  ccs.can_free_cb = false;
-  ccs.err = ERROR_INIT;
-  ccs.err_errmsg = e_intern2;
-  ccs.dgc_ret = true;
-  ccs.arg = (typval_T){ .v_type = VAR_STRING, .vval.v_string = ccline.cmdbuff };
-  ccs.arg_allocated = false;
-  ccs.tv = (typval_T){ .v_type = VAR_UNKNOWN };
+  return ccline.highlight_callback.type != kCallbackNone ? 1 : 0;
+}
 
-  if (ccline.highlight_callback.type != kCallbackNone) {
-    assert(ccline.input_fn);
-    ccs.color_cb = ccline.highlight_callback;
-    return 1;
-  } else if (ccline.cmdfirstc == ':') {
-    TRY_WRAP(&ccs.err, {
-      ccs.err_errmsg = N_("E5408: Unable to get g:Nvim_color_cmdline callback: %s");
-      ccs.dgc_ret = tv_dict_get_callback(get_globvar_dict(), S_LEN("Nvim_color_cmdline"),
-                                         &ccs.color_cb);
-    });
-    ccs.can_free_cb = true;
-    if (ERROR_SET(&ccs.err) || !ccs.dgc_ret) {
-      return -1;
-    }
-    return 2;
-  } else if (ccline.cmdfirstc == '=') {
-    return 3;
-  }
-  return 0;
+/// Copy ccline.highlight_callback to ccs.color_cb (both are Callback structs).
+void nvim_color_use_ccline_highlight_cb(void)
+{
+  assert(ccline.input_fn);
+  ccs.color_cb = ccline.highlight_callback;
+}
+
+/// Returns 1 if ccs.err is set (type != kErrorTypeNone = -1).
+int nvim_color_ccs_has_error(void) { return ERROR_SET(&ccs.err) ? 1 : 0; }
+
+/// Returns ccs.can_free_cb as int.
+int nvim_color_ccs_can_free_cb(void) { return ccs.can_free_cb ? 1 : 0; }
+
+/// Returns ccs.arg_allocated as int.
+int nvim_color_ccs_arg_allocated(void) { return ccs.arg_allocated ? 1 : 0; }
+
+/// Returns ccs.arg.vval.v_string (the duplicated cmdbuff string for finalize).
+char *nvim_color_ccs_arg_string(void) { return ccs.arg.vval.v_string; }
+
+/// Set ccs.arg.arg_allocated = true and xmemdupz cmdbuff into ccs.arg.vval.v_string.
+void nvim_color_ccs_dup_arg(void)
+{
+  ccs.arg_allocated = true;
+  ccs.arg.vval.v_string = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
+}
+
+/// Returns pointer to ccs.tv (typval_T *) for tv_clear.
+void *nvim_color_ccs_tv_ptr(void) { return &ccs.tv; }
+
+/// Returns pointer to ccs.color_cb (Callback *) for callback_free.
+void *nvim_color_ccs_color_cb_ptr(void) { return &ccs.color_cb; }
+
+/// Returns ccs.err.msg (for Rust to print error message).
+const char *nvim_color_ccs_err_msg(void) { return ccs.err.msg; }
+
+/// Returns ccs.err_errmsg (format string for nvim_color_smsg_error).
+const char *nvim_color_ccs_err_errmsg(void) { return ccs.err_errmsg; }
+
+/// Clears ccs.err via api_clear_error.
+void nvim_color_ccs_clear_error(void) { api_clear_error(&ccs.err); }
+
+/// Clears ccs.tv via tv_clear.
+void nvim_color_ccs_tv_clear(void) { tv_clear(&ccs.tv); }
+
+/// Frees ccs.color_cb via callback_free (if can_free_cb).
+void nvim_color_ccs_free_cb(void) { callback_free(&ccs.color_cb); }
+
+/// Returns ccs.tv.v_type as int.
+int nvim_color_ccs_tv_type(void) { return (int)ccs.tv.v_type; }
+
+/// Returns ccs.tv.vval.v_list as void * (for list processing).
+void *nvim_color_ccs_tv_list(void) { return (void *)ccs.tv.vval.v_list; }
+
+/// TRY_WRAP shim: acquire g:Nvim_color_cmdline dict callback.
+/// Populates ccs.color_cb, ccs.err, ccs.err_errmsg, ccs.dgc_ret.
+/// Returns 1 if callback was obtained (dgc_ret true, no error), 0 otherwise.
+int nvim_color_try_get_dict_callback(void)
+{
+  TRY_WRAP(&ccs.err, {
+    ccs.err_errmsg = N_("E5408: Unable to get g:Nvim_color_cmdline callback: %s");
+    ccs.dgc_ret = tv_dict_get_callback(get_globvar_dict(), S_LEN("Nvim_color_cmdline"),
+                                       &ccs.color_cb);
+  });
+  ccs.can_free_cb = true;
+  return (!ERROR_SET(&ccs.err) && ccs.dgc_ret) ? 1 : 0;
 }
 
 /// Run the full VimL expression coloring path ('=' firstc).
@@ -473,14 +529,14 @@ void nvim_color_run_expr_coloring(void)
   kvi_destroy(expr_colors);
 }
 
-/// Invoke the acquired callback. Returns 1=ok, 0=failed.
-int nvim_color_run_callback_coloring(void)
+// nvim_color_run_callback_coloring: migrated to Rust (color.rs).
+
+/// TRY_WRAP shim: call the acquired callback.
+/// Prerequisite: ccs.err = ERROR_INIT, ccs.arg set by Rust caller.
+/// Sets ccs.tv (result), ccs.err, ccs.err_errmsg, getln_interrupted_highlight.
+/// Returns 1 if callback succeeded (cbcall_ret true, no error), 0 otherwise.
+int nvim_color_try_callback_call(void)
 {
-  if (ccline.cmdbuff[ccline.cmdlen] != NUL) {
-    ccs.arg_allocated = true;
-    ccs.arg.vval.v_string = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
-  }
-  getln_interrupted_highlight = false;
   bool cbcall_ret = true;
   ccs.err = ERROR_INIT;
   TRY_WRAP(&ccs.err, {
@@ -494,22 +550,12 @@ int nvim_color_run_callback_coloring(void)
       getln_interrupted_highlight = true;
     }
   });
-  return (ERROR_SET(&ccs.err) || !cbcall_ret) ? 0 : 1;
+  return (!ERROR_SET(&ccs.err) && cbcall_ret) ? 1 : 0;
 }
 
-/// Get v_type of the result typval.
-int nvim_color_result_tv_type(void) { return (int)ccs.tv.v_type; }
-
-/// Get v_list of the result typval (NULL if not a list).
-void *nvim_color_result_tv_list(void) { return (void *)ccs.tv.vval.v_list; }
-
-/// Print an error message (PRINT_ERRMSG style: scroll + newline + smsg).
-void nvim_color_errmsg(const char *msg)
-{
-  msg_scroll = true;
-  msg_putchar('\n');
-  smsg(HLF_E, "%s", msg);
-}
+// nvim_color_result_tv_type: migrated to Rust (color.rs).
+// nvim_color_result_tv_list: migrated to Rust (color.rs).
+// nvim_color_errmsg: migrated to Rust (color.rs).
 
 /// Get ccline.last_colors.prompt_id (for Rust cache_valid check).
 unsigned int nvim_get_ccline_last_colors_prompt_id(void) { return ccline.last_colors.prompt_id; }
@@ -520,6 +566,20 @@ const char *nvim_get_ccline_last_colors_cmdbuff(void) { return ccline.last_color
 /// Free and NULL ccline.last_colors.cmdbuff (for Rust is_empty check).
 void nvim_ccline_clear_last_colors_cmdbuff(void) { XFREE_CLEAR(ccline.last_colors.cmdbuff); }
 
+/// Set ccline.last_colors.prompt_id (for Rust nvim_color_finalize).
+void nvim_set_ccline_last_colors_prompt_id(unsigned int id) { ccline.last_colors.prompt_id = id; }
+
+/// Set ccline.last_colors.cmdbuff to buf (takes ownership; caller passes xstrdup'd or
+/// xmemdupz'd pointer). Also frees existing cmdbuff first.
+void nvim_set_ccline_last_colors_cmdbuff(char *buf)
+{
+  xfree(ccline.last_colors.cmdbuff);
+  ccline.last_colors.cmdbuff = buf;
+}
+
+/// Reset ccline.last_colors.colors kvec size to 0 (for nvim_color_finalize error path).
+void nvim_ccline_reset_colors_size(void) { kv_size(ccline.last_colors.colors) = 0; }
+
 /// Push a color chunk to ccline.last_colors.colors.
 void nvim_ccline_colors_push(int start, int end, int hl_id)
 {
@@ -528,54 +588,23 @@ void nvim_ccline_colors_push(int start, int end, int hl_id)
   }));
 }
 
-/// Finalize coloring: update cmdbuff cache, prompt_id, tv_clear, free callback.
-/// If success==0 (error path): print pending error, clear colors, call redrawcmdline.
-void nvim_color_finalize(int success)
+// nvim_color_finalize: migrated to Rust (color.rs).
+
+/// smsg(HLF_E, _(fmt), msg) wrapper for Rust (variadic smsg not callable from Rust).
+void nvim_color_smsg_error(const char *fmt, const char *msg)
 {
-  if (!success) {
-    if (ERROR_SET(&ccs.err)) {
-      msg_putchar('\n');
-      msg_scroll = true;
-      smsg(HLF_E, _(ccs.err_errmsg), ccs.err.msg);
-      api_clear_error(&ccs.err);
-    }
-    kv_size(ccline.last_colors.colors) = 0;
-  }
-  if (ccs.can_free_cb) {
-    callback_free(&ccs.color_cb);
-  }
-  xfree(ccline.last_colors.cmdbuff);
-  ccline.last_colors.prompt_id = ccline.prompt_id;
-  if (ccs.arg_allocated) {
-    ccline.last_colors.cmdbuff = ccs.arg.vval.v_string;
-  } else {
-    ccline.last_colors.cmdbuff = xmemdupz(ccline.cmdbuff, (size_t)ccline.cmdlen);
-  }
-  tv_clear(&ccs.tv);
-  if (!success) {
-    redrawcmdline();
-  }
+  smsg(HLF_E, _(fmt), msg);
 }
 
-/// Get one byte from ccline.cmdbuff at the given index.
-unsigned char nvim_color_cmdbuff_at(int idx) { return (unsigned char)ccline.cmdbuff[idx]; }
+// nvim_color_cmdbuff_at: inlined in Rust (color.rs, nvim_get_ccline_cmdbuff + index).
+// nvim_color_tv_list_len: kept (wraps static-inline tv_list_len).
+// nvim_color_tv_get_number_chk: deleted; Rust calls tv_get_number_chk directly.
+// nvim_color_tv_get_string_chk: deleted; Rust calls tv_get_string_chk directly.
 
-/// Wrapper for tv_list_len (inline) called from Rust color.rs.
+/// Wrapper for tv_list_len (static inline) called from Rust color.rs.
 int nvim_color_tv_list_len(const list_T *l)
 {
   return tv_list_len(l);
-}
-
-/// Wrapper for tv_get_number_chk (inline) called from Rust color.rs.
-int64_t nvim_color_tv_get_number_chk(const typval_T *tv, bool *error)
-{
-  return tv_get_number_chk(tv, error);
-}
-
-/// Wrapper for tv_get_string_chk (inline) called from Rust color.rs.
-const char *nvim_color_tv_get_string_chk(const typval_T *tv)
-{
-  return tv_get_string_chk(tv);
 }
 
 // ui_ext_cmdline_block_append: migrated to Rust (cmdline crate, ui.rs).
