@@ -146,6 +146,7 @@ extern "C" {
     #[link_name = "emsg"]
     fn nvim_autocmd_emsg(msg: *const c_char);
     fn nvim_autocmd_semsg_str(fmt: *const c_char, arg: *const c_char);
+    fn nvim_autocmd_semsg_int(fmt: *const c_char, arg: c_int);
     fn skipwhite(p: *const c_char) -> *mut c_char;
     #[link_name = "xmemdupz"]
     fn nvim_autocmd_xmemdupz(src: *const c_char, len: usize) -> *mut c_char;
@@ -199,6 +200,36 @@ extern "C" {
     fn nvim_autocmd_expand_env_save(pat: *const c_char) -> *mut c_char;
     fn nvim_docmd_expand_sfile_impl(cmd: *const c_char) -> *mut c_char;
     fn nvim_autocmd_del_matching(event: c_int, findgroup: c_int, pat: *const c_char, patlen: c_int);
+
+    // Phase 4: autocmd_register helpers
+    fn nvim_autocmd_buflist_findnr(bufnr: c_int) -> bool;
+    fn nvim_autocmd_find_reuse_pat(
+        event: c_int,
+        findgroup: c_int,
+        pat: *const c_char,
+        patlen: c_int,
+    ) -> *mut c_void;
+    fn nvim_autocmd_alloc_and_compile_pat(
+        pat: *const c_char,
+        patlen: c_int,
+        is_buflocal: bool,
+        buflocal_nr: c_int,
+        out_ap: *mut *mut c_void,
+    ) -> c_int;
+    fn nvim_autocmd_pat_set_group(ap: *mut c_void, group: c_int);
+    fn nvim_autocmd_pat_inc_refcount(ap: *mut c_void);
+    fn nvim_autocmd_first_event_setup(event: c_int);
+    fn nvim_autocmd_push_ac(
+        event: c_int,
+        ap: *mut c_void,
+        id: i64,
+        handler_cmd: *const c_char,
+        handler_fn_ptr: *mut c_void,
+        desc: *const c_char,
+        once: bool,
+        nested: bool,
+    );
+
     fn nvim_autocmd_register_cmd(
         event: c_int,
         pat: *const c_char,
@@ -1543,6 +1574,107 @@ pub unsafe extern "C" fn rs_do_all_autocmd_events(
             return;
         }
     }
+}
+
+/// Register an autocmd. The handler may be an Ex command or a callback function,
+/// selected by `handler_cmd` (non-NULL) or `handler_fn` (used when `handler_cmd` is NULL).
+///
+/// # Safety
+/// All pointer arguments must be valid for their respective types.
+/// `pat` must be a valid C string of at least `patlen` bytes.
+/// `handler_cmd`, `desc` must be NUL-terminated C strings or NULL.
+/// `handler_fn` must be a valid `Callback*` or NULL (when `handler_cmd` is non-NULL).
+///
+/// # Panics
+/// Panics if `group` is 0 (not a valid group; the caller must ensure a non-zero group).
+#[unsafe(export_name = "autocmd_register")]
+pub unsafe extern "C" fn rs_autocmd_register(
+    id: i64,
+    event: c_int,
+    pat: *const c_char,
+    patlen: c_int,
+    group: c_int,
+    once: bool,
+    nested: bool,
+    desc: *const c_char,
+    handler_cmd: *const c_char,
+    handler_fn: *mut c_void,
+) -> c_int {
+    assert!(group != 0);
+
+    // Validate: patlen must not exceed actual string length.
+    #[allow(clippy::cast_possible_truncation)]
+    if patlen > c_strlen(pat) as c_int {
+        return FAIL;
+    }
+
+    let findgroup = if group == group::AUGROUP_ALL {
+        current_augroup
+    } else {
+        group
+    };
+
+    // Detect special <buffer[=X]> buffer-local patterns (already in Rust).
+    let is_buflocal = rs_aupat_is_buflocal(pat, patlen);
+    let mut buflocal_nr: c_int = 0;
+    let mut buflocal_pat = [0u8; BUFLOCAL_PAT_LEN];
+    let mut pat = pat;
+    let mut patlen = patlen;
+
+    if is_buflocal {
+        buflocal_nr = rs_aupat_get_buflocal_nr(pat, patlen);
+        rs_aupat_normalize_buflocal_pat(buflocal_pat.as_mut_ptr().cast(), pat, patlen, buflocal_nr);
+        pat = buflocal_pat.as_ptr().cast();
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            patlen = c_strlen(pat) as c_int;
+        }
+    }
+
+    // Try to reuse the last AutoPat with matching group/pat.
+    let mut ap = nvim_autocmd_find_reuse_pat(event, findgroup, pat, patlen);
+
+    // No matching pattern found — allocate a new one.
+    if ap.is_null() {
+        // Refuse to add buffer-local ap if buffer number is invalid.
+        if is_buflocal && (buflocal_nr == 0 || !nvim_autocmd_buflist_findnr(buflocal_nr)) {
+            let fmt = c"E680: <buffer=%d>: invalid buffer number ".as_ptr();
+            nvim_autocmd_semsg_int(fmt, buflocal_nr);
+            return FAIL;
+        }
+
+        let mut new_ap: *mut c_void = std::ptr::null_mut();
+        if nvim_autocmd_alloc_and_compile_pat(
+            pat,
+            patlen,
+            is_buflocal,
+            buflocal_nr,
+            &raw mut new_ap,
+        ) == FAIL
+        {
+            return FAIL;
+        }
+        ap = new_ap;
+
+        // First-event setup for special events.
+        nvim_autocmd_first_event_setup(event);
+
+        // Set ap->group.
+        let ap_group = if group == group::AUGROUP_ALL {
+            current_augroup
+        } else {
+            group
+        };
+        nvim_autocmd_pat_set_group(ap, ap_group);
+    }
+
+    // Increment refcount.
+    nvim_autocmd_pat_inc_refcount(ap);
+
+    // Append the new AutoCmd.
+    nvim_autocmd_push_ac(event, ap, id, handler_cmd, handler_fn, desc, once, nested);
+
+    OK
 }
 
 /// Define or delete an autocommand for one event.

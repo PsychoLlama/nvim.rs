@@ -131,136 +131,9 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
 // exported directly under the name "free_all_autocmds" via #[unsafe(export_name)].
 // The C declaration in autocmd.h still covers external callers gated by #if EXITFREE.
 
-/// Registers an autocmd. The handler may be a Ex command or callback function, decided by
-/// the `handler_cmd` or `handler_fn` args.
-///
-/// @param handler_cmd Handler Ex command, or NULL if handler is a function (`handler_fn`).
-/// @param handler_fn Handler function, ignored if `handler_cmd` is not NULL.
-int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int group, bool once,
-                     bool nested, char *desc, const char *handler_cmd, Callback *handler_fn)
-{
-  // 0 is not a valid group.
-  assert(group != 0);
-
-  if (patlen > (int)strlen(pat)) {
-    return FAIL;
-  }
-
-  const int findgroup = group == AUGROUP_ALL ? current_augroup : group;
-
-  // detect special <buffer[=X]> buffer-local patterns
-  const bool is_buflocal = aupat_is_buflocal(pat, patlen);
-  int buflocal_nr = 0;
-
-  char buflocal_pat[BUFLOCAL_PAT_LEN];  // for "<buffer=X>"
-  if (is_buflocal) {
-    buflocal_nr = aupat_get_buflocal_nr(pat, patlen);
-
-    // normalize pat into standard "<buffer>#N" form
-    aupat_normalize_buflocal_pat(buflocal_pat, pat, patlen, buflocal_nr);
-
-    pat = buflocal_pat;
-    patlen = (int)strlen(buflocal_pat);
-  }
-
-  // Try to reuse pattern from the last existing autocommand.
-  AutoPat *ap = NULL;
-  AutoCmdVec *const acs = &autocmds[(int)event];
-  for (ptrdiff_t i = (ptrdiff_t)kv_size(*acs) - 1; i >= 0; i--) {
-    ap = kv_A(*acs, i).pat;
-    if (ap == NULL) {
-      continue;  // Skip deleted autocommands.
-    }
-    // Set result back to NULL if the last pattern doesn't match.
-    if (ap->group != findgroup || ap->patlen != patlen
-        || strncmp(pat, ap->pat, (size_t)patlen) != 0) {
-      ap = NULL;
-    }
-    break;
-  }
-
-  // No matching pattern found, allocate a new one.
-  if (ap == NULL) {
-    // refuse to add buffer-local ap if buffer number is invalid
-    if (is_buflocal && (buflocal_nr == 0 || buflist_findnr(buflocal_nr) == NULL)) {
-      semsg(_("E680: <buffer=%d>: invalid buffer number "), buflocal_nr);
-      return FAIL;
-    }
-
-    ap = xmalloc(sizeof(AutoPat));
-
-    if (is_buflocal) {
-      ap->buflocal_nr = buflocal_nr;
-      ap->reg_prog = NULL;
-    } else {
-      ap->buflocal_nr = 0;
-      char *reg_pat = file_pat_to_reg_pat(pat, pat + patlen, &ap->allow_dirs, true);
-      if (reg_pat != NULL) {
-        ap->reg_prog = vim_regcomp(reg_pat, RE_MAGIC);
-      }
-      xfree(reg_pat);
-      if (reg_pat == NULL || ap->reg_prog == NULL) {
-        xfree(ap);
-        return FAIL;
-      }
-    }
-
-    ap->refcount = 0;
-    ap->pat = xmemdupz(pat, (size_t)patlen);
-    ap->patlen = patlen;
-
-    // need to initialize last_mode for the first ModeChanged autocmd
-    if (event == EVENT_MODECHANGED && !has_event(EVENT_MODECHANGED)) {
-      get_mode(last_mode);
-    }
-
-    // If the event is CursorMoved or CursorMovedI, update the last cursor position
-    // position to avoid immediately triggering the autocommand
-    if ((event == EVENT_CURSORMOVED && !has_event(EVENT_CURSORMOVED))
-        || (event == EVENT_CURSORMOVEDI && !has_event(EVENT_CURSORMOVEDI))) {
-      last_cursormoved_win = curwin;
-      last_cursormoved = curwin->w_cursor;
-    }
-
-    // Initialize the fields checked by the WinScrolled and
-    // WinResized trigger to prevent them from firing right after
-    // the first autocmd is defined.
-    if ((event == EVENT_WINSCROLLED || event == EVENT_WINRESIZED)
-        && !(has_event(EVENT_WINSCROLLED) || has_event(EVENT_WINRESIZED))) {
-      tabpage_T *save_curtab = curtab;
-      FOR_ALL_TABS(tp) {
-        unuse_tabpage(curtab);
-        use_tabpage(tp);
-        snapshot_windows_scroll_size();
-      }
-      unuse_tabpage(curtab);
-      use_tabpage(save_curtab);
-    }
-
-    ap->group = group == AUGROUP_ALL ? current_augroup : group;
-  }
-
-  ap->refcount++;
-
-  // Add the autocmd at the end of the AutoCmd vector.
-  AutoCmd *ac = kv_pushp(autocmds[(int)event]);
-  ac->pat = ap;
-  ac->id = id;
-  if (handler_cmd) {
-    ac->handler_cmd = xstrdup(handler_cmd);
-  } else {
-    ac->handler_cmd = NULL;
-    callback_copy(&ac->handler_fn, handler_fn);
-  }
-  ac->script_ctx = current_sctx;
-  ac->script_ctx.sc_lnum += SOURCING_LNUM;
-  nlua_set_sctx(&ac->script_ctx);
-  ac->once = once;
-  ac->nested = nested;
-  ac->desc = desc == NULL ? NULL : xstrdup(desc);
-
-  return OK;
-}
+// autocmd_register is now implemented in Rust (rs_autocmd_register in lib.rs),
+// exported directly under the name "autocmd_register" via #[unsafe(export_name)].
+// The C declaration in autocmd.h still covers external callers.
 
 /// Prepare for executing autocommands for (hidden) buffer `buf`.
 /// If the current buffer is not in any visible window, put it in a temporary
@@ -775,6 +648,7 @@ int nvim_autocmd_register_cmd(int event, const char *pat, int patlen, int group,
 
 void *nvim_autocmd_get_curbuf_ptr(void) { return curbuf; }
 void nvim_autocmd_semsg_str(const char *fmt, const char *arg) { semsg(fmt, arg); }
+void nvim_autocmd_semsg_int(const char *fmt, int arg) { semsg(fmt, arg); }
 void nvim_autocmd_smsg_no_matching(const char *arg_start) { smsg(0, _("No matching autocommands: %s"), arg_start); }
 
 // =============================================================================
@@ -1289,4 +1163,131 @@ void nvim_autocmd_restore_sctx(void *s_raw)
   AutocmdSctxSave *s = (AutocmdSctxSave *)s_raw;
   current_sctx = s->sctx;
   xfree(s);
+}
+
+// =============================================================================
+// Phase 4: autocmd_register helpers (called from Rust rs_autocmd_register)
+// =============================================================================
+
+/// Check whether a buffer number is valid (for buflocal autocmd patterns).
+bool nvim_autocmd_buflist_findnr(int bufnr)
+{
+  return buflist_findnr(bufnr) != NULL;
+}
+
+/// Back-scan autocmds[event] for a matching AutoPat.
+/// Returns an existing AutoPat* whose group/patlen/pat match findgroup/pat/patlen,
+/// or NULL if none found.
+void *nvim_autocmd_find_reuse_pat(int event, int findgroup, const char *pat, int patlen)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  AutoPat *ap = NULL;
+  for (ptrdiff_t i = (ptrdiff_t)kv_size(*acs) - 1; i >= 0; i--) {
+    ap = kv_A(*acs, i).pat;
+    if (ap == NULL) {
+      continue;  // Skip deleted autocommands.
+    }
+    // Set result back to NULL if the last pattern doesn't match.
+    if (ap->group != findgroup || ap->patlen != patlen
+        || strncmp(pat, ap->pat, (size_t)patlen) != 0) {
+      ap = NULL;
+    }
+    break;
+  }
+  return ap;
+}
+
+/// Allocate and compile a new AutoPat.
+/// For buflocal patterns sets buflocal_nr and clears reg_prog.
+/// For regular patterns: converts via file_pat_to_reg_pat + vim_regcomp.
+/// Returns OK on success (writing *out_ap), FAIL on error.
+int nvim_autocmd_alloc_and_compile_pat(const char *pat, int patlen, bool is_buflocal,
+                                       int buflocal_nr, void **out_ap)
+{
+  AutoPat *ap = xmalloc(sizeof(AutoPat));
+  if (is_buflocal) {
+    ap->buflocal_nr = buflocal_nr;
+    ap->reg_prog = NULL;
+  } else {
+    ap->buflocal_nr = 0;
+    char *reg_pat = file_pat_to_reg_pat(pat, pat + patlen, &ap->allow_dirs, true);
+    if (reg_pat != NULL) {
+      ap->reg_prog = vim_regcomp(reg_pat, RE_MAGIC);
+    }
+    xfree(reg_pat);
+    if (reg_pat == NULL || ap->reg_prog == NULL) {
+      xfree(ap);
+      return FAIL;
+    }
+  }
+  ap->refcount = 0;
+  ap->pat = xmemdupz(pat, (size_t)patlen);
+  ap->patlen = patlen;
+  *out_ap = ap;
+  return OK;
+}
+
+/// Set ap->group.
+void nvim_autocmd_pat_set_group(void *ap_raw, int group)
+{
+  ((AutoPat *)ap_raw)->group = group;
+}
+
+/// Increment ap->refcount.
+void nvim_autocmd_pat_inc_refcount(void *ap_raw)
+{
+  ((AutoPat *)ap_raw)->refcount++;
+}
+
+/// Initialize event-specific state for the first registration of certain events.
+/// Handles ModeChanged, CursorMoved/I, WinScrolled/Resized.
+void nvim_autocmd_first_event_setup(int event)
+{
+  if (event == EVENT_MODECHANGED && !has_event(EVENT_MODECHANGED)) {
+    get_mode(last_mode);
+  }
+
+  if ((event == EVENT_CURSORMOVED && !has_event(EVENT_CURSORMOVED))
+      || (event == EVENT_CURSORMOVEDI && !has_event(EVENT_CURSORMOVEDI))) {
+    last_cursormoved_win = curwin;
+    last_cursormoved = curwin->w_cursor;
+  }
+
+  if ((event == EVENT_WINSCROLLED || event == EVENT_WINRESIZED)
+      && !(has_event(EVENT_WINSCROLLED) || has_event(EVENT_WINRESIZED))) {
+    tabpage_T *save_curtab = curtab;
+    FOR_ALL_TABS(tp) {
+      unuse_tabpage(curtab);
+      use_tabpage(tp);
+      snapshot_windows_scroll_size();
+    }
+    unuse_tabpage(curtab);
+    use_tabpage(save_curtab);
+  }
+}
+
+/// Append a new AutoCmd to autocmds[event] and populate its fields.
+/// handler_cmd: Ex command string (xstrdup'd), or NULL for callback.
+/// handler_fn_ptr: pointer to Callback (copied via callback_copy), or NULL.
+/// Handles script_ctx, nlua_set_sctx, once, nested, desc (xstrdup'd).
+void nvim_autocmd_push_ac(int event, void *ap_raw, int64_t id,
+                          const char *handler_cmd, void *handler_fn_ptr,
+                          const char *desc, bool once, bool nested)
+{
+  AutoPat *ap = (AutoPat *)ap_raw;
+  AutoCmd *ac = kv_pushp(autocmds[event]);
+  ac->pat = ap;
+  ac->id = id;
+  if (handler_cmd) {
+    ac->handler_cmd = xstrdup(handler_cmd);
+  } else {
+    ac->handler_cmd = NULL;
+    callback_copy(&ac->handler_fn, (Callback *)handler_fn_ptr);
+  }
+  ac->script_ctx = current_sctx;
+  ac->script_ctx.sc_lnum += SOURCING_LNUM;
+  nlua_set_sctx(&ac->script_ctx);
+  ac->once = once;
+  ac->nested = nested;
+  ac->desc = desc == NULL ? NULL : xstrdup(desc);
 }

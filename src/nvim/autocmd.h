@@ -101,6 +101,8 @@ EXTERN bool filechangeshell_busy INIT( = false);    ///< FileChangedShell is exe
 
 // Declarations for functions now implemented in Rust (nvim-autocmd crate).
 // These replace the C thin wrappers that were deleted in Phase 1.
+int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int group, bool once,
+                     bool nested, char *desc, const char *handler_cmd, Callback *handler_fn);
 void augroup_del(char *name, bool stupid_legacy_mode);
 void ex_doautoall(exarg_T *eap);
 void do_autocmd_uienter(uint64_t chanid, bool attached);
