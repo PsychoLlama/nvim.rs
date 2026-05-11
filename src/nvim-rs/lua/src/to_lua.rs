@@ -1,18 +1,18 @@
 //! Typval to Lua conversion helpers
 //!
-//! This module provides FFI helpers for converting Neovim API values to Lua values.
-//! These functions wrap the C `nlua_push_*` functions from converter.c.
+//! This module provides the real Rust implementations of nlua_push_* functions,
+//! replacing the C bodies from converter.c (Phases 1 and 5).
 
-use std::ffi::c_int;
+#![allow(non_snake_case)]
+
+use std::ffi::{c_char, c_int};
 
 use crate::state::LuaState;
-use crate::types::push_flags;
-
-// Re-export push flags for convenience
-pub use crate::types::push_flags::{NLUA_PUSH_FREE_REFS, NLUA_PUSH_SPECIAL};
+use crate::types::push_flags::{NLUA_PUSH_FREE_REFS, NLUA_PUSH_SPECIAL};
+use nvim_api::{Array, Dict, NvimString, Object};
 
 // =============================================================================
-// API type aliases for documentation
+// Type aliases
 // =============================================================================
 
 /// Integer type (i64)
@@ -24,289 +24,287 @@ pub type Boolean = bool;
 /// Handle type for Buffer, Window, Tabpage
 pub type Handle = c_int;
 
-/// String type matching Neovim's String struct
-#[repr(C)]
-pub struct NvimString {
-    pub data: *mut std::ffi::c_char,
-    pub size: usize,
-}
+/// LuaRef is int in C (typedef int LuaRef)
+type LuaRef = c_int;
 
-/// Array type matching Neovim's Array struct
-#[repr(C)]
-pub struct Array {
-    pub items: *mut Object,
-    pub size: usize,
-    pub capacity: usize,
-}
+// LUA_NOREF constant
+const LUA_NOREF: LuaRef = -2;
 
-/// KeyValuePair for Dict entries
-#[repr(C)]
-pub struct KeyValuePair {
-    pub key: NvimString,
-    pub value: Object,
-}
-
-/// Dict type matching Neovim's Dict struct
-#[repr(C)]
-pub struct Dict {
-    pub items: *mut KeyValuePair,
-    pub size: usize,
-    pub capacity: usize,
-}
-
-/// ObjectType enum matching Neovim's ObjectType
-#[repr(i32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ObjectType {
-    Nil = 0,
-    Boolean = 1,
-    Integer = 2,
-    Float = 3,
-    String = 4,
-    Array = 5,
-    Dict = 6,
-    LuaRef = 7,
-    Buffer = 8,
-    Window = 9,
-    Tabpage = 10,
-}
-
-/// Object data union (simplified for FFI)
-#[repr(C)]
-pub union ObjectData {
-    pub boolean: bool,
-    pub integer: i64,
-    pub floating: f64,
-    pub string: std::mem::ManuallyDrop<NvimString>,
-    pub array: std::mem::ManuallyDrop<Array>,
-    pub dict: std::mem::ManuallyDrop<Dict>,
-    pub luaref: c_int,
-}
-
-/// Object type matching Neovim's Object struct
-#[repr(C)]
-pub struct Object {
-    pub r#type: ObjectType,
-    pub data: ObjectData,
-}
+// kObjectType constants (matching C enum values)
+const K_OBJECT_TYPE_NIL: c_int = 0;
+const K_OBJECT_TYPE_BOOLEAN: c_int = 1;
+const K_OBJECT_TYPE_INTEGER: c_int = 2;
+const K_OBJECT_TYPE_FLOAT: c_int = 3;
+const K_OBJECT_TYPE_STRING: c_int = 4;
+const K_OBJECT_TYPE_ARRAY: c_int = 5;
+const K_OBJECT_TYPE_DICT: c_int = 6;
+const K_OBJECT_TYPE_LUAREF: c_int = 7;
+const K_OBJECT_TYPE_BUFFER: c_int = 8;
+const K_OBJECT_TYPE_WINDOW: c_int = 9;
+const K_OBJECT_TYPE_TABPAGE: c_int = 10;
 
 // =============================================================================
-// C FFI declarations for nlua_push_* functions
+// C FFI declarations
 // =============================================================================
 
 extern "C" {
-    fn nlua_push_Integer(lstate: *mut LuaState, n: Integer, flags: c_int);
-    fn nlua_push_Float(lstate: *mut LuaState, f: Float, flags: c_int);
-    fn nlua_push_Boolean(lstate: *mut LuaState, b: Boolean, flags: c_int);
-    fn nlua_push_String(lstate: *mut LuaState, s: NvimString, flags: c_int);
-    fn nlua_push_Array(lstate: *mut LuaState, array: Array, flags: c_int);
-    fn nlua_push_Dict(lstate: *mut LuaState, dict: Dict, flags: c_int);
-    fn nlua_push_Object(lstate: *mut LuaState, obj: *mut Object, flags: c_int);
-    fn nlua_push_handle(lstate: *mut LuaState, item: Handle, flags: c_int);
-
-    // Lua C API functions (for direct use)
+    // Lua C API
     fn lua_pushnil(lstate: *mut LuaState);
     fn lua_pushnumber(lstate: *mut LuaState, n: f64);
     fn lua_pushboolean(lstate: *mut LuaState, b: c_int);
-    fn lua_pushlstring(lstate: *mut LuaState, s: *const std::ffi::c_char, len: usize);
+    fn lua_pushlstring(lstate: *mut LuaState, s: *const c_char, len: usize);
+    fn lua_createtable(lstate: *mut LuaState, narr: c_int, nrec: c_int);
+    fn lua_rawset(lstate: *mut LuaState, idx: c_int);
+    fn lua_rawseti(lstate: *mut LuaState, idx: c_int, n: c_int);
+    fn lua_setmetatable(lstate: *mut LuaState, objindex: c_int) -> c_int;
+}
+
+// Call into the Rust implementations directly to avoid redeclaring externs
+// with conflicting types. refs.rs uses LuaRef=c_int and leaf.rs also uses c_int.
+#[inline]
+unsafe fn pushref(lstate: *mut LuaState, ref_: LuaRef) {
+    crate::refs::rs_nlua_pushref(lstate, ref_);
+}
+
+#[inline]
+unsafe fn free_luaref(ref_: LuaRef) {
+    crate::refs::rs_api_free_luaref(ref_);
+}
+
+#[inline]
+unsafe fn get_nil_ref(lstate: *mut LuaState) -> LuaRef {
+    crate::leaf::rs_nlua_get_nil_ref(lstate)
+}
+
+#[inline]
+unsafe fn get_empty_dict_ref(lstate: *mut LuaState) -> LuaRef {
+    crate::leaf::rs_nlua_get_empty_dict_ref(lstate)
 }
 
 // =============================================================================
-// Rust FFI exports
+// Private inline helpers (were static inline in C, Rust-only here)
 // =============================================================================
 
-/// Push an Integer onto the Lua stack.
+/// Push the type index key (true boolean) onto the stack.
 ///
-/// Converts to Lua number type.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_integer(lstate: *mut LuaState, n: Integer, flags: c_int) {
-    nlua_push_Integer(lstate, n, flags);
+/// Used as the key for all "typed" Lua tables representing Vimscript values.
+#[inline]
+unsafe fn nlua_push_type_idx(lstate: *mut LuaState) {
+    lua_pushboolean(lstate, 1); // TYPE_IDX_VALUE = true
 }
 
-/// Push a Float onto the Lua stack.
+/// Push the value index key (false boolean) onto the stack.
 ///
-/// If `flags & NLUA_PUSH_SPECIAL`, creates a typed table with the float value.
-/// Otherwise, pushes as a Lua number.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_float(lstate: *mut LuaState, f: Float, flags: c_int) {
-    nlua_push_Float(lstate, f, flags);
+/// Used as the key for tables representing scalar values like float.
+#[inline]
+unsafe fn nlua_push_val_idx(lstate: *mut LuaState) {
+    lua_pushboolean(lstate, 0); // VAL_IDX_VALUE = false
 }
 
-/// Push a Boolean onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_boolean(lstate: *mut LuaState, b: Boolean, flags: c_int) {
-    nlua_push_Boolean(lstate, b, flags);
+/// Push a type number onto the stack.
+#[inline]
+unsafe fn nlua_push_type(lstate: *mut LuaState, type_val: c_int) {
+    lua_pushnumber(lstate, f64::from(type_val));
 }
 
-/// Push a String onto the Lua stack.
+/// Create a Lua table tagged with its Vimscript type.
 ///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `s` must have valid data pointer (or be empty with size 0).
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_string(lstate: *mut LuaState, s: NvimString, flags: c_int) {
-    nlua_push_String(lstate, s, flags);
+/// Leaves a table with a `type_idx => type_val` entry already inserted.
+pub unsafe fn nlua_create_typed_table(
+    lstate: *mut LuaState,
+    narr: usize,
+    nrec: usize,
+    type_val: c_int,
+) {
+    // narr and nrec are table size hints; silently truncating large tables is safe here.
+    #[allow(clippy::cast_possible_truncation)]
+    let narr_i = narr as c_int;
+    #[allow(clippy::cast_possible_truncation)]
+    let nrec_i = (1 + nrec) as c_int;
+    lua_createtable(lstate, narr_i, nrec_i);
+    nlua_push_type_idx(lstate);
+    nlua_push_type(lstate, type_val);
+    lua_rawset(lstate, -3);
 }
 
-/// Push an Array onto the Lua stack.
-///
-/// Creates a Lua table with sequential integer keys (1-based).
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `array` must have valid items pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_array(lstate: *mut LuaState, array: Array, flags: c_int) {
-    nlua_push_Array(lstate, array, flags);
+// =============================================================================
+// Phase 1: Trivial scalar pushers
+// These replace the C bodies in converter.c.
+// =============================================================================
+
+/// Convert a String to a Lua string and push it onto the stack.
+#[unsafe(export_name = "nlua_push_String")]
+pub unsafe extern "C" fn rs_nlua_push_String(lstate: *mut LuaState, s: NvimString, _flags: c_int) {
+    let ptr = if s.size != 0 && !s.data.is_null() {
+        s.data.cast_const()
+    } else {
+        c"".as_ptr()
+    };
+    lua_pushlstring(lstate, ptr, s.size);
 }
 
-/// Push a Dict onto the Lua stack.
-///
-/// Creates a Lua table with string keys.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `dict` must have valid items pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_dict(lstate: *mut LuaState, dict: Dict, flags: c_int) {
-    nlua_push_Dict(lstate, dict, flags);
+/// Convert an Integer to a Lua number and push it onto the stack.
+#[unsafe(export_name = "nlua_push_Integer")]
+pub unsafe extern "C" fn rs_nlua_push_Integer(lstate: *mut LuaState, n: Integer, _flags: c_int) {
+    #[allow(clippy::cast_precision_loss)]
+    lua_pushnumber(lstate, n as f64);
 }
 
-/// Push an Object onto the Lua stack.
+/// Convert a Float to a Lua value and push it onto the stack.
 ///
-/// Dispatches based on object type to the appropriate push function.
+/// If `kNluaPushSpecial` is set in flags, pushes a typed float table; otherwise a plain number.
+#[unsafe(export_name = "nlua_push_Float")]
+pub unsafe extern "C" fn rs_nlua_push_Float(lstate: *mut LuaState, f: Float, flags: c_int) {
+    if flags & NLUA_PUSH_SPECIAL != 0 {
+        nlua_create_typed_table(lstate, 0, 1, K_OBJECT_TYPE_FLOAT);
+        nlua_push_val_idx(lstate);
+        lua_pushnumber(lstate, f);
+        lua_rawset(lstate, -3);
+    } else {
+        lua_pushnumber(lstate, f);
+    }
+}
+
+/// Convert a Boolean to a Lua boolean and push it onto the stack.
+#[unsafe(export_name = "nlua_push_Boolean")]
+pub unsafe extern "C" fn rs_nlua_push_Boolean(lstate: *mut LuaState, b: Boolean, _flags: c_int) {
+    lua_pushboolean(lstate, c_int::from(b));
+}
+
+/// Push a handle (buffer/window/tabpage integer) onto the stack.
+#[unsafe(export_name = "nlua_push_handle")]
+pub unsafe extern "C" fn rs_nlua_push_handle(lstate: *mut LuaState, item: Handle, _flags: c_int) {
+    lua_pushnumber(lstate, f64::from(item));
+}
+
+// =============================================================================
+// Phase 5: Recursive/composite pushers
+// These replace the C bodies for push_Array, push_Dict, push_Object.
+// =============================================================================
+
+/// Convert an Array to a Lua table (1-based integer keys) and push it onto the stack.
+#[unsafe(export_name = "nlua_push_Array")]
+pub unsafe extern "C" fn rs_nlua_push_Array(lstate: *mut LuaState, array: Array, flags: c_int) {
+    #[allow(clippy::cast_possible_truncation)]
+    lua_createtable(lstate, array.size as c_int, 0);
+    for i in 0..array.size {
+        let item = &mut *array.items.add(i);
+        rs_nlua_push_Object(lstate, item, flags);
+        #[allow(clippy::cast_possible_truncation)]
+        lua_rawseti(lstate, -2, (i + 1) as c_int);
+    }
+}
+
+/// Convert a Dict to a Lua table (string keys) and push it onto the stack.
 ///
-/// # Safety
+/// An empty dict gets the empty_dict metatable to distinguish it from an empty array.
+#[unsafe(export_name = "nlua_push_Dict")]
+pub unsafe extern "C" fn rs_nlua_push_Dict(lstate: *mut LuaState, dict: Dict, flags: c_int) {
+    #[allow(clippy::cast_possible_truncation)]
+    lua_createtable(lstate, 0, dict.size as c_int);
+    if dict.size == 0 {
+        let empty_ref = get_empty_dict_ref(lstate);
+        pushref(lstate, empty_ref);
+        lua_setmetatable(lstate, -2);
+    }
+    for i in 0..dict.size {
+        let kv = &*dict.items.add(i);
+        rs_nlua_push_String(lstate, kv.key, flags);
+        // kv.value is conceptually const here; cast to *mut is safe because
+        // push_Object only reads through the pointer when dealing with value types.
+        let val_ptr: *mut Object = std::ptr::from_ref(&kv.value).cast_mut();
+        rs_nlua_push_Object(lstate, val_ptr, flags);
+        lua_rawset(lstate, -3);
+    }
+}
+
+/// Convert an Object to a Lua value and push it onto the stack.
 ///
-/// `lstate` must be a valid Lua state pointer.
-/// `obj` must be a valid Object pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_object(
+/// Dispatches to the appropriate typed push function based on `obj.type`.
+#[unsafe(export_name = "nlua_push_Object")]
+pub unsafe extern "C" fn rs_nlua_push_Object(
     lstate: *mut LuaState,
     obj: *mut Object,
     flags: c_int,
 ) {
-    nlua_push_Object(lstate, obj, flags);
-}
-
-/// Push a handle (Buffer, Window, Tabpage) onto the Lua stack.
-///
-/// Converts to Lua number type.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_push_handle(lstate: *mut LuaState, item: Handle, flags: c_int) {
-    nlua_push_handle(lstate, item, flags);
+    let obj_ref = &mut *obj;
+    match obj_ref.obj_type {
+        K_OBJECT_TYPE_NIL => {
+            if flags & NLUA_PUSH_SPECIAL != 0 {
+                lua_pushnil(lstate);
+            } else {
+                let nil_ref = get_nil_ref(lstate);
+                pushref(lstate, nil_ref);
+            }
+        }
+        K_OBJECT_TYPE_LUAREF => {
+            // data.luaref is stored as i64 in ObjectData but real LuaRef is c_int.
+            // On little-endian the low 32 bits are the actual int value.
+            #[allow(clippy::cast_possible_truncation)]
+            let luaref = obj_ref.data.luaref as c_int;
+            pushref(lstate, luaref);
+            if flags & NLUA_PUSH_FREE_REFS != 0 {
+                free_luaref(luaref);
+                // Write LUA_NOREF back into the field
+                obj_ref.data.luaref = i64::from(LUA_NOREF);
+            }
+        }
+        K_OBJECT_TYPE_BOOLEAN => {
+            rs_nlua_push_Boolean(lstate, obj_ref.data.boolean, flags);
+        }
+        K_OBJECT_TYPE_INTEGER => {
+            rs_nlua_push_Integer(lstate, obj_ref.data.integer, flags);
+        }
+        K_OBJECT_TYPE_FLOAT => {
+            rs_nlua_push_Float(lstate, obj_ref.data.floating, flags);
+        }
+        K_OBJECT_TYPE_STRING => {
+            rs_nlua_push_String(lstate, obj_ref.data.string, flags);
+        }
+        K_OBJECT_TYPE_ARRAY => {
+            rs_nlua_push_Array(lstate, obj_ref.data.array, flags);
+        }
+        K_OBJECT_TYPE_DICT => {
+            rs_nlua_push_Dict(lstate, obj_ref.data.dict, flags);
+        }
+        // Remote handle types: Buffer=8, Window=9, Tabpage=10
+        // data.integer stores the handle value
+        K_OBJECT_TYPE_BUFFER | K_OBJECT_TYPE_WINDOW | K_OBJECT_TYPE_TABPAGE => {
+            #[allow(clippy::cast_precision_loss)]
+            lua_pushnumber(lstate, obj_ref.data.integer as f64);
+        }
+        _ => {
+            // Unreachable in practice; match C behavior of falling off switch
+        }
+    }
 }
 
 // =============================================================================
-// Direct Lua stack operations
+// Direct Lua stack operations (kept for Rust consumers that import this module)
 // =============================================================================
 
 /// Push nil onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_pushnil(lstate: *mut LuaState) {
     lua_pushnil(lstate);
 }
 
 /// Push a number onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_pushnumber(lstate: *mut LuaState, n: f64) {
     lua_pushnumber(lstate, n);
 }
 
 /// Push a boolean onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_lua_pushboolean(lstate: *mut LuaState, b: bool) {
     lua_pushboolean(lstate, c_int::from(b));
 }
 
 /// Push a string onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-/// `s` must be a valid pointer with at least `len` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn rs_lua_pushlstring(
-    lstate: *mut LuaState,
-    s: *const std::ffi::c_char,
-    len: usize,
-) {
+pub unsafe extern "C" fn rs_lua_pushlstring(lstate: *mut LuaState, s: *const c_char, len: usize) {
     lua_pushlstring(lstate, s, len);
-}
-
-// =============================================================================
-// Safe Rust wrappers
-// =============================================================================
-
-/// Push an integer onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-#[inline]
-pub unsafe fn push_integer(lstate: *mut LuaState, n: Integer, special: bool) {
-    let flags = if special {
-        push_flags::NLUA_PUSH_SPECIAL
-    } else {
-        0
-    };
-    nlua_push_Integer(lstate, n, flags);
-}
-
-/// Push a float onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-#[inline]
-pub unsafe fn push_float(lstate: *mut LuaState, f: Float, special: bool) {
-    let flags = if special {
-        push_flags::NLUA_PUSH_SPECIAL
-    } else {
-        0
-    };
-    nlua_push_Float(lstate, f, flags);
-}
-
-/// Push a boolean onto the Lua stack.
-///
-/// # Safety
-///
-/// `lstate` must be a valid Lua state pointer.
-#[inline]
-pub unsafe fn push_boolean(lstate: *mut LuaState, b: bool) {
-    nlua_push_Boolean(lstate, b, 0);
 }
 
 #[cfg(test)]
@@ -314,32 +312,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_object_type_values() {
-        assert_eq!(ObjectType::Nil as i32, 0);
-        assert_eq!(ObjectType::Boolean as i32, 1);
-        assert_eq!(ObjectType::Integer as i32, 2);
-        assert_eq!(ObjectType::Float as i32, 3);
-        assert_eq!(ObjectType::String as i32, 4);
-        assert_eq!(ObjectType::Array as i32, 5);
-        assert_eq!(ObjectType::Dict as i32, 6);
-        assert_eq!(ObjectType::LuaRef as i32, 7);
-        assert_eq!(ObjectType::Buffer as i32, 8);
-        assert_eq!(ObjectType::Window as i32, 9);
-        assert_eq!(ObjectType::Tabpage as i32, 10);
+    fn test_object_type_constants() {
+        assert_eq!(K_OBJECT_TYPE_NIL, 0);
+        assert_eq!(K_OBJECT_TYPE_BOOLEAN, 1);
+        assert_eq!(K_OBJECT_TYPE_INTEGER, 2);
+        assert_eq!(K_OBJECT_TYPE_FLOAT, 3);
+        assert_eq!(K_OBJECT_TYPE_STRING, 4);
+        assert_eq!(K_OBJECT_TYPE_ARRAY, 5);
+        assert_eq!(K_OBJECT_TYPE_DICT, 6);
+        assert_eq!(K_OBJECT_TYPE_LUAREF, 7);
+        assert_eq!(K_OBJECT_TYPE_BUFFER, 8);
+        assert_eq!(K_OBJECT_TYPE_WINDOW, 9);
+        assert_eq!(K_OBJECT_TYPE_TABPAGE, 10);
     }
 
     #[test]
     fn test_push_flags() {
         assert_eq!(NLUA_PUSH_SPECIAL, 0x01);
         assert_eq!(NLUA_PUSH_FREE_REFS, 0x02);
-    }
-
-    #[test]
-    fn test_struct_sizes() {
-        // Verify struct layouts are reasonable
-        assert!(std::mem::size_of::<NvimString>() > 0);
-        assert!(std::mem::size_of::<Array>() > 0);
-        assert!(std::mem::size_of::<Dict>() > 0);
-        assert!(std::mem::size_of::<Object>() > 0);
     }
 }

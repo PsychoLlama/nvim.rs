@@ -6,7 +6,12 @@
 use std::ffi::c_int;
 
 use crate::state::LuaState;
-use crate::to_lua::{Array, Dict, Float, Integer, NvimString, Object};
+use nvim_api::{Array, Dict, NvimString, Object};
+
+/// Float type (f64)
+pub type Float = f64;
+/// Integer type (i64)
+pub type Integer = i64;
 
 // =============================================================================
 // Error type (matches Neovim's Error struct)

@@ -110,20 +110,15 @@ unsafe fn lua_pop(lstate: *mut LuaState, n: c_int) {
 
 /// Push an Object onto the Lua stack.
 ///
-/// Delegates to the to_lua module's push_object wrapper.
-/// `nvim_api::Object` and `to_lua::Object` are both `#[repr(C)]` with the
-/// same field layout; the pointer cast is a no-op at the ABI level.
+/// Delegates to the to_lua module's real Rust implementation.
 #[inline]
 unsafe fn push_object(lstate: *mut LuaState, obj: *mut Object, flags: c_int) {
-    crate::to_lua::rs_nlua_push_object(lstate, obj.cast::<crate::to_lua::Object>(), flags);
+    crate::to_lua::rs_nlua_push_Object(lstate, obj, flags);
 }
 
 /// Pop an Object from the Lua stack.
 ///
 /// Delegates to the from_lua module's pop_object wrapper.
-/// All pointer casts are no-ops: the pointed-to types are `#[repr(C)]`
-/// structs with identical field layouts across crate boundaries.
-#[allow(clippy::transmute_ptr_to_ptr)]
 #[inline]
 unsafe fn pop_object(
     lstate: *mut LuaState,
@@ -131,13 +126,12 @@ unsafe fn pop_object(
     arena: *mut Arena,
     err: *mut Error,
 ) -> Object {
-    // Safety: to_lua::Object and nvim_api::Object have the same #[repr(C)] layout.
-    std::mem::transmute::<crate::to_lua::Object, Object>(crate::from_lua::rs_nlua_pop_object(
+    crate::from_lua::rs_nlua_pop_object(
         lstate,
         keep_ref,
         arena.cast::<crate::from_lua::Arena>(),
         err.cast::<crate::from_lua::Error>(),
-    ))
+    )
 }
 
 /// lua_isnil: lua_type(L, n) == LUA_TNIL (0)

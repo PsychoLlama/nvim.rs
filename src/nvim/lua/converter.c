@@ -47,6 +47,38 @@ typedef struct {
 #define LUA_PUSH_STATIC_STRING(lstate, s) \
   lua_pushlstring(lstate, s, sizeof(s) - 1)
 
+// These helpers are still used by the macro forest (TYPVAL_ENCODE_CONV_EMPTY_DICT)
+// and by nlua_init_types below. They are defined here so that C code calling
+// them continues to compile while those callers remain in C. Once all callers
+// are migrated to Rust, these can be removed.
+static inline void nlua_push_type_idx(lua_State *lstate)
+  FUNC_ATTR_NONNULL_ALL
+{
+  lua_pushboolean(lstate, TYPE_IDX_VALUE);
+}
+
+static inline void nlua_push_val_idx(lua_State *lstate)
+  FUNC_ATTR_NONNULL_ALL
+{
+  lua_pushboolean(lstate, VAL_IDX_VALUE);
+}
+
+static inline void nlua_push_type(lua_State *lstate, ObjectType type)
+  FUNC_ATTR_NONNULL_ALL
+{
+  lua_pushnumber(lstate, (lua_Number)type);
+}
+
+static inline void nlua_create_typed_table(lua_State *lstate, const size_t narr, const size_t nrec,
+                                           const ObjectType type)
+  FUNC_ATTR_NONNULL_ALL
+{
+  lua_createtable(lstate, (int)narr, (int)(1 + nrec));
+  nlua_push_type_idx(lstate);
+  nlua_push_type(lstate, type);
+  lua_rawset(lstate, -3);
+}
+
 static LuaTableProps nlua_traverse_table(lua_State *const lstate)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -607,177 +639,6 @@ bool nlua_push_typval(lua_State *lstate, typval_T *const tv, int flags)
   return true;
 }
 
-/// Push value which is a type index
-///
-/// Used for all “typed” tables: i.e. for all tables which represent Vimscript values.
-static inline void nlua_push_type_idx(lua_State *lstate)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_pushboolean(lstate, TYPE_IDX_VALUE);
-}
-
-/// Push value which is a value index
-///
-/// Used for tables which represent scalar values, like float value.
-static inline void nlua_push_val_idx(lua_State *lstate)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_pushboolean(lstate, VAL_IDX_VALUE);
-}
-
-/// Push type
-///
-/// Type is a value in vim.types table.
-///
-/// @param[out]  lstate  Lua state.
-/// @param[in]   type    Type to push.
-static inline void nlua_push_type(lua_State *lstate, ObjectType type)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_pushnumber(lstate, (lua_Number)type);
-}
-
-/// Create Lua table which has an entry that determines its Vimscript type
-///
-/// @param[out]  lstate  Lua state.
-/// @param[in]   narr    Number of “array” entries to be populated later.
-/// @param[in]   nrec    Number of “dictionary” entries to be populated later.
-/// @param[in]   type    Type of the table.
-static inline void nlua_create_typed_table(lua_State *lstate, const size_t narr, const size_t nrec,
-                                           const ObjectType type)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_createtable(lstate, (int)narr, (int)(1 + nrec));
-  nlua_push_type_idx(lstate);
-  nlua_push_type(lstate, type);
-  lua_rawset(lstate, -3);
-}
-
-/// Convert given String to Lua string
-///
-/// Leaves converted string on top of the stack.
-void nlua_push_String(lua_State *lstate, const String s, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_pushlstring(lstate, s.size ? s.data : "", s.size);
-}
-
-/// Convert given Integer to Lua number
-///
-/// Leaves converted number on top of the stack.
-void nlua_push_Integer(lua_State *lstate, const Integer n, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_pushnumber(lstate, (lua_Number)n);
-}
-
-/// Convert given Float to Lua table
-///
-/// Leaves converted table on top of the stack.
-void nlua_push_Float(lua_State *lstate, const Float f, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (flags & kNluaPushSpecial) {
-    nlua_create_typed_table(lstate, 0, 1, kObjectTypeFloat);
-    nlua_push_val_idx(lstate);
-    lua_pushnumber(lstate, (lua_Number)f);
-    lua_rawset(lstate, -3);
-  } else {
-    lua_pushnumber(lstate, (lua_Number)f);
-  }
-}
-
-/// Convert given Float to Lua boolean
-///
-/// Leaves converted value on top of the stack.
-void nlua_push_Boolean(lua_State *lstate, const Boolean b, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_pushboolean(lstate, b);
-}
-
-/// Convert given Dict to Lua table
-///
-/// Leaves converted table on top of the stack.
-void nlua_push_Dict(lua_State *lstate, const Dict dict, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_createtable(lstate, 0, (int)dict.size);
-  if (dict.size == 0) {
-    nlua_pushref(lstate, nlua_global_refs->empty_dict_ref);
-    lua_setmetatable(lstate, -2);
-  }
-  for (size_t i = 0; i < dict.size; i++) {
-    nlua_push_String(lstate, dict.items[i].key, flags);
-    nlua_push_Object(lstate, &dict.items[i].value, flags);
-    lua_rawset(lstate, -3);
-  }
-}
-
-/// Convert given Array to Lua table
-///
-/// Leaves converted table on top of the stack.
-void nlua_push_Array(lua_State *lstate, const Array array, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_createtable(lstate, (int)array.size, 0);
-  for (size_t i = 0; i < array.size; i++) {
-    nlua_push_Object(lstate, &array.items[i], flags);
-    lua_rawseti(lstate, -2, (int)i + 1);
-  }
-}
-
-void nlua_push_handle(lua_State *lstate, const handle_T item, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  lua_pushnumber(lstate, (lua_Number)(item));
-}
-
-/// Convert given Object to Lua value
-///
-/// Leaves converted value on top of the stack.
-void nlua_push_Object(lua_State *lstate, Object *obj, int flags)
-  FUNC_ATTR_NONNULL_ALL
-{
-  switch (obj->type) {
-  case kObjectTypeNil:
-    if (flags & kNluaPushSpecial) {
-      lua_pushnil(lstate);
-    } else {
-      nlua_pushref(lstate, nlua_global_refs->nil_ref);
-    }
-    break;
-  case kObjectTypeLuaRef: {
-    nlua_pushref(lstate, obj->data.luaref);
-    if (flags & kNluaPushFreeRefs) {
-      api_free_luaref(obj->data.luaref);
-      obj->data.luaref = LUA_NOREF;
-    }
-    break;
-  }
-#define ADD_TYPE(type, data_key) \
-  case kObjectType##type: { \
-      nlua_push_##type(lstate, obj->data.data_key, flags); \
-      break; \
-  }
-    ADD_TYPE(Boolean, boolean)
-    ADD_TYPE(Integer, integer)
-    ADD_TYPE(Float,   floating)
-    ADD_TYPE(String,  string)
-    ADD_TYPE(Array,   array)
-    ADD_TYPE(Dict,    dict)
-#undef ADD_TYPE
-#define ADD_REMOTE_TYPE(type) \
-  case kObjectType##type: { \
-      nlua_push_##type(lstate, (type)obj->data.integer, flags); \
-      break; \
-  }
-    ADD_REMOTE_TYPE(Buffer)
-    ADD_REMOTE_TYPE(Window)
-    ADD_REMOTE_TYPE(Tabpage)
-#undef ADD_REMOTE_TYPE
-  }
-}
 
 /// Convert Lua value to string
 ///
