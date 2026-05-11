@@ -62,6 +62,64 @@ typedef struct {
 
 #include "lua/treesitter.c.generated.h"
 
+// Rust implementations (nvim-treesitter crate)
+extern int rs_ts_node_tostring(lua_State *L);
+extern int rs_ts_node_eq(lua_State *L);
+extern int rs_ts_node_id(lua_State *L);
+extern int rs_ts_node_named(lua_State *L);
+extern int rs_ts_node_missing(lua_State *L);
+extern int rs_ts_node_extra(lua_State *L);
+extern int rs_ts_node_has_changes(lua_State *L);
+extern int rs_ts_node_has_error(lua_State *L);
+extern int rs_ts_node_type(lua_State *L);
+extern int rs_ts_node_symbol(lua_State *L);
+extern int rs_ts_node_child_count(lua_State *L);
+extern int rs_ts_node_named_child_count(lua_State *L);
+extern int rs_ts_node_byte_length(lua_State *L);
+extern int rs_ts_node_equal(lua_State *L);
+extern int rs_ts_node_sexpr(lua_State *L);
+extern int rs_ts_node_range(lua_State *L);
+extern int rs_ts_node_start(lua_State *L);
+extern int rs_ts_node_end(lua_State *L);
+extern int rs_ts_node_parent(lua_State *L);
+extern int rs_ts_node_next_sibling(lua_State *L);
+extern int rs_ts_node_prev_sibling(lua_State *L);
+extern int rs_ts_node_next_named_sibling(lua_State *L);
+extern int rs_ts_node_prev_named_sibling(lua_State *L);
+extern int rs_ts_node_child(lua_State *L);
+extern int rs_ts_node_named_child(lua_State *L);
+extern int rs_ts_node_descendant_for_range(lua_State *L);
+extern int rs_ts_node_named_descendant_for_range(lua_State *L);
+extern int rs_ts_node_child_with_descendant(lua_State *L);
+extern int rs_ts_node_root(lua_State *L);
+extern int rs_ts_node_tree(lua_State *L);
+extern int rs_ts_node_field(lua_State *L);
+extern int rs_ts_node_named_children(lua_State *L);
+extern int rs_ts_node_next_child(lua_State *L);
+extern int rs_ts_node_iter_children(lua_State *L);
+extern int rs_ts_has_ancestor(lua_State *L);
+extern int rs_ts_tree_tostring(lua_State *L);
+extern int rs_ts_tree_copy(lua_State *L);
+extern int rs_ts_tree_get_ranges(lua_State *L);
+extern int rs_ts_tree_gc(lua_State *L);
+extern int rs_ts_tree_root(lua_State *L);
+extern int rs_ts_tree_edit(lua_State *L);
+extern int rs_ts_query_tostring(lua_State *L);
+extern int rs_ts_query_gc(lua_State *L);
+extern int rs_ts_query_disable_capture(lua_State *L);
+extern int rs_ts_query_disable_pattern(lua_State *L);
+extern int rs_ts_query_inspect(lua_State *L);
+extern int rs_ts_querycursor_gc(lua_State *L);
+extern int rs_ts_querycursor_remove_match(lua_State *L);
+extern int rs_ts_querycursor_next_match(lua_State *L);
+extern int rs_ts_querycursor_next_capture(lua_State *L);
+extern int rs_ts_querymatch_info(lua_State *L);
+extern int rs_ts_querymatch_captures(lua_State *L);
+extern int rs_ts_parser_tostring(lua_State *L);
+extern int rs_ts_parser_reset(lua_State *L);
+extern void rs_ts_query_err_string(const char *src, int error_offset, uint32_t error_type,
+                                   char *err_buf, size_t errlen);
+
 static PMap(cstr_t) langs = MAP_INIT;
 
 #ifdef HAVE_WASMTIME
@@ -359,9 +417,9 @@ static int tslua_inspect_lang(lua_State *L)
 
 static struct luaL_Reg parser_meta[] = {
   { "__gc", parser_gc },
-  { "__tostring", parser_tostring },
+  { "__tostring", rs_ts_parser_tostring },
   { "parse", parser_parse },
-  { "reset", parser_reset },
+  { "reset", rs_ts_parser_reset },
   { "set_included_ranges", parser_set_ranges },
   { "included_ranges", parser_get_ranges },
   { "_set_logger", parser_set_logger },
@@ -418,12 +476,6 @@ static int parser_gc(lua_State *L)
   logger_gc(ts_parser_logger(p));
   ts_parser_delete(p);
   return 0;
-}
-
-static int parser_tostring(lua_State *L)
-{
-  lua_pushstring(L, "<parser>");
-  return 1;
 }
 
 static const char *input_cb(void *payload, uint32_t byte_index, TSPoint position,
@@ -560,13 +612,6 @@ static int parser_parse(lua_State *L)
 
   xfree(changed);
   return 2;
-}
-
-static int parser_reset(lua_State *L)
-{
-  TSParser *p = parser_check(L, 1);
-  ts_parser_reset(p);
-  return 0;
 }
 
 static void range_err(lua_State *L) { luaL_error(L, "Ranges can only be made from 6 element long tables or nodes."); }
@@ -734,12 +779,12 @@ static int parser_get_logger(lua_State *L)
 // TSTree
 
 static struct luaL_Reg tree_meta[] = {
-  { "__gc", tree_gc },
-  { "__tostring", tree_tostring },
-  { "root", tree_root },
-  { "edit", tree_edit },
-  { "included_ranges", tree_get_ranges },
-  { "copy", tree_copy },
+  { "__gc", rs_ts_tree_gc },
+  { "__tostring", rs_ts_tree_tostring },
+  { "root", rs_ts_tree_root },
+  { "edit", rs_ts_tree_edit },
+  { "included_ranges", rs_ts_tree_get_ranges },
+  { "copy", rs_ts_tree_copy },
   { NULL, NULL }
 };
 
@@ -760,135 +805,44 @@ static void push_tree(lua_State *L, const TSTree *tree)
   lua_setmetatable(L, -2);  // [udata]
 }
 
-static int tree_copy(lua_State *L)
-{
-  TSLuaTree *ud = luaL_checkudata(L, 1, TS_META_TREE);
-  TSTree *copy = ts_tree_copy(ud->tree);
-  push_tree(L, copy);  // [tree]
-
-  return 1;
-}
-
-static int tree_edit(lua_State *L)
-{
-  if (lua_gettop(L) < 10) {
-    lua_pushstring(L, "not enough args to tree:edit()");
-    return lua_error(L);
-  }
-
-  TSLuaTree *ud = luaL_checkudata(L, 1, TS_META_TREE);
-
-  uint32_t start_byte = (uint32_t)luaL_checkint(L, 2);
-  uint32_t old_end_byte = (uint32_t)luaL_checkint(L, 3);
-  uint32_t new_end_byte = (uint32_t)luaL_checkint(L, 4);
-  TSPoint start_point = { (uint32_t)luaL_checkint(L, 5), (uint32_t)luaL_checkint(L, 6) };
-  TSPoint old_end_point = { (uint32_t)luaL_checkint(L, 7), (uint32_t)luaL_checkint(L, 8) };
-  TSPoint new_end_point = { (uint32_t)luaL_checkint(L, 9), (uint32_t)luaL_checkint(L, 10) };
-
-  TSInputEdit edit = { start_byte, old_end_byte, new_end_byte,
-                       start_point, old_end_point, new_end_point };
-
-  TSTree *new_tree = ts_tree_copy(ud->tree);
-  ts_tree_edit(new_tree, &edit);
-
-  push_tree(L, new_tree);  // [tree]
-
-  return 1;
-}
-
-static int tree_get_ranges(lua_State *L)
-{
-  TSLuaTree *ud = luaL_checkudata(L, 1, TS_META_TREE);
-
-  bool include_bytes = (lua_gettop(L) >= 2) && lua_toboolean(L, 2);
-
-  uint32_t len;
-  TSRange *ranges = ts_tree_included_ranges(ud->tree, &len);
-
-  push_ranges(L, ranges, len, include_bytes);
-
-  xfree(ranges);
-  return 1;
-}
-
-static int tree_gc(lua_State *L)
-{
-  TSLuaTree *ud = luaL_checkudata(L, 1, TS_META_TREE);
-
-  // SAFETY: we can cast the const away because the tree is only garbage collected after all of its
-  // TSNode's, TSQuerCurors, etc., are unreachable (each contains a reference to the TSLuaTree)
-  TSTree *tree = (TSTree *)ud->tree;
-
-  ts_tree_delete(tree);
-  return 0;
-}
-
-static int tree_tostring(lua_State *L)
-{
-  lua_pushstring(L, "<tree>");
-  return 1;
-}
-
-static int tree_root(lua_State *L)
-{
-  TSLuaTree *ud = luaL_checkudata(L, 1, TS_META_TREE);
-
-  TSNode root = ts_tree_root_node(ud->tree);
-
-  TSNode *node_ud = lua_newuserdata(L, sizeof(TSNode));  // [node]
-  *node_ud = root;
-  lua_getfield(L, LUA_REGISTRYINDEX, TS_META_NODE);  // [node, meta]
-  lua_setmetatable(L, -2);  // [node]
-
-  // To prevent the tree from being garbage collected, create a reference to it
-  // in the fenv which will be passed to userdata nodes of the tree.
-  // Note: environments (fenvs) associated with userdata have no meaning in Lua
-  // and are only used to associate a table.
-  lua_createtable(L, 1, 0);  // [node, reftable]
-  lua_pushvalue(L, 1);  // [node, reftable, tree]
-  lua_rawseti(L, -2, 1);  // [node, reftable]
-  lua_setfenv(L, -2);  // [node]
-
-  return 1;
-}
 
 // TSNode
 static struct luaL_Reg node_meta[] = {
-  { "__tostring", node_tostring },
-  { "__eq", node_eq },
-  { "__len", node_child_count },
-  { "id", node_id },
-  { "range", node_range },
-  { "start", node_start },
-  { "end_", node_end },
-  { "type", node_type },
-  { "symbol", node_symbol },
-  { "field", node_field },
-  { "named", node_named },
-  { "missing", node_missing },
-  { "extra", node_extra },
-  { "has_changes", node_has_changes },
-  { "has_error", node_has_error },
-  { "sexpr", node_sexpr },
-  { "child_count", node_child_count },
-  { "named_child_count", node_named_child_count },
-  { "child", node_child },
-  { "named_child", node_named_child },
-  { "descendant_for_range", node_descendant_for_range },
-  { "named_descendant_for_range", node_named_descendant_for_range },
-  { "parent", node_parent },
-  { "__has_ancestor", __has_ancestor },
-  { "child_with_descendant", node_child_with_descendant },
-  { "iter_children", node_iter_children },
-  { "next_sibling", node_next_sibling },
-  { "prev_sibling", node_prev_sibling },
-  { "next_named_sibling", node_next_named_sibling },
-  { "prev_named_sibling", node_prev_named_sibling },
-  { "named_children", node_named_children },
-  { "root", node_root },
-  { "tree", node_tree },
-  { "byte_length", node_byte_length },
-  { "equal", node_equal },
+  { "__tostring", rs_ts_node_tostring },
+  { "__eq", rs_ts_node_eq },
+  { "__len", rs_ts_node_child_count },
+  { "id", rs_ts_node_id },
+  { "range", rs_ts_node_range },
+  { "start", rs_ts_node_start },
+  { "end_", rs_ts_node_end },
+  { "type", rs_ts_node_type },
+  { "symbol", rs_ts_node_symbol },
+  { "field", rs_ts_node_field },
+  { "named", rs_ts_node_named },
+  { "missing", rs_ts_node_missing },
+  { "extra", rs_ts_node_extra },
+  { "has_changes", rs_ts_node_has_changes },
+  { "has_error", rs_ts_node_has_error },
+  { "sexpr", rs_ts_node_sexpr },
+  { "child_count", rs_ts_node_child_count },
+  { "named_child_count", rs_ts_node_named_child_count },
+  { "child", rs_ts_node_child },
+  { "named_child", rs_ts_node_named_child },
+  { "descendant_for_range", rs_ts_node_descendant_for_range },
+  { "named_descendant_for_range", rs_ts_node_named_descendant_for_range },
+  { "parent", rs_ts_node_parent },
+  { "__has_ancestor", rs_ts_has_ancestor },
+  { "child_with_descendant", rs_ts_node_child_with_descendant },
+  { "iter_children", rs_ts_node_iter_children },
+  { "next_sibling", rs_ts_node_next_sibling },
+  { "prev_sibling", rs_ts_node_prev_sibling },
+  { "next_named_sibling", rs_ts_node_next_named_sibling },
+  { "prev_named_sibling", rs_ts_node_prev_named_sibling },
+  { "named_children", rs_ts_node_named_children },
+  { "root", rs_ts_node_root },
+  { "tree", rs_ts_node_tree },
+  { "byte_length", rs_ts_node_byte_length },
+  { "equal", rs_ts_node_equal },
 
   { NULL, NULL }
 };
@@ -932,405 +886,13 @@ static TSNode node_check(lua_State *L, int index)
   return *ud;
 }
 
-static int node_tostring(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushstring(L, "<node ");
-  lua_pushstring(L, ts_node_type(node));
-  lua_pushstring(L, ">");
-  lua_concat(L, 3);
-  return 1;
-}
-
-static int node_eq(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode node2 = node_check(L, 2);
-  lua_pushboolean(L, ts_node_eq(node, node2));
-  return 1;
-}
-
-static int node_id(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushlstring(L, (const char *)&node.id, sizeof node.id);
-  return 1;
-}
-
-static int node_range(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-
-  bool include_bytes = (lua_gettop(L) >= 2) && lua_toboolean(L, 2);
-
-  TSPoint start = ts_node_start_point(node);
-  TSPoint end = ts_node_end_point(node);
-
-  if (include_bytes) {
-    lua_pushinteger(L, start.row);
-    lua_pushinteger(L, start.column);
-    lua_pushinteger(L, ts_node_start_byte(node));
-    lua_pushinteger(L, end.row);
-    lua_pushinteger(L, end.column);
-    lua_pushinteger(L, ts_node_end_byte(node));
-    return 6;
-  }
-
-  lua_pushinteger(L, start.row);
-  lua_pushinteger(L, start.column);
-  lua_pushinteger(L, end.row);
-  lua_pushinteger(L, end.column);
-  return 4;
-}
-
-static int node_start(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSPoint start = ts_node_start_point(node);
-  uint32_t start_byte = ts_node_start_byte(node);
-  lua_pushinteger(L, start.row);
-  lua_pushinteger(L, start.column);
-  lua_pushinteger(L, start_byte);
-  return 3;
-}
-
-static int node_end(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSPoint end = ts_node_end_point(node);
-  uint32_t end_byte = ts_node_end_byte(node);
-  lua_pushinteger(L, end.row);
-  lua_pushinteger(L, end.column);
-  lua_pushinteger(L, end_byte);
-  return 3;
-}
-
-static int node_child_count(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  uint32_t count = ts_node_child_count(node);
-  lua_pushinteger(L, count);
-  return 1;
-}
-
-static int node_named_child_count(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  uint32_t count = ts_node_named_child_count(node);
-  lua_pushinteger(L, count);
-  return 1;
-}
-
-static int node_type(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushstring(L, ts_node_type(node));
-  return 1;
-}
-
-static int node_symbol(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSSymbol symbol = ts_node_symbol(node);
-  lua_pushinteger(L, symbol);
-  return 1;
-}
-
-static int node_field(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  uint32_t count = ts_node_child_count(node);
-  int curr_index = 0;
-
-  size_t name_len;
-  const char *field_name = luaL_checklstring(L, 2, &name_len);
-
-  lua_newtable(L);
-
-  for (uint32_t i = 0; i < count; i++) {
-    const char *child_field_name = ts_node_field_name_for_child(node, i);
-    if (strequal(field_name, child_field_name)) {
-      TSNode child = ts_node_child(node, i);
-      push_node(L, child, 1);
-      lua_rawseti(L, -2, ++curr_index);
-    }
-  }
-
-  return 1;
-}
-
-static int node_named(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushboolean(L, ts_node_is_named(node));
-  return 1;
-}
-
-static int node_sexpr(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  char *allocated = ts_node_string(node);
-  lua_pushstring(L, allocated);
-  xfree(allocated);
-  return 1;
-}
-
-static int node_missing(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushboolean(L, ts_node_is_missing(node));
-  return 1;
-}
-
-static int node_extra(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushboolean(L, ts_node_is_extra(node));
-  return 1;
-}
-
-static int node_has_changes(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushboolean(L, ts_node_has_changes(node));
-  return 1;
-}
-
-static int node_has_error(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  lua_pushboolean(L, ts_node_has_error(node));
-  return 1;
-}
-
-static int node_child(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  uint32_t num = (uint32_t)lua_tointeger(L, 2);
-  TSNode child = ts_node_child(node, num);
-
-  push_node(L, child, 1);
-  return 1;
-}
-
-static int node_named_child(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  uint32_t num = (uint32_t)lua_tointeger(L, 2);
-  TSNode child = ts_node_named_child(node, num);
-
-  push_node(L, child, 1);
-  return 1;
-}
-
-static int node_descendant_for_range(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSPoint start = { (uint32_t)lua_tointeger(L, 2),
-                    (uint32_t)lua_tointeger(L, 3) };
-  TSPoint end = { (uint32_t)lua_tointeger(L, 4),
-                  (uint32_t)lua_tointeger(L, 5) };
-  TSNode child = ts_node_descendant_for_point_range(node, start, end);
-
-  push_node(L, child, 1);
-  return 1;
-}
-
-static int node_named_descendant_for_range(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSPoint start = { (uint32_t)lua_tointeger(L, 2),
-                    (uint32_t)lua_tointeger(L, 3) };
-  TSPoint end = { (uint32_t)lua_tointeger(L, 4),
-                  (uint32_t)lua_tointeger(L, 5) };
-  TSNode child = ts_node_named_descendant_for_point_range(node, start, end);
-
-  push_node(L, child, 1);
-  return 1;
-}
-
-static int node_next_child(lua_State *L)
-{
-  uint32_t *child_index = lua_touserdata(L, lua_upvalueindex(1));
-  TSNode source = node_check(L, lua_upvalueindex(2));
-
-  if (*child_index >= ts_node_child_count(source)) {
-    return 0;
-  }
-
-  TSNode child = ts_node_child(source, *child_index);
-  push_node(L, child, lua_upvalueindex(2));
-
-  const char *field = ts_node_field_name_for_child(source, *child_index);
-  if (field != NULL) {
-    lua_pushstring(L, field);
-  } else {
-    lua_pushnil(L);
-  }  // [node, field_name_or_nil]
-
-  (*child_index)++;
-
-  return 2;
-}
-
-static int node_iter_children(lua_State *L)
-{
-  node_check(L, 1);
-  uint32_t *child_index = lua_newuserdata(L, sizeof(uint32_t));  // [source_node,..., udata]
-  *child_index = 0;
-
-  lua_pushvalue(L, 1);  // [source_node, ..., udata, source_node]
-  lua_pushcclosure(L, node_next_child, 2);
-
-  return 1;
-}
-
-static int node_parent(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode parent = ts_node_parent(node);
-  push_node(L, parent, 1);
-  return 1;
-}
-
-static int __has_ancestor(lua_State *L)
-{
-  TSNode descendant = node_check(L, 1);
-  if (lua_type(L, 2) != LUA_TTABLE) {
-    lua_pushboolean(L, false);
-    return 1;
-  }
-  int const pred_len = (int)lua_objlen(L, 2);
-
-  TSNode node = ts_tree_root_node(descendant.tree);
-  while (node.id != descendant.id && !ts_node_is_null(node)) {
-    char const *node_type = ts_node_type(node);
-    size_t node_type_len = strlen(node_type);
-
-    for (int i = 3; i <= pred_len; i++) {
-      lua_rawgeti(L, 2, i);
-      if (lua_type(L, -1) == LUA_TSTRING) {
-        size_t check_len;
-        char const *check_str = lua_tolstring(L, -1, &check_len);
-        if (node_type_len == check_len && memcmp(node_type, check_str, check_len) == 0) {
-          lua_pushboolean(L, true);
-          return 1;
-        }
-      }
-      lua_pop(L, 1);
-    }
-
-    node = ts_node_child_with_descendant(node, descendant);
-  }
-
-  lua_pushboolean(L, false);
-  return 1;
-}
-
-static int node_child_with_descendant(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode descendant = node_check(L, 2);
-  TSNode child = ts_node_child_with_descendant(node, descendant);
-  push_node(L, child, 1);
-  return 1;
-}
-
-static int node_next_sibling(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode sibling = ts_node_next_sibling(node);
-  push_node(L, sibling, 1);
-  return 1;
-}
-
-static int node_prev_sibling(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode sibling = ts_node_prev_sibling(node);
-  push_node(L, sibling, 1);
-  return 1;
-}
-
-static int node_next_named_sibling(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode sibling = ts_node_next_named_sibling(node);
-  push_node(L, sibling, 1);
-  return 1;
-}
-
-static int node_prev_named_sibling(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode sibling = ts_node_prev_named_sibling(node);
-  push_node(L, sibling, 1);
-  return 1;
-}
-
-static int node_named_children(lua_State *L)
-{
-  TSNode source = node_check(L, 1);
-
-  lua_newtable(L);
-  int curr_index = 0;
-
-  uint32_t n = ts_node_child_count(source);
-  for (uint32_t i = 0; i < n; i++) {
-    TSNode child = ts_node_child(source, i);
-    if (ts_node_is_named(child)) {
-      push_node(L, child, 1);
-      lua_rawseti(L, -2, ++curr_index);
-    }
-  }
-
-  return 1;
-}
-
-static int node_root(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  TSNode root = ts_tree_root_node(node.tree);
-  push_node(L, root, 1);
-  return 1;
-}
-
-static int node_tree(lua_State *L)
-{
-  node_check(L, 1);
-
-  // Get the tree from the node fenv. We cannot use `push_tree(node.tree)` here because that would
-  // cause a double free.
-  lua_getfenv(L, 1);  // [node, reftable]
-  lua_rawgeti(L, 2, 1);  // [node, reftable, tree]
-
-  return 1;
-}
-
-static int node_byte_length(lua_State *L)
-{
-  TSNode node = node_check(L, 1);
-  uint32_t start_byte = ts_node_start_byte(node);
-  uint32_t end_byte = ts_node_end_byte(node);
-  lua_pushinteger(L, end_byte - start_byte);
-  return 1;
-}
-
-static int node_equal(lua_State *L)
-{
-  TSNode node1 = node_check(L, 1);
-  TSNode node2 = node_check(L, 2);
-  lua_pushboolean(L, ts_node_eq(node1, node2));
-  return 1;
-}
-
 // TSQueryCursor
 
 static struct luaL_Reg querycursor_meta[] = {
-  { "remove_match", querycursor_remove_match },
-  { "next_capture", querycursor_next_capture },
-  { "next_match", querycursor_next_match },
-  { "__gc", querycursor_gc },
+  { "remove_match", rs_ts_querycursor_remove_match },
+  { "next_capture", rs_ts_querycursor_next_capture },
+  { "next_match", rs_ts_querycursor_next_match },
+  { "__gc", rs_ts_querycursor_gc },
   { NULL, NULL }
 };
 
@@ -1392,47 +954,6 @@ static int tslua_push_querycursor(lua_State *L)
   return 1;
 }
 
-static int querycursor_remove_match(lua_State *L)
-{
-  TSQueryCursor *cursor = querycursor_check(L, 1);
-  uint32_t match_id = (uint32_t)luaL_checkinteger(L, 2);
-  ts_query_cursor_remove_match(cursor, match_id);
-  return 0;
-}
-
-static int querycursor_next_capture(lua_State *L)
-{
-  TSQueryCursor *cursor = querycursor_check(L, 1);
-  TSQueryMatch match;
-  uint32_t capture_index;
-  if (!ts_query_cursor_next_capture(cursor, &match, &capture_index)) {
-    return 0;
-  }
-
-  TSQueryCapture capture = match.captures[capture_index];
-
-  // Handle capture quantifiers here
-  lua_pushinteger(L, capture.index + 1);  // [index]
-  push_node(L, capture.node, 1);  // [index, node]
-  push_querymatch(L, &match, 1);
-
-  return 3;
-}
-
-static int querycursor_next_match(lua_State *L)
-{
-  TSQueryCursor *cursor = querycursor_check(L, 1);
-
-  TSQueryMatch match;
-  if (!ts_query_cursor_next_match(cursor, &match)) {
-    return 0;
-  }
-
-  push_querymatch(L, &match, 1);
-
-  return 1;
-}
-
 static TSQueryCursor *querycursor_check(lua_State *L, int index)
 {
   TSQueryCursor **ud = luaL_checkudata(L, index, TS_META_QUERYCURSOR);
@@ -1440,69 +961,22 @@ static TSQueryCursor *querycursor_check(lua_State *L, int index)
   return *ud;
 }
 
-static int querycursor_gc(lua_State *L)
-{
-  TSQueryCursor *cursor = querycursor_check(L, 1);
-  ts_query_cursor_delete(cursor);
-  return 0;
-}
-
 // TSQueryMatch
 
 static struct luaL_Reg querymatch_meta[] = {
-  { "info", querymatch_info },
-  { "captures", querymatch_captures },
+  { "info", rs_ts_querymatch_info },
+  { "captures", rs_ts_querymatch_captures },
   { NULL, NULL }
 };
-
-static void push_querymatch(lua_State *L, TSQueryMatch *match, int uindex)
-{
-  TSQueryMatch *ud = lua_newuserdata(L, sizeof(TSQueryMatch));  // [udata]
-  *ud = *match;
-  lua_getfield(L, LUA_REGISTRYINDEX, TS_META_QUERYMATCH);  // [udata, meta]
-  lua_setmetatable(L, -2);  // [udata]
-
-  // Copy the fenv which contains the nodes tree.
-  lua_getfenv(L, uindex);  // [udata, reftable]
-  lua_setfenv(L, -2);  // [udata]
-}
-
-static int querymatch_info(lua_State *L)
-{
-  TSQueryMatch *match = luaL_checkudata(L, 1, TS_META_QUERYMATCH);
-  lua_pushinteger(L, match->id);
-  lua_pushinteger(L, match->pattern_index + 1);
-  return 2;
-}
-
-static int querymatch_captures(lua_State *L)
-{
-  TSQueryMatch *match = luaL_checkudata(L, 1, TS_META_QUERYMATCH);
-  lua_newtable(L);  // [match, nodes, captures]
-  for (size_t i = 0; i < match->capture_count; i++) {
-    TSQueryCapture capture = match->captures[i];
-    int index = (int)capture.index + 1;
-
-    lua_rawgeti(L, -1, index);  // [match, node, captures]
-    if (lua_isnil(L, -1)) {  // [match, node, captures, nil]
-      lua_pop(L, 1);  // [match, node, captures]
-      lua_newtable(L);  // [match, node, captures, nodes]
-    }
-    push_node(L, capture.node, 1);  // [match, node, captures, nodes, node]
-    lua_rawseti(L, -2, (int)lua_objlen(L, -2) + 1);  // [match, node, captures, nodes]
-    lua_rawseti(L, -2, index);  // [match, node, captures]
-  }
-  return 1;
-}
 
 // TSQuery
 
 static struct luaL_Reg query_meta[] = {
-  { "__gc", query_gc },
-  { "__tostring", query_tostring },
-  { "inspect", query_inspect },
-  { "disable_capture", query_disable_capture },
-  { "disable_pattern", query_disable_pattern },
+  { "__gc", rs_ts_query_gc },
+  { "__tostring", rs_ts_query_tostring },
+  { "inspect", rs_ts_query_inspect },
+  { "disable_capture", rs_ts_query_disable_capture },
+  { "disable_pattern", rs_ts_query_disable_pattern },
   { NULL, NULL }
 };
 
@@ -1524,7 +998,7 @@ static int tslua_parse_query(lua_State *L)
 
   if (!query) {
     char err_msg[IOSIZE];
-    query_err_string(src, (int)error_offset, error_type, err_msg, sizeof(err_msg));
+    rs_ts_query_err_string(src, (int)error_offset, (uint32_t)error_type, err_msg, sizeof(err_msg));
     return luaL_error(L, "%s", err_msg);
   }
 
@@ -1535,187 +1009,11 @@ static int tslua_parse_query(lua_State *L)
   return 1;
 }
 
-static const char *query_err_to_string(TSQueryError error_type)
-{
-  switch (error_type) {
-  case TSQueryErrorSyntax:
-    return "Invalid syntax:\n";
-  case TSQueryErrorNodeType:
-    return "Invalid node type ";
-  case TSQueryErrorField:
-    return "Invalid field name ";
-  case TSQueryErrorCapture:
-    return "Invalid capture name ";
-  case TSQueryErrorStructure:
-    return "Impossible pattern:\n";
-  default:
-    return "error";
-  }
-}
-
-static void query_err_string(const char *src, int error_offset, TSQueryError error_type, char *err,
-                             size_t errlen)
-{
-  int line_start = 0;
-  int row = 0;
-  const char *error_line = NULL;
-  int error_line_len = 0;
-
-  const char *end_str;
-  do {
-    const char *src_tmp = src + line_start;
-    end_str = strchr(src_tmp, '\n');
-    int line_length = end_str != NULL ? (int)(end_str - src_tmp) : (int)strlen(src_tmp);
-    int line_end = line_start + line_length;
-    if (line_end > error_offset) {
-      error_line = src_tmp;
-      error_line_len = line_length;
-      break;
-    }
-    line_start = line_end + 1;
-    row++;
-  } while (end_str != NULL);
-
-  int column = error_offset - line_start;
-
-  const char *type_msg = query_err_to_string(error_type);
-  snprintf(err, errlen, "Query error at %d:%d. %s", row + 1, column + 1, type_msg);
-  size_t offset = strlen(err);
-  errlen = errlen - offset;
-  err = err + offset;
-
-  // Error types that report names
-  if (error_type == TSQueryErrorNodeType
-      || error_type == TSQueryErrorField
-      || error_type == TSQueryErrorCapture) {
-    const char *suffix = src + error_offset;
-    bool is_anonymous = error_type == TSQueryErrorNodeType && suffix[-1] == '"';
-    int suffix_len = 0;
-    char c = suffix[suffix_len];
-    if (is_anonymous) {
-      int backslashes = 0;
-      // Stop when we hit an unescaped double quote
-      while (c != '"' || backslashes % 2 != 0) {
-        if (c == '\\') {
-          backslashes += 1;
-        } else {
-          backslashes = 0;
-        }
-        c = suffix[++suffix_len];
-      }
-    } else {
-      // Stop when we hit the end of the identifier
-      while (isalnum(c) || c == '_' || c == '-' || c == '.') {
-        c = suffix[++suffix_len];
-      }
-    }
-    snprintf(err, errlen, "\"%.*s\":\n", suffix_len, suffix);
-    offset = strlen(err);
-    errlen = errlen - offset;
-    err = err + offset;
-  }
-
-  if (!error_line) {
-    snprintf(err, errlen, "Unexpected EOF\n");
-    return;
-  }
-
-  snprintf(err, errlen, "%.*s\n%*s^\n", error_line_len, error_line, column, "");
-}
-
 static TSQuery *query_check(lua_State *L, int index)
 {
   TSQuery **ud = luaL_checkudata(L, index, TS_META_QUERY);
   luaL_argcheck(L, *ud, index, "TSQuery expected");
   return *ud;
-}
-
-static int query_gc(lua_State *L)
-{
-  TSQuery *query = query_check(L, 1);
-  ts_query_delete(query);
-  return 0;
-}
-
-static int query_tostring(lua_State *L)
-{
-  lua_pushstring(L, "<query>");
-  return 1;
-}
-
-static int query_inspect(lua_State *L)
-{
-  TSQuery *query = query_check(L, 1);
-
-  // TSQueryInfo
-  lua_createtable(L, 0, 2);  // [retval]
-
-  uint32_t n_pat = ts_query_pattern_count(query);
-  lua_createtable(L, (int)n_pat, 1);  // [retval, patterns]
-  for (size_t i = 0; i < n_pat; i++) {
-    uint32_t len;
-    const TSQueryPredicateStep *step = ts_query_predicates_for_pattern(query, (uint32_t)i, &len);
-    if (len == 0) {
-      continue;
-    }
-    lua_createtable(L, (int)len/4, 1);  // [retval, patterns, pat]
-    lua_createtable(L, 3, 0);  // [retval, patterns, pat, pred]
-    int nextpred = 1;
-    int nextitem = 1;
-    for (size_t k = 0; k < len; k++) {
-      if (step[k].type == TSQueryPredicateStepTypeDone) {
-        lua_rawseti(L, -2, nextpred++);  // [retval, patterns, pat]
-        lua_createtable(L, 3, 0);  // [retval, patterns, pat, pred]
-        nextitem = 1;
-        continue;
-      }
-
-      if (step[k].type == TSQueryPredicateStepTypeString) {
-        uint32_t strlen;
-        const char *str = ts_query_string_value_for_id(query, step[k].value_id,
-                                                       &strlen);
-        lua_pushlstring(L, str, strlen);  // [retval, patterns, pat, pred, item]
-      } else if (step[k].type == TSQueryPredicateStepTypeCapture) {
-        lua_pushinteger(L, step[k].value_id + 1);  // [..., pat, pred, item]
-      } else {
-        abort();
-      }
-      lua_rawseti(L, -2, nextitem++);  // [retval, patterns, pat, pred]
-    }
-    // last predicate should have ended with TypeDone
-    lua_pop(L, 1);  // [retval, patterns, pat]
-    lua_rawseti(L, -2, (int)i + 1);  // [retval, patterns]
-  }
-  lua_setfield(L, -2, "patterns");  // [retval]
-
-  uint32_t n_captures = ts_query_capture_count(query);
-  lua_createtable(L, (int)n_captures, 0);  // [retval, captures]
-  for (size_t i = 0; i < n_captures; i++) {
-    uint32_t strlen;
-    const char *str = ts_query_capture_name_for_id(query, (uint32_t)i, &strlen);
-    lua_pushlstring(L, str, strlen);  // [retval, captures, capture]
-    lua_rawseti(L, -2, (int)i + 1);
-  }
-  lua_setfield(L, -2, "captures");  // [retval]
-
-  return 1;
-}
-
-static int query_disable_capture(lua_State *L)
-{
-  TSQuery *query = query_check(L, 1);
-  size_t name_len;
-  const char *name = luaL_checklstring(L, 2, &name_len);
-  ts_query_disable_capture(query, name, (uint32_t)name_len);
-  return 0;
-}
-
-static int query_disable_pattern(lua_State *L)
-{
-  TSQuery *query = query_check(L, 1);
-  const uint32_t pattern_index = (uint32_t)luaL_checkinteger(L, 2);
-  ts_query_disable_pattern(query, pattern_index - 1);
-  return 0;
 }
 
 // Library init

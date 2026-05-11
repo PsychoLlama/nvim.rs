@@ -122,6 +122,7 @@ nvim-log = { path = "log" }
 nvim-vterm = { path = "vterm" }
 nvim-unpacker = { path = "unpacker" }
 nvim-tui = { path = "tui" }
+nvim-treesitter = { path = "treesitter" }
 nvim-typval = { path = "typval" }
 nvim-ui = { path = "ui" }
 nvim-ugrid = { path = "ugrid" }

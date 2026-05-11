@@ -102,6 +102,7 @@ members = [
     "src/nvim-rs/log",
     "src/nvim-rs/unpacker",
     "src/nvim-rs/tui",
+    "src/nvim-rs/treesitter",
     "src/nvim-rs/typval",
     "src/nvim-rs/ugrid",
     "src/nvim-rs/undo",

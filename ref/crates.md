@@ -104,6 +104,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | tag            | Tag system (stack, search, navigation, file iteration, jump orchestration, location lists) |
 | terminal       | Terminal emulator state and utilities   |
 | testing        | Testing framework (assertions, fixtures, runners, mocks) |
+| treesitter     | Tree-sitter Lua binding layer (TSNode, TSTree, TSQuery, TSQueryCursor, TSQueryMatch metatable methods) |
 | vterm          | VTerm terminal emulation core           |
 | textformat     | Text formatting options                 |
 | textobject     | Text object selection and navigation    |

@@ -1,0 +1,14 @@
+[package]
+name = "nvim-treesitter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lua bindings for tree-sitter (node/tree/query metatable methods)"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+
+[lints]
+workspace = true
