@@ -86,6 +86,17 @@ Object nlua_call_pop_retval(lua_State *lstate, LuaRetMode mode, Arena *arena, in
                             Error *err);
 char *nlua_funcref_str(LuaRef ref, Arena *arena);
 
+// Phase D: small leaf functions implemented in Rust (leaf.rs)
+LuaRef nlua_get_nil_ref(lua_State *lstate);
+LuaRef nlua_get_empty_dict_ref(lua_State *lstate);
+int nlua_in_fast_event(lua_State *lstate);
+int nlua_is_thread(lua_State *lstate);
+bool nlua_is_table_from_lua(const typval_T *arg);
+char *nlua_register_table_as_callable(const typval_T *arg);
+void nlua_init_defaults(void);
+int nlua_init_argv(lua_State *lstate, char **argv, int argc, int lua_arg0);
+int nlua_module_preloader(lua_State *lstate);
+
 #include "lua/executor.h.generated.h"
 
 EXTERN nlua_ref_state_t *nlua_global_refs INIT( = NULL);

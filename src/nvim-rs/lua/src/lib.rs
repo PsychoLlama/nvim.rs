@@ -24,6 +24,7 @@ pub mod errors;
 pub mod exec;
 pub mod executor;
 pub mod from_lua;
+pub mod leaf;
 pub mod refs;
 pub mod state;
 pub mod stdlib;

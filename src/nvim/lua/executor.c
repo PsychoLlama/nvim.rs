@@ -340,24 +340,7 @@ static int nlua_thr_api_nvim__get_runtime(lua_State *lstate)
 /// @see https://github.com/premake/premake-core/blob/1c1304637f4f5e50ba8c57aae8d1d80ec3b7aaf2/src/host/premake.c#L563-L594
 ///
 /// @returns number of args
-static int nlua_init_argv(lua_State *const L, char **argv, int argc, int lua_arg0)
-{
-  int i = 0;
-  lua_newtable(L);  // _G.arg
-
-  if (lua_arg0 > 0) {
-    lua_pushstring(L, argv[lua_arg0 - 1]);
-    lua_rawseti(L, -2, 0);  // _G.arg[0] = "foo.lua"
-
-    for (; i + lua_arg0 < argc; i++) {
-      lua_pushstring(L, argv[i + lua_arg0]);
-      lua_rawseti(L, -2, i + 1);  // _G.arg[i+1] = "--foo"
-    }
-  }
-
-  lua_setglobal(L, "arg");
-  return i;
-}
+// nlua_init_argv: implemented in Rust (leaf.rs, Phase D)
 
 static void nlua_schedule_event(void **argv)
 {
@@ -553,19 +536,7 @@ static nlua_ref_state_t *nlua_get_ref_state(lua_State *lstate)
   return ref_state;
 }
 
-LuaRef nlua_get_nil_ref(lua_State *lstate)
-  FUNC_ATTR_NONNULL_ALL
-{
-  nlua_ref_state_t *ref_state = nlua_get_ref_state(lstate);
-  return ref_state->nil_ref;
-}
-
-LuaRef nlua_get_empty_dict_ref(lua_State *lstate)
-  FUNC_ATTR_NONNULL_ALL
-{
-  nlua_ref_state_t *ref_state = nlua_get_ref_state(lstate);
-  return ref_state->empty_dict_ref;
-}
+// nlua_get_nil_ref, nlua_get_empty_dict_ref: implemented in Rust (leaf.rs, Phase D)
 
 // C accessor for nlua_global_refs->ref_count (used by Rust)
 int nvim_get_nlua_global_ref_count(void) { return nlua_global_refs->ref_count; }
@@ -661,6 +632,48 @@ void nvim_lua_init_typval_zero(typval_T *ret_tv)
   ret_tv->vval.v_number = 0;
 }
 
+// C accessors for Phase D (leaf.rs)
+
+/// Get the ref_state for the given lstate (thread-local).
+nlua_ref_state_t *nvim_lua_get_ref_state(lua_State *lstate)
+{
+  return nlua_get_ref_state(lstate);
+}
+
+/// Return the nil_ref from a ref_state.
+LuaRef nvim_ref_state_get_nil_ref(nlua_ref_state_t *rs) { return rs->nil_ref; }
+
+/// Return the empty_dict_ref from a ref_state.
+LuaRef nvim_ref_state_get_empty_dict_ref(nlua_ref_state_t *rs) { return rs->empty_dict_ref; }
+
+/// Return the lua_table_ref for a VAR_DICT or VAR_LIST typval (LUA_NOREF otherwise).
+LuaRef nvim_typval_get_lua_table_ref(const typval_T *arg)
+{
+  if (arg->v_type == VAR_DICT) {
+    return arg->vval.v_dict->lua_table_ref;
+  } else if (arg->v_type == VAR_LIST) {
+    return arg->vval.v_list->lua_table_ref;
+  }
+  return LUA_NOREF;
+}
+
+/// Access builtin_modules[i]; returns false when i is out of range.
+bool nvim_lua_get_builtin_module(size_t i, const char **name_out,
+                                 const uint8_t **data_out, size_t *size_out)
+{
+  if (i >= ARRAY_SIZE(builtin_modules)) {
+    return false;
+  }
+  ModuleDef def = builtin_modules[i];
+  *name_out = def.name;
+  *data_out = def.data;
+  *size_out = def.size;
+  return true;
+}
+
+/// fprintf(stderr, ...) shim for Rust (single %s).
+void nvim_lua_stderr_str(const char *str) { fprintf(stderr, "%s\n", str); }
+
 // Implemented in Rust (nvim-lua crate)
 extern int nlua_get_global_ref_count(void);
 
@@ -723,23 +736,7 @@ static void nlua_common_vim_init(lua_State *lstate, bool is_thread, bool is_stan
   lua_pop(lstate, 3);
 }
 
-static int nlua_module_preloader(lua_State *lstate)
-{
-  size_t i = (size_t)lua_tointeger(lstate, lua_upvalueindex(1));
-  ModuleDef def = builtin_modules[i];
-  char name[256];
-  name[0] = '@';
-  size_t off = xstrlcpy(name + 1, def.name, (sizeof name) - 2);
-  strchrsub(name + 1, '.', '/');
-  xstrlcpy(name + 1 + off, ".lua", (sizeof name) - 2 - off);
-
-  if (luaL_loadbuffer(lstate, (const char *)def.data, def.size - 1, name)) {
-    return lua_error(lstate);
-  }
-
-  lua_call(lstate, 0, 1);  // propagates error to caller
-  return 1;
-}
+// nlua_module_preloader: implemented in Rust (leaf.rs, Phase D)
 
 static bool nlua_init_packages(lua_State *lstate, bool is_standalone)
   FUNC_ATTR_NONNULL_ALL
@@ -1231,11 +1228,7 @@ static int nlua_debug(lua_State *lstate)
   return 0;
 }
 
-int nlua_in_fast_event(lua_State *lstate)
-{
-  lua_pushboolean(lstate, in_fast_callback > 0);
-  return 1;
-}
+// nlua_in_fast_event: implemented in Rust (leaf.rs, Phase D)
 
 static bool viml_func_is_fast(const char *name)
 {
@@ -1746,67 +1739,11 @@ int nlua_expand_get_matches(int *num_results, char ***results)
   return *num_results > 0;
 }
 
-static int nlua_is_thread(lua_State *lstate)
-{
-  lua_getfield(lstate, LUA_REGISTRYINDEX, "nvim.thread");
+// nlua_is_thread: implemented in Rust (leaf.rs, Phase D)
 
-  return 1;
-}
+// nlua_is_table_from_lua: implemented in Rust (leaf.rs, Phase D)
 
-bool nlua_is_table_from_lua(const typval_T *const arg)
-{
-  if (arg->v_type == VAR_DICT) {
-    return arg->vval.v_dict->lua_table_ref != LUA_NOREF;
-  } else if (arg->v_type == VAR_LIST) {
-    return arg->vval.v_list->lua_table_ref != LUA_NOREF;
-  } else {
-    return false;
-  }
-}
-
-char *nlua_register_table_as_callable(const typval_T *const arg)
-{
-  LuaRef table_ref = LUA_NOREF;
-  if (arg->v_type == VAR_DICT) {
-    table_ref = arg->vval.v_dict->lua_table_ref;
-  } else if (arg->v_type == VAR_LIST) {
-    table_ref = arg->vval.v_list->lua_table_ref;
-  }
-
-  if (table_ref == LUA_NOREF) {
-    return NULL;
-  }
-
-  lua_State *const lstate = global_lstate;
-
-#ifndef NDEBUG
-  int top = lua_gettop(lstate);
-#endif
-
-  nlua_pushref(lstate, table_ref);  // [table]
-  if (!lua_getmetatable(lstate, -1)) {
-    lua_pop(lstate, 1);
-    assert(top == lua_gettop(lstate));
-    return NULL;
-  }  // [table, mt]
-
-  lua_getfield(lstate, -1, "__call");  // [table, mt, mt.__call]
-  if (!lua_isfunction(lstate, -1)) {
-    lua_pop(lstate, 3);
-    assert(top == lua_gettop(lstate));
-    return NULL;
-  }
-  lua_pop(lstate, 2);  // [table]
-
-  LuaRef func = nlua_ref_global(lstate, -1);
-
-  char *name = register_luafunc(func);
-
-  lua_pop(lstate, 1);  // []
-  assert(top == lua_gettop(lstate));
-
-  return name;
-}
+// nlua_register_table_as_callable: implemented in Rust (leaf.rs, Phase D)
 
 /// @return true to discard the key
 bool nlua_execute_on_key(int c, char *typed_buf)
@@ -2131,17 +2068,7 @@ int nlua_do_ucmd(ucmd_T *cmd, exarg_T *eap, bool preview)
 // nlua_funcref_str: implemented in Rust (exec.rs, Phase C)
 
 /// Execute the vim._defaults module to set up default mappings and autocommands
-void nlua_init_defaults(void)
-{
-  lua_State *const L = global_lstate;
-  assert(L);
-
-  lua_getglobal(L, "require");
-  lua_pushstring(L, "vim._defaults");
-  if (nlua_pcall(L, 1, 0)) {
-    fprintf(stderr, "%s\n", lua_tostring(L, -1));
-  }
-}
+// nlua_init_defaults: implemented in Rust (leaf.rs, Phase D)
 
 /// check lua function exist
 bool nlua_func_exists(const char *lua_funcname)
