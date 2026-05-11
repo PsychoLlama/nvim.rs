@@ -47,5 +47,3 @@ void nlua_pop_keydict(lua_State *lstate, void *retval, FieldHashfn hashy, char *
 void nlua_push_keydict(lua_State *lstate, void *value, KeySetLink *table);
 bool nlua_push_typval(lua_State *lstate, typval_T *const tv, int flags);
 bool nlua_pop_typval(lua_State *lstate, typval_T *ret_tv);
-
-#include "lua/converter.h.generated.h"
