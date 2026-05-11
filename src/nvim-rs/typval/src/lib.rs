@@ -1303,11 +1303,111 @@ extern "C" {
     fn nvim_hashitem_set_ro_fix(hi: HashItemHandle);
     fn nvim_hashitem_next(hi: HashItemHandle) -> HashItemHandle;
 
-    // Phase 6j: tv_dict_to_env
+    // Phase 6j: tv_dict_to_env (now Rust, kept as reference for callers)
     fn nvim_dictitem_format_env(di: DictItemHandle) -> *mut c_char;
     #[link_name = "xmalloc"]
     fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
     fn nvim_hashitem_to_dictitem(hi: HashItemHandle) -> DictItemHandle;
+
+    // Phase 3 (f39b5673): new accessor helpers for migrating nvim_* functions to Rust
+    fn nvim_dict_hash_find(d: DictHandle, key: *const c_char) -> HashItemHandle;
+    fn nvim_dict_hash_find_len(d: DictHandle, key: *const c_char, len: usize) -> HashItemHandle;
+    fn nvim_hashitem_is_empty(hi: HashItemHandle) -> c_int;
+    fn nvim_listwatch_get_item(lw: *mut std::ffi::c_void) -> ListItemHandle;
+    fn nvim_listwatch_set_item(lw: *mut std::ffi::c_void, item: ListItemHandle);
+}
+
+// =============================================================================
+// Migrated from typval.c: Phase 3 (f39b5673)
+//
+// These functions were C-only ("accessor for Rust") wrappers with no C callers.
+// Moving the logic to Rust eliminates the C bodies entirely.
+// =============================================================================
+
+/// Find a dictitem by key in a dict's hashtab.
+/// Returns null handle if dict is NULL or key not found.
+/// Exported as `nvim_dict_find` for existing `extern "C"` callers in this crate.
+#[export_name = "nvim_dict_find"]
+pub unsafe extern "C" fn rs_nvim_dict_find(
+    d: DictHandle,
+    key: *const c_char,
+    len: isize,
+) -> DictItemHandle {
+    if d.is_null() {
+        return DictItemHandle::null();
+    }
+    let hi = if len < 0 {
+        unsafe { nvim_dict_hash_find(d, key) }
+    } else {
+        unsafe { nvim_dict_hash_find_len(d, key, len as usize) }
+    };
+    if unsafe { nvim_hashitem_is_empty(hi) } != 0 {
+        return DictItemHandle::null();
+    }
+    unsafe { nvim_hashitem_to_dictitem(hi) }
+}
+
+/// Remove a key from a dict's hashtab (does NOT free the dictitem).
+/// Exported as `nvim_dict_remove_key` for existing `extern "C"` callers in this crate.
+#[export_name = "nvim_dict_remove_key"]
+pub unsafe extern "C" fn rs_nvim_dict_remove_key(d: DictHandle, key: *const c_char) {
+    let hi = unsafe { nvim_dict_hash_find(d, key) };
+    if unsafe { nvim_hashitem_is_empty(hi) } == 0 {
+        // Use nvim_dict_hash_remove (wraps hash_remove on d->dv_hashtab)
+        unsafe { nvim_dict_hash_remove(d, hi) };
+    }
+}
+
+/// Advance all list watchers that point to `item` past it to `item->li_next`.
+/// Exported as `nvim_list_watch_fix` for existing `extern "C"` callers in this crate.
+#[export_name = "nvim_list_watch_fix"]
+pub unsafe extern "C" fn rs_nvim_list_watch_fix(l: ListHandle, item: ListItemHandle) {
+    let mut lw = unsafe { nvim_list_get_watch(l) };
+    while !lw.is_null() {
+        let lw_item = unsafe { nvim_listwatch_get_item(lw) };
+        if lw_item.as_ptr() == item.as_ptr() {
+            let next = unsafe { nvim_listitem_get_next(item) };
+            unsafe { nvim_listwatch_set_item(lw, next) };
+        }
+        lw = unsafe { nvim_listwatch_get_next(lw) };
+    }
+}
+
+/// Clear a list item's tv payload and free the item.
+/// Exported as `nvim_list_item_clear_free` for existing `extern "C"` callers in this crate.
+#[export_name = "nvim_list_item_clear_free"]
+pub unsafe extern "C" fn rs_nvim_list_item_clear_free(li: ListItemHandle) {
+    let tv = unsafe { nvim_listitem_get_tv(li) };
+    unsafe { tv_clear(tv) };
+    unsafe { nvim_list_item_free(li) };
+}
+
+/// Format a dictitem as "key=value" for environment variable use.
+/// Returns an xmalloc'd string; caller must free.
+/// Exported as `nvim_dictitem_format_env` for existing `extern "C"` callers in this crate.
+#[export_name = "nvim_dictitem_format_env"]
+pub unsafe extern "C" fn rs_nvim_dictitem_format_env(di: DictItemHandle) -> *mut c_char {
+    let key_ptr = unsafe { nvim_dictitem_get_key(di) };
+    let tv = unsafe { nvim_dictitem_di_tv(di) };
+    // Use nvim_tv_get_string which does type coercion (same as tv_get_string in C).
+    let val_ptr = unsafe { nvim_tv_get_string(tv, std::ptr::null_mut()) };
+
+    let key = std::ffi::CStr::from_ptr(key_ptr).to_bytes();
+    let val = if val_ptr.is_null() {
+        b"" as &[u8]
+    } else {
+        std::ffi::CStr::from_ptr(val_ptr).to_bytes()
+    };
+
+    // Allocate: key + '=' + val + NUL
+    let total = key.len() + 1 + val.len() + 1;
+    let buf = unsafe { nvim_xmalloc(total) }.cast::<u8>();
+    let slice = std::slice::from_raw_parts_mut(buf, total);
+    slice[..key.len()].copy_from_slice(key);
+    slice[key.len()] = b'=';
+    slice[key.len() + 1..key.len() + 1 + val.len()].copy_from_slice(val);
+    slice[total - 1] = 0;
+    buf.cast::<c_char>()
 }
 
 // =============================================================================

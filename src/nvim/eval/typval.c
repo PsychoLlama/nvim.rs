@@ -563,21 +563,8 @@ dict_T *nvim_dict_get_used_next(const dict_T *d) { return d->dv_used_next; }
 /// Get di_key from a dictitem as a C string (accessor for Rust).
 const char *nvim_dictitem_get_key(const dictitem_T *di) { return di->di_key; }
 
-/// Look up a key in a dict, returning a dictitem pointer or NULL (accessor for Rust).
-/// Directly uses hash table to avoid circular dependency with Rust tv_dict_find.
-dictitem_T *nvim_dict_find(const dict_T *d, const char *key, ptrdiff_t len)
-{
-  if (d == NULL) {
-    return NULL;
-  }
-  hashitem_T *const hi = (len < 0
-                          ? hash_find(&d->dv_hashtab, key)
-                          : hash_find_len(&d->dv_hashtab, key, (size_t)len));
-  if (HASHITEM_EMPTY(hi)) {
-    return NULL;
-  }
-  return TV_DICT_HI2DI(hi);
-}
+// nvim_dict_find migrated to Rust (Phase 3 of f39b5673);
+// uses nvim_dict_hash_find / nvim_dict_hash_find_len / nvim_hashitem_is_empty accessors.
 
 /// Get string representation of a typval into buf (accessor for Rust).
 /// Returns NULL on type error, empty string for empty string.
@@ -976,6 +963,20 @@ void nvim_dict_hash_unlock(dict_T *d) { hash_unlock(&d->dv_hashtab); }
 /// hash_remove on dict's hashtab for given item (accessor for Rust tv_dict_extend).
 void nvim_dict_hash_remove(dict_T *d, hashitem_T *hi) { hash_remove(&d->dv_hashtab, hi); }
 
+/// hash_find on dict's hashtab by NUL-terminated key (accessor for Rust).
+hashitem_T *nvim_dict_hash_find(const dict_T *d, const char *key)
+{
+  return hash_find(&d->dv_hashtab, key);
+}
+
+/// hash_find_len on dict's hashtab by key + length (accessor for Rust).
+hashitem_T *nvim_dict_hash_find_len(const dict_T *d, const char *key, size_t len)
+{
+  return hash_find_len(&d->dv_hashtab, key, len);
+}
+
+// nvim_hashitem_is_empty: already defined in syntax_accessors.c
+
 /// Get di_key from a dictitem as mutable (accessor for Rust).
 const char *nvim_dictitem_get_key_ptr(const dictitem_T *di) { return di->di_key; }
 
@@ -1068,15 +1069,7 @@ int nvim_list_get_refcount(const list_T *l) { return l->lv_refcount; }
 /// Decrement lv_refcount from a list and return new value (accessor for Rust).
 int nvim_list_dec_refcount(list_T *l) { return --l->lv_refcount; }
 
-/// Remove a hash item for key from dict's hashtab (accessor for Rust).
-/// Only removes from hash, does NOT free the dictitem.
-void nvim_dict_remove_key(dict_T *d, const char *key)
-{
-  hashitem_T *hi = hash_find(&d->dv_hashtab, key);
-  if (!HASHITEM_EMPTY(hi)) {
-    hash_remove(&d->dv_hashtab, hi);
-  }
-}
+// nvim_dict_remove_key migrated to Rust (Phase 3 of f39b5673).
 
 // Phase 5 accessor functions for Rust list infrastructure migration
 
@@ -1091,6 +1084,12 @@ listwatch_T *nvim_listwatch_get_next(const listwatch_T *lw) { return lw->lw_next
 
 /// Set lw_next on a listwatch (accessor for Rust).
 void nvim_listwatch_set_next(listwatch_T *lw, listwatch_T *next) { lw->lw_next = next; }
+
+/// Get lw_item from a listwatch (accessor for Rust).
+listitem_T *nvim_listwatch_get_item(const listwatch_T *lw) { return lw->lw_item; }
+
+/// Set lw_item on a listwatch (accessor for Rust).
+void nvim_listwatch_set_item(listwatch_T *lw, listitem_T *item) { lw->lw_item = item; }
 
 /// Get tv_in_free_unref_items global (accessor for Rust).
 int nvim_get_tv_in_free_unref_items(void) { return (int)tv_in_free_unref_items; }
@@ -1149,23 +1148,11 @@ void nvim_list_free_list_impl(list_T *l)
   xfree(l);
 }
 
-/// Self-contained list watch_fix (accessor for Rust).
-/// Avoids circular call: advances watchers past the removed item.
-void nvim_list_watch_fix(list_T *l, const listitem_T *item)
-{
-  for (listwatch_T *lw = l->lv_watch; lw != NULL; lw = lw->lw_next) {
-    if (lw->lw_item == item) {
-      lw->lw_item = item->li_next;
-    }
-  }
-}
+// nvim_list_watch_fix migrated to Rust (Phase 3 of f39b5673).
+// Uses nvim_listwatch_get_item / nvim_listwatch_set_item / nvim_listitem_get_next.
 
-/// Clear a list item's tv and free it (accessor for Rust).
-void nvim_list_item_clear_free(listitem_T *li)
-{
-  tv_clear(&li->li_tv);
-  xfree(li);
-}
+// nvim_list_item_clear_free migrated to Rust (Phase 3 of f39b5673).
+// Uses nvim_listitem_get_tv + tv_clear + nvim_list_item_free.
 
 /// Shallow copy of a list (tv_list_copy(NULL, l, false, 0)) for Rust.
 /// Returns a new list with refcount=1, or NULL on alloc failure.
@@ -1247,16 +1234,8 @@ int nvim_dict_get_scope_impl(const dict_T *d) { return (int)d->dv_scope; }
 
 // Phase 6j: tv_dict_to_env accessor
 
-/// Format a dict item as "key=value" env string (accessor for Rust tv_dict_to_env).
-/// Returns allocated string. Caller must free with xfree.
-char *nvim_dictitem_format_env(const dictitem_T *di)
-{
-  const char *str = tv_get_string(&di->di_tv);
-  size_t len = strlen(di->di_key) + strlen(str) + 2;  // "=" and NUL
-  char *entry = xmalloc(len);
-  snprintf(entry, len, "%s=%s", di->di_key, str);
-  return entry;
-}
+// nvim_dictitem_format_env migrated to Rust (Phase 3 of f39b5673).
+// Uses nvim_dictitem_get_key, nvim_dictitem_di_tv, tv_get_string, xmalloc, snprintf.
 
 // Phase 6f: tv_dict_remove migrated to Rust; accessors in eval_shim.c
 
