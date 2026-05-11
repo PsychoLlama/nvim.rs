@@ -230,6 +230,12 @@ extern void rs_tui_query_kitty_keyboard(TUIData *tui);
 extern void rs_tui_set_key_encoding_cb(TUIData *tui);
 extern void rs_tui_reset_key_encoding_impl(TUIData *tui);
 
+// Phase 2: Rust implementations for chdir, option_set, screenshot
+extern void rs_tui_chdir(const char *path, size_t path_len);
+extern void rs_tui_option_set(TUIData *tui, const char *name, size_t name_len,
+                              int obj_type, int64_t int_val, bool bool_val);
+extern void rs_tui_screenshot(TUIData *tui, const char *path, size_t path_len);
+
 // TUIData Accessor Functions for Rust
 
 
@@ -683,6 +689,28 @@ int nvim_tui_input_get_key_encoding(TUIData *tui) { return (int)tui->input.key_e
 
 /// Wrapper for tui_reset_key_encoding (static) callable from Rust
 void nvim_tui_reset_key_encoding(TUIData *tui) { tui_reset_key_encoding(tui); }
+
+// Phase 2 accessors: option_set and screenshot fields
+void nvim_tui_set_mouse_move_enabled(TUIData *tui, bool val) { tui->mouse_move_enabled = val; }
+void nvim_tui_set_rgb(TUIData *tui, bool val) { tui->rgb = val; }
+void nvim_tui_set_verbose(TUIData *tui, int64_t val) { tui->verbose = val; }
+void nvim_tui_set_sync_output(TUIData *tui, bool val) { tui->sync_output = val; }
+void nvim_tui_set_input_ttimeout(TUIData *tui, bool val) { tui->input.ttimeout = val; }
+void nvim_tui_set_input_ttimeoutlen(TUIData *tui, int64_t val) { tui->input.ttimeoutlen = (OptInt)val; }
+void nvim_tui_set_screenshot(TUIData *tui, FILE *f) { tui->screenshot = f; }
+FILE *nvim_tui_get_screenshot(TUIData *tui) { return tui->screenshot; }
+void nvim_tui_set_grid_row_val(TUIData *tui, int row) { tui->grid.row = row; }
+void nvim_tui_set_grid_col_val(TUIData *tui, int col) { tui->grid.col = col; }
+/// Send termguicolors RGB mode change via RPC (wraps MAXSIZE_TEMP_ARRAY macros)
+void nvim_tui_rpc_send_termguicolors(bool value)
+{
+  if (ui_client_channel_id) {
+    MAXSIZE_TEMP_ARRAY(args, 2);
+    ADD_C(args, CSTR_AS_OBJ("rgb"));
+    ADD_C(args, BOOLEAN_OBJ(value));
+    rpc_send_event(ui_client_channel_id, "nvim_ui_set_option", args);
+  }
+}
 
 /// Wrapper to reset terminal title from Rust (NULL_STRING)
 void nvim_tui_reset_title(TUIData *tui) { tui_set_title(tui, NULL_STRING); }
@@ -1442,76 +1470,23 @@ void tui_set_title(TUIData *tui, String title) { rs_tui_set_title(tui, title.dat
 /// Set icon (stub - not implemented). Rust implementation.
 void tui_set_icon(TUIData *tui, String icon) { rs_tui_set_icon(tui); }
 
+/// Capture a screenshot of the TUI grid to a file. Rust implementation.
 void tui_screenshot(TUIData *tui, String path)
 {
-  FILE *f = fopen(path.data, "w");
-  if (f == NULL) {
-    return;
-  }
-
-  UGrid *grid = &tui->grid;
-  flush_buf(tui);
-  grid->row = 0;
-  grid->col = 0;
-
-  tui->screenshot = f;
-  fprintf(f, "%d,%d\n", grid->height, grid->width);
-  terminfo_out(tui, kTerm_clear_screen);
-  for (int i = 0; i < grid->height; i++) {
-    cursor_goto(tui, i, 0);
-    for (int j = 0; j < grid->width; j++) {
-      UCell cell = grid->cells[i][j];
-      char buf[MAX_SCHAR_SIZE];
-      schar_get(buf, cell.data);
-      rs_print_cell(tui, buf, cell.attr);
-    }
-  }
-  flush_buf(tui);
-  tui->screenshot = NULL;
-
-  fclose(f);
+  rs_tui_screenshot(tui, path.data, path.size);
 }
 
+/// Handle option changes from the server. Rust implementation.
 void tui_option_set(TUIData *tui, String name, Object value)
 {
-  if (strequal(name.data, "mousemoveevent")) {
-    if (tui->mouse_move_enabled != value.data.boolean) {
-      if (tui->mouse_enabled) {
-        tui_mouse_off(tui);
-        tui->mouse_move_enabled = value.data.boolean;
-        tui_mouse_on(tui);
-      } else {
-        tui->mouse_move_enabled = value.data.boolean;
-      }
-    }
-  } else if (strequal(name.data, "termguicolors")) {
-    tui->rgb = value.data.boolean;
-    tui->print_attr_id = -1;
-    invalidate(tui, 0, tui->grid.height, 0, tui->grid.width);
-
-    if (ui_client_channel_id) {
-      MAXSIZE_TEMP_ARRAY(args, 2);
-      ADD_C(args, CSTR_AS_OBJ("rgb"));
-      ADD_C(args, BOOLEAN_OBJ(value.data.boolean));
-      rpc_send_event(ui_client_channel_id, "nvim_ui_set_option", args);
-    }
-  } else if (strequal(name.data, "ttimeout")) {
-    tui->input.ttimeout = value.data.boolean;
-  } else if (strequal(name.data, "ttimeoutlen")) {
-    tui->input.ttimeoutlen = (OptInt)value.data.integer;
-  } else if (strequal(name.data, "verbose")) {
-    tui->verbose = value.data.integer;
-  } else if (strequal(name.data, "termsync")) {
-    tui->sync_output = value.data.boolean;
-  }
+  rs_tui_option_set(tui, name.data, name.size, (int)value.type,
+                    value.data.integer, value.data.boolean);
 }
 
+/// Change working directory. Rust implementation.
 void tui_chdir(TUIData *tui, String path)
 {
-  int err = uv_chdir(path.data);
-  if (err != 0) {
-    ELOG("Failed to chdir to %s: %s", path.data, strerror(err));
-  }
+  rs_tui_chdir(path.data, path.size);
 }
 
 /// Render a raw line. Rust implementation.

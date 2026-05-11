@@ -2471,6 +2471,158 @@ pub unsafe extern "C" fn rs_tui_reset_key_encoding_impl(tui: *mut TuiHandle) {
     }
 }
 
+// ============================================================================
+// Phase 2: chdir, option_set, screenshot
+// ============================================================================
+
+extern "C" {
+    fn nvim_tui_set_mouse_move_enabled(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_rgb(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_verbose(tui: *mut TuiHandle, val: i64);
+    fn nvim_tui_set_sync_output(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_input_ttimeout(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_set_input_ttimeoutlen(tui: *mut TuiHandle, val: i64);
+    fn nvim_tui_set_screenshot(tui: *mut TuiHandle, f: *mut libc::FILE);
+    fn nvim_tui_set_grid_row_val(tui: *mut TuiHandle, row: c_int);
+    fn nvim_tui_set_grid_col_val(tui: *mut TuiHandle, col: c_int);
+    fn nvim_tui_rpc_send_termguicolors(value: bool);
+    // schar_get already declared above (as *mut libc::c_char)
+    // nvim_tui_cursor_goto_internal already declared above
+}
+
+extern "C" {
+    fn uv_chdir(dir: *const libc::c_char) -> c_int;
+}
+
+/// Change the process working directory. Logs on failure.
+///
+/// # Safety
+///
+/// - `path` must be a valid NUL-terminated C string pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_chdir(path: *const libc::c_char, _path_len: usize) {
+    if path.is_null() {
+        return;
+    }
+    // Use uv_chdir (matches the original C tui_chdir behavior)
+    uv_chdir(path);
+}
+
+// ObjectType values matching C enum (kObjectTypeBoolean=1)
+// kObjectTypeInteger=2 is handled by reading int_val directly
+const OBJECT_TYPE_BOOLEAN: c_int = 1;
+
+/// Handle a TUI option change dispatched from the server.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+/// - `name` must be a valid pointer to `name_len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_option_set(
+    tui: *mut TuiHandle,
+    name: *const u8,
+    name_len: usize,
+    obj_type: c_int,
+    int_val: i64,
+    bool_val: bool,
+) {
+    if tui.is_null() || name.is_null() {
+        return;
+    }
+    let name_bytes = std::slice::from_raw_parts(name, name_len);
+
+    if name_bytes == b"mousemoveevent" {
+        let cur = nvim_tui_get_mouse_move_enabled(tui);
+        let new_val = obj_type == OBJECT_TYPE_BOOLEAN && bool_val;
+        if cur != new_val {
+            if nvim_tui_get_mouse_enabled(tui) {
+                rs_tui_mouse_off(tui);
+                nvim_tui_set_mouse_move_enabled(tui, new_val);
+                rs_tui_mouse_on(tui);
+            } else {
+                nvim_tui_set_mouse_move_enabled(tui, new_val);
+            }
+        }
+    } else if name_bytes == b"termguicolors" {
+        let new_val = obj_type == OBJECT_TYPE_BOOLEAN && bool_val;
+        nvim_tui_set_rgb(tui, new_val);
+        nvim_tui_set_print_attr_id(tui, -1);
+        let height = nvim_tui_get_grid_height(tui);
+        let width = nvim_tui_get_grid_width(tui);
+        rs_invalidate(tui, 0, height, 0, width);
+        nvim_tui_rpc_send_termguicolors(new_val);
+    } else if name_bytes == b"ttimeout" {
+        let new_val = obj_type == OBJECT_TYPE_BOOLEAN && bool_val;
+        nvim_tui_set_input_ttimeout(tui, new_val);
+    } else if name_bytes == b"ttimeoutlen" {
+        nvim_tui_set_input_ttimeoutlen(tui, int_val);
+    } else if name_bytes == b"verbose" {
+        nvim_tui_set_verbose(tui, int_val);
+    } else if name_bytes == b"termsync" {
+        let new_val = obj_type == OBJECT_TYPE_BOOLEAN && bool_val;
+        nvim_tui_set_sync_output(tui, new_val);
+    }
+}
+
+// KTERM_CLEAR_SCREEN = 2 is already defined above in the terminfo_disable section
+
+/// Capture a screenshot of the TUI grid to a file.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+/// - `path` must be a valid pointer to a NUL-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_screenshot(
+    tui: *mut TuiHandle,
+    path: *const libc::c_char,
+    _path_len: usize,
+) {
+    if tui.is_null() || path.is_null() {
+        return;
+    }
+
+    let mode = b"w\0";
+    let f = libc::fopen(path, mode.as_ptr() as *const libc::c_char);
+    if f.is_null() {
+        return;
+    }
+
+    let height = nvim_tui_get_grid_height(tui);
+    let width = nvim_tui_get_grid_width(tui);
+
+    nvim_tui_flush_buf(tui);
+    nvim_tui_set_grid_row_val(tui, 0);
+    nvim_tui_set_grid_col_val(tui, 0);
+
+    nvim_tui_set_screenshot(tui, f);
+
+    // Print header: "height,width\n"
+    let header = format!("{},{}\n", height, width);
+    libc::fwrite(header.as_ptr() as *const libc::c_void, 1, header.len(), f);
+
+    // Clear screen
+    rs_terminfo_out(tui, KTERM_CLEAR_SCREEN);
+
+    // Walk grid
+    for i in 0..height {
+        nvim_tui_cursor_goto_internal(tui, i, 0);
+        for j in 0..width {
+            let data = nvim_tui_get_cell_data(tui, i, j);
+            let attr = nvim_tui_get_cell_attr(tui, i, j);
+            const MAX_SCHAR_SIZE: usize = 28; // from nvim/grid.h
+            let mut buf = [0u8; MAX_SCHAR_SIZE];
+            schar_get(buf.as_mut_ptr() as *mut libc::c_char, data);
+            rs_print_cell(tui, buf.as_ptr(), attr as i16);
+        }
+    }
+
+    nvim_tui_flush_buf(tui);
+    nvim_tui_set_screenshot(tui, std::ptr::null_mut());
+    libc::fclose(f);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
