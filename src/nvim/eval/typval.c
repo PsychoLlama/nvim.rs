@@ -781,17 +781,11 @@ void nvim_blob_free_impl(blob_T *b)
   xfree(b);
 }
 
-/// Get the refcount of a blob (accessor for Rust).
-int nvim_blob_get_refcount(const blob_T *b) { return b->bv_refcount; }
-
 /// Decrement blob refcount and return new value (accessor for Rust).
 int nvim_blob_dec_refcount(blob_T *b) { return --b->bv_refcount; }
 
 /// Set ga_maxlen of a blob (accessor for Rust).
 void nvim_blob_set_ga_maxlen(blob_T *b, int n) { b->bv_ga.ga_maxlen = n; }
-
-/// Get ga_maxlen of a blob (accessor for Rust).
-int nvim_blob_get_ga_maxlen(const blob_T *b) { return b->bv_ga.ga_maxlen; }
 
 /// Duplicate ga_data of blob (xmemdup wrapper for Rust).
 uint8_t *nvim_blob_xmemdup_ga_data(const blob_T *from, int len)
@@ -885,14 +879,6 @@ dict_T *nvim_dict_alloc_impl(void)
   d->lua_table_ref = LUA_NOREF;
   return d;
 }
-
-/// Free a dict completely (accessor for Rust).
-/// Delegates to C tv_dict_free (before migration).
-void nvim_dict_free_impl(dict_T *d) { tv_dict_free(d); }
-
-/// Decrement dict refcount and free if zero (accessor for Rust).
-/// Delegates to C tv_dict_unref (before migration).
-void nvim_dict_unref_impl(dict_T *d) { tv_dict_unref(d); }
 
 // Phase 4 accessors for tv_dict_free_contents / tv_dict_free_dict migration
 
@@ -1006,9 +992,6 @@ void nvim_dict_inc_refcount(dict_T *d) { d->dv_refcount++; }
 /// Get dict refcount (accessor for Rust).
 int nvim_dict_get_refcount(const dict_T *d) { return d->dv_refcount; }
 
-/// Get dv_used_prev from a dict (accessor for Rust).
-dict_T *nvim_dict_get_used_prev(const dict_T *d) { return d->dv_used_prev; }
-
 /// Set v_type to VAR_DICT and vval.v_dict (accessor for Rust).
 void nvim_tv_set_dict(typval_T *tv, dict_T *d)
 {
@@ -1025,12 +1008,6 @@ void nvim_tv_dict_alloc_ret(typval_T *ret_tv)
   d->dv_lock = VAR_UNLOCKED;
   tv_dict_set_ret(ret_tv, d);
 }
-
-/// Get v_lock from a typval (accessor for Rust).
-int nvim_tv_get_lock(const typval_T *tv) { return (int)tv->v_lock; }
-
-/// Get dv_scope from a dict (accessor for Rust).
-int nvim_dict_get_scope(const dict_T *d) { return (int)d->dv_scope; }
 
 /// tv_list_ref wrapper - increment list refcount (accessor for Rust).
 void nvim_list_ref(list_T *l) { tv_list_ref(l); }
@@ -1087,27 +1064,6 @@ void nvim_dict_remove_key(dict_T *d, const char *key)
 
 // Phase 5 accessor functions for Rust list infrastructure migration
 
-/// Get gc_first_list global (accessor for Rust).
-list_T *nvim_gc_first_list_get(void) { return gc_first_list; }
-
-/// Set gc_first_list global (accessor for Rust).
-void nvim_gc_first_list_set(list_T *l) { gc_first_list = l; }
-
-/// Set lv_used_prev on a list (accessor for Rust).
-void nvim_list_set_used_prev(list_T *l, list_T *prev) { l->lv_used_prev = prev; }
-
-/// Set lv_used_next on a list (accessor for Rust).
-void nvim_list_set_used_next(list_T *l, list_T *next) { l->lv_used_next = next; }
-
-/// Get lv_used_prev from a list (accessor for Rust).
-list_T *nvim_list_get_used_prev(const list_T *l) { return l->lv_used_prev; }
-
-/// Initialize lua_table_ref on a list to LUA_NOREF (accessor for Rust).
-void nvim_list_init_lua_ref(list_T *l) { l->lua_table_ref = LUA_NOREF; }
-
-/// Clear lua_table_ref on a list using NLUA_CLEAR_REF (accessor for Rust).
-void nvim_list_clear_lua_ref(list_T *l) { NLUA_CLEAR_REF(l->lua_table_ref); }
-
 /// Get lv_watch from a list (accessor for Rust).
 listwatch_T *nvim_list_get_watch(const list_T *l) { return l->lv_watch; }
 
@@ -1119,12 +1075,6 @@ listwatch_T *nvim_listwatch_get_next(const listwatch_T *lw) { return lw->lw_next
 
 /// Set lw_next on a listwatch (accessor for Rust).
 void nvim_listwatch_set_next(listwatch_T *lw, listwatch_T *next) { lw->lw_next = next; }
-
-/// Get lw_item from a listwatch (accessor for Rust).
-listitem_T *nvim_listwatch_get_item(const listwatch_T *lw) { return lw->lw_item; }
-
-/// Set lw_item on a listwatch (accessor for Rust).
-void nvim_listwatch_set_item(listwatch_T *lw, listitem_T *item) { lw->lw_item = item; }
 
 /// Get tv_in_free_unref_items global (accessor for Rust).
 int nvim_get_tv_in_free_unref_items(void) { return (int)tv_in_free_unref_items; }
