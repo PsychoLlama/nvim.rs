@@ -1815,6 +1815,9 @@ int nvim_var_list(void) { return VAR_LIST; }
 /// Get eval_lavars_used global pointer (may be NULL).
 bool *nvim_vars_get_eval_lavars_used(void) { return eval_lavars_used; }
 
+/// Set eval_lavars_used global pointer.
+void nvim_vars_set_eval_lavars_used(bool *ptr) { eval_lavars_used = ptr; }
+
 /// Get get_funccal_local_ht() as void*.
 void *nvim_vars_get_funccal_local_ht(void) { return get_funccal_local_ht(); }
 

@@ -120,6 +120,9 @@ extern void rs_add_nr_var(dict_T *dp, dictitem_T *v, const char *name, int64_t n
 extern size_t rs_get_lambda_name(char *buf, size_t bufsize);
 extern ufunc_T *rs_alloc_ufunc(const char *name, size_t namelen);
 
+// Phase 5 (plan db85cc6b): get_lambda_tv (Rust userfunc/src/lambda.rs)
+extern int rs_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -187,136 +190,12 @@ static ufunc_T *alloc_ufunc(const char *name, size_t namelen)
 }
 
 /// Parse a lambda expression and get a Funcref from "*arg".
+/// Logic lives in Rust (lambda.rs Phase 5). Thin wrapper for C callers.
 ///
 /// @return OK or FAIL.  Returns NOTDONE for dict or {expr}.
 int get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg)
 {
-  const bool evaluate = evalarg != NULL && (evalarg->eval_flags & EVAL_EVALUATE);
-  garray_T newargs = GA_EMPTY_INIT_VALUE;
-  garray_T *pnewargs;
-  ufunc_T *fp = NULL;
-  partial_T *pt = NULL;
-  int varargs;
-  bool *old_eval_lavars = eval_lavars_used;
-  bool eval_lavars = false;
-  char *tofree = NULL;
-
-  // First, check if this is a lambda expression. "->" must exists.
-  char *s = skipwhite(*arg + 1);
-  int ret = get_function_args(&s, '-', NULL, NULL, NULL, true);
-  if (ret == FAIL || *s != '>') {
-    return NOTDONE;
-  }
-
-  // Parse the arguments again.
-  if (evaluate) {
-    pnewargs = &newargs;
-  } else {
-    pnewargs = NULL;
-  }
-  *arg = skipwhite(*arg + 1);
-  ret = get_function_args(arg, '-', pnewargs, &varargs, NULL, false);
-  if (ret == FAIL || **arg != '>') {
-    goto errret;
-  }
-
-  // Set up a flag for checking local variables and arguments.
-  if (evaluate) {
-    eval_lavars_used = &eval_lavars;
-  }
-
-  // Get the start and the end of the expression.
-  *arg = skipwhite((*arg) + 1);
-  char *start = *arg;
-  ret = skip_expr(arg, evalarg);
-  char *end = *arg;
-  if (ret == FAIL) {
-    goto errret;
-  }
-  if (evalarg != NULL) {
-    // avoid that the expression gets freed when another line break follows
-    tofree = evalarg->eval_tofree;
-    evalarg->eval_tofree = NULL;
-  }
-
-  *arg = skipwhite(*arg);
-  if (**arg != '}') {
-    semsg(_("E451: Expected }: %s"), *arg);
-    goto errret;
-  }
-  (*arg)++;
-
-  if (evaluate) {
-    int flags = 0;
-    garray_T newlines;
-
-    String name = get_lambda_name();
-    fp = alloc_ufunc(name.data, name.size);
-    pt = xcalloc(1, sizeof(partial_T));
-
-    ga_init(&newlines, (int)sizeof(char *), 1);
-    ga_grow(&newlines, 1);
-
-    // Add "return " before the expression.
-    size_t len = (size_t)(7 + end - start + 1);
-    char *p = xmalloc(len);
-    ((char **)(newlines.ga_data))[newlines.ga_len++] = p;
-    STRCPY(p, "return ");
-    xmemcpyz(p + 7, start, (size_t)(end - start));
-    if (strstr(p + 7, "a:") == NULL) {
-      // No a: variables are used for sure.
-      flags |= FC_NOARGS;
-    }
-
-    fp->uf_refcount = 1;
-    hash_add(&func_hashtab, UF2HIKEY(fp));
-    fp->uf_args = newargs;
-    ga_init(&fp->uf_def_args, (int)sizeof(char *), 1);
-    fp->uf_lines = newlines;
-    if (current_funccal != NULL && eval_lavars) {
-      flags |= FC_CLOSURE;
-      register_closure(fp);
-    } else {
-      fp->uf_scoped = NULL;
-    }
-
-    if (prof_def_func()) {
-      func_do_profile(fp);
-    }
-    if (sandbox) {
-      flags |= FC_SANDBOX;
-    }
-    fp->uf_varargs = true;
-    fp->uf_flags = flags;
-    fp->uf_calls = 0;
-    fp->uf_script_ctx = current_sctx;
-    fp->uf_script_ctx.sc_lnum += SOURCING_LNUM - newlines.ga_len;
-
-    pt->pt_func = fp;
-    pt->pt_refcount = 1;
-    rettv->vval.v_partial = pt;
-    rettv->v_type = VAR_PARTIAL;
-  }
-
-  eval_lavars_used = old_eval_lavars;
-  if (evalarg != NULL && evalarg->eval_tofree == NULL) {
-    evalarg->eval_tofree = tofree;
-  } else {
-    xfree(tofree);
-  }
-  return OK;
-
-errret:
-  ga_clear_strings(&newargs);
-  assert(fp == NULL);
-  xfree(pt);
-  if (evalarg != NULL && evalarg->eval_tofree == NULL) {
-    evalarg->eval_tofree = tofree;
-  } else {
-    xfree(tofree);
-  }
-  eval_lavars_used = old_eval_lavars;
-  return FAIL;
+  return rs_get_lambda_tv(arg, rettv, evalarg);
 }
 
 /// Return name of the function corresponding to `name`
@@ -2183,6 +2062,8 @@ void nvim_list_functions_matching_pat(const char *pat, bool ic)
 void nvim_emsg_function_list_modified(void) { emsg(_(e_function_list_was_modified)); }
 void nvim_emsg_undefined_function(const char *name) { emsg_funcname(N_("E123: Undefined function: %s"), name); }
 void nvim_emsg_trailing_arg(const char *name) { semsg(_(e_trailing_arg), name); }
+// Phase 5 (plan db85cc6b): get_lambda_tv error messages
+void nvim_semsg_e451_expected_cbrace(const char *p) { semsg(_("E451: Expected }: %s"), p); }
 
 // Phase 2: Function Name Translation Accessors
 int nvim_script_id_valid(int sid) { return sid > 0 && sid <= script_items.ga_len; }
@@ -2766,3 +2647,51 @@ void nvim_iobuff_xstrlcpy_at(int offset, const char *src)
 {
   xstrlcpy(IObuff + offset, src, (size_t)(IOSIZE - offset));
 }
+
+// Phase 5 (plan db85cc6b): get_lambda_tv accessors
+
+/// Set fp->uf_refcount.
+void nvim_ufunc_set_refcount(ufunc_T *fp, int v) { if (fp) { fp->uf_refcount = v; } }
+
+/// Set fp->uf_varargs.
+void nvim_ufunc_set_varargs(ufunc_T *fp, int v) { if (fp) { fp->uf_varargs = (bool)v; } }
+
+/// Set fp->uf_flags.
+void nvim_ufunc_set_flags(ufunc_T *fp, int v) { if (fp) { fp->uf_flags = v; } }
+
+/// Set fp->uf_calls.
+void nvim_ufunc_set_calls(ufunc_T *fp, int v) { if (fp) { fp->uf_calls = v; } }
+
+/// Move (struct-assign) *src into fp->uf_args.
+void nvim_ufunc_move_args_ga(ufunc_T *fp, const garray_T *src)
+{
+  if (fp && src) { fp->uf_args = *src; }
+}
+
+/// Move (struct-assign) *src into fp->uf_lines.
+void nvim_ufunc_move_lines_ga(ufunc_T *fp, const garray_T *src)
+{
+  if (fp && src) { fp->uf_lines = *src; }
+}
+
+/// Set fp->uf_script_ctx = current_sctx, then adjust sc_lnum by SOURCING_LNUM.
+/// newlines_len is the number of lines in uf_lines (used for sc_lnum offset).
+void nvim_ufunc_finalize_script_ctx(ufunc_T *fp, int newlines_len)
+{
+  if (fp) {
+    fp->uf_script_ctx = current_sctx;
+    fp->uf_script_ctx.sc_lnum += SOURCING_LNUM - newlines_len;
+  }
+}
+
+/// Size of partial_T.
+size_t nvim_sizeof_partial(void) { return sizeof(partial_T); }
+
+/// skip_expr(arg, evalarg) wrapper for Rust (with evalarg support).
+int nvim_skip_expr(char **arg, evalarg_T *evalarg) { return skip_expr(arg, evalarg); }
+
+/// Get evalarg->eval_tofree.
+char *nvim_evalarg_get_tofree(evalarg_T *ea) { return ea ? ea->eval_tofree : NULL; }
+
+/// Set evalarg->eval_tofree.
+void nvim_evalarg_set_tofree(evalarg_T *ea, char *v) { if (ea) { ea->eval_tofree = v; } }
