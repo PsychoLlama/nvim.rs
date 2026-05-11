@@ -55,6 +55,16 @@ enum { CB_MAX_ERROR = 3, };
 extern int nlua_get_global_ref_count(void);
 extern bool nlua_is_deferred_safe(void);
 
+// Phase A: ref-state primitives implemented in Rust (refs.rs)
+LuaRef nlua_ref(lua_State *lstate, nlua_ref_state_t *ref_state, int index);
+LuaRef nlua_ref_global(lua_State *lstate, int index);
+void nlua_unref(lua_State *lstate, nlua_ref_state_t *ref_state, LuaRef ref);
+void nlua_unref_global(lua_State *lstate, LuaRef ref);
+void nlua_pushref(lua_State *lstate, LuaRef ref);
+void api_free_luaref(LuaRef ref);
+LuaRef api_new_luaref(LuaRef original_ref);
+bool nlua_ref_is_function(LuaRef ref);
+
 #include "lua/executor.h.generated.h"
 
 EXTERN nlua_ref_state_t *nlua_global_refs INIT( = NULL);

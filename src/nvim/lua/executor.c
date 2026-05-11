@@ -98,9 +98,6 @@ extern int rs_wait_timeout_code(void);
 extern int rs_wait_interrupted_code(void);
 extern bool rs_wait_no_results(int nresults);
 extern bool rs_lcmd_fits_iosize(size_t lcmd_len, size_t iosize);
-extern bool rs_lua_ref_needs_tracking(int ref_);
-extern int rs_lua_ref_count_inc(int count);
-extern int rs_lua_ref_count_dec(int count);
 
 // Initialized in nlua_init().
 static lua_State *global_lstate = NULL;
@@ -611,6 +608,32 @@ LuaRef nlua_get_empty_dict_ref(lua_State *lstate)
 
 // C accessor for nlua_global_refs->ref_count (used by Rust)
 int nvim_get_nlua_global_ref_count(void) { return nlua_global_refs->ref_count; }
+
+// C accessors for ref_state (used by Rust refs.rs - Phase A)
+nlua_ref_state_t *nvim_get_nlua_global_refs(void) { return nlua_global_refs; }
+void nvim_nlua_ref_state_inc(nlua_ref_state_t *rs) { rs->ref_count++; }
+void nvim_nlua_ref_state_dec(nlua_ref_state_t *rs) { rs->ref_count--; }
+int nvim_nlua_ref_state_count(nlua_ref_state_t *rs) { return rs->ref_count; }
+void nvim_nlua_ref_track(nlua_ref_state_t *rs, int ref_)
+{
+#ifdef NLUA_TRACK_REFS
+  if (nlua_track_refs) {
+    pmap_put(int)(&rs->ref_markers, ref_, xmalloc(3));
+  }
+#else
+  (void)rs; (void)ref_;
+#endif
+}
+void nvim_nlua_ref_untrack(nlua_ref_state_t *rs, int ref_)
+{
+#ifdef NLUA_TRACK_REFS
+  if (nlua_track_refs) {
+    xfree(pmap_get(int)(&rs->ref_markers, ref_));
+  }
+#else
+  (void)rs; (void)ref_;
+#endif
+}
 
 // Implemented in Rust (nvim-lua crate)
 extern int nlua_get_global_ref_count(void);
@@ -1340,67 +1363,8 @@ static int nlua_getenv(lua_State *lstate)
 }
 #endif
 
-/// add the value to the registry
-/// The current implementation does not support calls from threads.
-LuaRef nlua_ref(lua_State *lstate, nlua_ref_state_t *ref_state, int index)
-{
-  lua_pushvalue(lstate, index);
-  LuaRef ref = luaL_ref(lstate, LUA_REGISTRYINDEX);
-  if (rs_lua_ref_needs_tracking(ref)) {
-    ref_state->ref_count = rs_lua_ref_count_inc(ref_state->ref_count);
-#ifdef NLUA_TRACK_REFS
-    if (nlua_track_refs) {
-      // dummy allocation to make LeakSanitizer track our luarefs
-      pmap_put(int)(&ref_state->ref_markers, ref, xmalloc(3));
-    }
-#endif
-  }
-  return ref;
-}
-
-// TODO(lewis6991): Currently cannot be run in __gc metamethods as they are
-// invoked in lua_close() which can be invoked after the ref_markers map is
-// destroyed in nlua_common_free_all_mem.
-LuaRef nlua_ref_global(lua_State *lstate, int index) { return nlua_ref(lstate, nlua_global_refs, index); }
-
-/// remove the value from the registry
-void nlua_unref(lua_State *lstate, nlua_ref_state_t *ref_state, LuaRef ref)
-{
-  if (rs_lua_ref_needs_tracking(ref)) {
-    ref_state->ref_count = rs_lua_ref_count_dec(ref_state->ref_count);
-#ifdef NLUA_TRACK_REFS
-    // NB: don't remove entry from map to track double-unref
-    if (nlua_track_refs) {
-      xfree(pmap_get(int)(&ref_state->ref_markers, ref));
-    }
-#endif
-    luaL_unref(lstate, LUA_REGISTRYINDEX, ref);
-  }
-}
-
-void nlua_unref_global(lua_State *lstate, LuaRef ref) { nlua_unref(lstate, nlua_global_refs, ref); }
-
-void api_free_luaref(LuaRef ref) { nlua_unref_global(global_lstate, ref); }
-
-/// push a value referenced in the registry
-void nlua_pushref(lua_State *lstate, LuaRef ref) { lua_rawgeti(lstate, LUA_REGISTRYINDEX, ref); }
-
-/// Gets a new reference to an object stored at original_ref
-///
-/// NOTE: It does not copy the value, it creates a new ref to the lua object.
-///       Leaves the stack unchanged.
-LuaRef api_new_luaref(LuaRef original_ref)
-{
-  if (original_ref == LUA_NOREF) {
-    return LUA_NOREF;
-  }
-
-  lua_State *const lstate = global_lstate;
-  nlua_pushref(lstate, original_ref);
-  LuaRef new_ref = nlua_ref_global(lstate,  -1);
-  lua_pop(lstate, 1);
-  return new_ref;
-}
+// nlua_ref, nlua_ref_global, nlua_unref, nlua_unref_global, nlua_pushref,
+// api_free_luaref, api_new_luaref: implemented in Rust (refs.rs, Phase A)
 
 /// Evaluate lua string
 ///
@@ -1582,18 +1546,7 @@ Object nlua_exec(const String str, const char *chunkname, const Array args, LuaR
   return nlua_call_pop_retval(lstate, mode, arena, top, err);
 }
 
-bool nlua_ref_is_function(LuaRef ref)
-{
-  lua_State *const lstate = global_lstate;
-  nlua_pushref(lstate, ref);
-
-  // TODO(tjdevries): This should probably check for callable tables as well.
-  //                    We should put some work maybe into simplifying how all of that works
-  bool is_function = (lua_type(lstate, -1) == LUA_TFUNCTION);
-  lua_pop(lstate, 1);
-
-  return is_function;
-}
+// nlua_ref_is_function: implemented in Rust (refs.rs, Phase A)
 
 /// call a LuaRef as a function (or table with __call metamethod)
 ///

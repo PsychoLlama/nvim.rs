@@ -22,6 +22,7 @@ pub mod api;
 pub mod callback;
 pub mod executor;
 pub mod from_lua;
+pub mod refs;
 pub mod state;
 pub mod stdlib;
 pub mod to_lua;
