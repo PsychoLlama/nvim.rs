@@ -99,10 +99,16 @@ EXTERN bool filechangeshell_busy INIT( = false);    ///< FileChangedShell is exe
 
 #include "autocmd.h.generated.h"
 
+// Phase 5: implementation helpers called from Rust.
+void nvim_aucmd_prepbuf_impl(aco_save_T *aco, buf_T *buf);
+void nvim_aucmd_restbuf_impl(aco_save_T *aco);
+
 // Declarations for functions now implemented in Rust (nvim-autocmd crate).
 // These replace the C thin wrappers that were deleted in Phase 1.
 int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int group, bool once,
                      bool nested, char *desc, const char *handler_cmd, Callback *handler_fn);
+void aucmd_prepbuf(aco_save_T *aco, buf_T *buf);
+void aucmd_restbuf(aco_save_T *aco);
 void augroup_del(char *name, bool stupid_legacy_mode);
 void ex_doautoall(exarg_T *eap);
 void do_autocmd_uienter(uint64_t chanid, bool attached);

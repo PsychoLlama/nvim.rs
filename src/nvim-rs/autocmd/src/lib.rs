@@ -319,6 +319,10 @@ extern "C" {
     fn nvim_get_secure() -> c_int;
     #[link_name = "nvim_tag_set_secure"]
     fn nvim_set_secure(val: c_int);
+
+    // Phase 5: aucmd_prepbuf / aucmd_restbuf implementations (body stays in C)
+    fn nvim_aucmd_prepbuf_impl(aco: *mut c_void, buf: *mut c_void);
+    fn nvim_aucmd_restbuf_impl(aco: *mut c_void);
 }
 
 // Static "Unknown" string for invalid events
@@ -1675,6 +1679,28 @@ pub unsafe extern "C" fn rs_autocmd_register(
     nvim_autocmd_push_ac(event, ap, id, handler_cmd, handler_fn, desc, once, nested);
 
     OK
+}
+
+/// Prepare for executing autocommands for (hidden) buffer `buf`.
+/// Delegates to C implementation `nvim_aucmd_prepbuf_impl` which handles
+/// macro-heavy logic (FOR_ALL_WINDOWS_IN_TAB, kv_push, pmap_put).
+///
+/// # Safety
+/// `aco` must point to a valid `aco_save_T`; `buf` must be a valid `buf_T *`.
+#[unsafe(export_name = "aucmd_prepbuf")]
+pub unsafe extern "C" fn rs_aucmd_prepbuf(aco: *mut c_void, buf: *mut c_void) {
+    nvim_aucmd_prepbuf_impl(aco, buf);
+}
+
+/// Cleanup after executing autocommands for a (hidden) buffer.
+/// Delegates to C implementation `nvim_aucmd_restbuf_impl` which handles
+/// macro-heavy logic (FOR_ALL_TAB_WINDOWS, goto labels, pmap_del).
+///
+/// # Safety
+/// `aco` must point to a valid `aco_save_T` previously set up by `aucmd_prepbuf`.
+#[unsafe(export_name = "aucmd_restbuf")]
+pub unsafe extern "C" fn rs_aucmd_restbuf(aco: *mut c_void) {
+    nvim_aucmd_restbuf_impl(aco);
 }
 
 /// Define or delete an autocommand for one event.

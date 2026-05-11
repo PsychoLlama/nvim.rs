@@ -135,14 +135,20 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
 // exported directly under the name "autocmd_register" via #[unsafe(export_name)].
 // The C declaration in autocmd.h still covers external callers.
 
-/// Prepare for executing autocommands for (hidden) buffer `buf`.
-/// If the current buffer is not in any visible window, put it in a temporary
-/// floating window using an entry in `aucmd_win[]`.
-/// Set `curbuf` and `curwin` to match `buf`.
-///
-/// @param aco  structure to save values in
-/// @param buf  new curbuf
-void aucmd_prepbuf(aco_save_T *aco, buf_T *buf)
+// aucmd_prepbuf is now implemented in Rust (rs_aucmd_prepbuf in lib.rs),
+// exported under the name "aucmd_prepbuf" via #[unsafe(export_name)].
+// The full implementation is in nvim_aucmd_prepbuf_impl below; Rust calls it.
+
+// aucmd_restbuf is now implemented in Rust (rs_aucmd_restbuf in lib.rs),
+// exported under the name "aucmd_restbuf" via #[unsafe(export_name)].
+// The full implementation is in nvim_aucmd_restbuf_impl below; Rust calls it.
+
+// =============================================================================
+// Phase 5: aucmd_prepbuf / aucmd_restbuf implementations (called from Rust)
+// =============================================================================
+
+/// Implementation of aucmd_prepbuf, called from Rust rs_aucmd_prepbuf.
+void nvim_aucmd_prepbuf_impl(aco_save_T *aco, buf_T *buf)
 {
   win_T *win;
   bool need_append = true;  // Append `aucmd_win` to the window list.
@@ -246,11 +252,8 @@ void aucmd_prepbuf(aco_save_T *aco, buf_T *buf)
   }
 }
 
-/// Cleanup after executing autocommands for a (hidden) buffer.
-/// Restore the window as it was (if possible).
-///
-/// @param aco  structure holding saved values
-void aucmd_restbuf(aco_save_T *aco)
+/// Implementation of aucmd_restbuf, called from Rust rs_aucmd_restbuf.
+void nvim_aucmd_restbuf_impl(aco_save_T *aco)
 {
   if (aco->use_aucmd_win_idx >= 0) {
     win_T *awp = aucmd_win[aco->use_aucmd_win_idx].auc_win;
