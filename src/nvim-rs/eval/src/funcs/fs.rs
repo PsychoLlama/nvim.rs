@@ -1206,14 +1206,319 @@ pub unsafe extern "C" fn rs_f_globpath(
 }
 
 // =============================================================================
-// Phase 5+6: Read/write file and resolve functions (implementations in funcs_shim.c)
+// Phase 5+6: Read/write file and resolve functions
 // =============================================================================
 
 extern "C" {
     fn nvim_f_readblob(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
     fn nvim_f_readfile(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
     fn nvim_f_resolve(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
-    fn nvim_f_writefile(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+
+    // List item accessors (signatures must match dispatch.rs which uses *const → *const)
+    #[link_name = "nvim_list_get_first"]
+    fn fileio_list_get_first(l: *const c_void) -> *const c_void;
+    #[link_name = "nvim_listitem_get_next"]
+    fn fileio_listitem_get_next(li: *const c_void) -> *const c_void;
+    #[link_name = "nvim_listitem_get_tv"]
+    fn fileio_listitem_get_tv(li: *const c_void) -> *const c_void;
+
+    // Blob accessors (signatures must match container.rs: blob is *mut, tv is *mut)
+    #[link_name = "nvim_tv_get_blob"]
+    fn fileio_tv_get_blob(tv: *mut c_void) -> *mut c_void;
+    #[link_name = "nvim_tv_get_list"]
+    fn fileio_tv_get_list(tv: *const c_void) -> *const c_void;
+    #[link_name = "nvim_blob_get_ga_data"]
+    fn fileio_blob_get_ga_data(b: *mut c_void) -> *mut u8;
+    #[link_name = "nvim_blob_len"]
+    fn fileio_blob_len(b: *mut c_void) -> c_int;
+
+    // Type checking (already a Rust export, callable via C ABI)
+    fn tv_check_str_or_nr(tv: *const c_void) -> bool;
+
+    // String accessors
+    fn tv_get_string_buf_chk(tv: *const c_void, buf: *mut c_char) -> *const c_char;
+
+    // File I/O (FileDescriptor is 48 bytes opaque; allocate as [u8; FILE_DESCRIPTOR_SIZE])
+    fn file_open(ret_fp: *mut c_void, fname: *const c_char, flags: c_int, mode: c_int) -> c_int;
+    fn file_close(fp: *mut c_void, do_fsync: bool) -> c_int;
+    fn file_flush(fp: *mut c_void) -> c_int;
+    fn file_write(fp: *mut c_void, buf: *const c_char, size: usize) -> isize;
+
+    // 2-arg semsg for file errors (fmt + two string args)
+    #[allow(clashing_extern_declarations)]
+    #[link_name = "semsg"]
+    fn fs_semsg_2s(fmt: *const c_char, a1: *const c_char, a2: *const c_char) -> c_int;
+
+    // p_fs option
+    fn nvim_get_p_fs() -> bool;
+}
+
+// FileOpenFlags constants (from nvim/os/fileio.h)
+const K_FILE_TRUNCATE: c_int = 32;
+const K_FILE_APPEND: c_int = 64;
+const K_FILE_CREATE: c_int = 2;
+const K_FILE_MK_DIR: c_int = 256;
+
+// FileDescriptor opaque size (48 bytes: verified in C)
+const FILE_DESCRIPTOR_SIZE: usize = 48;
+
+// VAR_BLOB type value (from typval_defs.h)
+const VAR_BLOB: i32 = 10;
+// VAR_LIST type value
+const VAR_LIST: i32 = 5;
+
+// Error message for write errors
+const E_ERROR_WHILE_WRITING: &[u8] = b"E80: Error while writing: %s\0";
+
+/// Write blob data to an open FileDescriptor.
+///
+/// Returns true on success, false on error (also calls semsg).
+unsafe fn write_blob_inner(fp: *mut c_void, blob: *mut c_void) -> bool {
+    let len = unsafe { fileio_blob_len(blob) };
+    if len > 0 {
+        let data = unsafe { fileio_blob_get_ga_data(blob) };
+        let written = unsafe { file_write(fp, data.cast::<c_char>(), len as usize) };
+        if written < len as isize {
+            let error = written as c_int;
+            let errmsg = unsafe { nvim_os_strerror(error) };
+            unsafe { fs_semsg(E_ERROR_WHILE_WRITING.as_ptr().cast::<c_char>(), errmsg) };
+            return false;
+        }
+    }
+    let error = unsafe { file_flush(fp) };
+    if error != 0 {
+        let errmsg = unsafe { nvim_os_strerror(error) };
+        unsafe { fs_semsg(E_ERROR_WHILE_WRITING.as_ptr().cast::<c_char>(), errmsg) };
+        return false;
+    }
+    true
+}
+
+/// Write list of strings to an open FileDescriptor.
+///
+/// Returns true on success, false on error (also calls semsg).
+unsafe fn write_list_inner(fp: *mut c_void, list: *mut c_void, binary: bool) -> bool {
+    let mut li = unsafe { fileio_list_get_first(list.cast_const()) }.cast_mut();
+    while !li.is_null() {
+        let next_li = unsafe { fileio_listitem_get_next(li.cast_const()) }.cast_mut();
+        let item_tv = unsafe { fileio_listitem_get_tv(li.cast_const()) };
+
+        let s = unsafe { nvim_tv_get_string_chk(item_tv, std::ptr::null_mut()) };
+        if s.is_null() {
+            return false;
+        }
+        let s_cchar = s.cast::<c_char>();
+
+        // Walk the string writing hunks; NL in string → NUL byte in file
+        let mut hunk_start = s_cchar;
+        let mut p = s_cchar;
+        loop {
+            let c = unsafe { *p as u8 };
+            if c == 0 || c == b'\n' {
+                if p != hunk_start {
+                    let chunk_len = unsafe { p.offset_from(hunk_start) } as usize;
+                    let written = unsafe { file_write(fp, hunk_start, chunk_len) };
+                    if written < 0 {
+                        let errmsg = unsafe { nvim_os_strerror(written as c_int) };
+                        unsafe {
+                            fs_semsg(E_ERROR_WHILE_WRITING.as_ptr().cast::<c_char>(), errmsg)
+                        };
+                        return false;
+                    }
+                }
+                if c == 0 {
+                    break;
+                }
+                // NL → write NUL byte
+                hunk_start = unsafe { p.add(1) };
+                let nul_byte: [u8; 1] = [0];
+                let written = unsafe { file_write(fp, nul_byte.as_ptr().cast::<c_char>(), 1) };
+                if written < 0 {
+                    let errmsg = unsafe { nvim_os_strerror(written as c_int) };
+                    unsafe { fs_semsg(E_ERROR_WHILE_WRITING.as_ptr().cast::<c_char>(), errmsg) };
+                    return false;
+                }
+            }
+            p = unsafe { p.add(1) };
+        }
+
+        // Write newline after each item (skip for last item in binary mode)
+        let is_last = next_li.is_null();
+        if !binary || !is_last {
+            let nl_byte: [u8; 1] = [b'\n'];
+            let written = unsafe { file_write(fp, nl_byte.as_ptr().cast::<c_char>(), 1) };
+            if written < 0 {
+                let errmsg = unsafe { nvim_os_strerror(written as c_int) };
+                unsafe { fs_semsg(E_ERROR_WHILE_WRITING.as_ptr().cast::<c_char>(), errmsg) };
+                return false;
+            }
+        }
+
+        li = next_li;
+    }
+
+    let error = unsafe { file_flush(fp) };
+    if error != 0 {
+        let errmsg = unsafe { nvim_os_strerror(error) };
+        unsafe { fs_semsg(E_ERROR_WHILE_WRITING.as_ptr().cast::<c_char>(), errmsg) };
+        return false;
+    }
+    true
+}
+
+/// "writefile()" function
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_writefile"]
+pub unsafe extern "C" fn rs_f_writefile(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    rettv_set_number(unsafe { TypevalPtrMut::from_raw(rettv) }, -1);
+
+    if unsafe { rs_check_secure() } != 0 {
+        return;
+    }
+
+    let tv0 = unsafe { argvar_at(argvars, 0) };
+    let tv0_type = unsafe { nvim_tv_get_type(tv0.as_ptr()) };
+
+    if tv0_type == VAR_LIST {
+        // Validate all list items are string or number
+        let list = unsafe { fileio_tv_get_list(tv0.as_ptr()) }.cast_mut();
+        let mut li = unsafe { fileio_list_get_first(list.cast_const()) }.cast_mut();
+        while !li.is_null() {
+            let item_tv = unsafe { fileio_listitem_get_tv(li.cast_const()) };
+            if !unsafe { tv_check_str_or_nr(item_tv) } {
+                return;
+            }
+            li = unsafe { fileio_listitem_get_next(li.cast_const()) }.cast_mut();
+        }
+    } else if tv0_type != VAR_BLOB {
+        unsafe {
+            fs_semsg(
+                c"E475: Invalid argument: %s".as_ptr(),
+                c"writefile() first argument must be a List or a Blob".as_ptr(),
+            )
+        };
+        return;
+    }
+
+    let mut binary = false;
+    let mut append = false;
+    let mut defer = false;
+    let mut do_fsync = unsafe { nvim_get_p_fs() };
+    let mut mkdir_p = false;
+
+    let tv2 = unsafe { argvar_at(argvars, 2) };
+    if unsafe { nvim_tv_get_type(tv2.as_ptr()) } != VAR_UNKNOWN {
+        let mut flagbuf = [0u8; NUMBUFLEN];
+        let flags_ptr =
+            unsafe { tv_get_string_buf_chk(tv2.as_ptr(), flagbuf.as_mut_ptr().cast::<c_char>()) };
+        if flags_ptr.is_null() {
+            return;
+        }
+        let mut p = flags_ptr;
+        loop {
+            let c = unsafe { *p as u8 };
+            if c == 0 {
+                break;
+            }
+            match c {
+                b'b' => binary = true,
+                b'a' => append = true,
+                b'D' => defer = true,
+                b's' => do_fsync = true,
+                b'S' => do_fsync = false,
+                b'p' => mkdir_p = true,
+                _ => {
+                    // Pass %s, p to preserve multibyte characters (same as C)
+                    unsafe { fs_semsg(c"E5060: Unknown flag: %s".as_ptr(), p) };
+                    return;
+                }
+            }
+            p = unsafe { p.add(1) };
+        }
+    }
+
+    let tv1 = unsafe { argvar_at(argvars, 1) };
+    let mut namebuf = [0u8; NUMBUFLEN];
+    let fname =
+        unsafe { tv_get_string_buf_chk(tv1.as_ptr(), namebuf.as_mut_ptr().cast::<c_char>()) };
+    if fname.is_null() {
+        return;
+    }
+
+    if defer && !unsafe { nvim_can_add_defer() } {
+        return;
+    }
+
+    if unsafe { *fname as u8 } == 0 {
+        unsafe { fs_emsg(c"E482: Can't open file with an empty name".as_ptr()) };
+        return;
+    }
+
+    let open_flags = (if append {
+        K_FILE_APPEND
+    } else {
+        K_FILE_TRUNCATE
+    }) | (if mkdir_p { K_FILE_MK_DIR } else { 0 })
+        | K_FILE_CREATE;
+
+    let mut fp_buf = [0u8; FILE_DESCRIPTOR_SIZE];
+    let fp = fp_buf.as_mut_ptr().cast::<c_void>();
+    let error = unsafe { file_open(fp, fname, open_flags, 0o666) };
+    if error != 0 {
+        let errmsg = unsafe { nvim_os_strerror(error) };
+        unsafe {
+            fs_semsg_2s(
+                c"E482: Can't open file %s for writing: %s".as_ptr(),
+                fname,
+                errmsg,
+            )
+        };
+        return;
+    }
+
+    if defer {
+        let full_name = unsafe { nvim_FullName_save(fname, false) };
+        // Build typval_T for add_defer("delete", 1, &tv)
+        // typval_T layout: v_type(i32) + v_lock(i32) + v_string(*mut c_char) [+ pad to 16]
+        let mut tv_buf = [0u8; 16];
+        let tv_ptr = tv_buf.as_mut_ptr();
+        unsafe {
+            std::ptr::write_unaligned(tv_ptr.cast::<i32>(), VAR_STRING);
+            std::ptr::write_unaligned(tv_ptr.add(4).cast::<i32>(), 0i32); // VAR_UNLOCKED
+            std::ptr::write_unaligned(tv_ptr.add(8).cast::<*mut c_char>(), full_name);
+        }
+        unsafe { nvim_add_defer_delete(tv_buf.as_mut_ptr().cast(), 1) };
+    }
+
+    let write_ok = if tv0_type == VAR_BLOB {
+        let blob = unsafe { fileio_tv_get_blob(tv0.as_ptr().cast_mut()) };
+        unsafe { write_blob_inner(fp, blob) }
+    } else {
+        let list = unsafe { fileio_tv_get_list(tv0.as_ptr()) }.cast_mut();
+        unsafe { write_list_inner(fp, list, binary) }
+    };
+
+    if write_ok {
+        rettv_set_number(unsafe { TypevalPtrMut::from_raw(rettv) }, 0);
+    }
+
+    let close_error = unsafe { file_close(fp, do_fsync) };
+    if close_error != 0 {
+        let errmsg = unsafe { nvim_os_strerror(close_error) };
+        unsafe {
+            fs_semsg_2s(
+                c"E80: Error when closing file %s: %s".as_ptr(),
+                fname,
+                errmsg,
+            )
+        };
+    }
 }
 
 /// "readblob()" function
@@ -1253,17 +1558,4 @@ pub unsafe extern "C" fn rs_f_resolve(
     fptr: *mut c_void,
 ) {
     unsafe { nvim_f_resolve(argvars, rettv, fptr) };
-}
-
-/// "writefile()" function
-///
-/// # Safety
-/// Caller must provide valid pointers to typval_T arrays.
-#[export_name = "f_writefile"]
-pub unsafe extern "C" fn rs_f_writefile(
-    argvars: *const c_void,
-    rettv: *mut c_void,
-    fptr: *mut c_void,
-) {
-    unsafe { nvim_f_writefile(argvars, rettv, fptr) };
 }
