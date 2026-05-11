@@ -8,7 +8,9 @@
 use std::ffi::{c_char, c_int};
 
 use crate::state::LuaState;
-use crate::types::{LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE};
+use crate::types::{
+    LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TUSERDATA,
+};
 use nvim_api::{Array, Dict, KeyValuePair, NvimString, Object};
 
 /// Float type (f64)
@@ -98,14 +100,9 @@ extern "C" {
     fn arena_dict(arena: *mut Arena, max_size: usize) -> Dict;
     fn api_free_array(value: Array);
     fn api_free_dict(value: Dict);
+    fn api_free_object(value: Object);
 
-    // Still-C pop functions (Phase 7 will replace these)
-    fn nlua_pop_Object(
-        lstate: *mut LuaState,
-        r#ref: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Object;
+    // Still-C pop functions (Phase 10 will replace)
     fn nlua_pop_typval(lstate: *mut LuaState, ret_tv: *mut std::ffi::c_void) -> bool;
 }
 
@@ -119,11 +116,15 @@ unsafe fn lua_pop(lstate: *mut LuaState, n: c_int) {
 // Phase 4: Internal table-traversal helpers (Rust-private, no C symbol export)
 // =============================================================================
 
-// kObjectType* constants needed for traverse_table / check_type
+// kObjectType* constants needed for traverse_table / check_type / pop_Object
 const K_OBJECT_TYPE_NIL: c_int = 0;
+const K_OBJECT_TYPE_BOOLEAN: c_int = 1;
+const K_OBJECT_TYPE_INTEGER: c_int = 2;
 const K_OBJECT_TYPE_FLOAT: c_int = 3;
+const K_OBJECT_TYPE_STRING: c_int = 4;
 const K_OBJECT_TYPE_ARRAY: c_int = 5;
 const K_OBJECT_TYPE_DICT: c_int = 6;
+const K_OBJECT_TYPE_LUAREF: c_int = 7;
 
 // TYPE_IDX_VALUE is `true` (boolean true = 1 from lua_toboolean)
 // VAL_IDX_VALUE is `false` (0)
@@ -516,7 +517,7 @@ unsafe fn pop_Array_unchecked(
     for i in 1..=props.maxidx {
         #[allow(clippy::cast_possible_truncation)]
         lua_rawgeti(lstate, -1, i as c_int);
-        let val = nlua_pop_Object(lstate, false, arena, err);
+        let val = rs_nlua_pop_Object(lstate, false, arena, err);
         if (*err).is_set() {
             lua_pop(lstate, 1);
             if arena.is_null() {
@@ -591,7 +592,7 @@ unsafe fn pop_Dict_unchecked(
                 lua_pop(lstate, 1);
                 // stack: dict, key
             } else {
-                let value = nlua_pop_Object(lstate, ref_, arena, err);
+                let value = rs_nlua_pop_Object(lstate, ref_, arena, err);
                 // kv_push_c: append KeyValuePair to pre-allocated dict
                 let idx = ret.size;
                 ret.size += 1;
@@ -641,7 +642,276 @@ pub unsafe extern "C" fn rs_nlua_pop_Dict(
     pop_Dict_unchecked(lstate, props, ref_, arena, err)
 }
 
-/// Pop an Object from the Lua stack. (Phase 7 will replace with real impl)
+// =============================================================================
+// Phase 7: nlua_pop_Object (real implementation)
+// =============================================================================
+
+/// Helper for the pop_Object iterative stack.
+#[derive(Copy, Clone)]
+struct ObjPopStackItem {
+    /// Pointer to the Object slot being filled.
+    obj: *mut Object,
+    /// True if we are iterating into a container (array/dict).
+    container: bool,
+}
+
+/// Convert the Lua value on top of the stack to an Object.
+///
+/// Always pops one value from the stack. Mirrors `nlua_pop_Object` from converter.c.
+///
+/// # Safety
+/// `lstate` must be valid; `err` must be a valid Error pointer.
+#[allow(clippy::too_many_lines)]
+#[unsafe(export_name = "nlua_pop_Object")]
+pub unsafe extern "C" fn rs_nlua_pop_Object(
+    lstate: *mut LuaState,
+    ref_: bool,
+    arena: *mut Arena,
+    err: *mut Error,
+) -> Object {
+    use nvim_api::ObjectData;
+
+    let mut ret = Object::nil();
+    let initial_size = lua_gettop(lstate);
+
+    // Small-vector: capacity 2 matches kvi_init default
+    let mut stack: Vec<ObjPopStackItem> = Vec::with_capacity(2);
+    stack.push(ObjPopStackItem {
+        obj: &raw mut ret,
+        container: false,
+    });
+
+    while !(*err).is_set() && !stack.is_empty() {
+        let mut cur = stack.pop().unwrap();
+
+        if cur.container {
+            if !lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
+                api_set_error(err, K_ERROR_EXCEPTION, c"Lua failed to grow stack".as_ptr());
+                break;
+            }
+            if (*cur.obj).obj_type == K_OBJECT_TYPE_DICT {
+                // stack: …, dict, key
+                let dict = &mut (*cur.obj).data.dict;
+                if dict.size == dict.capacity {
+                    lua_pop(lstate, 2);
+                    continue;
+                }
+                let mut next_key_found = false;
+                while lua_next(lstate, -2) != 0 {
+                    // stack: …, dict, new key, val
+                    if lua_type(lstate, -2) == LUA_TSTRING {
+                        next_key_found = true;
+                        break;
+                    }
+                    lua_pop(lstate, 1);
+                    // stack: …, dict, new key
+                }
+                if next_key_found {
+                    // stack: …, dict, new key, val
+                    let mut len: usize = 0;
+                    let s = lua_tolstring(lstate, -2, &raw mut len);
+                    let idx = dict.size;
+                    dict.size += 1;
+                    let key_data = arena_memdupz(arena, s, len);
+                    let key = NvimString {
+                        data: key_data,
+                        size: len,
+                    };
+                    let val_ptr = &raw mut dict.items.add(idx).as_mut().unwrap().value;
+                    dict.items.add(idx).as_mut().unwrap().key = key;
+                    stack.push(cur);
+                    cur = ObjPopStackItem {
+                        obj: val_ptr,
+                        container: false,
+                    };
+                } else {
+                    // stack: …, dict
+                    lua_pop(lstate, 1);
+                    // stack: …
+                    continue;
+                }
+            } else {
+                // Array container
+                let arr = &mut (*cur.obj).data.array;
+                if arr.size == arr.capacity {
+                    lua_pop(lstate, 1);
+                    continue;
+                }
+                let idx = arr.size;
+                arr.size += 1;
+                #[allow(clippy::cast_possible_truncation)]
+                lua_rawgeti(lstate, -1, idx as c_int + 1);
+                let elem_ptr = arr.items.add(idx);
+                stack.push(cur);
+                cur = ObjPopStackItem {
+                    obj: elem_ptr,
+                    container: false,
+                };
+            }
+        }
+
+        // cur is now a leaf slot to fill
+        *cur.obj = Object::nil();
+
+        let lua_t = lua_type(lstate, -1);
+        'type_dispatch: {
+            match lua_t {
+                t if t == LUA_TNIL => {
+                    // leave as nil
+                }
+                t if t == LUA_TBOOLEAN => {
+                    *cur.obj = Object {
+                        obj_type: K_OBJECT_TYPE_BOOLEAN,
+                        data: ObjectData {
+                            boolean: lua_toboolean(lstate, -1) != 0,
+                        },
+                    };
+                }
+                t if t == LUA_TSTRING => {
+                    let mut len: usize = 0;
+                    let s = lua_tolstring(lstate, -1, &raw mut len);
+                    let data = arena_memdupz(arena, s, len);
+                    *cur.obj = Object {
+                        obj_type: K_OBJECT_TYPE_STRING,
+                        data: ObjectData {
+                            string: NvimString { data, size: len },
+                        },
+                    };
+                }
+                t if t == LUA_TNUMBER => {
+                    let n = lua_tonumber(lstate, -1);
+                    // Round-trip check: if it converts exactly to integer, use integer
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                    let as_int = n as Integer;
+                    // float_cmp: intentional exact round-trip check to detect integer-valued floats
+                    #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+                    if n > (i64::MAX as f64) || n < (i64::MIN as f64) || (as_int as f64) != n {
+                        *cur.obj = Object {
+                            obj_type: K_OBJECT_TYPE_FLOAT,
+                            data: ObjectData { floating: n },
+                        };
+                    } else {
+                        *cur.obj = Object {
+                            obj_type: K_OBJECT_TYPE_INTEGER,
+                            data: ObjectData { integer: as_int },
+                        };
+                    }
+                }
+                t if t == LUA_TTABLE => {
+                    let props = traverse_table(lstate);
+                    match props.obj_type {
+                        k if k == K_OBJECT_TYPE_ARRAY => {
+                            *cur.obj = Object {
+                                obj_type: K_OBJECT_TYPE_ARRAY,
+                                data: ObjectData {
+                                    array: Array {
+                                        size: 0,
+                                        capacity: 0,
+                                        items: std::ptr::null_mut(),
+                                    },
+                                },
+                            };
+                            if props.maxidx != 0 {
+                                (*cur.obj).data.array = arena_array(arena, props.maxidx);
+                                cur.container = true;
+                                stack.push(cur);
+                            }
+                        }
+                        k if k == K_OBJECT_TYPE_DICT => {
+                            *cur.obj = Object {
+                                obj_type: K_OBJECT_TYPE_DICT,
+                                data: ObjectData {
+                                    dict: Dict {
+                                        size: 0,
+                                        capacity: 0,
+                                        items: std::ptr::null_mut(),
+                                    },
+                                },
+                            };
+                            if props.string_keys_num != 0 {
+                                (*cur.obj).data.dict = arena_dict(arena, props.string_keys_num);
+                                cur.container = true;
+                                stack.push(cur);
+                                lua_pushnil(lstate);
+                            }
+                        }
+                        k if k == K_OBJECT_TYPE_FLOAT => {
+                            *cur.obj = Object {
+                                obj_type: K_OBJECT_TYPE_FLOAT,
+                                data: ObjectData {
+                                    floating: props.val,
+                                },
+                            };
+                        }
+                        _ => {
+                            api_set_error(
+                                err,
+                                K_ERROR_VALIDATION,
+                                c"Cannot convert given Lua table".as_ptr(),
+                            );
+                        }
+                    }
+                }
+                t if t == LUA_TFUNCTION => {
+                    if ref_ {
+                        let luaref = crate::refs::rs_nlua_ref_global(lstate, -1);
+                        *cur.obj = Object {
+                            obj_type: K_OBJECT_TYPE_LUAREF,
+                            data: ObjectData {
+                                luaref: i64::from(luaref),
+                            },
+                        };
+                    } else {
+                        // goto type_error equivalent
+                        api_set_error(
+                            err,
+                            K_ERROR_VALIDATION,
+                            c"Cannot convert given Lua type".as_ptr(),
+                        );
+                        break 'type_dispatch;
+                    }
+                }
+                t if t == LUA_TUSERDATA => {
+                    let nil_ref = crate::leaf::rs_nlua_get_nil_ref(lstate);
+                    crate::refs::rs_nlua_pushref(lstate, nil_ref);
+                    let is_nil = lua_rawequal(lstate, -2, -1) != 0;
+                    lua_pop(lstate, 1);
+                    if is_nil {
+                        *cur.obj = Object::nil();
+                    } else {
+                        api_set_error(err, K_ERROR_VALIDATION, c"Cannot convert userdata".as_ptr());
+                    }
+                }
+                _ => {
+                    api_set_error(
+                        err,
+                        K_ERROR_VALIDATION,
+                        c"Cannot convert given Lua type".as_ptr(),
+                    );
+                }
+            }
+        } // end 'type_dispatch
+
+        if !cur.container {
+            lua_pop(lstate, 1);
+        }
+    }
+
+    if (*err).is_set() {
+        if arena.is_null() {
+            api_free_object(ret);
+        }
+        ret = Object::nil();
+        let excess = lua_gettop(lstate) - initial_size + 1;
+        if excess > 0 {
+            lua_pop(lstate, excess);
+        }
+    }
+
+    ret
+}
+
+/// Forwarding shim for Rust callers that used the old rs_ prefix.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_pop_object(
     lstate: *mut LuaState,
@@ -649,7 +919,7 @@ pub unsafe extern "C" fn rs_nlua_pop_object(
     arena: *mut Arena,
     err: *mut Error,
 ) -> Object {
-    nlua_pop_Object(lstate, ref_, arena, err)
+    rs_nlua_pop_Object(lstate, ref_, arena, err)
 }
 
 /// Pop a typval from the Lua stack. (Phase 10 will replace with real impl)
