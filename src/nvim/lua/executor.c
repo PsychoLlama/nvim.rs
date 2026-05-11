@@ -150,46 +150,7 @@ typedef enum luv_err_type {
 
 lua_State *get_global_lstate(void) { return global_lstate; }
 
-/// Gets the Lua error at top of stack as a string, possibly modifying it in-place (but doesn't
-/// change stack height).
-///
-/// The returned string points to memory on the Lua stack. Use or duplicate it before using
-/// `lstate` again.
-///
-/// @param[out] len length of error (can be NULL)
-static const char *nlua_get_error(lua_State *lstate, size_t *len)
-{
-  if (luaL_getmetafield(lstate, -1, "__tostring")) {
-    if (lua_isfunction(lstate, -1) && luaL_callmeta(lstate, -2, "__tostring")) {
-      // call __tostring, convert the result and replace error with it
-      lua_replace(lstate, -3);
-    }
-    // pop __tostring.
-    lua_pop(lstate, 1);
-  }
-
-  return lua_tolstring(lstate, -1, len);
-}
-
-/// Converts a Lua error into a Vim error message.
-///
-/// @param  lstate  Lua interpreter state.
-/// @param[in]  msg  Message base, must contain one `%.*s`.
-void nlua_error(lua_State *const lstate, const char *const msg)
-  FUNC_ATTR_NONNULL_ALL
-{
-  size_t len;
-  const char *str = nlua_get_error(lstate, &len);
-
-  if (in_script) {
-    fprintf(stderr, msg, (int)len, str);
-    fprintf(stderr, "\n");
-  } else {
-    semsg_multiline("lua_error", msg, (int)len, str);
-  }
-
-  lua_pop(lstate, 1);
-}
+// nlua_get_error, nlua_error: implemented in Rust (errors.rs, Phase B)
 
 /// Like lua_pcall, but use debug.traceback as errfunc.
 ///
@@ -633,6 +594,18 @@ void nvim_nlua_ref_untrack(nlua_ref_state_t *rs, int ref_)
 #else
   (void)rs; (void)ref_;
 #endif
+}
+
+// C accessors for Phase B (errors.rs)
+bool nvim_lua_in_script(void) { return in_script; }
+void nvim_lua_semsg_multiline(const char *fmt, int len, const char *str)
+{
+  semsg_multiline("lua_error", fmt, len, str);
+}
+void nvim_lua_fprintf_stderr(const char *fmt, int len, const char *str)
+{
+  fprintf(stderr, fmt, len, str);
+  fprintf(stderr, "\n");
 }
 
 // Implemented in Rust (nvim-lua crate)
@@ -1338,17 +1311,7 @@ check_err:
   return request ? 1 : 0;
 }
 
-static int nlua_nil_tostring(lua_State *lstate)
-{
-  lua_pushstring(lstate, "vim.NIL");
-  return 1;
-}
-
-static int nlua_empty_dict_tostring(lua_State *lstate)
-{
-  lua_pushstring(lstate, "vim.empty_dict()");
-  return 1;
-}
+// nlua_nil_tostring, nlua_empty_dict_tostring: implemented in Rust (errors.rs, Phase B)
 
 #ifdef MSWIN
 /// os.getenv: override os.getenv to maintain coherency. #9681

@@ -20,6 +20,7 @@
 
 pub mod api;
 pub mod callback;
+pub mod errors;
 pub mod executor;
 pub mod from_lua;
 pub mod refs;

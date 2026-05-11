@@ -65,6 +65,12 @@ void api_free_luaref(LuaRef ref);
 LuaRef api_new_luaref(LuaRef original_ref);
 bool nlua_ref_is_function(LuaRef ref);
 
+// Phase B: error helpers and tostring stubs implemented in Rust (errors.rs)
+const char *nlua_get_error(lua_State *lstate, size_t *len);
+void nlua_error(lua_State *const lstate, const char *const msg);
+int nlua_nil_tostring(lua_State *lstate);
+int nlua_empty_dict_tostring(lua_State *lstate);
+
 #include "lua/executor.h.generated.h"
 
 EXTERN nlua_ref_state_t *nlua_global_refs INIT( = NULL);
