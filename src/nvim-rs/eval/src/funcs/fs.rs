@@ -1210,8 +1210,24 @@ pub unsafe extern "C" fn rs_f_globpath(
 // =============================================================================
 
 extern "C" {
-    fn nvim_f_resolve(argvars: *const c_void, rettv: *mut c_void, fptr: *mut c_void);
+    // Path helpers for resolve
+    fn after_pathsep(b: *const c_char, p: *const c_char) -> bool;
+    fn path_next_component(fname: *const c_char) -> *const c_char;
+    fn vim_ispathsep(c: c_int) -> bool;
+    fn add_pathsep(p: *mut c_char) -> bool;
+    #[allow(clashing_extern_declarations)]
+    #[link_name = "path_tail"]
+    fn resolve_path_tail(fname: *const c_char) -> *mut c_char;
+    fn concat_str(str1: *const c_char, str2: *const c_char) -> *mut c_char;
+    #[allow(clashing_extern_declarations)]
+    #[link_name = "xmallocz"]
+    fn resolve_xmallocz(size: usize) -> *mut c_char;
+    fn xstrlcat(dst: *mut c_char, src: *const c_char, dst_len: usize) -> usize;
+    #[allow(dead_code)]
+    fn os_realpath(name: *const c_char, buf: *mut c_char, len: usize) -> *mut c_char;
+}
 
+extern "C" {
     // List item accessors (signatures must match dispatch.rs which uses *const → *const)
     #[link_name = "nvim_list_get_first"]
     fn fileio_list_get_first(l: *const c_void) -> *const c_void;
@@ -1965,7 +1981,7 @@ pub unsafe extern "C" fn rs_f_readfile(
     unsafe { read_file_or_blob_inner(argvars, rettv, false) };
 }
 
-/// "resolve()" function
+/// "resolve()" function — resolve symlinks and normalize path.
 ///
 /// # Safety
 /// Caller must provide valid pointers to typval_T arrays.
@@ -1973,7 +1989,231 @@ pub unsafe extern "C" fn rs_f_readfile(
 pub unsafe extern "C" fn rs_f_resolve(
     argvars: *const c_void,
     rettv: *mut c_void,
-    fptr: *mut c_void,
+    _fptr: *mut c_void,
 ) {
-    unsafe { nvim_f_resolve(argvars, rettv, fptr) };
+    // Set rettv v_type = VAR_STRING (offset 0), v_string = NULL (offset 8)
+    // VAR_STRING = 2 from typval_defs.h
+    unsafe {
+        std::ptr::write_unaligned(rettv.cast::<u8>().cast::<i32>(), 2i32);
+        std::ptr::write_unaligned(
+            rettv.cast::<u8>().add(8).cast::<*mut c_char>(),
+            std::ptr::null_mut(),
+        );
+    }
+
+    let tv0 = unsafe { argvar_at(argvars, 0) };
+    let fname = unsafe { nvim_tv_get_string(tv0.as_ptr(), std::ptr::null_mut()) }.cast::<c_char>();
+
+    #[cfg(windows)]
+    {
+        let v = unsafe { nvim_os_resolve_shortcut(fname) };
+        let result = if v.is_null() {
+            if unsafe { nvim_os_is_reparse_point_include(fname) } {
+                let r = unsafe { os_realpath(fname, std::ptr::null_mut(), MAXPATHL + 1) };
+                if r.is_null() {
+                    unsafe { xstrdup_u8(fname) }.cast::<c_char>()
+                } else {
+                    r
+                }
+            } else {
+                unsafe { xstrdup_u8(fname) }.cast::<c_char>()
+            }
+        } else {
+            v
+        };
+        unsafe { simplify_filename(result.cast::<u8>()) };
+        unsafe {
+            std::ptr::write_unaligned(rettv.cast::<u8>().add(8).cast::<*mut c_char>(), result)
+        };
+        return;
+    }
+
+    #[cfg(not(windows))]
+    {
+        // HAVE_READLINK path (Linux always has readlink)
+        let mut is_relative_to_current = false;
+        let mut has_trailing_pathsep = false;
+        let mut limit: c_int = 100;
+
+        let mut p = unsafe { xstrdup_u8(fname) };
+
+        // Check if path starts with "./" or "../"
+        let p0 = unsafe { *p } as u8;
+        let p1 = if p0 != 0 {
+            (unsafe { *p.add(1) }) as u8
+        } else {
+            0
+        };
+        let p2 = if p1 != 0 {
+            (unsafe { *p.add(2) }) as u8
+        } else {
+            0
+        };
+        if p0 == b'.'
+            && (unsafe { vim_ispathsep(c_int::from(p1)) }
+                || (p1 == b'.' && unsafe { vim_ispathsep(c_int::from(p2)) }))
+        {
+            is_relative_to_current = true;
+        }
+
+        let mut len = unsafe { libc::strlen(p.cast()) } as isize;
+        if len > 1 && unsafe { after_pathsep(p, p.add(len as usize)) } {
+            has_trailing_pathsep = true;
+            unsafe { *p.add(len as usize - 1) = 0 }; // Remove trailing slash
+        }
+
+        let mut q = unsafe { path_next_component(p) }.cast_mut();
+        let mut remain: *mut c_char = std::ptr::null_mut();
+        if unsafe { *q } != 0 {
+            // Separate the first path component; keep the remainder (beginning with path sep)
+            remain = unsafe { xstrdup_u8(q.sub(1)) }.cast::<c_char>();
+            unsafe { *q.sub(1) = 0 };
+        }
+
+        let buf = unsafe { resolve_xmallocz(MAXPATHL) };
+
+        'outer: loop {
+            loop {
+                len = unsafe { libc::readlink(p.cast(), buf.cast(), MAXPATHL) } as isize;
+                if len <= 0 {
+                    break;
+                }
+                unsafe { *buf.add(len as usize) = 0 };
+
+                limit -= 1;
+                if limit < 0 {
+                    unsafe { fileio_xfree(p.cast()) };
+                    unsafe { fileio_xfree(remain.cast()) };
+                    unsafe { fs_emsg(c"E655: Too many symbolic links (cycle?)".as_ptr()) };
+                    unsafe { fileio_xfree(buf.cast()) };
+                    return;
+                }
+
+                // Ensure trailing path separator if original had one
+                if remain.is_null() && has_trailing_pathsep {
+                    unsafe { add_pathsep(buf) };
+                }
+
+                // Separate first component of link value, concat remainders
+                let buf0 = unsafe { *buf } as u8;
+                let skip = usize::from(unsafe { vim_ispathsep(c_int::from(buf0)) });
+                q = unsafe { path_next_component(buf.add(skip)) }.cast_mut();
+                if unsafe { *q } != 0 {
+                    let cpy = remain;
+                    remain = if !remain.is_null() {
+                        unsafe { concat_str(q.sub(1), remain) }
+                    } else {
+                        unsafe { xstrdup_u8(q.sub(1)) }.cast::<c_char>()
+                    };
+                    unsafe { fileio_xfree(cpy.cast()) };
+                    unsafe { *q.sub(1) = 0 };
+                }
+
+                q = unsafe { resolve_path_tail(p) };
+                if q > p && unsafe { *q } == 0 {
+                    // Ignore trailing path separator
+                    unsafe { *p.add((q as usize - p as usize) - 1) = 0 };
+                    q = unsafe { resolve_path_tail(p) };
+                }
+
+                let buf_is_abs = unsafe { path_is_absolute(buf.cast::<u8>()) };
+                if q > p && !buf_is_abs {
+                    // Symlink relative to directory of argument
+                    let p_len = unsafe { libc::strlen(p.cast()) };
+                    let buf_len = unsafe { libc::strlen(buf.cast()) };
+                    p = unsafe { fileio_xrealloc(p.cast(), p_len + buf_len + 1) }.cast::<c_char>();
+                    let tail = unsafe { resolve_path_tail(p) };
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            buf.cast::<u8>(),
+                            tail.cast::<u8>(),
+                            buf_len + 1,
+                        );
+                    };
+                } else {
+                    unsafe { fileio_xfree(p.cast()) };
+                    p = unsafe { xstrdup_u8(buf) }.cast::<c_char>();
+                }
+            }
+
+            if remain.is_null() {
+                break 'outer;
+            }
+
+            // Append first path component of "remain" to "p"
+            q = unsafe { path_next_component(remain.add(1)) }.cast_mut();
+            let q_char = unsafe { *q };
+            len = (q as isize - remain as isize) - isize::from(q_char != 0);
+            let p_len = unsafe { libc::strlen(p.cast()) };
+            let cpy = unsafe { resolve_xmallocz(p_len + len as usize) };
+            unsafe { std::ptr::copy_nonoverlapping(p.cast::<u8>(), cpy.cast::<u8>(), p_len + 1) };
+            unsafe { xstrlcat(cpy.add(p_len), remain, len as usize + 1) };
+            unsafe { fileio_xfree(p.cast()) };
+            p = cpy;
+
+            // Shorten "remain"
+            if q_char != 0 {
+                // STRMOVE(remain, q - 1)
+                let src = unsafe { q.sub(1) };
+                let move_len = unsafe { libc::strlen(src.cast()) } + 1;
+                unsafe { libc::memmove(remain.cast(), src.cast(), move_len) };
+            } else {
+                unsafe { fileio_xfree(remain.cast()) };
+                remain = std::ptr::null_mut();
+            }
+        }
+
+        // Make relative path explicitly relative if original was
+        if !unsafe { vim_ispathsep(c_int::from(*p as u8)) } {
+            let p0 = unsafe { *p } as u8;
+            let p1 = if p0 != 0 {
+                (unsafe { *p.add(1) }) as u8
+            } else {
+                0
+            };
+            let p2 = if p1 != 0 {
+                (unsafe { *p.add(2) }) as u8
+            } else {
+                0
+            };
+            if is_relative_to_current
+                && p0 != 0
+                && !(p0 == b'.'
+                    && (p1 == 0
+                        || unsafe { vim_ispathsep(c_int::from(p1)) }
+                        || (p1 == b'.' && (p2 == 0 || unsafe { vim_ispathsep(c_int::from(p2)) }))))
+            {
+                // Prepend "./"
+                let cpy = unsafe { concat_str(c"./".as_ptr(), p) };
+                unsafe { fileio_xfree(p.cast()) };
+                p = cpy;
+            } else if !is_relative_to_current {
+                // Strip leading "./"
+                let mut strip = p;
+                while unsafe { *strip } as u8 == b'.'
+                    && unsafe { vim_ispathsep(c_int::from(*strip.add(1) as u8)) }
+                {
+                    strip = unsafe { strip.add(2) };
+                }
+                if strip > p {
+                    // STRMOVE(p, p + 2)
+                    let src = unsafe { p.add(2) };
+                    let move_len = unsafe { libc::strlen(src.cast()) } + 1;
+                    unsafe { libc::memmove(p.cast(), src.cast(), move_len) };
+                }
+            }
+        }
+
+        // Remove trailing path separator if original had none (but keep "/" or "//")
+        if !has_trailing_pathsep {
+            let end = unsafe { p.add(libc::strlen(p.cast())) };
+            if unsafe { after_pathsep(p, end) } {
+                unsafe { *nvim_path_tail_with_sep(p) = 0 };
+            }
+        }
+
+        unsafe { std::ptr::write_unaligned(rettv.cast::<u8>().add(8).cast::<*mut c_char>(), p) };
+        unsafe { fileio_xfree(buf.cast()) };
+        unsafe { simplify_filename(p.cast::<u8>()) };
+    }
 }

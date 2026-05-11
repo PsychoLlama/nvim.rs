@@ -1922,6 +1922,7 @@ extern "C" {
     fn nvim_eval_tv_get_list_ptr(tv: *mut c_void) -> *mut c_void;
     fn nvim_eval_repeat_blob(argvars: *mut c_void, rettv: *mut c_void, n: i64);
     fn tv_list_extend(l1: *mut c_void, l2: *mut c_void, bef: *mut c_void);
+    #[allow(clashing_extern_declarations)]
     fn xmallocz(size: usize) -> *mut c_void;
     #[link_name = "nvim_tv_set_string"]
     fn p9_nvim_tv_set_string(tv: *mut c_void, s: *mut u8);
