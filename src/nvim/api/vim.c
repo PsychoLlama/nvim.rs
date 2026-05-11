@@ -96,13 +96,77 @@ extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern foldinfo_T rs_fold_info(win_T *win, linenr_T lnum);
 extern unsigned rs_get_cot_flags(void);
 
+// ---------------------------------------------------------------------------
+// Phase-1 C accessors for Rust vim.rs
+// ---------------------------------------------------------------------------
+
+int rs_curbuf_handle(void) { return curbuf->handle; }
+int rs_curwin_handle(void) { return curwin->handle; }
+int rs_curtab_handle(void) { return curtab->handle; }
+
+void rs_for_each_buf_handle(void (*cb)(int, Array *), Array *ud) {
+  FOR_ALL_BUFFERS(b) { cb(b->handle, ud); }
+}
+
+void rs_for_each_win_handle(void (*cb)(int, Array *), Array *ud) {
+  FOR_ALL_TAB_WINDOWS(tp, wp) { cb(wp->handle, ud); }
+}
+
+void rs_for_each_tab_handle(void (*cb)(int, Array *), Array *ud) {
+  FOR_ALL_TABS(tp) { cb(tp->handle, ud); }
+}
+
+int64_t rs_g_stats_fsync(void) { return g_stats.fsync; }
+int64_t rs_g_stats_log_skip(void) { return g_stats.log_skip; }
+int64_t rs_g_stats_redraw(void) { return g_stats.redraw; }
+int64_t rs_arena_alloc_count_get(void) { return (int64_t)arena_alloc_count; }
+int64_t rs_tslua_query_parse_count_get(void) { return (int64_t)tslua_query_parse_count; }
+
+// Expose color_name_table by index; returns false when the table ends.
+bool rs_color_name_get(size_t idx, const char **name_out, int *rgb_out) {
+  if (color_name_table[idx].name == NULL) {
+    return false;
+  }
+  *name_out = color_name_table[idx].name;
+  *rgb_out  = color_name_table[idx].color;
+  return true;
+}
+
+// Return number of valid entries in color_name_table.
+size_t rs_color_name_table_size(void) {
+  size_t n = 0;
+  while (color_name_table[n].name != NULL) { n++; }
+  return n;
+}
+
+// Phase-1 Rust function declarations
+extern int rs_nvim_get_current_buf(void);
+extern int rs_nvim_get_current_win(void);
+extern int rs_nvim_get_current_tabpage(void);
+extern Array rs_nvim_list_bufs(Arena *arena);
+extern Array rs_nvim_list_wins(Arena *arena);
+extern Array rs_nvim_list_tabpages(Arena *arena);
+extern Array rs_nvim_list_uis(Arena *arena);
+extern Array rs_nvim_list_chans(Arena *arena);
+extern Integer rs_nvim_strwidth(const char *text_data, size_t text_size, Error *err);
+extern Integer rs_nvim_get_color_by_name(const char *name);
+extern Dict rs_nvim_get_color_map(Arena *arena);
+extern Object rs_nvim__id(Object obj, Arena *arena);
+extern Array rs_nvim__id_array(Array arr, Arena *arena);
+extern Dict rs_nvim__id_dict(Dict dct, Arena *arena);
+extern Float rs_nvim__id_float(Float flt);
+extern Dict rs_nvim__stats(Arena *arena);
+extern Integer rs_nvim_get_hl_id_by_name(const char *name_data, size_t name_size);
+extern String rs_nvim__get_lib_dir(void);
+// ---------------------------------------------------------------------------
+
 /// Gets a highlight group by name
 ///
 /// similar to |hlID()|, but allocates a new ID if not present.
 Integer nvim_get_hl_id_by_name(String name)
   FUNC_API_SINCE(7)
 {
-  return syn_check_group(name.data, name.size);
+  return rs_nvim_get_hl_id_by_name(name.data, name.size);
 }
 
 /// Gets all or specific highlight groups in a namespace.
@@ -558,11 +622,7 @@ Object nvim__exec_lua_fast(String code, Array args, Arena *arena, Error *err)
 Integer nvim_strwidth(String text, Error *err)
   FUNC_API_SINCE(1)
 {
-  VALIDATE_S((text.size <= INT_MAX), "text length", "(too long)", {
-    return 0;
-  });
-
-  return (Integer)mb_string2cells(text.data);
+  return rs_nvim_strwidth(text.data, text.size, err);
 }
 
 /// Gets the paths contained in |runtime-search-path|.
@@ -628,7 +688,7 @@ static bool find_runtime_cb(int num_fnames, char **fnames, bool all, void *c)
 String nvim__get_lib_dir(void)
   FUNC_API_RET_ALLOC
 {
-  return cstr_as_string(get_lib_dir());
+  return rs_nvim__get_lib_dir();
 }
 
 /// Find files in runtime directories
@@ -881,19 +941,7 @@ error:
 ArrayOf(Buffer) nvim_list_bufs(Arena *arena)
   FUNC_API_SINCE(1)
 {
-  size_t n = 0;
-
-  FOR_ALL_BUFFERS(b) {
-    n++;
-  }
-
-  Array rv = arena_array(arena, n);
-
-  FOR_ALL_BUFFERS(b) {
-    ADD_C(rv, BUFFER_OBJ(b->handle));
-  }
-
-  return rv;
+  return rs_nvim_list_bufs(arena);
 }
 
 /// Gets the current buffer.
@@ -902,7 +950,7 @@ ArrayOf(Buffer) nvim_list_bufs(Arena *arena)
 Buffer nvim_get_current_buf(void)
   FUNC_API_SINCE(1)
 {
-  return curbuf->handle;
+  return rs_nvim_get_current_buf();
 }
 
 /// Sets the current window's buffer to `buffer`.
@@ -930,19 +978,7 @@ void nvim_set_current_buf(Buffer buffer, Error *err)
 ArrayOf(Window) nvim_list_wins(Arena *arena)
   FUNC_API_SINCE(1)
 {
-  size_t n = 0;
-
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    n++;
-  }
-
-  Array rv = arena_array(arena, n);
-
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    ADD_C(rv, WINDOW_OBJ(wp->handle));
-  }
-
-  return rv;
+  return rs_nvim_list_wins(arena);
 }
 
 /// Gets the current window.
@@ -951,7 +987,7 @@ ArrayOf(Window) nvim_list_wins(Arena *arena)
 Window nvim_get_current_win(void)
   FUNC_API_SINCE(1)
 {
-  return curwin->handle;
+  return rs_nvim_get_current_win();
 }
 
 /// Navigates to the given window (and tabpage, implicitly).
@@ -1203,19 +1239,7 @@ void nvim_chan_send(Integer chan, String data, Error *err)
 ArrayOf(Tabpage) nvim_list_tabpages(Arena *arena)
   FUNC_API_SINCE(1)
 {
-  size_t n = 0;
-
-  FOR_ALL_TABS(tp) {
-    n++;
-  }
-
-  Array rv = arena_array(arena, n);
-
-  FOR_ALL_TABS(tp) {
-    ADD_C(rv, TABPAGE_OBJ(tp->handle));
-  }
-
-  return rv;
+  return rs_nvim_list_tabpages(arena);
 }
 
 /// Gets the current tabpage.
@@ -1224,7 +1248,7 @@ ArrayOf(Tabpage) nvim_list_tabpages(Arena *arena)
 Tabpage nvim_get_current_tabpage(void)
   FUNC_API_SINCE(1)
 {
-  return curtab->handle;
+  return rs_nvim_get_current_tabpage();
 }
 
 /// Sets the current tabpage.
@@ -1387,8 +1411,7 @@ void nvim_put(ArrayOf(String) lines, String type, Boolean after, Boolean follow,
 Integer nvim_get_color_by_name(String name)
   FUNC_API_SINCE(1)
 {
-  int dummy;
-  return name_to_color(name.data, &dummy);
+  return rs_nvim_get_color_by_name(name.data);
 }
 
 /// Returns a map of color names and RGB values.
@@ -1400,12 +1423,7 @@ Integer nvim_get_color_by_name(String name)
 DictOf(Integer) nvim_get_color_map(Arena *arena)
   FUNC_API_SINCE(1)
 {
-  DictOf(Integer) colors = arena_dict(arena, ARRAY_SIZE(color_name_table));
-
-  for (int i = 0; color_name_table[i].name != NULL; i++) {
-    PUT_C(colors, color_name_table[i].name, INTEGER_OBJ(color_name_table[i].color));
-  }
-  return colors;
+  return rs_nvim_get_color_map(arena);
 }
 
 /// Gets a map of the current editor state.
@@ -1704,7 +1722,7 @@ Dict nvim_get_chan_info(uint64_t channel_id, Integer chan, Arena *arena, Error *
 ArrayOf(Dict) nvim_list_chans(Arena *arena)
   FUNC_API_SINCE(4)
 {
-  return channel_all_info(arena);
+  return rs_nvim_list_chans(arena);
 }
 
 // Functions used for testing purposes
@@ -1717,7 +1735,7 @@ ArrayOf(Dict) nvim_list_chans(Arena *arena)
 /// @param[in]  obj  Object to return.
 ///
 /// @return its argument.
-Object nvim__id(Object obj, Arena *arena) { return copy_object(obj, arena); }
+Object nvim__id(Object obj, Arena *arena) { return rs_nvim__id(obj, arena); }
 
 /// Returns array given as argument.
 ///
@@ -1727,7 +1745,7 @@ Object nvim__id(Object obj, Arena *arena) { return copy_object(obj, arena); }
 /// @param[in]  arr  Array to return.
 ///
 /// @return its argument.
-Array nvim__id_array(Array arr, Arena *arena) { return copy_array(arr, arena); }
+Array nvim__id_array(Array arr, Arena *arena) { return rs_nvim__id_array(arr, arena); }
 
 /// Returns dict given as argument.
 ///
@@ -1737,7 +1755,7 @@ Array nvim__id_array(Array arr, Arena *arena) { return copy_array(arr, arena); }
 /// @param[in]  dct  Dict to return.
 ///
 /// @return its argument.
-Dict nvim__id_dict(Dict dct, Arena *arena) { return copy_dict(dct, arena); }
+Dict nvim__id_dict(Dict dct, Arena *arena) { return rs_nvim__id_dict(dct, arena); }
 
 /// Returns floating-point value given as argument.
 ///
@@ -1747,21 +1765,14 @@ Dict nvim__id_dict(Dict dct, Arena *arena) { return copy_dict(dct, arena); }
 /// @param[in]  flt  Value to return.
 ///
 /// @return its argument.
-Float nvim__id_float(Float flt) { return flt; }
+Float nvim__id_float(Float flt) { return rs_nvim__id_float(flt); }
 
 /// Gets internal stats.
 ///
 /// @return Map of various internal stats.
 Dict nvim__stats(Arena *arena)
 {
-  Dict rv = arena_dict(arena, 6);
-  PUT_C(rv, "fsync", INTEGER_OBJ(g_stats.fsync));
-  PUT_C(rv, "log_skip", INTEGER_OBJ(g_stats.log_skip));
-  PUT_C(rv, "lua_refcount", INTEGER_OBJ(nlua_get_global_ref_count()));
-  PUT_C(rv, "redraw", INTEGER_OBJ(g_stats.redraw));
-  PUT_C(rv, "arena_alloc_count", INTEGER_OBJ((Integer)arena_alloc_count));
-  PUT_C(rv, "ts_query_parse_count", INTEGER_OBJ((Integer)tslua_query_parse_count));
-  return rv;
+  return rs_nvim__stats(arena);
 }
 
 /// Gets a list of dictionaries representing attached UIs.
@@ -1783,7 +1794,7 @@ Dict nvim__stats(Arena *arena)
 ArrayOf(Dict) nvim_list_uis(Arena *arena)
   FUNC_API_SINCE(4)
 {
-  return ui_array(arena);
+  return rs_nvim_list_uis(arena);
 }
 
 /// Gets the immediate children of process `pid`.

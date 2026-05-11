@@ -6,6 +6,7 @@
 #![allow(dead_code)]
 
 pub mod buffer;
+pub mod vim;
 pub mod window;
 
 use std::ffi::{c_char, c_int};
