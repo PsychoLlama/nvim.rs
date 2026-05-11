@@ -22,6 +22,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::doc_markdown)]
 
+pub mod body;
 pub mod call;
 pub mod closure;
 pub mod defer;
@@ -42,6 +43,7 @@ pub mod scope;
 pub mod teardown;
 pub mod types;
 
+pub use body::*;
 pub use call::*;
 pub use closure::*;
 pub use defer::*;
