@@ -8,8 +8,8 @@
 use std::ffi::{c_char, c_int};
 
 use crate::state::LuaState;
-use crate::types::{LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING};
-use nvim_api::{Array, Dict, NvimString, Object};
+use crate::types::{LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE};
+use nvim_api::{Array, Dict, KeyValuePair, NvimString, Object};
 
 /// Float type (f64)
 pub type Float = f64;
@@ -82,15 +82,24 @@ extern "C" {
     // arena_memdupz: used by rs_nlua_pop_String (Phase 3)
     fn arena_memdupz(arena: *mut Arena, data: *const c_char, len: usize) -> *mut c_char;
 
-    // Still-C pop functions (Phases 6, 7 will replace these)
-    fn nlua_pop_Float(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Float;
-    fn nlua_pop_Array(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Array;
-    fn nlua_pop_Dict(
-        lstate: *mut LuaState,
-        r#ref: bool,
-        arena: *mut Arena,
-        err: *mut Error,
-    ) -> Dict;
+    // Table traversal helpers (Phase 4+6)
+    fn lua_pushnil(lstate: *mut LuaState);
+    fn lua_next(lstate: *mut LuaState, idx: c_int) -> c_int;
+    fn lua_rawgeti(lstate: *mut LuaState, idx: c_int, n: c_int);
+    fn lua_getmetatable(lstate: *mut LuaState, idx: c_int) -> c_int;
+    fn lua_rawequal(lstate: *mut LuaState, idx1: c_int, idx2: c_int) -> c_int;
+    fn lua_checkstack(lstate: *mut LuaState, extra: c_int) -> c_int;
+    fn lua_pushvalue(lstate: *mut LuaState, idx: c_int);
+    fn semsg(fmt: *const c_char, ...);
+    fn api_typename(obj_type: c_int) -> *const c_char;
+
+    // Arena allocation (Phase 6)
+    fn arena_array(arena: *mut Arena, max_size: usize) -> Array;
+    fn arena_dict(arena: *mut Arena, max_size: usize) -> Dict;
+    fn api_free_array(value: Array);
+    fn api_free_dict(value: Dict);
+
+    // Still-C pop functions (Phase 7 will replace these)
     fn nlua_pop_Object(
         lstate: *mut LuaState,
         r#ref: bool,
@@ -104,6 +113,219 @@ extern "C" {
 #[inline]
 unsafe fn lua_pop(lstate: *mut LuaState, n: c_int) {
     lua_settop(lstate, -n - 1);
+}
+
+// =============================================================================
+// Phase 4: Internal table-traversal helpers (Rust-private, no C symbol export)
+// =============================================================================
+
+// kObjectType* constants needed for traverse_table / check_type
+const K_OBJECT_TYPE_NIL: c_int = 0;
+const K_OBJECT_TYPE_FLOAT: c_int = 3;
+const K_OBJECT_TYPE_ARRAY: c_int = 5;
+const K_OBJECT_TYPE_DICT: c_int = 6;
+
+// TYPE_IDX_VALUE is `true` (boolean true = 1 from lua_toboolean)
+// VAL_IDX_VALUE is `false` (0)
+const TYPE_IDX_VALUE: c_int = 1;
+
+/// Properties of a Lua table as determined by traverse_table.
+///
+/// Mirrors the C `LuaTableProps` struct.
+#[derive(Debug, Clone, Copy, Default)]
+struct LuaTableProps {
+    /// Maximum positive integral key found (= length if sequential).
+    maxidx: usize,
+    /// Number of string-typed keys.
+    string_keys_num: usize,
+    /// True if at least one string key contains a NUL byte.
+    has_string_with_nul: bool,
+    /// Inferred object type of the table.
+    obj_type: c_int,
+    /// If has_type_key && has_val_key && val is number: the float value.
+    val: f64,
+    /// True if a boolean-true key (type_idx) was found.
+    has_type_key: bool,
+}
+
+/// Inspect a Lua table on top of the stack and classify its type.
+///
+/// Does not pop the table. Mirrors `nlua_traverse_table` from converter.c.
+///
+/// # Safety
+/// `lstate` must be a valid Lua state with a table at the top.
+#[allow(clippy::too_many_lines)]
+unsafe fn traverse_table(lstate: *mut LuaState) -> LuaTableProps {
+    let mut props = LuaTableProps {
+        obj_type: K_OBJECT_TYPE_NIL,
+        ..LuaTableProps::default()
+    };
+
+    if lua_checkstack(lstate, lua_gettop(lstate) + 3) == 0 {
+        semsg(
+            c"E1502: Lua failed to grow stack to %i".as_ptr(),
+            lua_gettop(lstate) + 2,
+        );
+        return props;
+    }
+
+    let mut tsize: usize = 0;
+    let mut val_type: c_int = 0;
+    let mut has_val_key = false;
+    let mut other_keys_num: usize = 0;
+
+    lua_pushnil(lstate);
+    while lua_next(lstate, -2) != 0 {
+        match lua_type(lstate, -2) {
+            t if t == LUA_TSTRING => {
+                let mut len: usize = 0;
+                let s = lua_tolstring(lstate, -2, &raw mut len);
+                // Check for embedded NUL bytes
+                let slice = std::slice::from_raw_parts(s.cast::<u8>(), len);
+                if slice.contains(&0) {
+                    props.has_string_with_nul = true;
+                }
+                props.string_keys_num += 1;
+            }
+            t if t == LUA_TNUMBER => {
+                let n = lua_tonumber(lstate, -2);
+                // A valid array index is a positive integer in [1, usize::MAX].
+                // usize::MAX as f64 rounds up on 64-bit, use 2^53 as a safe cap.
+                let max_exact_f64: f64 = 9_007_199_254_740_992.0; // 2^53
+                let n_trunc = n.trunc();
+                if n_trunc < 1.0 || n_trunc > max_exact_f64 {
+                    other_keys_num += 1;
+                } else {
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                    let idx = n_trunc as usize;
+                    if idx > props.maxidx {
+                        props.maxidx = idx;
+                    }
+                }
+            }
+            t if t == LUA_TBOOLEAN => {
+                let b = lua_toboolean(lstate, -2);
+                if b == TYPE_IDX_VALUE {
+                    // This is the type_idx key (boolean true)
+                    if lua_type(lstate, -1) == LUA_TNUMBER {
+                        let n = lua_tonumber(lstate, -1);
+                        #[allow(clippy::cast_possible_truncation)]
+                        let n_int = n as c_int;
+                        if n_int == K_OBJECT_TYPE_FLOAT
+                            || n_int == K_OBJECT_TYPE_ARRAY
+                            || n_int == K_OBJECT_TYPE_DICT
+                        {
+                            props.has_type_key = true;
+                            props.obj_type = n_int;
+                        } else {
+                            other_keys_num += 1;
+                        }
+                    } else {
+                        other_keys_num += 1;
+                    }
+                } else {
+                    // This is the val_idx key (boolean false)
+                    has_val_key = true;
+                    val_type = lua_type(lstate, -1);
+                    if val_type == LUA_TNUMBER {
+                        props.val = lua_tonumber(lstate, -1);
+                    }
+                }
+            }
+            _ => {
+                other_keys_num += 1;
+            }
+        }
+        tsize += 1;
+        lua_pop(lstate, 1);
+    }
+
+    if props.has_type_key {
+        if props.obj_type == K_OBJECT_TYPE_FLOAT && (!has_val_key || val_type != LUA_TNUMBER) {
+            props.obj_type = K_OBJECT_TYPE_NIL;
+        } else if props.obj_type == K_OBJECT_TYPE_ARRAY {
+            // Recompute maxidx to be the last index in the *sequential* prefix.
+            // This guards against {[type_idx]=array, [SIZE_MAX]=1} crashing nvim.
+            let expected = tsize
+                - usize::from(props.has_type_key)
+                - other_keys_num
+                - usize::from(has_val_key)
+                - props.string_keys_num;
+            if props.maxidx != 0 && props.maxidx != expected {
+                props.maxidx = 0;
+                loop {
+                    #[allow(clippy::cast_possible_truncation)]
+                    lua_rawgeti(lstate, -1, props.maxidx as c_int + 1);
+                    if lua_type(lstate, -1) == LUA_TNIL {
+                        lua_pop(lstate, 1);
+                        break;
+                    }
+                    lua_pop(lstate, 1);
+                    props.maxidx += 1;
+                }
+            }
+        }
+    } else if tsize == 0
+        || (tsize <= props.maxidx && other_keys_num == 0 && props.string_keys_num == 0)
+    {
+        props.obj_type = K_OBJECT_TYPE_ARRAY;
+        // Check if table has the empty-dict metatable
+        if tsize == 0 && lua_getmetatable(lstate, -1) != 0 {
+            let empty_dict_ref = crate::leaf::rs_nlua_get_empty_dict_ref(lstate);
+            crate::refs::rs_nlua_pushref(lstate, empty_dict_ref);
+            if lua_rawequal(lstate, -2, -1) != 0 {
+                props.obj_type = K_OBJECT_TYPE_DICT;
+            }
+            lua_pop(lstate, 2);
+        }
+    } else if props.string_keys_num == tsize {
+        props.obj_type = K_OBJECT_TYPE_DICT;
+    } else {
+        props.obj_type = K_OBJECT_TYPE_NIL;
+    }
+
+    props
+}
+
+/// Classify the table on top of the stack and validate it has the expected type.
+///
+/// Mirrors `nlua_check_type` from converter.c.
+/// Does NOT pop the table.
+///
+/// # Safety
+/// `lstate` must be a valid Lua state with a table at the top.
+unsafe fn check_type(lstate: *mut LuaState, err: *mut Error, expected: c_int) -> LuaTableProps {
+    if lua_type(lstate, -1) != LUA_TTABLE {
+        if !err.is_null() {
+            if expected == K_OBJECT_TYPE_FLOAT {
+                api_set_error(err, K_ERROR_VALIDATION, c"Expected Lua number".as_ptr());
+            } else {
+                api_set_error(err, K_ERROR_VALIDATION, c"Expected Lua table".as_ptr());
+            }
+        }
+        return LuaTableProps::default();
+    }
+    let mut props = traverse_table(lstate);
+
+    // Allow empty array to be treated as dict
+    if expected == K_OBJECT_TYPE_DICT
+        && props.obj_type == K_OBJECT_TYPE_ARRAY
+        && props.maxidx == 0
+        && !props.has_type_key
+    {
+        props.obj_type = K_OBJECT_TYPE_DICT;
+    }
+
+    if props.obj_type != expected && !err.is_null() {
+        api_set_error(
+            err,
+            K_ERROR_VALIDATION,
+            c"Expected %s-like Lua table".as_ptr(),
+            api_typename(expected),
+        );
+    }
+
+    props
 }
 
 // =============================================================================
@@ -247,35 +469,176 @@ pub unsafe extern "C" fn rs_nlua_pop_String(
     NvimString { data, size }
 }
 
-/// Pop a Float from the Lua stack. (Phase 6 will replace with real impl)
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_float(
+/// Pop a Float from the Lua stack (Phase 6 real implementation).
+///
+/// Accepts either a plain Lua number or a typed float table.
+/// Always pops one value from the stack.
+#[unsafe(export_name = "nlua_pop_Float")]
+pub unsafe extern "C" fn rs_nlua_pop_Float(
     lstate: *mut LuaState,
-    arena: *mut Arena,
+    _arena: *mut Arena,
     err: *mut Error,
 ) -> Float {
-    nlua_pop_Float(lstate, arena, err)
+    if lua_type(lstate, -1) == LUA_TNUMBER {
+        let ret = lua_tonumber(lstate, -1);
+        lua_pop(lstate, 1);
+        return ret;
+    }
+    let props = check_type(lstate, err, K_OBJECT_TYPE_FLOAT);
+    lua_pop(lstate, 1);
+    if props.obj_type != K_OBJECT_TYPE_FLOAT {
+        return 0.0;
+    }
+    props.val
 }
 
-/// Pop an Array from the Lua stack. (Phase 6 will replace with real impl)
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_array(
+// =============================================================================
+// Phase 6: pop_Array and pop_Dict (real implementations)
+// =============================================================================
+
+/// Convert a Lua table to an Array without pre-checking the type.
+///
+/// `table_props` must have been produced by `traverse_table`.
+/// Pops the table from the stack.
+unsafe fn pop_Array_unchecked(
+    lstate: *mut LuaState,
+    props: LuaTableProps,
+    arena: *mut Arena,
+    err: *mut Error,
+) -> Array {
+    let mut ret = arena_array(arena, props.maxidx);
+
+    if props.maxidx == 0 {
+        lua_pop(lstate, 1);
+        return ret;
+    }
+
+    for i in 1..=props.maxidx {
+        #[allow(clippy::cast_possible_truncation)]
+        lua_rawgeti(lstate, -1, i as c_int);
+        let val = nlua_pop_Object(lstate, false, arena, err);
+        if (*err).is_set() {
+            lua_pop(lstate, 1);
+            if arena.is_null() {
+                api_free_array(ret);
+            }
+            return Array {
+                size: 0,
+                capacity: 0,
+                items: std::ptr::null_mut(),
+            };
+        }
+        // ADD_C: append to pre-allocated array (capacity guaranteed by arena_array)
+        let idx = ret.size;
+        ret.size += 1;
+        ret.items.add(idx).write(val);
+    }
+    lua_pop(lstate, 1);
+    ret
+}
+
+/// Convert a Lua table to an Array.
+///
+/// Always pops one value from the stack.
+#[unsafe(export_name = "nlua_pop_Array")]
+pub unsafe extern "C" fn rs_nlua_pop_Array(
     lstate: *mut LuaState,
     arena: *mut Arena,
     err: *mut Error,
 ) -> Array {
-    nlua_pop_Array(lstate, arena, err)
+    let props = check_type(lstate, err, K_OBJECT_TYPE_ARRAY);
+    if props.obj_type != K_OBJECT_TYPE_ARRAY {
+        return Array {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        };
+    }
+    pop_Array_unchecked(lstate, props, arena, err)
 }
 
-/// Pop a Dict from the Lua stack. (Phase 6 will replace with real impl)
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_dict(
+/// Convert a Lua table to a Dict without pre-checking the type.
+///
+/// `table_props` must have been produced by `traverse_table`.
+/// Pops the table from the stack.
+unsafe fn pop_Dict_unchecked(
+    lstate: *mut LuaState,
+    props: LuaTableProps,
+    ref_: bool,
+    arena: *mut Arena,
+    err: *mut Error,
+) -> Dict {
+    let mut ret = arena_dict(arena, props.string_keys_num);
+
+    if props.string_keys_num == 0 {
+        lua_pop(lstate, 1);
+        return ret;
+    }
+
+    lua_pushnil(lstate);
+    let mut i: usize = 0;
+    while lua_next(lstate, -2) != 0 && i < props.string_keys_num {
+        // stack: dict, key, value
+        if lua_type(lstate, -2) == LUA_TSTRING {
+            // Duplicate the key so pop_String can consume it without disturbing lua_next
+            lua_pushvalue(lstate, -2);
+            // stack: dict, key, value, key_dup
+
+            let key = rs_nlua_pop_String(lstate, arena, err);
+            // stack: dict, key, value
+
+            if (*err).is_set() {
+                lua_pop(lstate, 1);
+                // stack: dict, key
+            } else {
+                let value = nlua_pop_Object(lstate, ref_, arena, err);
+                // kv_push_c: append KeyValuePair to pre-allocated dict
+                let idx = ret.size;
+                ret.size += 1;
+                ret.items.add(idx).write(KeyValuePair { key, value });
+                // stack: dict, key
+            }
+
+            if (*err).is_set() {
+                if arena.is_null() {
+                    api_free_dict(ret);
+                }
+                lua_pop(lstate, 2); // pop key and dict
+                return Dict {
+                    size: 0,
+                    capacity: 0,
+                    items: std::ptr::null_mut(),
+                };
+            }
+            i += 1;
+        } else {
+            lua_pop(lstate, 1); // pop value, keep key for lua_next
+        }
+    }
+    lua_pop(lstate, 1); // pop the dict
+    ret
+}
+
+/// Convert a Lua table to a Dict.
+///
+/// Always pops one value from the stack.
+#[unsafe(export_name = "nlua_pop_Dict")]
+pub unsafe extern "C" fn rs_nlua_pop_Dict(
     lstate: *mut LuaState,
     ref_: bool,
     arena: *mut Arena,
     err: *mut Error,
 ) -> Dict {
-    nlua_pop_Dict(lstate, ref_, arena, err)
+    let props = check_type(lstate, err, K_OBJECT_TYPE_DICT);
+    if props.obj_type != K_OBJECT_TYPE_DICT {
+        lua_pop(lstate, 1);
+        return Dict {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        };
+    }
+    pop_Dict_unchecked(lstate, props, ref_, arena, err)
 }
 
 /// Pop an Object from the Lua stack. (Phase 7 will replace with real impl)

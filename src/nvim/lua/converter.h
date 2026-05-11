@@ -38,5 +38,8 @@ LuaRef nlua_pop_LuaRef(lua_State *lstate, Arena *arena, Error *err);
 handle_T nlua_pop_handle(lua_State *lstate, Arena *arena, Error *err);
 String nlua_pop_String(lua_State *lstate, Arena *arena, Error *err);
 void nlua_init_types(lua_State *lstate);
+Float nlua_pop_Float(lua_State *lstate, Arena *arena, Error *err);
+Array nlua_pop_Array(lua_State *lstate, Arena *arena, Error *err);
+Dict nlua_pop_Dict(lua_State *lstate, bool ref, Arena *arena, Error *err);
 
 #include "lua/converter.h.generated.h"
