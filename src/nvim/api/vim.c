@@ -158,6 +158,187 @@ extern Float rs_nvim__id_float(Float flt);
 extern Dict rs_nvim__stats(Arena *arena);
 extern Integer rs_nvim_get_hl_id_by_name(const char *name_data, size_t name_size);
 extern String rs_nvim__get_lib_dir(void);
+
+// ---------------------------------------------------------------------------
+// Phase-2 C accessors for Rust vim.rs
+// ---------------------------------------------------------------------------
+
+// Cursor line number (1-based, subtract 1 for API 0-based)
+int rs_curwin_cursor_lnum(void) { return (int)curwin->w_cursor.lnum; }
+
+// is_internal_call is already in Rust (rs_is_internal_call), but we need
+// the raw channel_id check in C for nvim_get_chan_info
+int rs_is_internal_call_c(uint64_t channel_id) {
+  return is_internal_call(channel_id) ? 1 : 0;
+}
+
+// g:var operations (wraps dict_set_var on the global dict)
+void rs_nvim_set_var_impl(String name, Object value, Error *err) {
+  dict_set_var(get_globvar_dict(), name, value, false, false, NULL, err);
+}
+void rs_nvim_del_var_impl(String name, Error *err) {
+  dict_set_var(get_globvar_dict(), name, NIL, true, false, NULL, err);
+}
+
+// v:var operations
+Object rs_nvim_get_vvar_impl(String name, Arena *arena, Error *err) {
+  return dict_get_value(get_vimvar_dict(), name, arena, err);
+}
+void rs_nvim_set_vvar_impl(String name, Object value, Error *err) {
+  dict_set_var(get_vimvar_dict(), name, value, false, false, NULL, err);
+}
+
+// g:var get — returns converted Object or NIL; sets err on failure
+Object rs_nvim_get_var_impl(String name, Arena *arena, Error *err) {
+  dictitem_T *di = tv_dict_find(get_globvar_dict(), name.data, (ptrdiff_t)name.size);
+  if (di == NULL) {
+    bool found = script_autoload(name.data, name.size, false) && !aborting();
+    if (!found) {
+      api_set_error(err, kErrorTypeValidation, "Key not found: %s", name.data);
+      return (Object)OBJECT_INIT;
+    }
+    di = tv_dict_find(get_globvar_dict(), name.data, (ptrdiff_t)name.size);
+  }
+  if (di == NULL) {
+    api_set_error(err, kErrorTypeValidation, "Key not found: %s", name.data);
+    return (Object)OBJECT_INIT;
+  }
+  return vim_to_object(&di->di_tv, arena, true);
+}
+
+// set_current_dir: TRY_WRAP around changedir_func
+// Copies dir to stack buffer to ensure NUL termination.
+void rs_nvim_set_current_dir_impl(const char *dir_data, size_t dir_size, Error *err) {
+  if (dir_size >= MAXPATHL) {
+    api_set_error(err, kErrorTypeValidation,
+                  "Invalid 'directory name': '(too long)'");
+    return;
+  }
+  char string[MAXPATHL];
+  memcpy(string, dir_data, dir_size);
+  string[dir_size] = NUL;
+  TRY_WRAP(err, {
+    changedir_func(string, kCdScopeGlobal);
+  });
+}
+
+// Current line helpers
+String rs_nvim_get_current_line_impl(Arena *arena, Error *err) {
+  return buffer_get_line(curbuf->handle, curwin->w_cursor.lnum - 1, arena, err);
+}
+void rs_nvim_set_current_line_impl(String line, Arena *arena, Error *err) {
+  buffer_set_line(curbuf->handle, curwin->w_cursor.lnum - 1, line, arena, err);
+}
+void rs_nvim_del_current_line_impl(Arena *arena, Error *err) {
+  buffer_del_line(curbuf->handle, curwin->w_cursor.lnum - 1, arena, err);
+}
+
+// get_mode: fills a 4-byte buffer and returns input_blocking()
+// mode_out must be at least MODE_MAX_LENGTH (4) bytes.
+void rs_nvim_get_mode_impl(char *mode_out) {
+  get_mode(mode_out);
+}
+bool rs_nvim_input_blocking(void) { return input_blocking(); }
+
+// mode string alloc size
+int rs_mode_max_length(void) { return MODE_MAX_LENGTH; }
+
+// keymap helpers
+Array rs_nvim_get_keymap_impl(String mode, Arena *arena) {
+  return keymap_array(mode, NULL, arena);
+}
+void rs_nvim_set_keymap_impl(uint64_t channel_id, String mode, String lhs, String rhs,
+                              Dict(keymap) *opts, Error *err) {
+  modify_keymap(channel_id, -1, false, mode, lhs, rhs, opts, err);
+}
+void rs_nvim_del_keymap_impl(uint64_t channel_id, String mode, String lhs, Error *err) {
+  nvim_buf_del_keymap(channel_id, -1, mode, lhs, err);
+}
+
+// mark helpers
+bool rs_nvim_del_mark_impl(String name, Error *err) {
+  return set_mark(NULL, name, 0, 0, err);
+}
+
+// get_mark: returns a 4-element array or empty array on error
+Array rs_nvim_get_mark_impl(String name, Arena *arena, Error *err) {
+  Array rv = ARRAY_DICT_INIT;
+  xfmark_T *mark = mark_get_global(false, *name.data);
+  pos_T pos = mark->fmark.mark;
+  bool allocated = false;
+  int bufnr;
+  char *filename;
+
+  if (mark->fmark.fnum != 0) {
+    bufnr = mark->fmark.fnum;
+    filename = buflist_nr2name(bufnr, true, true);
+    allocated = true;
+  } else {
+    filename = mark->fname;
+    bufnr = 0;
+  }
+
+  bool exists = filename != NULL;
+  Integer row;
+  Integer col;
+
+  if (!exists || pos.lnum <= 0) {
+    if (allocated) {
+      xfree(filename);
+      allocated = false;
+    }
+    filename = "";
+    bufnr = 0;
+    row = 0;
+    col = 0;
+  } else {
+    row = pos.lnum;
+    col = pos.col;
+  }
+
+  rv = arena_array(arena, 4);
+  ADD_C(rv, INTEGER_OBJ(row));
+  ADD_C(rv, INTEGER_OBJ(col));
+  ADD_C(rv, INTEGER_OBJ(bufnr));
+  ADD_C(rv, CSTR_TO_ARENA_OBJ(arena, filename));
+
+  if (allocated) {
+    xfree(filename);
+  }
+  return rv;
+}
+
+// channel info
+Dict rs_nvim_get_chan_info_impl(uint64_t channel_id, int64_t chan, Arena *arena) {
+  if (chan == 0 && !is_internal_call(channel_id)) {
+    chan = (int64_t)channel_id;
+  }
+  return channel_info((uint64_t)chan, arena);
+}
+
+// arena_alloc for mode string
+void *rs_arena_alloc_raw(Arena *arena, size_t size) {
+  return arena_alloc(arena, size, false);
+}
+
+// Phase-2 Rust function declarations
+extern Object rs_nvim_get_var(String name, Arena *arena, Error *err);
+extern void rs_nvim_set_var(String name, Object value, Error *err);
+extern void rs_nvim_del_var(String name, Error *err);
+extern Object rs_nvim_get_vvar(String name, Arena *arena, Error *err);
+extern void rs_nvim_set_vvar(String name, Object value, Error *err);
+extern void rs_nvim_set_current_dir(String dir, Error *err);
+extern String rs_nvim_get_current_line(Arena *arena, Error *err);
+extern void rs_nvim_set_current_line(String line, Arena *arena, Error *err);
+extern void rs_nvim_del_current_line(Arena *arena, Error *err);
+extern DictAs(get_mode) rs_nvim_get_mode(Arena *arena);
+extern Array rs_nvim_get_keymap(String mode, Arena *arena);
+extern void rs_nvim_set_keymap(uint64_t channel_id, String mode, String lhs, String rhs,
+                               Dict(keymap) *opts, Error *err);
+extern void rs_nvim_del_keymap(uint64_t channel_id, String mode, String lhs, Error *err);
+extern bool rs_nvim_del_mark(String name, Error *err);
+extern Array rs_nvim_get_mark(String name, Arena *arena, Error *err);
+extern Dict rs_nvim_get_chan_info(uint64_t channel_id, int64_t chan, Arena *arena, Error *err);
 // ---------------------------------------------------------------------------
 
 /// Gets a highlight group by name
@@ -728,17 +909,7 @@ ArrayOf(String) nvim__get_runtime(ArrayOf(String) pat, Boolean all, Dict(runtime
 void nvim_set_current_dir(String dir, Error *err)
   FUNC_API_SINCE(1)
 {
-  VALIDATE_S((dir.size < MAXPATHL), "directory name", "(too long)", {
-    return;
-  });
-
-  char string[MAXPATHL];
-  memcpy(string, dir.data, dir.size);
-  string[dir.size] = NUL;
-
-  TRY_WRAP(err, {
-    changedir_func(string, kCdScopeGlobal);
-  });
+  rs_nvim_set_current_dir(dir, err);
 }
 
 /// Gets the current line.
@@ -748,7 +919,7 @@ void nvim_set_current_dir(String dir, Error *err)
 String nvim_get_current_line(Arena *arena, Error *err)
   FUNC_API_SINCE(1)
 {
-  return buffer_get_line(curbuf->handle, curwin->w_cursor.lnum - 1, arena, err);
+  return rs_nvim_get_current_line(arena, err);
 }
 
 /// Sets the text on the current line.
@@ -759,7 +930,7 @@ void nvim_set_current_line(String line, Arena *arena, Error *err)
   FUNC_API_SINCE(1)
   FUNC_API_TEXTLOCK_ALLOW_CMDWIN
 {
-  buffer_set_line(curbuf->handle, curwin->w_cursor.lnum - 1, line, arena, err);
+  rs_nvim_set_current_line(line, arena, err);
 }
 
 /// Deletes the current line.
@@ -769,7 +940,7 @@ void nvim_del_current_line(Arena *arena, Error *err)
   FUNC_API_SINCE(1)
   FUNC_API_TEXTLOCK_ALLOW_CMDWIN
 {
-  buffer_del_line(curbuf->handle, curwin->w_cursor.lnum - 1, arena, err);
+  rs_nvim_del_current_line(arena, err);
 }
 
 /// Gets a global (g:) variable.
@@ -780,18 +951,7 @@ void nvim_del_current_line(Arena *arena, Error *err)
 Object nvim_get_var(String name, Arena *arena, Error *err)
   FUNC_API_SINCE(1)
 {
-  dictitem_T *di = tv_dict_find(get_globvar_dict(), name.data, (ptrdiff_t)name.size);
-  if (di == NULL) {  // try to autoload script
-    bool found = script_autoload(name.data, name.size, false) && !aborting();
-    VALIDATE(found, "Key not found: %s", name.data, {
-      return (Object)OBJECT_INIT;
-    });
-    di = tv_dict_find(get_globvar_dict(), name.data, (ptrdiff_t)name.size);
-  }
-  VALIDATE((di != NULL), "Key not found: %s", name.data, {
-    return (Object)OBJECT_INIT;
-  });
-  return vim_to_object(&di->di_tv, arena, true);
+  return rs_nvim_get_var(name, arena, err);
 }
 
 /// Sets a global (g:) variable.
@@ -802,7 +962,7 @@ Object nvim_get_var(String name, Arena *arena, Error *err)
 void nvim_set_var(String name, Object value, Error *err)
   FUNC_API_SINCE(1)
 {
-  dict_set_var(get_globvar_dict(), name, value, false, false, NULL, err);
+  rs_nvim_set_var(name, value, err);
 }
 
 /// Removes a global (g:) variable.
@@ -812,7 +972,7 @@ void nvim_set_var(String name, Object value, Error *err)
 void nvim_del_var(String name, Error *err)
   FUNC_API_SINCE(1)
 {
-  dict_set_var(get_globvar_dict(), name, NIL, true, false, NULL, err);
+  rs_nvim_del_var(name, err);
 }
 
 /// Gets a v: variable.
@@ -823,7 +983,7 @@ void nvim_del_var(String name, Error *err)
 Object nvim_get_vvar(String name, Arena *arena, Error *err)
   FUNC_API_SINCE(1)
 {
-  return dict_get_value(get_vimvar_dict(), name, arena, err);
+  return rs_nvim_get_vvar(name, arena, err);
 }
 
 /// Sets a v: variable, if it is not readonly.
@@ -834,7 +994,7 @@ Object nvim_get_vvar(String name, Arena *arena, Error *err)
 void nvim_set_vvar(String name, Object value, Error *err)
   FUNC_API_SINCE(6)
 {
-  dict_set_var(get_vimvar_dict(), name, value, false, false, NULL, err);
+  rs_nvim_set_vvar(name, value, err);
 }
 
 /// Prints a message given by a list of `[text, hl_group]` "chunks".
@@ -1504,15 +1664,7 @@ Object nvim_load_context(Dict dict, Error *err)
 DictAs(get_mode) nvim_get_mode(Arena *arena)
   FUNC_API_SINCE(2) FUNC_API_FAST
 {
-  Dict rv = arena_dict(arena, 2);
-  char *modestr = arena_alloc(arena, MODE_MAX_LENGTH, false);
-  get_mode(modestr);
-  bool blocked = input_blocking();
-
-  PUT_C(rv, "mode", CSTR_AS_OBJ(modestr));
-  PUT_C(rv, "blocking", BOOLEAN_OBJ(blocked));
-
-  return rv;
+  return rs_nvim_get_mode(arena);
 }
 
 /// Gets a list of global (non-buffer-local) |mapping| definitions.
@@ -1523,7 +1675,7 @@ DictAs(get_mode) nvim_get_mode(Arena *arena)
 ArrayOf(DictAs(get_keymap)) nvim_get_keymap(String mode, Arena *arena)
   FUNC_API_SINCE(3)
 {
-  return keymap_array(mode, NULL, arena);
+  return rs_nvim_get_keymap(mode, arena);
 }
 
 /// Sets a global |mapping| for the given mode.
@@ -1564,7 +1716,7 @@ void nvim_set_keymap(uint64_t channel_id, String mode, String lhs, String rhs, D
                      Error *err)
   FUNC_API_SINCE(6)
 {
-  modify_keymap(channel_id, -1, false, mode, lhs, rhs, opts, err);
+  rs_nvim_set_keymap(channel_id, mode, lhs, rhs, opts, err);
 }
 
 /// Unmaps a global |mapping| for the given mode.
@@ -1575,7 +1727,7 @@ void nvim_set_keymap(uint64_t channel_id, String mode, String lhs, String rhs, D
 void nvim_del_keymap(uint64_t channel_id, String mode, String lhs, Error *err)
   FUNC_API_SINCE(6)
 {
-  nvim_buf_del_keymap(channel_id, -1, mode, lhs, err);
+  rs_nvim_del_keymap(channel_id, mode, lhs, err);
 }
 
 /// Returns a 2-tuple (Array), where item 0 is the current channel id and item
@@ -1704,15 +1856,7 @@ void nvim_set_client_info(uint64_t channel_id, String name, Dict version, String
 Dict nvim_get_chan_info(uint64_t channel_id, Integer chan, Arena *arena, Error *err)
   FUNC_API_SINCE(4)
 {
-  if (chan < 0) {
-    return (Dict)ARRAY_DICT_INIT;
-  }
-
-  if (chan == 0 && !is_internal_call(channel_id)) {
-    assert(channel_id <= INT64_MAX);
-    chan = (Integer)channel_id;
-  }
-  return channel_info((uint64_t)chan, arena);
+  return rs_nvim_get_chan_info(channel_id, (int64_t)chan, arena, err);
 }
 
 /// Get information about all open channels.
@@ -1965,18 +2109,7 @@ Object nvim__unpack(String str, Arena *arena, Error *err)
 Boolean nvim_del_mark(String name, Error *err)
   FUNC_API_SINCE(8)
 {
-  bool res = false;
-  VALIDATE_S((name.size == 1), "mark name (must be a single char)", name.data, {
-    return res;
-  });
-  // Only allow file/uppercase marks
-  // TODO(muniter): Refactor this ASCII_ISUPPER macro to a proper function
-  VALIDATE_S((ASCII_ISUPPER(*name.data) || ascii_isdigit(*name.data)),
-             "mark name (must be file/uppercase)", name.data, {
-    return res;
-  });
-  res = set_mark(NULL, name, 0, 0, err);
-  return res;
+  return rs_nvim_del_mark(name, err);
 }
 
 /// Returns a `(row, col, buffer, buffername)` tuple representing the position
@@ -1996,62 +2129,7 @@ Tuple(Integer, Integer, Buffer, String) nvim_get_mark(String name, Dict(empty) *
                                                       Error *err)
   FUNC_API_SINCE(8)
 {
-  Array rv = ARRAY_DICT_INIT;
-
-  VALIDATE_S((name.size == 1), "mark name (must be a single char)", name.data, {
-    return rv;
-  });
-  VALIDATE_S((ASCII_ISUPPER(*name.data) || ascii_isdigit(*name.data)),
-             "mark name (must be file/uppercase)", name.data, {
-    return rv;
-  });
-
-  xfmark_T *mark = mark_get_global(false, *name.data);  // false avoids loading the mark buffer
-  pos_T pos = mark->fmark.mark;
-  bool allocated = false;
-  int bufnr;
-  char *filename;
-
-  // Marks are from an open buffer it fnum is non zero
-  if (mark->fmark.fnum != 0) {
-    bufnr = mark->fmark.fnum;
-    filename = buflist_nr2name(bufnr, true, true);
-    allocated = true;
-    // Marks comes from shada
-  } else {
-    filename = mark->fname;
-    bufnr = 0;
-  }
-
-  bool exists = filename != NULL;
-  Integer row;
-  Integer col;
-
-  if (!exists || pos.lnum <= 0) {
-    if (allocated) {
-      xfree(filename);
-      allocated = false;
-    }
-    filename = "";
-    bufnr = 0;
-    row = 0;
-    col = 0;
-  } else {
-    row = pos.lnum;
-    col = pos.col;
-  }
-
-  rv = arena_array(arena, 4);
-  ADD_C(rv, INTEGER_OBJ(row));
-  ADD_C(rv, INTEGER_OBJ(col));
-  ADD_C(rv, INTEGER_OBJ(bufnr));
-  ADD_C(rv, CSTR_TO_ARENA_OBJ(arena, filename));
-
-  if (allocated) {
-    xfree(filename);
-  }
-
-  return rv;
+  return rs_nvim_get_mark(name, arena, err);
 }
 
 /// Evaluates statusline string.

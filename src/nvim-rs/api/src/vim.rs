@@ -65,6 +65,9 @@ extern "C" {
 
     // Color table size (number of valid entries)
     fn rs_color_name_table_size() -> usize;
+
+    // C string length
+    fn strlen(s: *const c_char) -> usize;
 }
 
 // ---------------------------------------------------------------------------
@@ -300,4 +303,266 @@ pub unsafe extern "C" fn rs_nvim_get_hl_id_by_name(
 #[no_mangle]
 pub unsafe extern "C" fn rs_nvim__get_lib_dir() -> NvimString {
     cstr_as_string(get_lib_dir())
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — variables, current line/dir, mode, keymap, mark, chan_info
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    // g:var / v:var C thunks
+    fn rs_nvim_get_var_impl(name: NvimString, arena: *mut Arena, err: *mut crate::Error) -> Object;
+    fn rs_nvim_set_var_impl(name: NvimString, value: Object, err: *mut crate::Error);
+    fn rs_nvim_del_var_impl(name: NvimString, err: *mut crate::Error);
+    fn rs_nvim_get_vvar_impl(name: NvimString, arena: *mut Arena, err: *mut crate::Error)
+        -> Object;
+    fn rs_nvim_set_vvar_impl(name: NvimString, value: Object, err: *mut crate::Error);
+
+    // current dir
+    fn rs_nvim_set_current_dir_impl(
+        dir_data: *const c_char,
+        dir_size: usize,
+        err: *mut crate::Error,
+    );
+
+    // current line C thunks
+    fn rs_nvim_get_current_line_impl(arena: *mut Arena, err: *mut crate::Error) -> NvimString;
+    fn rs_nvim_set_current_line_impl(line: NvimString, arena: *mut Arena, err: *mut crate::Error);
+    fn rs_nvim_del_current_line_impl(arena: *mut Arena, err: *mut crate::Error);
+
+    // mode
+    fn rs_nvim_get_mode_impl(mode_out: *mut c_char);
+    fn rs_nvim_input_blocking() -> bool;
+    fn rs_mode_max_length() -> c_int;
+
+    // keymap
+    fn rs_nvim_get_keymap_impl(mode: NvimString, arena: *mut Arena) -> Array;
+    fn rs_nvim_set_keymap_impl(
+        channel_id: u64,
+        mode: NvimString,
+        lhs: NvimString,
+        rhs: NvimString,
+        opts: *mut KeymapOpts,
+        err: *mut crate::Error,
+    );
+    fn rs_nvim_del_keymap_impl(
+        channel_id: u64,
+        mode: NvimString,
+        lhs: NvimString,
+        err: *mut crate::Error,
+    );
+
+    // marks
+    fn rs_nvim_del_mark_impl(name: NvimString, err: *mut crate::Error) -> bool;
+    fn rs_nvim_get_mark_impl(name: NvimString, arena: *mut Arena, err: *mut crate::Error) -> Array;
+
+    // channel info
+    fn rs_nvim_get_chan_info_impl(channel_id: u64, chan: i64, arena: *mut Arena) -> Dict;
+
+    // arena alloc (for mode string)
+    fn rs_arena_alloc_raw(arena: *mut Arena, size: usize) -> *mut c_char;
+}
+
+// Opaque type for Dict(keymap) — only passed through as pointer
+#[repr(C)]
+pub struct KeymapOpts {
+    _private: [u8; 0],
+}
+
+/// Gets a global (g:) variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_var(
+    name: NvimString,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Object {
+    rs_nvim_get_var_impl(name, arena, err)
+}
+
+/// Sets a global (g:) variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_var(name: NvimString, value: Object, err: *mut crate::Error) {
+    rs_nvim_set_var_impl(name, value, err);
+}
+
+/// Removes a global (g:) variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_del_var(name: NvimString, err: *mut crate::Error) {
+    rs_nvim_del_var_impl(name, err);
+}
+
+/// Gets a v: variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_vvar(
+    name: NvimString,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Object {
+    rs_nvim_get_vvar_impl(name, arena, err)
+}
+
+/// Sets a v: variable (if not readonly).
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_vvar(name: NvimString, value: Object, err: *mut crate::Error) {
+    rs_nvim_set_vvar_impl(name, value, err);
+}
+
+/// Changes the global working directory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_current_dir(dir: NvimString, err: *mut crate::Error) {
+    rs_nvim_set_current_dir_impl(dir.data, dir.size, err);
+}
+
+/// Gets the current line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_current_line(
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> NvimString {
+    rs_nvim_get_current_line_impl(arena, err)
+}
+
+/// Sets the text on the current line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_current_line(
+    line: NvimString,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) {
+    rs_nvim_set_current_line_impl(line, arena, err);
+}
+
+/// Deletes the current line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_del_current_line(arena: *mut Arena, err: *mut crate::Error) {
+    rs_nvim_del_current_line_impl(arena, err);
+}
+
+/// Gets the current mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_mode(arena: *mut Arena) -> Dict {
+    let len = rs_mode_max_length() as usize;
+    let modestr = rs_arena_alloc_raw(arena, len);
+    rs_nvim_get_mode_impl(modestr);
+    let blocked = rs_nvim_input_blocking();
+
+    let mut rv = arena_dict(arena, 2);
+    let mode_obj = Object {
+        obj_type: 4, // kObjectTypeString
+        data: crate::ObjectData {
+            string: NvimString {
+                data: modestr,
+                size: strlen(modestr),
+            },
+        },
+    };
+    rv.put_static(c"mode".as_ptr(), mode_obj);
+    rv.put_static(
+        c"blocking".as_ptr(),
+        Object {
+            obj_type: 1, // kObjectTypeBoolean
+            data: crate::ObjectData { boolean: blocked },
+        },
+    );
+    rv
+}
+
+/// Gets a list of global (non-buffer-local) mapping definitions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_keymap(mode: NvimString, arena: *mut Arena) -> Array {
+    rs_nvim_get_keymap_impl(mode, arena)
+}
+
+/// Sets a global mapping for the given mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_keymap(
+    channel_id: u64,
+    mode: NvimString,
+    lhs: NvimString,
+    rhs: NvimString,
+    opts: *mut KeymapOpts,
+    err: *mut crate::Error,
+) {
+    rs_nvim_set_keymap_impl(channel_id, mode, lhs, rhs, opts, err);
+}
+
+/// Unmaps a global mapping for the given mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_del_keymap(
+    channel_id: u64,
+    mode: NvimString,
+    lhs: NvimString,
+    err: *mut crate::Error,
+) {
+    rs_nvim_del_keymap_impl(channel_id, mode, lhs, err);
+}
+
+/// Deletes an uppercase/file named mark.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_del_mark(name: NvimString, err: *mut crate::Error) -> bool {
+    // Validation: must be a single char, uppercase or digit
+    if name.size != 1 {
+        api_set_error(
+            err,
+            1, // kErrorTypeValidation
+            c"Invalid 'mark name (must be a single char)': '%s'".as_ptr(),
+            name.data,
+        );
+        return false;
+    }
+    let ch = *name.data as u8;
+    if !ch.is_ascii_uppercase() && !ch.is_ascii_digit() {
+        api_set_error(
+            err,
+            1,
+            c"Invalid 'mark name (must be file/uppercase)': '%s'".as_ptr(),
+            name.data,
+        );
+        return false;
+    }
+    rs_nvim_del_mark_impl(name, err)
+}
+
+/// Returns a (row, col, buffer, buffername) tuple for the named mark.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_mark(
+    name: NvimString,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Array {
+    let rv = Array::empty();
+    if name.size != 1 {
+        api_set_error(
+            err,
+            1,
+            c"Invalid 'mark name (must be a single char)': '%s'".as_ptr(),
+            name.data,
+        );
+        return rv;
+    }
+    let ch = *name.data as u8;
+    if !ch.is_ascii_uppercase() && !ch.is_ascii_digit() {
+        api_set_error(
+            err,
+            1,
+            c"Invalid 'mark name (must be file/uppercase)': '%s'".as_ptr(),
+            name.data,
+        );
+        return rv;
+    }
+    rs_nvim_get_mark_impl(name, arena, err)
+}
+
+/// Gets information about a channel.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_chan_info(
+    channel_id: u64,
+    chan: i64,
+    arena: *mut Arena,
+    _err: *mut crate::Error,
+) -> Dict {
+    if chan < 0 {
+        return Dict::empty();
+    }
+    rs_nvim_get_chan_info_impl(channel_id, chan, arena)
 }
