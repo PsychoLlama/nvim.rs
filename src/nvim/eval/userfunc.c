@@ -123,6 +123,11 @@ extern ufunc_T *rs_alloc_ufunc(const char *name, size_t namelen);
 // Phase 5 (plan db85cc6b): get_lambda_tv (Rust userfunc/src/lambda.rs)
 extern int rs_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg);
 
+// Phase 6 (plan db85cc6b): free_all_functions (Rust userfunc/src/teardown.rs)
+#if defined(EXITFREE)
+extern void rs_free_all_functions(void);
+#endif
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -709,74 +714,12 @@ funccall_T *get_current_funccal(void) { return current_funccal; }
 void set_current_funccal(funccall_T *fc) { current_funccal = fc; }
 
 #if defined(EXITFREE)
+/// Free all user-defined functions and clean up the funccal stack.
+/// Logic lives in Rust (teardown.rs Phase 6). Thin wrapper for EXITFREE build.
 void free_all_functions(void)
 {
-  hashitem_T *hi;
-  ufunc_T *fp;
-  uint64_t skipped = 0;
-  uint64_t todo = 1;
-  int changed;
-
-  // Clean up the current_funccal chain and the funccal stack.
-  while (current_funccal != NULL) {
-    tv_clear(current_funccal->fc_rettv);
-    rs_cleanup_function_call(current_funccal);
-    if (current_funccal == NULL && funccal_stack != NULL) {
-      restore_funccal();
-    }
-  }
-
-  // First clear what the functions contain. Since this may lower the
-  // reference count of a function, it may also free a function and change
-  // the hash table. Restart if that happens.
-  while (todo > 0) {
-    todo = func_hashtab.ht_used;
-    for (hi = func_hashtab.ht_array; todo > 0; hi++) {
-      if (!HASHITEM_EMPTY(hi)) {
-        // Only free functions that are not refcounted, those are
-        // supposed to be freed when no longer referenced.
-        fp = HI2UF(hi);
-        if (rs_func_name_refcount(fp->uf_name)) {
-          skipped++;
-        } else {
-          changed = func_hashtab.ht_changed;
-          rs_func_clear(fp, 1);
-          if (changed != func_hashtab.ht_changed) {
-            skipped = 0;
-            break;
-          }
-        }
-        todo--;
-      }
-    }
-  }
-
-  // Now actually free the functions. Need to start all over every time,
-  // because func_free() may change the hash table.
-  skipped = 0;
-  while (func_hashtab.ht_used > skipped) {
-    todo = func_hashtab.ht_used;
-    for (hi = func_hashtab.ht_array; todo > 0; hi++) {
-      if (!HASHITEM_EMPTY(hi)) {
-        todo--;
-        // Only free functions that are not refcounted, those are
-        // supposed to be freed when no longer referenced.
-        fp = HI2UF(hi);
-        if (rs_func_name_refcount(fp->uf_name)) {
-          skipped++;
-        } else {
-          rs_func_free(fp);
-          skipped = 0;
-          break;
-        }
-      }
-    }
-  }
-  if (skipped == 0) {
-    hash_clear(&func_hashtab);
-  }
+  rs_free_all_functions();
 }
-
 #endif
 
 
@@ -2695,3 +2638,8 @@ char *nvim_evalarg_get_tofree(evalarg_T *ea) { return ea ? ea->eval_tofree : NUL
 
 /// Set evalarg->eval_tofree.
 void nvim_evalarg_set_tofree(evalarg_T *ea, char *v) { if (ea) { ea->eval_tofree = v; } }
+
+// Phase 6 (plan db85cc6b): free_all_functions accessor
+
+/// hash_clear the global function hashtab (called after free_all_functions).
+void nvim_func_ht_hash_clear(void) { hash_clear(&func_hashtab); }

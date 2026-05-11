@@ -39,6 +39,7 @@ pub mod parsing;
 pub mod partial;
 pub mod refcount;
 pub mod scope;
+pub mod teardown;
 pub mod types;
 
 pub use call::*;
@@ -58,6 +59,7 @@ pub use parsing::*;
 pub use partial::*;
 pub use refcount::*;
 pub use scope::*;
+pub use teardown::*;
 pub use types::*;
 
 use std::ffi::c_int;
