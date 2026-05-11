@@ -557,6 +557,212 @@ extern DictAs(get_hl_info) rs_nvim_get_hl(Integer ns_id, Dict(get_highlight) *op
                                           Error *err);
 extern Array rs_nvim_list_runtime_paths(Arena *arena, Error *err);
 extern Array rs_nvim__runtime_inspect(Arena *arena);
+
+// ---------------------------------------------------------------------------
+// Phase-4 C accessors for Rust vim.rs
+// ---------------------------------------------------------------------------
+
+// nvim_set_hl: HAS_KEY + WITH_SCRIPT_CONTEXT can't cross FFI
+void rs_nvim_set_hl_impl(uint64_t channel_id, Integer ns_id, String name,
+                          Dict(highlight) *val, Error *err) {
+  int hl_id = syn_check_group(name.data, name.size);
+  VALIDATE_S((hl_id != 0), "highlight name", name.data, { return; });
+  int link_id = -1;
+  if (HAS_KEY(val, highlight, url)) {
+    api_free_string(val->url);
+    val->url = NULL_STRING;
+  }
+  HlAttrs attrs = dict2hlattrs(val, true, &link_id, err);
+  if (!ERROR_SET(err)) {
+    WITH_SCRIPT_CONTEXT(channel_id, {
+      ns_hl_def((NS)ns_id, hl_id, attrs, link_id, val);
+    });
+  }
+}
+
+// nvim_chan_send: VALIDATE macro can't cross FFI cleanly
+void rs_nvim_chan_send_impl(Integer chan, String data, Error *err) {
+  if (!data.size) {
+    return;
+  }
+  const char *error = NULL;
+  channel_send((uint64_t)chan, data.data, data.size, false, &error);
+  VALIDATE(!error, "%s", error, {});
+}
+
+// nvim_get_api_info: ADD_C macro and api_metadata() → C thunk
+Array rs_nvim_get_api_info_impl(uint64_t channel_id, Arena *arena) {
+  Array rv = arena_array(arena, 2);
+  ADD_C(rv, INTEGER_OBJ((int64_t)channel_id));
+  ADD_C(rv, api_metadata());
+  return rv;
+}
+
+// nvim_set_client_info: MAXSIZE_TEMP_DICT / PUT_C macros → C thunk
+void rs_nvim_set_client_info_impl(uint64_t channel_id, String name, Dict version,
+                                   String type, Dict methods, Dict attributes,
+                                   Arena *arena) {
+  MAXSIZE_TEMP_DICT(info, 5);
+  PUT_C(info, "name", STRING_OBJ(name));
+  bool has_major = false;
+  for (size_t i = 0; i < version.size; i++) {
+    if (strequal(version.items[i].key.data, "major")) {
+      has_major = true;
+      break;
+    }
+  }
+  if (!has_major) {
+    Dict v = arena_dict(arena, version.size + 1);
+    if (version.size) {
+      memcpy(v.items, version.items, version.size * sizeof(v.items[0]));
+      v.size = version.size;
+    }
+    PUT_C(v, "major", INTEGER_OBJ(0));
+    version = v;
+  }
+  PUT_C(info, "version", DICT_OBJ(version));
+  PUT_C(info, "type", STRING_OBJ(type));
+  PUT_C(info, "methods", DICT_OBJ(methods));
+  PUT_C(info, "attributes", DICT_OBJ(attributes));
+  rpc_set_client_info(channel_id, copy_dict(info, NULL));
+}
+
+// nvim_get_context: HAS_KEY + kCtx* flags → C thunk
+Dict rs_nvim_get_context_impl(Dict(context) *opts, Arena *arena, Error *err) {
+  Array types = ARRAY_DICT_INIT;
+  if (HAS_KEY(opts, context, types)) {
+    types = opts->types;
+  }
+  int int_types = types.size > 0 ? 0 : kCtxAll;
+  if (types.size > 0) {
+    for (size_t i = 0; i < types.size; i++) {
+      if (types.items[i].type == kObjectTypeString) {
+        const char *const s = types.items[i].data.string.data;
+        if (strequal(s, "regs")) {
+          int_types |= kCtxRegs;
+        } else if (strequal(s, "jumps")) {
+          int_types |= kCtxJumps;
+        } else if (strequal(s, "bufs")) {
+          int_types |= kCtxBufs;
+        } else if (strequal(s, "gvars")) {
+          int_types |= kCtxGVars;
+        } else if (strequal(s, "sfuncs")) {
+          int_types |= kCtxSFuncs;
+        } else if (strequal(s, "funcs")) {
+          int_types |= kCtxFuncs;
+        } else {
+          VALIDATE_S(false, "type", s, { return (Dict)ARRAY_DICT_INIT; });
+        }
+      }
+    }
+  }
+  Context ctx = CONTEXT_INIT;
+  ctx_save(&ctx, int_types);
+  Dict dict = ctx_to_dict(&ctx, arena);
+  ctx_free(&ctx);
+  return dict;
+}
+
+// nvim_load_context: did_emsg manipulation
+Object rs_nvim_load_context_impl(Dict dict, Error *err) {
+  Context ctx = CONTEXT_INIT;
+  int save_did_emsg = did_emsg;
+  did_emsg = false;
+  ctx_from_dict(dict, &ctx, err);
+  if (!ERROR_SET(err)) {
+    ctx_restore(&ctx, kCtxAll);
+  }
+  ctx_free(&ctx);
+  did_emsg = save_did_emsg;
+  return (Object)OBJECT_INIT;
+}
+
+// nvim_get_proc_children: VALIDATE_INT + NLUA_EXEC_STATIC + goto
+Array rs_nvim_get_proc_children_impl(Integer pid, Arena *arena, Error *err) {
+  Array rvobj = ARRAY_DICT_INIT;
+  int *proc_list = NULL;
+  VALIDATE_INT((pid > 0 && pid <= INT_MAX), "pid", pid, { goto end; });
+  size_t proc_count;
+  int rv = os_proc_children((int)pid, &proc_list, &proc_count);
+  if (rv == 2) {
+    DLOG("fallback to vim._os_proc_children()");
+    MAXSIZE_TEMP_ARRAY(a, 1);
+    ADD_C(a, INTEGER_OBJ(pid));
+    Object o = NLUA_EXEC_STATIC("return vim._os_proc_children(...)", a, kRetObject, arena, err);
+    if (o.type == kObjectTypeArray) {
+      rvobj = o.data.array;
+    } else if (!ERROR_SET(err)) {
+      api_set_error(err, kErrorTypeException,
+                    "Failed to get process children. pid=%" PRId64 " error=%d",
+                    pid, rv);
+    }
+  } else {
+    rvobj = arena_array(arena, proc_count);
+    for (size_t i = 0; i < proc_count; i++) {
+      ADD_C(rvobj, INTEGER_OBJ(proc_list[i]));
+    }
+  }
+end:
+  xfree(proc_list);
+  return rvobj;
+}
+
+// nvim_get_proc: platform-conditional + NLUA_EXEC_STATIC
+Object rs_nvim_get_proc_impl(Integer pid, Arena *arena, Error *err) {
+  VALIDATE_INT((pid > 0 && pid <= INT_MAX), "pid", pid, { return NIL; });
+#ifdef MSWIN
+  Object rvobj = DICT_OBJ(os_proc_info((int)pid, arena));
+  if (rvobj.data.dict.size == 0) {
+    return NIL;
+  }
+  return rvobj;
+#else
+  MAXSIZE_TEMP_ARRAY(a, 1);
+  ADD(a, INTEGER_OBJ(pid));
+  Object o = NLUA_EXEC_STATIC("return vim._os_proc_info(...)", a, kRetObject, arena, err);
+  if (o.type == kObjectTypeArray && o.data.array.size == 0) {
+    return NIL;
+  } else if (o.type == kObjectTypeDict) {
+    return o;
+  } else if (!ERROR_SET(err)) {
+    api_set_error(err, kErrorTypeException,
+                  "Failed to get process info. pid=%" PRId64, pid);
+  }
+  return NIL;
+#endif
+}
+
+// nvim_select_popupmenu_item: simple thunk
+void rs_nvim_select_popupmenu_item_impl(Integer item, bool insert, bool finish) {
+  if (finish) {
+    insert = true;
+  }
+  pum_ext_select_item((int)item, insert, finish);
+}
+
+// nvim__invalidate_glyph_cache: must_redraw global
+void rs_nvim__invalidate_glyph_cache_impl(void) {
+  schar_cache_clear();
+  must_redraw = UPD_CLEAR;
+}
+
+// Phase-4 Rust function declarations
+extern void rs_nvim_set_hl(uint64_t channel_id, Integer ns_id, String name,
+                           Dict(highlight) *val, Error *err);
+extern void rs_nvim_chan_send(Integer chan, String data, Error *err);
+extern Array rs_nvim_get_api_info(uint64_t channel_id, Arena *arena);
+extern void rs_nvim_set_client_info(uint64_t channel_id, String name, Dict version,
+                                    String type, Dict methods, Dict attributes,
+                                    Arena *arena, Error *err);
+extern Dict rs_nvim_get_context(Dict(context) *opts, Arena *arena, Error *err);
+extern Object rs_nvim_load_context(Dict dict, Error *err);
+extern Array rs_nvim_get_proc_children(Integer pid, Arena *arena, Error *err);
+extern Object rs_nvim_get_proc(Integer pid, Arena *arena, Error *err);
+extern void rs_nvim_select_popupmenu_item(Integer item, bool insert, bool finish,
+                                          Error *err);
+extern void rs_nvim__screenshot(String path);
+extern void rs_nvim__invalidate_glyph_cache(void);
+extern Object rs_nvim__unpack(String str, Arena *arena, Error *err);
 // ---------------------------------------------------------------------------
 
 /// Gets a highlight group by name
@@ -641,24 +847,7 @@ DictAs(get_hl_info) nvim_get_hl(Integer ns_id, Dict(get_highlight) *opts, Arena 
 void nvim_set_hl(uint64_t channel_id, Integer ns_id, String name, Dict(highlight) *val, Error *err)
   FUNC_API_SINCE(7)
 {
-  int hl_id = syn_check_group(name.data, name.size);
-  VALIDATE_S((hl_id != 0), "highlight name", name.data, {
-    return;
-  });
-  int link_id = -1;
-
-  // Setting URLs directly through highlight attributes is not supported
-  if (HAS_KEY(val, highlight, url)) {
-    api_free_string(val->url);
-    val->url = NULL_STRING;
-  }
-
-  HlAttrs attrs = dict2hlattrs(val, true, &link_id, err);
-  if (!ERROR_SET(err)) {
-    WITH_SCRIPT_CONTEXT(channel_id, {
-      ns_hl_def((NS)ns_id, hl_id, attrs, link_id, val);
-    });
-  }
+  rs_nvim_set_hl(channel_id, ns_id, name, val, err);
 }
 
 /// Gets the active highlight namespace.
@@ -1433,14 +1622,7 @@ static void term_close(void *data)
 void nvim_chan_send(Integer chan, String data, Error *err)
   FUNC_API_SINCE(7) FUNC_API_REMOTE_ONLY FUNC_API_LUA_ONLY
 {
-  const char *error = NULL;
-  if (!data.size) {
-    return;
-  }
-
-  channel_send((uint64_t)chan, data.data, data.size,
-               false, &error);
-  VALIDATE(!error, "%s", error, {});
+  rs_nvim_chan_send(chan, data, err);
 }
 
 /// Gets the current list of |tab-ID|s.
@@ -1647,42 +1829,7 @@ DictOf(Integer) nvim_get_color_map(Arena *arena)
 Dict nvim_get_context(Dict(context) *opts, Arena *arena, Error *err)
   FUNC_API_SINCE(6)
 {
-  Array types = ARRAY_DICT_INIT;
-  if (HAS_KEY(opts, context, types)) {
-    types = opts->types;
-  }
-
-  int int_types = types.size > 0 ? 0 : kCtxAll;
-  if (types.size > 0) {
-    for (size_t i = 0; i < types.size; i++) {
-      if (types.items[i].type == kObjectTypeString) {
-        const char *const s = types.items[i].data.string.data;
-        if (strequal(s, "regs")) {
-          int_types |= kCtxRegs;
-        } else if (strequal(s, "jumps")) {
-          int_types |= kCtxJumps;
-        } else if (strequal(s, "bufs")) {
-          int_types |= kCtxBufs;
-        } else if (strequal(s, "gvars")) {
-          int_types |= kCtxGVars;
-        } else if (strequal(s, "sfuncs")) {
-          int_types |= kCtxSFuncs;
-        } else if (strequal(s, "funcs")) {
-          int_types |= kCtxFuncs;
-        } else {
-          VALIDATE_S(false, "type", s, {
-            return (Dict)ARRAY_DICT_INIT;
-          });
-        }
-      }
-    }
-  }
-
-  Context ctx = CONTEXT_INIT;
-  ctx_save(&ctx, int_types);
-  Dict dict = ctx_to_dict(&ctx, arena);
-  ctx_free(&ctx);
-  return dict;
+  return rs_nvim_get_context(opts, arena, err);
 }
 
 /// Sets the current editor state from the given |context| map.
@@ -1691,20 +1838,7 @@ Dict nvim_get_context(Dict(context) *opts, Arena *arena, Error *err)
 Object nvim_load_context(Dict dict, Error *err)
   FUNC_API_SINCE(6)
 {
-  Context ctx = CONTEXT_INIT;
-
-  int save_did_emsg = did_emsg;
-  did_emsg = false;
-
-  ctx_from_dict(dict, &ctx, err);
-  if (!ERROR_SET(err)) {
-    ctx_restore(&ctx, kCtxAll);
-  }
-
-  ctx_free(&ctx);
-
-  did_emsg = save_did_emsg;
-  return (Object)OBJECT_INIT;
+  return rs_nvim_load_context(dict, err);
 }
 
 /// Gets the current mode. |mode()|
@@ -1787,13 +1921,7 @@ void nvim_del_keymap(uint64_t channel_id, String mode, String lhs, Error *err)
 ArrayOf(Object, 2) nvim_get_api_info(uint64_t channel_id, Arena *arena)
   FUNC_API_SINCE(1) FUNC_API_FAST FUNC_API_REMOTE_ONLY
 {
-  Array rv = arena_array(arena, 2);
-
-  assert(channel_id <= INT64_MAX);
-  ADD_C(rv, INTEGER_OBJ((int64_t)channel_id));
-  ADD_C(rv, api_metadata());
-
-  return rv;
+  return rs_nvim_get_api_info(channel_id, arena);
 }
 
 /// Self-identifies the client, and sets optional flags on the channel. Defines the `client` object
@@ -1851,32 +1979,7 @@ void nvim_set_client_info(uint64_t channel_id, String name, Dict version, String
                           Dict attributes, Arena *arena, Error *err)
   FUNC_API_SINCE(4) FUNC_API_REMOTE_ONLY
 {
-  MAXSIZE_TEMP_DICT(info, 5);
-  PUT_C(info, "name", STRING_OBJ(name));
-
-  bool has_major = false;
-  for (size_t i = 0; i < version.size; i++) {
-    if (strequal(version.items[i].key.data, "major")) {
-      has_major = true;
-      break;
-    }
-  }
-  if (!has_major) {
-    Dict v = arena_dict(arena, version.size + 1);
-    if (version.size) {
-      memcpy(v.items, version.items, version.size * sizeof(v.items[0]));
-      v.size = version.size;
-    }
-    PUT_C(v, "major", INTEGER_OBJ(0));
-    version = v;
-  }
-  PUT_C(info, "version", DICT_OBJ(version));
-
-  PUT_C(info, "type", STRING_OBJ(type));
-  PUT_C(info, "methods", DICT_OBJ(methods));
-  PUT_C(info, "attributes", DICT_OBJ(attributes));
-
-  rpc_set_client_info(channel_id, copy_dict(info, NULL));
+  rs_nvim_set_client_info(channel_id, name, version, type, methods, attributes, arena, err);
 }
 
 /// Gets information about a channel.
@@ -1997,38 +2100,7 @@ ArrayOf(Dict) nvim_list_uis(Arena *arena)
 Array nvim_get_proc_children(Integer pid, Arena *arena, Error *err)
   FUNC_API_SINCE(4)
 {
-  Array rvobj = ARRAY_DICT_INIT;
-  int *proc_list = NULL;
-
-  VALIDATE_INT((pid > 0 && pid <= INT_MAX), "pid", pid, {
-    goto end;
-  });
-
-  size_t proc_count;
-  int rv = os_proc_children((int)pid, &proc_list, &proc_count);
-  if (rv == 2) {
-    // syscall failed (possibly because of kernel options), try shelling out.
-    DLOG("fallback to vim._os_proc_children()");
-    MAXSIZE_TEMP_ARRAY(a, 1);
-    ADD_C(a, INTEGER_OBJ(pid));
-    Object o = NLUA_EXEC_STATIC("return vim._os_proc_children(...)", a, kRetObject, arena, err);
-    if (o.type == kObjectTypeArray) {
-      rvobj = o.data.array;
-    } else if (!ERROR_SET(err)) {
-      api_set_error(err, kErrorTypeException,
-                    "Failed to get process children. pid=%" PRId64 " error=%d",
-                    pid, rv);
-    }
-  } else {
-    rvobj = arena_array(arena, proc_count);
-    for (size_t i = 0; i < proc_count; i++) {
-      ADD_C(rvobj, INTEGER_OBJ(proc_list[i]));
-    }
-  }
-
-end:
-  xfree(proc_list);
-  return rvobj;
+  return rs_nvim_get_proc_children(pid, arena, err);
 }
 
 /// Gets info describing process `pid`.
@@ -2037,32 +2109,7 @@ end:
 Object nvim_get_proc(Integer pid, Arena *arena, Error *err)
   FUNC_API_SINCE(4)
 {
-  Object rvobj = NIL;
-
-  VALIDATE_INT((pid > 0 && pid <= INT_MAX), "pid", pid, {
-    return NIL;
-  });
-
-#ifdef MSWIN
-  rvobj = DICT_OBJ(os_proc_info((int)pid, arena));
-  if (rvobj.data.dict.size == 0) {  // Process not found.
-    return NIL;
-  }
-#else
-  // Cross-platform process info APIs are miserable, so use `ps` instead.
-  MAXSIZE_TEMP_ARRAY(a, 1);
-  ADD(a, INTEGER_OBJ(pid));
-  Object o = NLUA_EXEC_STATIC("return vim._os_proc_info(...)", a, kRetObject, arena, err);
-  if (o.type == kObjectTypeArray && o.data.array.size == 0) {
-    return NIL;  // Process not found.
-  } else if (o.type == kObjectTypeDict) {
-    rvobj = o;
-  } else if (!ERROR_SET(err)) {
-    api_set_error(err, kErrorTypeException,
-                  "Failed to get process info. pid=%" PRId64, pid);
-  }
-#endif
-  return rvobj;
+  return rs_nvim_get_proc(pid, arena, err);
 }
 
 /// Selects an item in the completion popup menu.
@@ -2084,11 +2131,7 @@ void nvim_select_popupmenu_item(Integer item, Boolean insert, Boolean finish, Di
                                 Error *err)
   FUNC_API_SINCE(6)
 {
-  if (finish) {
-    insert = true;
-  }
-
-  pum_ext_select_item((int)item, insert, finish);
+  rs_nvim_select_popupmenu_item(item, insert, finish, err);
 }
 
 /// NB: if your UI doesn't use hlstate, this will not return hlstate first time.
@@ -2131,22 +2174,21 @@ Array nvim__inspect_cell(Integer grid, Integer row, Integer col, Arena *arena, E
 void nvim__screenshot(String path)
   FUNC_API_FAST
 {
-  ui_call_screenshot(path);
+  rs_nvim__screenshot(path);
 }
 
 /// For testing. The condition in schar_cache_clear_if_full is hard to
 /// reach, so this function can be used to force a cache clear in a test.
 void nvim__invalidate_glyph_cache(void)
 {
-  schar_cache_clear();
-  must_redraw = UPD_CLEAR;
+  rs_nvim__invalidate_glyph_cache();
 }
 
 /// @nodoc
 Object nvim__unpack(String str, Arena *arena, Error *err)
   FUNC_API_FAST
 {
-  return unpack(str.data, str.size, arena, err);
+  return rs_nvim__unpack(str, arena, err);
 }
 
 /// Deletes an uppercase/file named mark. See |mark-motions|.

@@ -737,3 +737,162 @@ pub unsafe extern "C" fn rs_nvim_list_runtime_paths(
 pub unsafe extern "C" fn rs_nvim__runtime_inspect(arena: *mut Arena) -> Array {
     rs_nvim_runtime_inspect_impl(arena)
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 — hl_set, context, api_info, client_info, proc, misc
+// ---------------------------------------------------------------------------
+
+// Opaque type for Dict(highlight) — only passed through as pointer
+#[repr(C)]
+pub struct HlOpts {
+    _private: [u8; 0],
+}
+
+// Opaque type for Dict(context) — only passed through as pointer
+#[repr(C)]
+pub struct ContextOpts {
+    _private: [u8; 0],
+}
+
+extern "C" {
+    fn rs_nvim_set_hl_impl(
+        channel_id: u64,
+        ns_id: i64,
+        name: NvimString,
+        val: *mut HlOpts,
+        err: *mut crate::Error,
+    );
+    fn rs_nvim_chan_send_impl(chan: i64, data: NvimString, err: *mut crate::Error);
+    fn rs_nvim_get_api_info_impl(channel_id: u64, arena: *mut Arena) -> Array;
+    fn rs_nvim_set_client_info_impl(
+        channel_id: u64,
+        name: NvimString,
+        version: Dict,
+        type_: NvimString,
+        methods: Dict,
+        attributes: Dict,
+        arena: *mut Arena,
+    );
+    fn rs_nvim_get_context_impl(
+        opts: *mut ContextOpts,
+        arena: *mut Arena,
+        err: *mut crate::Error,
+    ) -> Dict;
+    fn rs_nvim_load_context_impl(dict: Dict, err: *mut crate::Error) -> Object;
+    fn rs_nvim_get_proc_children_impl(pid: i64, arena: *mut Arena, err: *mut crate::Error)
+        -> Array;
+    fn rs_nvim_get_proc_impl(pid: i64, arena: *mut Arena, err: *mut crate::Error) -> Object;
+    fn rs_nvim_select_popupmenu_item_impl(item: i64, insert: bool, finish: bool);
+    fn rs_nvim__invalidate_glyph_cache_impl();
+    fn ui_call_screenshot(path: NvimString);
+    fn unpack(data: *const c_char, len: usize, arena: *mut Arena, err: *mut crate::Error)
+        -> Object;
+}
+
+/// Sets a highlight group.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_hl(
+    channel_id: u64,
+    ns_id: i64,
+    name: NvimString,
+    val: *mut HlOpts,
+    err: *mut crate::Error,
+) {
+    rs_nvim_set_hl_impl(channel_id, ns_id, name, val, err);
+}
+
+/// Sends raw data to channel.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_chan_send(chan: i64, data: NvimString, err: *mut crate::Error) {
+    rs_nvim_chan_send_impl(chan, data, err);
+}
+
+/// Returns a 2-tuple [channel_id, api_metadata].
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_api_info(channel_id: u64, arena: *mut Arena) -> Array {
+    rs_nvim_get_api_info_impl(channel_id, arena)
+}
+
+/// Self-identifies the client.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_client_info(
+    channel_id: u64,
+    name: NvimString,
+    version: Dict,
+    type_: NvimString,
+    methods: Dict,
+    attributes: Dict,
+    arena: *mut Arena,
+    _err: *mut crate::Error,
+) {
+    rs_nvim_set_client_info_impl(channel_id, name, version, type_, methods, attributes, arena);
+}
+
+/// Gets the current editor context.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_context(
+    opts: *mut ContextOpts,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Dict {
+    rs_nvim_get_context_impl(opts, arena, err)
+}
+
+/// Sets the current editor state from context map.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_load_context(dict: Dict, err: *mut crate::Error) -> Object {
+    rs_nvim_load_context_impl(dict, err)
+}
+
+/// Gets the immediate children of process pid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_proc_children(
+    pid: i64,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Array {
+    rs_nvim_get_proc_children_impl(pid, arena, err)
+}
+
+/// Gets info describing process pid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_proc(
+    pid: i64,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Object {
+    rs_nvim_get_proc_impl(pid, arena, err)
+}
+
+/// Selects an item in the completion popup menu.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_select_popupmenu_item(
+    item: i64,
+    insert: bool,
+    finish: bool,
+    _err: *mut crate::Error,
+) {
+    rs_nvim_select_popupmenu_item_impl(item, insert, finish);
+}
+
+/// Takes a screenshot.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim__screenshot(path: NvimString) {
+    ui_call_screenshot(path);
+}
+
+/// Forces a glyph cache clear.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim__invalidate_glyph_cache() {
+    rs_nvim__invalidate_glyph_cache_impl();
+}
+
+/// Unpacks a msgpack string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim__unpack(
+    str: NvimString,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Object {
+    unpack(str.data, str.size, arena, err)
+}
