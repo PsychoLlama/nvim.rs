@@ -115,6 +115,10 @@ extern char *get_func_line(int c, void *cookie, int indent, bool do_concat);
 extern void rs_register_closure(ufunc_T *fp);
 extern void rs_add_nr_var(dict_T *dp, dictitem_T *v, const char *name, int64_t nr);
 
+// Phase 2 (plan db85cc6b): lambda / alloc_ufunc / register_luafunc (Rust userfunc/src/lambda.rs)
+extern size_t rs_get_lambda_name(char *buf, size_t bufsize);
+extern ufunc_T *rs_alloc_ufunc(const char *name, size_t namelen);
+
 #include "eval/userfunc.c.generated.h"
 
 /// structure used as item in "fc_defer"
@@ -167,31 +171,18 @@ static void register_closure(ufunc_T *fp) { rs_register_closure(fp); }
 static char lambda_name[8 + NUMBUFLEN];
 
 /// @return  a name for a lambda.  Returned in static memory.
+/// Logic (counter) lives in Rust (lambda.rs Phase 2). Thin wrapper for C callers.
 static String get_lambda_name(void)
 {
-  static int lambda_no = 0;
-
-  int n = snprintf(lambda_name, sizeof(lambda_name), "<lambda>%d", ++lambda_no);
-
-  return cbuf_as_string(lambda_name,
-                        n < 1 ? 0 : (size_t)MIN(n, (int)sizeof(lambda_name) - 1));
+  size_t len = rs_get_lambda_name(lambda_name, sizeof(lambda_name));
+  return cbuf_as_string(lambda_name, len);
 }
 
 /// Allocate a "ufunc_T" for a function called "name".
+/// Logic lives in Rust (lambda.rs Phase 2). Thin wrapper for C callers.
 static ufunc_T *alloc_ufunc(const char *name, size_t namelen)
 {
-  size_t len = offsetof(ufunc_T, uf_name) + namelen + 1;
-  ufunc_T *fp = xcalloc(1, len);
-  xmemcpyz(fp->uf_name, name, namelen);
-  fp->uf_namelen = namelen;
-
-  if ((uint8_t)name[0] == K_SPECIAL) {
-    len = namelen + 3;
-    fp->uf_name_exp = xmalloc(len);
-    snprintf(fp->uf_name_exp, len, "<SNR>%s", fp->uf_name + 3);
-  }
-
-  return fp;
+  return rs_alloc_ufunc(name, namelen);
 }
 
 /// Parse a lambda expression and get a Funcref from "*arg".
@@ -2041,24 +2032,8 @@ end:
 
 // nvim_set_ref_in_func_impl inlined into rs_set_ref_in_func (Rust, Phase 11)
 
-/// Registers a luaref as a lambda.
-char *register_luafunc(LuaRef ref)
-{
-  String name = get_lambda_name();
-  ufunc_T *fp = alloc_ufunc(name.data, name.size);
-
-  fp->uf_refcount = 1;
-  fp->uf_varargs = true;
-  fp->uf_flags = FC_LUAREF;
-  fp->uf_calls = 0;
-  fp->uf_script_ctx = current_sctx;
-  fp->uf_luaref = ref;
-
-  hash_add(&func_hashtab, UF2HIKEY(fp));
-
-  // coverity[leaked_storage]
-  return fp->uf_name;
-}
+// register_luafunc migrated to Rust (lambda.rs Phase 2).
+// rs_register_luafunc now implements the logic directly via export_name = "register_luafunc".
 
 // Rust FFI Accessor Functions
 
@@ -2792,3 +2767,51 @@ void nvim_add_nr_var(dict_T *dp, dictitem_T *v, const char *name, int64_t nr)
   v->di_tv.v_lock = VAR_FIXED;
   v->di_tv.vval.v_number = nr;
 }
+
+// Phase 2 (plan db85cc6b): alloc_ufunc / get_lambda_name / register_luafunc accessors
+
+/// Size of ufunc_T up to (but not including) uf_name flexible member.
+size_t nvim_sizeof_ufunc_header(void)
+{
+  return offsetof(ufunc_T, uf_name);
+}
+
+/// Initialize the name fields of a freshly xcalloc'd ufunc_T.
+/// Sets uf_name (copy of name[0..namelen]), uf_namelen, and (if K_SPECIAL prefix)
+/// allocates uf_name_exp as "<SNR>...".
+void nvim_ufunc_init_name(ufunc_T *fp, const char *name, size_t namelen)
+{
+  xmemcpyz(fp->uf_name, name, namelen);
+  fp->uf_namelen = namelen;
+  if ((uint8_t)name[0] == K_SPECIAL) {
+    size_t len = namelen + 3;
+    fp->uf_name_exp = xmalloc(len);
+    snprintf(fp->uf_name_exp, len, "<SNR>%s", fp->uf_name + 3);
+  }
+}
+
+/// Set the luaref-specific fields on fp (after init_name).
+void nvim_ufunc_init_luaref_fields(ufunc_T *fp, LuaRef ref)
+{
+  fp->uf_refcount = 1;
+  fp->uf_varargs = true;
+  fp->uf_flags = FC_LUAREF;
+  fp->uf_calls = 0;
+  fp->uf_script_ctx = current_sctx;
+  fp->uf_luaref = ref;
+}
+
+/// Add fp to the global function hashtab (hash_add).
+void nvim_func_ht_add_fp(ufunc_T *fp)
+{
+  hash_add(&func_hashtab, UF2HIKEY(fp));
+}
+
+/// Return fp->uf_name (pointer into the flexible member).
+char *nvim_ufunc_get_name_ptr(ufunc_T *fp)
+{
+  return fp ? fp->uf_name : NULL;
+}
+
+/// Return current_sctx.
+sctx_T nvim_get_current_sctx(void) { return current_sctx; }

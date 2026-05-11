@@ -157,6 +157,9 @@ extern int call_func(const char *funcname, int len, typval_T *rettv, int argcoun
 extern int func_call(char *name, typval_T *args, partial_T *partial, dict_T *selfdict,
                      typval_T *rettv);
 
+// Phase 2 (plan db85cc6b): register_luafunc migrated to Rust (lambda.rs)
+extern char *register_luafunc(LuaRef ref);
+
 // Phase 23: get_func_tv migrated to Rust (funccal.rs)
 extern int get_func_tv(const char *name, int len, typval_T *rettv, char **arg,
                        evalarg_T *const evalarg, funcexe_T *funcexe);
