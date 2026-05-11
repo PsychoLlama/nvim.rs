@@ -113,34 +113,7 @@ const char *const tv_empty_string = "";
 
 // tv_list_alloc migrated to Rust (Phase 5)
 
-/// Initialize a static list with 10 items
-///
-/// @param[out]  sl  Static list to initialize.
-void tv_list_init_static10(staticList10_T *const sl)
-  FUNC_ATTR_NONNULL_ALL
-{
-#define SL_SIZE ARRAY_SIZE(sl->sl_items)
-  list_T *const l = &sl->sl_list;
-
-  CLEAR_POINTER(sl);
-  l->lv_first = &sl->sl_items[0];
-  l->lv_last = &sl->sl_items[SL_SIZE - 1];
-  l->lv_refcount = DO_NOT_FREE_CNT;
-  tv_list_set_lock(l, VAR_FIXED);
-  sl->sl_list.lv_len = 10;
-
-  sl->sl_items[0].li_prev = NULL;
-  sl->sl_items[0].li_next = &sl->sl_items[1];
-  sl->sl_items[SL_SIZE - 1].li_prev = &sl->sl_items[SL_SIZE - 2];
-  sl->sl_items[SL_SIZE - 1].li_next = NULL;
-
-  for (size_t i = 1; i < SL_SIZE - 1; i++) {
-    listitem_T *const li = &sl->sl_items[i];
-    li->li_prev = li - 1;
-    li->li_next = li + 1;
-  }
-#undef SL_SIZE
-}
+// tv_list_init_static10 migrated to Rust (Phase 3)
 
 // tv_list_init_static migrated to Rust (Phase 5)
 
@@ -207,96 +180,7 @@ typval_T *tv_list_append_owned_tv(list_T *const l, typval_T tv)
 
 // tv_list_slice, tv_list_slice_or_index migrated to Rust (Phase 6c)
 
-typedef struct {
-  char *s;
-  char *tofree;
-} Join;
-
-/// Join list into a string, helper function
-///
-/// @param[out]  gap  Garray where result will be saved.
-/// @param[in]  l  List to join.
-/// @param[in]  sep  Used separator.
-/// @param[in]  join_gap  Garray to keep each list item string.
-///
-/// @return OK in case of success, FAIL otherwise.
-static int list_join_inner(garray_T *const gap, list_T *const l, const char *const sep,
-                           garray_T *const join_gap)
-  FUNC_ATTR_NONNULL_ALL
-{
-  size_t sumlen = 0;
-  bool first = true;
-
-  // Stringify each item in the list.
-  TV_LIST_ITER(l, item, {
-    if (got_int) {
-      break;
-    }
-    char *s;
-    size_t len;
-    s = encode_tv2echo(TV_LIST_ITEM_TV(item), &len);
-    if (s == NULL) {
-      return FAIL;
-    }
-
-    sumlen += len;
-
-    Join *const p = GA_APPEND_VIA_PTR(Join, join_gap);
-    p->tofree = p->s = s;
-
-    line_breakcheck();
-  });
-
-  // Allocate result buffer with its total size, avoid re-allocation and
-  // multiple copy operations.  Add 2 for a tailing ']' and NUL.
-  if (join_gap->ga_len >= 2) {
-    sumlen += strlen(sep) * (size_t)(join_gap->ga_len - 1);
-  }
-  ga_grow(gap, (int)sumlen + 2);
-
-  for (int i = 0; i < join_gap->ga_len && !got_int; i++) {
-    if (first) {
-      first = false;
-    } else {
-      ga_concat(gap, sep);
-    }
-    const Join *const p = ((const Join *)join_gap->ga_data) + i;
-
-    if (p->s != NULL) {
-      ga_concat(gap, p->s);
-    }
-    line_breakcheck();
-  }
-
-  return OK;
-}
-
-/// Join list into a string using given separator
-///
-/// @param[out]  gap  Garray where result will be saved.
-/// @param[in]  l  Joined list.
-/// @param[in]  sep  Separator.
-///
-/// @return OK in case of success, FAIL otherwise.
-int tv_list_join(garray_T *const gap, list_T *const l, const char *const sep)
-  FUNC_ATTR_NONNULL_ARG(1)
-{
-  if (!tv_list_len(l)) {
-    return OK;
-  }
-
-  garray_T join_ga;
-  int retval;
-
-  ga_init(&join_ga, (int)sizeof(Join), tv_list_len(l));
-  retval = list_join_inner(gap, l, sep, &join_ga);
-
-#define FREE_JOIN_TOFREE(join) xfree((join)->tofree)
-  GA_DEEP_CLEAR(&join_ga, Join, FREE_JOIN_TOFREE);
-#undef FREE_JOIN_TOFREE
-
-  return retval;
-}
+// list_join_inner, tv_list_join migrated to Rust (Phase 3)
 
 // f_join migrated to Rust (Phase 6)
 // f_list2str migrated to Rust (Phase 6)
@@ -1256,6 +1140,18 @@ void nvim_list_init_static_impl(list_T *l)
   l->lv_refcount = DO_NOT_FREE_CNT;
 }
 
+/// Clear (zero) a staticList10_T struct (accessor for Rust tv_list_init_static10).
+void nvim_staticlist10_clear(staticList10_T *sl) { CLEAR_POINTER(sl); }
+
+/// Get pointer to sl->sl_items[i] (accessor for Rust tv_list_init_static10).
+listitem_T *nvim_staticlist10_get_item(staticList10_T *sl, int i) { return &sl->sl_items[i]; }
+
+/// Get pointer to sl->sl_list (accessor for Rust tv_list_init_static10).
+list_T *nvim_staticlist10_get_list(staticList10_T *sl) { return &sl->sl_list; }
+
+/// Return DO_NOT_FREE_CNT constant (accessor for Rust).
+int nvim_do_not_free_cnt(void) { return DO_NOT_FREE_CNT; }
+
 /// Self-contained list alloc (accessor for Rust).
 /// Avoids circular call with Rust tv_list_alloc.
 list_T *nvim_list_alloc_impl(void)
@@ -1553,69 +1449,7 @@ const char *nvim_tv_get_string_checked(const typval_T *tv)
 
 // nvim_emsg_e_listreq deleted (Phase 9): Rust calls emsg directly.
 
-/// Join list into a newly allocated NUL-terminated string.
-/// Returns "" for empty lists, NULL if encoding any item fails.
-/// Caller must xfree the result.
-char *nvim_list_join_to_string(list_T *l, const char *sep)
-{
-  if (!tv_list_len(l)) {
-    return xstrdup("");
-  }
-
-  // Stringify each item via encode_tv2echo, accumulate in a per-item array.
-  typedef struct { char *s; char *tofree; } JoinItem;
-  size_t nitems = (size_t)tv_list_len(l);
-  JoinItem *items = xmalloc(nitems * sizeof(JoinItem));
-  size_t sumlen = 0;
-  size_t i = 0;
-  bool failed = false;
-
-  TV_LIST_ITER(l, item, {
-    if (got_int) { break; }
-    size_t len;
-    char *s = encode_tv2echo(TV_LIST_ITEM_TV(item), &len);
-    if (s == NULL) { failed = true; break; }
-    sumlen += len;
-    items[i].s = items[i].tofree = s;
-    i++;
-    line_breakcheck();
-  });
-
-  if (failed || got_int) {
-    for (size_t j = 0; j < i; j++) { xfree(items[j].tofree); }
-    xfree(items);
-    return NULL;
-  }
-
-  // Build result.
-  size_t seplen = strlen(sep);
-  if (i >= 2) { sumlen += seplen * (i - 1); }
-  char *result = xmalloc(sumlen + 1);
-  char *p = result;
-  for (size_t j = 0; j < i; j++) {
-    if (j > 0) { memcpy(p, sep, seplen); p += seplen; }
-    if (items[j].s != NULL) { size_t slen = strlen(items[j].s); memcpy(p, items[j].s, slen); p += slen; }
-    xfree(items[j].tofree);
-  }
-  *p = NUL;
-  xfree(items);
-  return result;
-}
-
-/// list2str: convert list of codepoints to UTF-8 string.
-/// Returns allocated string. Caller must xfree.
-char *nvim_f_list2str_from_list(list_T *l)
-{
-  garray_T ga;
-  ga_init(&ga, 1, 80);
-  char buf[MB_MAXBYTES + 1];
-  TV_LIST_ITER_CONST(l, li, {
-    buf[utf_char2bytes((int)tv_get_number(TV_LIST_ITEM_TV(li)), buf)] = NUL;
-    ga_concat(&ga, buf);
-  });
-  ga_append(&ga, NUL);
-  return ga.ga_data;
-}
+// nvim_list_join_to_string, nvim_f_list2str_from_list deleted (Phase 3): inlined into Rust
 
 // Phase 7 (typval migration): dict watcher add/remove/notify accessors
 

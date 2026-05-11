@@ -38,8 +38,34 @@
 #![allow(clippy::manual_midpoint)]
 #![allow(clippy::module_name_repetitions)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 use std::fmt;
+
+/// Rust mirror of C `garray_T` (growing array).
+///
+/// Must match the layout in `src/nvim-rs/collections/src/garray.rs` and
+/// `src/nvim/garray.h` exactly.
+#[repr(C)]
+#[allow(clippy::struct_field_names)]
+struct GArrayT {
+    ga_len: c_int,
+    ga_maxlen: c_int,
+    ga_itemsize: c_int,
+    ga_growsize: c_int,
+    ga_data: *mut c_void,
+}
+
+impl GArrayT {
+    const fn new() -> Self {
+        Self {
+            ga_len: 0,
+            ga_maxlen: 0,
+            ga_itemsize: 0,
+            ga_growsize: 1,
+            ga_data: std::ptr::null_mut(),
+        }
+    }
+}
 
 /// VarType enum values (matching C's VarType in typval_defs.h).
 #[repr(i32)]
@@ -1147,6 +1173,7 @@ extern "C" {
     fn nvim_gettext_unknown() -> *const c_char;
     // nvim_emsg_item_lock_nested: deleted (Phase 9), use typval_err_item_lock_nested directly
     fn nvim_list_set_lock(l: ListHandle, lock: c_int);
+    fn nvim_list_set_refcount(l: ListHandle, rc: c_int);
     fn nvim_blob_set_lock(b: BlobHandle, lock: c_int);
     fn nvim_list_get_refcount(l: ListHandle) -> c_int;
     fn nvim_dict_get_refcount(d: DictHandle) -> c_int;
@@ -1227,6 +1254,10 @@ extern "C" {
     // nvim_tv_clear deleted (Phase 2): tv_clear migrated to Rust, call rs_tv_clear directly
     fn nvim_list_item_free(li: ListItemHandle);
     fn nvim_list_init_static_impl(l: ListHandle);
+    fn nvim_staticlist10_clear(sl: *mut c_void);
+    fn nvim_staticlist10_get_item(sl: *mut c_void, i: c_int) -> ListItemHandle;
+    fn nvim_staticlist10_get_list(sl: *mut c_void) -> ListHandle;
+    fn nvim_do_not_free_cnt() -> c_int;
     fn nvim_list_copy_shallow(l: ListHandle) -> ListHandle;
     fn nvim_tv_set_list_vval(tv: TypevalHandle, l: ListHandle);
 
@@ -1758,6 +1789,51 @@ pub unsafe extern "C" fn rs_tv_list_alloc(_len: isize) -> ListHandle {
 #[export_name = "tv_list_init_static"]
 pub unsafe extern "C" fn rs_tv_list_init_static(l: ListHandle) {
     unsafe { nvim_list_init_static_impl(l) };
+}
+
+/// FFI export: tv_list_init_static10 - initialize a static list with 10 pre-allocated items.
+///
+/// Migrated from C. Zeros the `staticList10_T` struct, sets up the list header,
+/// and chains the 10 `listitem_T` items in a doubly-linked list.
+///
+/// # Safety
+///
+/// `sl` must be a valid pointer to a `staticList10_T`.
+#[export_name = "tv_list_init_static10"]
+pub unsafe extern "C" fn rs_tv_list_init_static10(sl: *mut c_void) {
+    // Zero the whole struct (CLEAR_POINTER)
+    unsafe { nvim_staticlist10_clear(sl) };
+
+    // Get pointers to the list and items array
+    let l = unsafe { nvim_staticlist10_get_list(sl) };
+    let do_not_free = unsafe { nvim_do_not_free_cnt() };
+
+    // Set up list header
+    let item0 = unsafe { nvim_staticlist10_get_item(sl, 0) };
+    let item9 = unsafe { nvim_staticlist10_get_item(sl, 9) };
+    unsafe { nvim_list_set_first(l, item0) };
+    unsafe { nvim_list_set_last(l, item9) };
+    unsafe { nvim_list_set_refcount(l, do_not_free) };
+    unsafe { nvim_list_set_lock(l, 2) }; // VAR_FIXED = 2
+    unsafe { nvim_list_set_len(l, 10) };
+
+    // Pre-fetch all 10 item handles.
+    let items: [ListItemHandle; 10] =
+        core::array::from_fn(|i| unsafe { nvim_staticlist10_get_item(sl, i as c_int) });
+
+    // Chain item 0: prev=NULL, next=item[1]
+    unsafe { nvim_listitem_set_prev(items[0], ListItemHandle::null()) };
+    unsafe { nvim_listitem_set_next(items[0], items[1]) };
+
+    // Chain items 1..8: prev=item[i-1], next=item[i+1]
+    for i in 1..9_usize {
+        unsafe { nvim_listitem_set_prev(items[i], items[i - 1]) };
+        unsafe { nvim_listitem_set_next(items[i], items[i + 1]) };
+    }
+
+    // Chain item 9: prev=item[8], next=NULL
+    unsafe { nvim_listitem_set_prev(items[9], items[8]) };
+    unsafe { nvim_listitem_set_next(items[9], ListItemHandle::null()) };
 }
 
 /// FFI export: tv_list_free_contents - free all items in a list.
@@ -5269,7 +5345,7 @@ unsafe fn nvim_tv_get_special(tv: TypevalHandle) -> c_int {
 //   kCallbackPartial = 2
 //   kCallbackLua     = 3
 
-use std::ffi::c_void;
+// c_void already imported at top
 
 const K_CALLBACK_NONE: c_int = 0;
 const K_CALLBACK_FUNCREF: c_int = 1;
@@ -6471,9 +6547,17 @@ extern "C" {
     fn strcasecmp(s1: *const c_char, s2: *const c_char) -> c_int;
     fn strcoll(s1: *const c_char, s2: *const c_char) -> c_int;
     fn strtod(s: *const c_char, endptr: *mut *mut c_char) -> f64;
-    // Phase 6 join/list2str accessors
-    fn nvim_list_join_to_string(l: ListHandle, sep: *const c_char) -> *mut c_char;
-    fn nvim_f_list2str_from_list(l: ListHandle) -> *mut c_char;
+    // Phase 6 join/list2str (nvim_list_join_to_string and nvim_f_list2str_from_list deleted Phase 3)
+    // encode_tv2echo: stringify a typval for echo/join
+    fn encode_tv2echo(tv: TypevalHandle, len: *mut usize) -> *mut c_char;
+    // garray_T helpers (ga_* are Rust-exported functions from nvim-collections)
+    fn ga_init(gap: *mut GArrayT, itemsize: c_int, growsize: c_int);
+    fn ga_concat(gap: *mut GArrayT, s: *const c_char);
+    fn ga_append(gap: *mut GArrayT, c: u8);
+    fn ga_clear(gap: *mut GArrayT);
+    // ga_grow: reserved for future use (not needed by current implementations)
+    fn line_breakcheck();
+    fn utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     // tv_get_number / tv_get_float for sort (C exported versions)
     fn tv_get_number(tv: TypevalHandle) -> i64;
     fn tv_get_float(tv: TypevalHandle) -> f64;
@@ -6941,6 +7025,81 @@ pub unsafe extern "C" fn rs_f_uniq(
     do_sort_uniq_impl(argvars, rettv, false);
 }
 
+/// Join list into a string using given separator (migrated from C `tv_list_join`).
+///
+/// Writes result into the caller-provided `garray_T` (gap). Returns OK on success, FAIL on
+/// error (e.g. encode_tv2echo returns NULL or got_int is set).
+///
+/// # Safety
+///
+/// `gap` must be a valid pointer to a `garray_T` initialized for byte output.
+/// `l` may be null (returns OK immediately).
+/// `sep` must be a valid C string.
+#[export_name = "tv_list_join"]
+pub unsafe extern "C" fn rs_tv_list_join(
+    gap: *mut c_void,
+    l: ListHandle,
+    sep: *const c_char,
+) -> c_int {
+    if tv_list_len_impl(l) == 0 {
+        return OK;
+    }
+
+    // Stringify each list item via encode_tv2echo into a Rust vec.
+    let mut strs: Vec<(*mut c_char, usize)> = Vec::new();
+    let mut item = unsafe { nvim_list_get_first(l) };
+    let mut failed = false;
+
+    while !item.is_null() {
+        if unsafe { nvim_got_int() } != 0 {
+            failed = true;
+            break;
+        }
+        let tv = unsafe { nvim_listitem_get_tv(item) };
+        let mut len: usize = 0;
+        let s = unsafe { encode_tv2echo(tv, &raw mut len) };
+        if s.is_null() {
+            failed = true;
+            break;
+        }
+        strs.push((s, len));
+        unsafe { line_breakcheck() };
+        item = unsafe { nvim_listitem_get_next(item) };
+    }
+
+    if failed || unsafe { nvim_got_int() } != 0 {
+        for (s, _) in &strs {
+            unsafe { nvim_xfree(s.cast()) };
+        }
+        return FAIL;
+    }
+
+    // Concatenate into the garray with separators.
+    let gap = gap.cast::<GArrayT>();
+    let mut first = true;
+    for (s, _) in &strs {
+        if first {
+            first = false;
+        } else if !sep.is_null() {
+            unsafe { ga_concat(gap, sep) };
+        }
+        if !s.is_null() {
+            unsafe { ga_concat(gap, s.cast_const()) };
+        }
+        if unsafe { nvim_got_int() } != 0 {
+            break;
+        }
+        unsafe { line_breakcheck() };
+    }
+
+    // Free all encoded strings.
+    for (s, _) in &strs {
+        unsafe { nvim_xfree(s.cast()) };
+    }
+
+    OK
+}
+
 /// "join({list})" VimL function.
 #[export_name = "f_join"]
 pub unsafe extern "C" fn rs_f_join(
@@ -6948,54 +7107,85 @@ pub unsafe extern "C" fn rs_f_join(
     rettv: TypevalHandle,
     _fptr: *mut c_void,
 ) {
-    let arg0 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 0);
-    if nvim_tv_get_type(arg0) != VarType::List as c_int {
-        typval_err_e_listreq();
+    let arg0 = unsafe { nvim_tv_idx(argvars.as_ptr().cast_mut(), 0) };
+    if unsafe { nvim_tv_get_type(arg0) } != VarType::List as c_int {
+        unsafe { typval_err_e_listreq() };
         return;
     }
 
-    nvim_tv_set_type(rettv, VarType::String as c_int);
+    unsafe { nvim_tv_set_type(rettv, VarType::String as c_int) };
 
-    let arg1 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 1);
-    let sep: *const c_char = if nvim_tv_get_type(arg1) == VarType::Unknown as c_int {
+    let arg1 = unsafe { nvim_tv_idx(argvars.as_ptr().cast_mut(), 1) };
+    let sep: *const c_char = if unsafe { nvim_tv_get_type(arg1) } == VarType::Unknown as c_int {
         b" \0".as_ptr().cast::<c_char>()
     } else {
-        let s = nvim_tv_get_string_checked(arg1);
+        let s = unsafe { nvim_tv_get_string_checked(arg1) };
         if s.is_null() {
-            nvim_tv_set_string(rettv, std::ptr::null_mut());
+            unsafe { nvim_tv_set_string(rettv, std::ptr::null_mut()) };
             return;
         }
         s
     };
 
-    let l = nvim_tv_get_list(arg0);
-    let result = nvim_list_join_to_string(l, sep);
-    nvim_tv_set_string(rettv, result);
+    let l = unsafe { nvim_tv_get_list(arg0) };
+
+    // Use rs_tv_list_join with a local garray to build the result string.
+    let mut gap = GArrayT::new();
+    unsafe { ga_init(&raw mut gap, 1, 80) };
+    let rc = unsafe { rs_tv_list_join((&raw mut gap).cast(), l, sep) };
+    if rc == OK {
+        unsafe { ga_append(&raw mut gap, 0) }; // NUL-terminate
+                                               // ga_data is the result string (owned by the garray).
+        unsafe { nvim_tv_set_string(rettv, gap.ga_data.cast::<c_char>()) };
+        // Don't free gap.ga_data - ownership transferred to rettv.
+    } else {
+        unsafe { ga_clear(&raw mut gap) };
+        unsafe { nvim_tv_set_string(rettv, std::ptr::null_mut()) };
+    }
 }
 
-/// "list2str({list})" VimL function.
+/// "list2str({list})" VimL function (inlined from C `nvim_f_list2str_from_list`).
 #[export_name = "f_list2str"]
 pub unsafe extern "C" fn rs_f_list2str(
     argvars: TypevalHandle,
     rettv: TypevalHandle,
     _fptr: *mut c_void,
 ) {
-    nvim_tv_set_type(rettv, VarType::String as c_int);
-    nvim_tv_set_string(rettv, std::ptr::null_mut());
+    unsafe { nvim_tv_set_type(rettv, VarType::String as c_int) };
+    unsafe { nvim_tv_set_string(rettv, std::ptr::null_mut()) };
 
-    let arg0 = nvim_tv_idx(argvars.as_ptr().cast_mut(), 0);
-    if nvim_tv_get_type(arg0) != VarType::List as c_int {
-        typval_err_invarg();
+    let arg0 = unsafe { nvim_tv_idx(argvars.as_ptr().cast_mut(), 0) };
+    if unsafe { nvim_tv_get_type(arg0) } != VarType::List as c_int {
+        unsafe { typval_err_invarg() };
         return;
     }
 
-    let l = nvim_tv_get_list(arg0);
+    let l = unsafe { nvim_tv_get_list(arg0) };
     if l.is_null() {
         return;
     }
 
-    let result = nvim_f_list2str_from_list(l);
-    nvim_tv_set_string(rettv, result);
+    // Build UTF-8 string from list of codepoints using a garray.
+    let mut ga = GArrayT::new();
+    unsafe { ga_init(&raw mut ga, 1, 80) };
+
+    let mut item = unsafe { nvim_list_get_first(l) };
+    while !item.is_null() {
+        let tv = unsafe { nvim_listitem_get_tv(item) };
+        let n = unsafe { nvim_tv_get_number_simple(tv) } as c_int;
+        let mut buf = [0u8; 7]; // MB_MAXBYTES + 1
+        let len = unsafe { utf_char2bytes(n, buf.as_mut_ptr().cast::<c_char>()) } as usize;
+        // Temporarily NUL-terminate for ga_concat.
+        buf[len] = 0;
+        unsafe { ga_concat(&raw mut ga, buf.as_ptr().cast::<c_char>()) };
+        item = unsafe { nvim_listitem_get_next(item) };
+    }
+
+    // NUL-terminate the result.
+    unsafe { ga_append(&raw mut ga, 0) };
+    // Transfer ownership of ga_data to rettv.
+    unsafe { nvim_tv_set_string(rettv, ga.ga_data.cast::<c_char>()) };
+    // Don't free ga.ga_data - ownership transferred.
 }
 
 // tv_list_append_owned_tv remains in C (by-value struct ABI not compatible with TypevalHandle).
