@@ -24,6 +24,7 @@
 
 pub mod blob;
 pub mod decode;
+pub mod encode;
 pub mod escape;
 pub mod json;
 

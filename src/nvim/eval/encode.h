@@ -36,8 +36,18 @@ typedef struct {
 extern const char *const encode_bool_var_names[];
 extern const char *const encode_special_var_names[];
 
-// Functions implemented in Rust (eval_codec crate):
+// Functions implemented in Rust eval_codec crate (export_name bindings).
+// The generated header no longer declares them since the C bodies are gone.
 int encode_blob_write(void *data, const char *buf, size_t len);
+void encode_list_write(void *data, const char *buf, size_t len);
+bool encode_vim_list_to_buf(const list_T *list, size_t *ret_len, char **ret_buf);
+int encode_read_from_list(ListReaderState *state, char *buf, size_t nbuf, size_t *read_bytes);
+bool encode_check_json_key(const typval_T *tv);
+char *encode_tv2string(typval_T *tv, size_t *len);
+char *encode_tv2echo(typval_T *tv, size_t *len);
+char *encode_tv2json(typval_T *tv, size_t *len);
+ListReaderState encode_init_lrstate(const list_T *list);
+int encode_vim_to_string(garray_T *gap, typval_T *tv, const char *objname);
 
 /// First codepoint in high surrogates block
 #define SURROGATE_HI_START 0xD800
