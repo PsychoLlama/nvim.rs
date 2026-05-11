@@ -28,9 +28,6 @@ extern "C" {
     // Typval conversion
     fn nlua_push_typval(lstate: *mut LuaState, tv: *const c_void, flags: c_int) -> bool;
 
-    // Type initialization
-    fn nlua_init_types(lstate: *mut LuaState);
-
     // Keydict operations
     fn nlua_pop_keydict(
         lstate: *mut LuaState,
@@ -126,7 +123,7 @@ pub unsafe extern "C" fn rs_nlua_pop_handle(
 /// `lstate` must be a valid Lua state pointer.
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_init_types(lstate: *mut LuaState) {
-    nlua_init_types(lstate);
+    crate::to_lua::rs_nlua_init_types(lstate);
 }
 
 /// Pop a keydict (structured options table) from the Lua stack.

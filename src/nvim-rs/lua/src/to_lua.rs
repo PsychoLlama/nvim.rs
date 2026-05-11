@@ -307,6 +307,56 @@ pub unsafe extern "C" fn rs_lua_pushlstring(lstate: *mut LuaState, s: *const c_c
     lua_pushlstring(lstate, s, len);
 }
 
+// =============================================================================
+// Phase 3: nlua_init_types
+// =============================================================================
+
+/// Record auxiliary type values in the vim module table.
+///
+/// Assumes the vim module table is on top of the stack.
+/// Populates `vim.type_idx`, `vim.val_idx`, and `vim.types`.
+///
+/// This is the Rust replacement for the C `nlua_init_types` in converter.c.
+#[unsafe(export_name = "nlua_init_types")]
+pub unsafe extern "C" fn rs_nlua_init_types(lstate: *mut LuaState) {
+    // vim.type_idx = true (the type-index sentinel key)
+    lua_pushlstring(lstate, c"type_idx".as_ptr(), 8);
+    nlua_push_type_idx(lstate);
+    lua_rawset(lstate, -3);
+
+    // vim.val_idx = false (the value-index sentinel key)
+    lua_pushlstring(lstate, c"val_idx".as_ptr(), 7);
+    nlua_push_val_idx(lstate);
+    lua_rawset(lstate, -3);
+
+    // vim.types = { float=3, [3]="float", array=5, [5]="array", dictionary=6, [6]="dictionary" }
+    lua_pushlstring(lstate, c"types".as_ptr(), 5);
+    lua_createtable(lstate, 0, 3);
+
+    lua_pushlstring(lstate, c"float".as_ptr(), 5);
+    lua_pushnumber(lstate, f64::from(K_OBJECT_TYPE_FLOAT));
+    lua_rawset(lstate, -3);
+    lua_pushnumber(lstate, f64::from(K_OBJECT_TYPE_FLOAT));
+    lua_pushlstring(lstate, c"float".as_ptr(), 5);
+    lua_rawset(lstate, -3);
+
+    lua_pushlstring(lstate, c"array".as_ptr(), 5);
+    lua_pushnumber(lstate, f64::from(K_OBJECT_TYPE_ARRAY));
+    lua_rawset(lstate, -3);
+    lua_pushnumber(lstate, f64::from(K_OBJECT_TYPE_ARRAY));
+    lua_pushlstring(lstate, c"array".as_ptr(), 5);
+    lua_rawset(lstate, -3);
+
+    lua_pushlstring(lstate, c"dictionary".as_ptr(), 10);
+    lua_pushnumber(lstate, f64::from(K_OBJECT_TYPE_DICT));
+    lua_rawset(lstate, -3);
+    lua_pushnumber(lstate, f64::from(K_OBJECT_TYPE_DICT));
+    lua_pushlstring(lstate, c"dictionary".as_ptr(), 10);
+    lua_rawset(lstate, -3);
+
+    lua_rawset(lstate, -3);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

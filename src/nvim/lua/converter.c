@@ -640,30 +640,6 @@ bool nlua_push_typval(lua_State *lstate, typval_T *const tv, int flags)
 }
 
 
-/// Convert Lua value to string
-///
-/// Always pops one value from the stack.
-String nlua_pop_String(lua_State *lstate, Arena *arena, Error *err)
-  FUNC_ATTR_NONNULL_ARG(1, 3) FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  if (lua_type(lstate, -1) != LUA_TSTRING) {
-    lua_pop(lstate, 1);
-    api_set_error(err, kErrorTypeValidation, "Expected Lua string");
-    return (String) { .size = 0, .data = NULL };
-  }
-  String ret;
-
-  ret.data = (char *)lua_tolstring(lstate, -1, &(ret.size));
-  assert(ret.data != NULL);
-  // TODO(bfredl): it would be "nice" to just use the memory of the Lua string
-  // directly, although ensuring the lifetime of such strings is a bit tricky
-  // (an API call could invoke nested Lua, which triggers GC, and kaboom?)
-  ret.data = arena_memdupz(arena, ret.data, ret.size);
-  lua_pop(lstate, 1);
-
-  return ret;
-}
-
 
 /// Check whether typed table on top of the stack has given type
 ///
@@ -1009,52 +985,6 @@ type_error:
 }
 
 
-/// Record some auxiliary values in vim module
-///
-/// Assumes that module table is on top of the stack.
-///
-/// Recorded values:
-///
-/// `vim.type_idx`: @see nlua_push_type_idx()
-/// `vim.val_idx`: @see nlua_push_val_idx()
-/// `vim.types`: table mapping possible values of `vim.type_idx` to string
-///              names (i.e. `array`, `float`, `dictionary`) and back.
-void nlua_init_types(lua_State *const lstate)
-{
-  LUA_PUSH_STATIC_STRING(lstate, "type_idx");
-  nlua_push_type_idx(lstate);
-  lua_rawset(lstate, -3);
-
-  LUA_PUSH_STATIC_STRING(lstate, "val_idx");
-  nlua_push_val_idx(lstate);
-  lua_rawset(lstate, -3);
-
-  LUA_PUSH_STATIC_STRING(lstate, "types");
-  lua_createtable(lstate, 0, 3);
-
-  LUA_PUSH_STATIC_STRING(lstate, "float");
-  lua_pushnumber(lstate, (lua_Number)kObjectTypeFloat);
-  lua_rawset(lstate, -3);
-  lua_pushnumber(lstate, (lua_Number)kObjectTypeFloat);
-  LUA_PUSH_STATIC_STRING(lstate, "float");
-  lua_rawset(lstate, -3);
-
-  LUA_PUSH_STATIC_STRING(lstate, "array");
-  lua_pushnumber(lstate, (lua_Number)kObjectTypeArray);
-  lua_rawset(lstate, -3);
-  lua_pushnumber(lstate, (lua_Number)kObjectTypeArray);
-  LUA_PUSH_STATIC_STRING(lstate, "array");
-  lua_rawset(lstate, -3);
-
-  LUA_PUSH_STATIC_STRING(lstate, "dictionary");
-  lua_pushnumber(lstate, (lua_Number)kObjectTypeDict);
-  lua_rawset(lstate, -3);
-  lua_pushnumber(lstate, (lua_Number)kObjectTypeDict);
-  LUA_PUSH_STATIC_STRING(lstate, "dictionary");
-  lua_rawset(lstate, -3);
-
-  lua_rawset(lstate, -3);
-}
 
 // Lua specific variant of api_dict_to_keydict
 void nlua_pop_keydict(lua_State *L, void *retval, FieldHashfn hashy, char **err_opt, Arena *arena,

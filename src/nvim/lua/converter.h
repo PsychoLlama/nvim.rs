@@ -36,5 +36,7 @@ Boolean nlua_pop_Boolean(lua_State *lstate, Arena *arena, Error *err);
 Boolean nlua_pop_Boolean_strict(lua_State *lstate, Error *err);
 LuaRef nlua_pop_LuaRef(lua_State *lstate, Arena *arena, Error *err);
 handle_T nlua_pop_handle(lua_State *lstate, Arena *arena, Error *err);
+String nlua_pop_String(lua_State *lstate, Arena *arena, Error *err);
+void nlua_init_types(lua_State *lstate);
 
 #include "lua/converter.h.generated.h"

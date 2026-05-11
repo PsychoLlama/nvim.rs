@@ -8,7 +8,7 @@
 use std::ffi::{c_char, c_int};
 
 use crate::state::LuaState;
-use crate::types::{LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER};
+use crate::types::{LUA_TBOOLEAN, LUA_TNIL, LUA_TNUMBER, LUA_TSTRING};
 use nvim_api::{Array, Dict, NvimString, Object};
 
 /// Float type (f64)
@@ -79,12 +79,10 @@ extern "C" {
     // API error function (variadic; only used with literal format strings below)
     fn api_set_error(err: *mut Error, err_type: c_int, fmt: *const c_char, ...);
 
-    // arena_memdupz for pop_String (Phase 3; unused until then)
-    #[allow(dead_code)]
+    // arena_memdupz: used by rs_nlua_pop_String (Phase 3)
     fn arena_memdupz(arena: *mut Arena, data: *const c_char, len: usize) -> *mut c_char;
 
-    // Still-C pop functions (Phases 3, 6, 7 will replace these)
-    fn nlua_pop_String(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> NvimString;
+    // Still-C pop functions (Phases 6, 7 will replace these)
     fn nlua_pop_Float(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Float;
     fn nlua_pop_Array(lstate: *mut LuaState, arena: *mut Arena, err: *mut Error) -> Array;
     fn nlua_pop_Dict(
@@ -223,14 +221,30 @@ pub unsafe extern "C" fn rs_nlua_pop_handle(
 // with real implementations in later phases.
 // =============================================================================
 
-/// Pop a String from the Lua stack. (Phase 3 will replace with real impl)
-#[no_mangle]
-pub unsafe extern "C" fn rs_nlua_pop_string(
+/// Pop a String from the Lua stack.
+///
+/// Validates the top-of-stack value is a Lua string, copies it into the
+/// arena, and pops it. Returns an empty String and sets `err` on failure.
+#[unsafe(export_name = "nlua_pop_String")]
+pub unsafe extern "C" fn rs_nlua_pop_String(
     lstate: *mut LuaState,
     arena: *mut Arena,
     err: *mut Error,
 ) -> NvimString {
-    nlua_pop_String(lstate, arena, err)
+    if lua_type(lstate, -1) != LUA_TSTRING {
+        lua_pop(lstate, 1);
+        api_set_error(err, K_ERROR_VALIDATION, c"Expected Lua string".as_ptr());
+        return NvimString {
+            data: std::ptr::null_mut(),
+            size: 0,
+        };
+    }
+    let mut size: usize = 0;
+    let data_ptr = lua_tolstring(lstate, -1, &raw mut size);
+    // Safety: lua_tolstring returns non-null for string values.
+    let data = arena_memdupz(arena, data_ptr, size);
+    lua_pop(lstate, 1);
+    NvimString { data, size }
 }
 
 /// Pop a Float from the Lua stack. (Phase 6 will replace with real impl)
