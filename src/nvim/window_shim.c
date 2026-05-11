@@ -313,6 +313,7 @@ int nvim_tv_dict_add_number(void *dict, const char *key, size_t key_len, int nr)
 int nvim_tv_dict_add_dict_wrapper(void *dict, const char *key, size_t key_len, void *child)
 { if (!dict || !key || !child) { return 0; } if (tv_dict_add_dict((dict_T *)dict, key, key_len, (dict_T *)child) == FAIL) { return 0; } ((dict_T *)child)->dv_refcount--; return 1; }
 void *nvim_get_v_event_opaque(void *buf) { return get_v_event((save_v_event_T *)buf); }
+void nvim_restore_v_event_opaque(void *dict, void *buf) { restore_v_event((dict_T *)dict, (save_v_event_T *)buf); }
 buf_T *nvim_buflist_findnr_win(int nr) { return buflist_findnr(nr); }
 int nvim_bufref_valid_win(void *br) { return bufref_valid((bufref_T *)br) ? 1 : 0; }
 buf_T *nvim_bufref_get_buf_win(void *br) { return ((bufref_T *)br)->br_buf; }

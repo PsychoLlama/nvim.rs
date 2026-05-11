@@ -235,36 +235,58 @@ void nvim_trigger_cmd_autocmd(int typechar, int evt)
 // command_line_enter migrated to Rust (entry_impl.rs as rs_command_line_enter).
 
 
-/// Fire CmdlineChanged autocmd (called from Rust; skip has_event check since Rust does it).
-void nvim_fire_cmdlinechanged_autocmd(int firstc)
+// nvim_fire_cmdlinechanged_autocmd: migrated to Rust (state.rs).
+// nvim_has_event_cmdlinechanged: replaced by direct has_event() calls from Rust.
+
+// =============================================================================
+// Phase 3: TRY_WRAP shims for Rust autocmd migration
+// =============================================================================
+
+/// TRY_WRAP shim: apply autocmd + restore v:event inside TRY_WRAP.
+/// dict and save_buf are opaque pointers from Rust (dict_T* and save_v_event_T*).
+/// If error: xstrdup()s err.msg into *err_msg_out, calls api_clear_error, returns 1.
+/// On success: sets *err_msg_out = NULL, returns 0.
+/// Caller must xfree(*err_msg_out) if non-NULL.
+int nvim_cmdline_try_autocmd_restore(int event, const char *firstcbuf,
+                                      void *dict, void *save_buf,
+                                      char **err_msg_out)
 {
   Error err = ERROR_INIT;
-  save_v_event_T save_v_event;
-  dict_T *dict = get_v_event(&save_v_event);
-
-  char firstcbuf[2];
-  firstcbuf[0] = (char)firstc;
-  firstcbuf[1] = 0;
-
-  // set v:event to a dictionary with information about the commandline
-  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
-  tv_dict_set_keys_readonly(dict);
   TRY_WRAP(&err, {
-    apply_autocmds(EVENT_CMDLINECHANGED, firstcbuf, firstcbuf, false, curbuf);
-    restore_v_event(dict, &save_v_event);
+    apply_autocmds((event_T)event, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
+    restore_v_event((dict_T *)dict, (save_v_event_T *)save_buf);
   });
   if (ERROR_SET(&err)) {
-    msg_putchar('\n');
-    msg_scroll = true;
-    msg_puts_hl(err.msg, HLF_E, true);
+    *err_msg_out = xstrdup(err.msg);
     api_clear_error(&err);
-    redrawcmd();
+    return 1;
   }
+  *err_msg_out = NULL;
+  return 0;
 }
 
-/// Check if CmdlineChanged event has any listeners (for Rust).
-int nvim_has_event_cmdlinechanged(void) { return has_event(EVENT_CMDLINECHANGED) ? 1 : 0; }
+/// TRY_WRAP shim: apply autocmd only (restore v:event handled by Rust outside).
+/// If error: xstrdup()s err.msg into *err_msg_out, calls api_clear_error, returns 1.
+/// On success: sets *err_msg_out = NULL, returns 0.
+/// Caller must xfree(*err_msg_out) if non-NULL.
+int nvim_cmdline_try_autocmd_only(int event, const char *firstcbuf,
+                                   char **err_msg_out)
+{
+  Error err = ERROR_INIT;
+  TRY_WRAP(&err, {
+    apply_autocmds((event_T)event, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
+  });
+  if (ERROR_SET(&err)) {
+    *err_msg_out = xstrdup(err.msg);
+    api_clear_error(&err);
+    return 1;
+  }
+  *err_msg_out = NULL;
+  return 0;
+}
+
+/// Check if any event has listeners (generic wrapper for Rust).
+int nvim_has_event(int event) { return has_event((event_T)event) ? 1 : 0; }
 
 // do_autocmd_cmdlinechanged: implemented in Rust (cmdline crate, state.rs as rs_do_autocmd_cmdlinechanged).
 
@@ -1077,78 +1099,9 @@ void nvim_gotocmdline(void) { gotocmdline(true); }
 /// Get exmode_active global.
 int nvim_get_exmode_active(void) { return exmode_active ? 1 : 0; }
 
-/// Thin C wrapper: delegates to Rust rs_cmdline_fire_leavepre_autocmd.
-int nvim_cmdline_fire_leavepre_autocmd(void *s, int c_val)
-{
-  return rs_cmdline_fire_leavepre_autocmd(s, c_val);
-}
-
-/// Fire CmdlineLeave autocmd (with v:char and abort handling).
-/// Sets v:char to c_val, fires autocmd, checks abort flag.
-/// Returns 1 if user set abort, 0 otherwise. Handles error printing.
-int nvim_cmdline_fire_leave_full(void *s, int c_val)
-{
-  CommandLineState *cs = (CommandLineState *)s;
-  if (!has_event(EVENT_CMDLINELEAVE)) {
-    return 0;
-  }
-  Error err = ERROR_INIT;
-  save_v_event_T save_v_event;
-  dict_T *dict = get_v_event(&save_v_event);
-  char firstcbuf[2] = { (char)cs->cmdline_type, 0 };
-  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-  tv_dict_add_nr(dict, S_LEN("cmdlevel"), ccline.level);
-  tv_dict_set_keys_readonly(dict);
-  tv_dict_add_bool(dict, S_LEN("abort"),
-                   cs->gotesc ? kBoolVarTrue : kBoolVarFalse);
-  set_vim_var_char(c_val);
-  TRY_WRAP(&err, {
-    apply_autocmds(EVENT_CMDLINELEAVE, firstcbuf, firstcbuf, false, curbuf);
-  });
-  int abort = 0;
-  if (tv_dict_get_number(dict, "abort") != 0) {
-    cs->gotesc = true;
-    abort = 1;
-  }
-  restore_v_event(dict, &save_v_event);
-  if (ERROR_SET(&err)) {
-    msg_putchar('\n');
-    emsg(err.msg);
-    did_emsg = false;
-    api_clear_error(&err);
-  }
-  return abort;
-}
-
-/// Combined CmdlineEnter autocmd with error handling.
-/// Returns error message string if error occurred (static buffer), NULL if ok.
-/// Prints error to cmdline and calls redrawcmd() if needed.
-int nvim_cmdline_fire_enter_full(const char *firstcbuf, int level)
-{
-  if (!has_event(EVENT_CMDLINEENTER)) {
-    return 0;
-  }
-  Error err = ERROR_INIT;
-  save_v_event_T save_v_event;
-  dict_T *dict = get_v_event(&save_v_event);
-  tv_dict_add_str(dict, S_LEN("cmdtype"), firstcbuf);
-  tv_dict_add_nr(dict, S_LEN("cmdlevel"), level);
-  tv_dict_set_keys_readonly(dict);
-  TRY_WRAP(&err, {
-    apply_autocmds(EVENT_CMDLINEENTER, (char *)firstcbuf, (char *)firstcbuf, false, curbuf);
-    restore_v_event(dict, &save_v_event);
-  });
-  if (ERROR_SET(&err)) {
-    msg_putchar('\n');
-    msg_scroll = true;
-    msg_puts_hl(err.msg, HLF_E, true);
-    api_clear_error(&err);
-    redrawcmd();
-    return 1;
-  }
-  return 0;
-}
-
+// nvim_cmdline_fire_leavepre_autocmd: migrated to Rust (entry_impl.rs, rs_cmdline_fire_leavepre_autocmd).
+// nvim_cmdline_fire_leave_full: migrated to Rust (entry_impl.rs).
+// nvim_cmdline_fire_enter_full: migrated to Rust (entry_impl.rs).
 // nvim_emsg_command_too_recursive: migrated to Rust (entry_impl.rs).
 
 // =============================================================================

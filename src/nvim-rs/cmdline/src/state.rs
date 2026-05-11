@@ -2047,11 +2047,20 @@ pub unsafe extern "C" fn nvim_command_line_end_wildmenu(s: *mut c_void, key_is_w
 
 // =============================================================================
 // Phase 4: do_autocmd_cmdlinechanged migrated to Rust
+// Phase 3 (ex_getln migration): nvim_fire_cmdlinechanged_autocmd migrated here
 // =============================================================================
 
+// Event IDs (from autocmd_events.h)
+const EVENT_CMDLINECHANGED: c_int = 23;
+
+// Size of C `save_v_event_T` in bytes (bool + hashtab_T = 304; validated in scroll.rs)
+const SAVE_V_EVENT_SIZE: usize = 304;
+
+// HLF_E = 6 (ErrorMsg highlight group)
+const HLF_E: c_int = 6;
+
 unsafe extern "C" {
-    fn nvim_has_event_cmdlinechanged() -> c_int;
-    fn nvim_fire_cmdlinechanged_autocmd(firstc: c_int);
+    fn nvim_has_event(event: c_int) -> c_int;
     fn apply_autocmds(
         event: c_int,
         pat: *const c_char,
@@ -2060,6 +2069,26 @@ unsafe extern "C" {
         buf: *mut c_void,
     ) -> bool;
     static mut curbuf: *mut c_void;
+    fn nvim_get_v_event_opaque(buf: *mut u8) -> *mut c_void;
+    fn tv_dict_add_str(
+        dict: *mut c_void,
+        key: *const c_char,
+        key_len: usize,
+        val: *const c_char,
+    ) -> c_int;
+    fn tv_dict_add_nr(dict: *mut c_void, key: *const c_char, key_len: usize, nr: i64) -> c_int;
+    fn tv_dict_set_keys_readonly(dict: *mut c_void);
+    fn nvim_cmdline_try_autocmd_restore(
+        event: c_int,
+        firstcbuf: *const c_char,
+        dict: *mut c_void,
+        save_buf: *mut u8,
+        err_msg_out: *mut *mut c_char,
+    ) -> c_int;
+    fn msg_putchar(c: c_int);
+    fn msg_puts_hl(s: *const c_char, hl_id: c_int, hist: bool);
+    fn redrawcmd();
+    static mut msg_scroll: c_int;
 }
 
 /// Rust replacement for `nvim_trigger_cmd_autocmd` in ex_getln.c.
@@ -2075,13 +2104,56 @@ pub unsafe extern "C" fn rs_trigger_cmd_autocmd(typechar: c_int, evt: c_int) {
     apply_autocmds(evt, typestr.as_ptr(), typestr.as_ptr(), false, curbuf);
 }
 
+/// Rust replacement for `nvim_fire_cmdlinechanged_autocmd` in ex_getln.c.
+///
+/// Sets up v:event dict and fires CmdlineChanged via TRY_WRAP shim.
+/// Error handling: print message with HLF_E + redrawcmd.
+///
+/// # Safety
+///
+/// Calls C autocmd/dict functions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nvim_fire_cmdlinechanged_autocmd(firstc: c_int) {
+    let mut save_buf = std::mem::MaybeUninit::<[u8; SAVE_V_EVENT_SIZE]>::zeroed();
+    let dict = nvim_get_v_event_opaque(save_buf.as_mut_ptr().cast());
+
+    let firstcbuf: [c_char; 2] = [firstc as c_char, 0];
+
+    tv_dict_add_str(dict, c"cmdtype".as_ptr(), 7, firstcbuf.as_ptr());
+    tv_dict_add_nr(
+        dict,
+        c"cmdlevel".as_ptr(),
+        8,
+        i64::from(nvim_get_ccline_level()),
+    );
+    tv_dict_set_keys_readonly(dict);
+
+    let mut err_msg: *mut c_char = std::ptr::null_mut();
+    // nvim_cmdline_try_autocmd_restore runs TRY_WRAP { apply_autocmds; restore_v_event; }
+    // On error it xstrdup()s err.msg into err_msg; we must xfree it after use.
+    if nvim_cmdline_try_autocmd_restore(
+        EVENT_CMDLINECHANGED,
+        firstcbuf.as_ptr(),
+        dict,
+        save_buf.as_mut_ptr().cast(),
+        &raw mut err_msg,
+    ) != 0
+    {
+        msg_putchar(b'\n' as c_int);
+        msg_scroll = 1;
+        msg_puts_hl(err_msg, HLF_E, true);
+        libc::free(err_msg.cast::<libc::c_void>());
+        redrawcmd();
+    }
+}
+
 /// Inner logic for `do_autocmd_cmdlinechanged`.
 ///
 /// # Safety
 ///
 /// Calls C autocmd/dict functions.
 unsafe fn do_autocmd_cmdlinechanged_inner(firstc: c_int) {
-    if nvim_has_event_cmdlinechanged() != 0 {
+    if nvim_has_event(EVENT_CMDLINECHANGED) != 0 {
         nvim_fire_cmdlinechanged_autocmd(firstc);
     }
 }
