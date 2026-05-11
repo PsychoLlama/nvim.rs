@@ -339,6 +339,224 @@ extern void rs_nvim_del_keymap(uint64_t channel_id, String mode, String lhs, Err
 extern bool rs_nvim_del_mark(String name, Error *err);
 extern Array rs_nvim_get_mark(String name, Arena *arena, Error *err);
 extern Dict rs_nvim_get_chan_info(uint64_t channel_id, int64_t chan, Arena *arena, Error *err);
+
+// ---------------------------------------------------------------------------
+// Phase-3 C accessors for Rust vim.rs
+// ---------------------------------------------------------------------------
+
+// feedkeys: full impl as C thunk due to typebuf/vgetc_busy complexity
+void rs_nvim_feedkeys_impl(String keys, String mode, bool escape_ks) {
+  bool remap = true;
+  bool insert = false;
+  bool typed = false;
+  bool execute = false;
+  bool dangerous = false;
+  bool lowlevel = false;
+
+  for (size_t i = 0; i < mode.size; i++) {
+    switch (mode.data[i]) {
+    case 'n': remap = false; break;
+    case 'm': remap = true; break;
+    case 't': typed = true; break;
+    case 'i': insert = true; break;
+    case 'x': execute = true; break;
+    case '!': dangerous = true; break;
+    case 'L': lowlevel = true; break;
+    }
+  }
+
+  if (keys.size == 0 && !execute) {
+    return;
+  }
+
+  char *keys_esc;
+  if (escape_ks) {
+    keys_esc = vim_strsave_escape_ks(keys.data);
+  } else {
+    keys_esc = keys.data;
+  }
+  if (lowlevel) {
+    input_enqueue_raw(keys_esc, strlen(keys_esc));
+  } else {
+    ins_typebuf(keys_esc, (remap ? REMAP_YES : REMAP_NONE),
+                insert ? 0 : typebuf.tb_len, !typed, false);
+    if (vgetc_busy) {
+      typebuf_was_filled = true;
+    }
+  }
+  if (escape_ks) {
+    xfree(keys_esc);
+  }
+  if (execute) {
+    int save_msg_scroll = msg_scroll;
+    msg_scroll = false;
+    if (!dangerous) {
+      ex_normal_busy++;
+    }
+    exec_normal(true, lowlevel);
+    if (!dangerous) {
+      ex_normal_busy--;
+    }
+    msg_scroll |= save_msg_scroll;
+  }
+}
+
+// input: simple passthrough
+Integer rs_nvim_input_impl(uint64_t channel_id, String keys) {
+  may_trigger_vim_suspend_resume(false);
+  return (Integer)input_enqueue(channel_id, keys);
+}
+
+// input_mouse: full impl as C thunk due to KE_* constants and goto
+void rs_nvim_input_mouse_impl(String button, String action, String modifier,
+                               int grid, int row, int col, Error *err) {
+  may_trigger_vim_suspend_resume(false);
+
+  if (button.data == NULL || action.data == NULL) {
+    goto error;
+  }
+
+  int code = 0;
+
+  if (strequal(button.data, "left")) {
+    code = KE_LEFTMOUSE;
+  } else if (strequal(button.data, "middle")) {
+    code = KE_MIDDLEMOUSE;
+  } else if (strequal(button.data, "right")) {
+    code = KE_RIGHTMOUSE;
+  } else if (strequal(button.data, "wheel")) {
+    code = KE_MOUSEDOWN;
+  } else if (strequal(button.data, "x1")) {
+    code = KE_X1MOUSE;
+  } else if (strequal(button.data, "x2")) {
+    code = KE_X2MOUSE;
+  } else if (strequal(button.data, "move")) {
+    code = KE_MOUSEMOVE;
+  } else {
+    goto error;
+  }
+
+  if (code == KE_MOUSEDOWN) {
+    if (strequal(action.data, "down")) {
+      code = KE_MOUSEUP;
+    } else if (strequal(action.data, "up")) {
+      // code = KE_MOUSEDOWN
+    } else if (strequal(action.data, "left")) {
+      code = KE_MOUSERIGHT;
+    } else if (strequal(action.data, "right")) {
+      code = KE_MOUSELEFT;
+    } else {
+      goto error;
+    }
+  } else if (code != KE_MOUSEMOVE) {
+    if (strequal(action.data, "press")) {
+      // pass
+    } else if (strequal(action.data, "drag")) {
+      code += KE_LEFTDRAG - KE_LEFTMOUSE;
+    } else if (strequal(action.data, "release")) {
+      code += KE_LEFTRELEASE - KE_LEFTMOUSE;
+    } else {
+      goto error;
+    }
+  }
+
+  int modmask = 0;
+  for (size_t i = 0; i < modifier.size; i++) {
+    char byte = modifier.data[i];
+    if (byte == '-') {
+      continue;
+    }
+    int mod = name_to_mod_mask(byte);
+    if (mod == 0) {
+      api_set_error(err, kErrorTypeValidation, "Invalid modifier: %c", byte);
+      return;
+    }
+    modmask |= mod;
+  }
+
+  input_enqueue_mouse(code, (uint8_t)modmask, grid, row, col);
+  return;
+
+error:
+  api_set_error(err, kErrorTypeValidation, "invalid button or action");
+}
+
+// replace_termcodes
+String rs_nvim_replace_termcodes_impl(String str, bool from_part, bool do_lt, bool special) {
+  if (str.size == 0) {
+    return (String){ .data = NULL, .size = 0 };
+  }
+  int flags = 0;
+  if (from_part) { flags |= REPTERM_FROM_PART; }
+  if (do_lt) { flags |= REPTERM_DO_LT; }
+  if (!special) { flags |= REPTERM_NO_SPECIAL; }
+  char *ptr = NULL;
+  replace_termcodes(str.data, str.size, &ptr, 0, flags, NULL, p_cpo);
+  return cstr_as_string(ptr);
+}
+
+// exec_lua
+Object rs_nvim_exec_lua_impl(String code, Array args, Arena *arena, Error *err) {
+  return nlua_exec(code, NULL, args, kRetObject, arena, err);
+}
+
+// hl_ns: complete C thunks (VALIDATE_INT can't cross FFI)
+void rs_nvim_set_hl_ns_impl(Integer ns_id, Error *err) {
+  VALIDATE_INT((ns_id >= 0), "namespace", ns_id, { return; });
+  ns_hl_global = (NS)ns_id;
+  hl_check_ns();
+  redraw_all_later(UPD_NOT_VALID);
+}
+void rs_nvim_set_hl_ns_fast_impl(Integer ns_id) {
+  ns_hl_fast = (NS)ns_id;
+  hl_check_ns();
+}
+
+// get_hl_ns: window-specific or global
+// Returns -2 on error (caller checks err), -1 if window has no ns.
+int rs_nvim_get_hl_ns_impl(bool has_winid, int winid, Error *err) {
+  if (has_winid) {
+    win_T *win = find_window_by_handle(winid, err);
+    if (!win) {
+      return 0;
+    }
+    return (int)win->w_ns_hl;
+  } else {
+    return (int)ns_hl_global;
+  }
+}
+
+// list_runtime_paths — calls nvim_get_runtime_file(NULL_STRING, true, arena, err)
+Array rs_nvim_list_runtime_paths_impl(Arena *arena, Error *err) {
+  return nvim_get_runtime_file(NULL_STRING, true, arena, err);
+}
+
+// runtime_inspect
+Array rs_nvim_runtime_inspect_impl(Arena *arena) {
+  return runtime_inspect(arena);
+}
+
+// get_hl: opaque Dict(get_highlight) can't cross FFI; C thunk passes through
+DictAs(get_hl_info) rs_nvim_get_hl_impl(Integer ns_id, Dict(get_highlight) *opts,
+                                         Arena *arena, Error *err) {
+  return ns_get_hl_defs((NS)ns_id, opts, arena, err);
+}
+
+// Phase-3 Rust function declarations
+extern void rs_nvim_feedkeys(String keys, String mode, bool escape_ks);
+extern Integer rs_nvim_input(uint64_t channel_id, String keys);
+extern void rs_nvim_input_mouse(String button, String action, String modifier,
+                                Integer grid, Integer row, Integer col, Error *err);
+extern String rs_nvim_replace_termcodes(String str, bool from_part, bool do_lt, bool special);
+extern Object rs_nvim_exec_lua(String code, Array args, Arena *arena, Error *err);
+extern Object rs_nvim__exec_lua_fast(String code, Array args, Arena *arena, Error *err);
+extern void rs_nvim_set_hl_ns(Integer ns_id, Error *err);
+extern void rs_nvim_set_hl_ns_fast(Integer ns_id, Error *err);
+extern Integer rs_nvim_get_hl_ns(bool has_winid, int winid, Error *err);
+extern DictAs(get_hl_info) rs_nvim_get_hl(Integer ns_id, Dict(get_highlight) *opts, Arena *arena,
+                                          Error *err);
+extern Array rs_nvim_list_runtime_paths(Arena *arena, Error *err);
+extern Array rs_nvim__runtime_inspect(Arena *arena);
 // ---------------------------------------------------------------------------
 
 /// Gets a highlight group by name
@@ -369,7 +587,7 @@ Integer nvim_get_hl_id_by_name(String name)
 DictAs(get_hl_info) nvim_get_hl(Integer ns_id, Dict(get_highlight) *opts, Arena *arena, Error *err)
   FUNC_API_SINCE(11)
 {
-  return ns_get_hl_defs((NS)ns_id, opts, arena, err);
+  return rs_nvim_get_hl(ns_id, opts, arena, err);
 }
 
 /// Sets a highlight group.
@@ -455,15 +673,7 @@ void nvim_set_hl(uint64_t channel_id, Integer ns_id, String name, Dict(highlight
 Integer nvim_get_hl_ns(Dict(get_ns) *opts, Error *err)
   FUNC_API_SINCE(12)
 {
-  if (HAS_KEY(opts, get_ns, winid)) {
-    win_T *win = find_window_by_handle(opts->winid, err);
-    if (!win) {
-      return 0;
-    }
-    return win->w_ns_hl;
-  } else {
-    return ns_hl_global;
-  }
+  return rs_nvim_get_hl_ns(HAS_KEY(opts, get_ns, winid), (int)opts->winid, err);
 }
 
 /// Set active namespace for highlights defined with |nvim_set_hl()|. This can be set for
@@ -474,13 +684,7 @@ Integer nvim_get_hl_ns(Dict(get_ns) *opts, Error *err)
 void nvim_set_hl_ns(Integer ns_id, Error *err)
   FUNC_API_SINCE(10)
 {
-  VALIDATE_INT((ns_id >= 0), "namespace", ns_id, {
-    return;
-  });
-
-  ns_hl_global = (NS)ns_id;
-  hl_check_ns();
-  redraw_all_later(UPD_NOT_VALID);
+  rs_nvim_set_hl_ns(ns_id, err);
 }
 
 /// Set active namespace for highlights defined with |nvim_set_hl()| while redrawing.
@@ -495,8 +699,7 @@ void nvim_set_hl_ns_fast(Integer ns_id, Error *err)
   FUNC_API_SINCE(10)
   FUNC_API_FAST
 {
-  ns_hl_fast = (NS)ns_id;
-  hl_check_ns();
+  rs_nvim_set_hl_ns_fast(ns_id, err);
 }
 
 /// Sends input-keys to Nvim, subject to various quirks controlled by `mode`
@@ -525,72 +728,7 @@ void nvim_set_hl_ns_fast(Integer ns_id, Error *err)
 void nvim_feedkeys(String keys, String mode, Boolean escape_ks)
   FUNC_API_SINCE(1)
 {
-  bool remap = true;
-  bool insert = false;
-  bool typed = false;
-  bool execute = false;
-  bool dangerous = false;
-  bool lowlevel = false;
-
-  for (size_t i = 0; i < mode.size; i++) {
-    switch (mode.data[i]) {
-    case 'n':
-      remap = false; break;
-    case 'm':
-      remap = true; break;
-    case 't':
-      typed = true; break;
-    case 'i':
-      insert = true; break;
-    case 'x':
-      execute = true; break;
-    case '!':
-      dangerous = true; break;
-    case 'L':
-      lowlevel = true; break;
-    }
-  }
-
-  if (keys.size == 0 && !execute) {
-    return;
-  }
-
-  char *keys_esc;
-  if (escape_ks) {
-    // Need to escape K_SPECIAL before putting the string in the
-    // typeahead buffer.
-    keys_esc = vim_strsave_escape_ks(keys.data);
-  } else {
-    keys_esc = keys.data;
-  }
-  if (lowlevel) {
-    input_enqueue_raw(keys_esc, strlen(keys_esc));
-  } else {
-    ins_typebuf(keys_esc, (remap ? REMAP_YES : REMAP_NONE),
-                insert ? 0 : typebuf.tb_len, !typed, false);
-    if (vgetc_busy) {
-      typebuf_was_filled = true;
-    }
-  }
-
-  if (escape_ks) {
-    xfree(keys_esc);
-  }
-
-  if (execute) {
-    int save_msg_scroll = msg_scroll;
-
-    // Avoid a 1 second delay when the keys start Insert mode.
-    msg_scroll = false;
-    if (!dangerous) {
-      ex_normal_busy++;
-    }
-    exec_normal(true, lowlevel);
-    if (!dangerous) {
-      ex_normal_busy--;
-    }
-    msg_scroll |= save_msg_scroll;
-  }
+  rs_nvim_feedkeys(keys, mode, escape_ks);
 }
 
 /// Queues raw user-input. Unlike |nvim_feedkeys()|, this uses a low-level input buffer and the call
@@ -612,8 +750,7 @@ void nvim_feedkeys(String keys, String mode, Boolean escape_ks)
 Integer nvim_input(uint64_t channel_id, String keys)
   FUNC_API_SINCE(1) FUNC_API_FAST
 {
-  may_trigger_vim_suspend_resume(false);
-  return (Integer)input_enqueue(channel_id, keys);
+  return rs_nvim_input(channel_id, keys);
 }
 
 /// Send mouse event from GUI.
@@ -644,75 +781,7 @@ void nvim_input_mouse(String button, String action, String modifier, Integer gri
                       Integer col, Error *err)
   FUNC_API_SINCE(6) FUNC_API_FAST
 {
-  may_trigger_vim_suspend_resume(false);
-
-  if (button.data == NULL || action.data == NULL) {
-    goto error;
-  }
-
-  int code = 0;
-
-  if (strequal(button.data, "left")) {
-    code = KE_LEFTMOUSE;
-  } else if (strequal(button.data, "middle")) {
-    code = KE_MIDDLEMOUSE;
-  } else if (strequal(button.data, "right")) {
-    code = KE_RIGHTMOUSE;
-  } else if (strequal(button.data, "wheel")) {
-    code = KE_MOUSEDOWN;
-  } else if (strequal(button.data, "x1")) {
-    code = KE_X1MOUSE;
-  } else if (strequal(button.data, "x2")) {
-    code = KE_X2MOUSE;
-  } else if (strequal(button.data, "move")) {
-    code = KE_MOUSEMOVE;
-  } else {
-    goto error;
-  }
-
-  if (code == KE_MOUSEDOWN) {
-    if (strequal(action.data, "down")) {
-      code = KE_MOUSEUP;
-    } else if (strequal(action.data, "up")) {
-      // code = KE_MOUSEDOWN
-    } else if (strequal(action.data, "left")) {
-      code = KE_MOUSERIGHT;
-    } else if (strequal(action.data, "right")) {
-      code = KE_MOUSELEFT;
-    } else {
-      goto error;
-    }
-  } else if (code != KE_MOUSEMOVE) {
-    if (strequal(action.data, "press")) {
-      // pass
-    } else if (strequal(action.data, "drag")) {
-      code += KE_LEFTDRAG - KE_LEFTMOUSE;
-    } else if (strequal(action.data, "release")) {
-      code += KE_LEFTRELEASE - KE_LEFTMOUSE;
-    } else {
-      goto error;
-    }
-  }
-
-  int modmask = 0;
-  for (size_t i = 0; i < modifier.size; i++) {
-    char byte = modifier.data[i];
-    if (byte == '-') {
-      continue;
-    }
-    int mod = name_to_mod_mask(byte);
-    VALIDATE((mod != 0), "Invalid modifier: %c", byte, {
-      return;
-    });
-    modmask |= mod;
-  }
-
-  input_enqueue_mouse(code, (uint8_t)modmask, (int)grid, (int)row, (int)col);
-  return;
-
-error:
-  api_set_error(err, kErrorTypeValidation,
-                "invalid button or action");
+  rs_nvim_input_mouse(button, action, modifier, grid, row, col, err);
 }
 
 /// Replaces terminal codes and |keycodes| ([<CR>], [<Esc>], ...) in a string with
@@ -729,25 +798,7 @@ error:
 String nvim_replace_termcodes(String str, Boolean from_part, Boolean do_lt, Boolean special)
   FUNC_API_SINCE(1) FUNC_API_RET_ALLOC
 {
-  if (str.size == 0) {
-    // Empty string
-    return (String) { .data = NULL, .size = 0 };
-  }
-
-  int flags = 0;
-  if (from_part) {
-    flags |= REPTERM_FROM_PART;
-  }
-  if (do_lt) {
-    flags |= REPTERM_DO_LT;
-  }
-  if (!special) {
-    flags |= REPTERM_NO_SPECIAL;
-  }
-
-  char *ptr = NULL;
-  replace_termcodes(str.data, str.size, &ptr, 0, flags, NULL, p_cpo);
-  return cstr_as_string(ptr);
+  return rs_nvim_replace_termcodes(str, from_part, do_lt, special);
 }
 
 /// Execute Lua code. Parameters (if any) are available as `...` inside the
@@ -766,8 +817,7 @@ Object nvim_exec_lua(String code, Array args, Arena *arena, Error *err)
   FUNC_API_SINCE(7)
   FUNC_API_REMOTE_ONLY
 {
-  // TODO(bfredl): convert directly from msgpack to lua and then back again
-  return nlua_exec(code, NULL, args, kRetObject, arena, err);
+  return rs_nvim_exec_lua(code, args, arena, err);
 }
 
 /// EXPERIMENTAL: this API may change or be removed in the future.
@@ -791,7 +841,7 @@ Object nvim__exec_lua_fast(String code, Array args, Arena *arena, Error *err)
   FUNC_API_REMOTE_ONLY
   FUNC_API_FAST
 {
-  return nvim_exec_lua(code, args, arena, err);
+  return rs_nvim__exec_lua_fast(code, args, arena, err);
 }
 
 /// Calculates the number of display cells occupied by `text`.
@@ -812,11 +862,11 @@ Integer nvim_strwidth(String text, Error *err)
 ArrayOf(String) nvim_list_runtime_paths(Arena *arena, Error *err)
   FUNC_API_SINCE(1)
 {
-  return nvim_get_runtime_file(NULL_STRING, true, arena, err);
+  return rs_nvim_list_runtime_paths(arena, err);
 }
 
 /// @nodoc
-Array nvim__runtime_inspect(Arena *arena) { return runtime_inspect(arena); }
+Array nvim__runtime_inspect(Arena *arena) { return rs_nvim__runtime_inspect(arena); }
 
 typedef struct {
   ArrayBuilder rv;

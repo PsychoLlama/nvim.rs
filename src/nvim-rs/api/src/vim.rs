@@ -566,3 +566,174 @@ pub unsafe extern "C" fn rs_nvim_get_chan_info(
     }
     rs_nvim_get_chan_info_impl(channel_id, chan, arena)
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3 — input, termcodes, exec_lua, hl-ns, runtime
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    // feedkeys
+    fn rs_nvim_feedkeys_impl(keys: NvimString, mode: NvimString, escape_ks: bool);
+
+    // input
+    fn rs_nvim_input_impl(channel_id: u64, keys: NvimString) -> i64;
+
+    // input_mouse
+    fn rs_nvim_input_mouse_impl(
+        button: NvimString,
+        action: NvimString,
+        modifier: NvimString,
+        grid: i64,
+        row: i64,
+        col: i64,
+        err: *mut crate::Error,
+    );
+
+    // replace_termcodes
+    fn rs_nvim_replace_termcodes_impl(
+        str: NvimString,
+        from_part: bool,
+        do_lt: bool,
+        special: bool,
+    ) -> NvimString;
+
+    // exec_lua
+    fn rs_nvim_exec_lua_impl(
+        code: NvimString,
+        args: Array,
+        arena: *mut Arena,
+        err: *mut crate::Error,
+    ) -> Object;
+
+    // hl-ns
+    fn rs_nvim_set_hl_ns_impl(ns_id: i64, err: *mut crate::Error);
+    fn rs_nvim_set_hl_ns_fast_impl(ns_id: i64);
+    fn rs_nvim_get_hl_ns_impl(has_winid: bool, winid: c_int, err: *mut crate::Error) -> c_int;
+
+    // get_hl: opaque opts pointer
+    fn rs_nvim_get_hl_impl(
+        ns_id: i64,
+        opts: *mut GetHlOpts,
+        arena: *mut Arena,
+        err: *mut crate::Error,
+    ) -> Dict;
+
+    // runtime paths
+    fn rs_nvim_list_runtime_paths_impl(arena: *mut Arena, err: *mut crate::Error) -> Array;
+    fn rs_nvim_runtime_inspect_impl(arena: *mut Arena) -> Array;
+
+}
+
+// Opaque type for Dict(get_highlight) — only passed through as pointer
+#[repr(C)]
+pub struct GetHlOpts {
+    _private: [u8; 0],
+}
+
+/// Sends input-keys to Nvim, subject to various quirks controlled by `mode` flags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_feedkeys(keys: NvimString, mode: NvimString, escape_ks: bool) {
+    rs_nvim_feedkeys_impl(keys, mode, escape_ks);
+}
+
+/// Queues raw user-input. Non-blocking.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_input(channel_id: u64, keys: NvimString) -> i64 {
+    rs_nvim_input_impl(channel_id, keys)
+}
+
+/// Send mouse event from GUI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_input_mouse(
+    button: NvimString,
+    action: NvimString,
+    modifier: NvimString,
+    grid: i64,
+    row: i64,
+    col: i64,
+    err: *mut crate::Error,
+) {
+    rs_nvim_input_mouse_impl(button, action, modifier, grid, row, col, err);
+}
+
+/// Replaces terminal codes and keycodes in a string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_replace_termcodes(
+    str: NvimString,
+    from_part: bool,
+    do_lt: bool,
+    special: bool,
+) -> NvimString {
+    rs_nvim_replace_termcodes_impl(str, from_part, do_lt, special)
+}
+
+/// Execute Lua code.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_exec_lua(
+    code: NvimString,
+    args: Array,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Object {
+    rs_nvim_exec_lua_impl(code, args, arena, err)
+}
+
+/// Like nvim_exec_lua(), but can be called during api-fast contexts.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim__exec_lua_fast(
+    code: NvimString,
+    args: Array,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Object {
+    rs_nvim_exec_lua_impl(code, args, arena, err)
+}
+
+/// Set active namespace for highlights.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_hl_ns(ns_id: i64, err: *mut crate::Error) {
+    rs_nvim_set_hl_ns_impl(ns_id, err);
+}
+
+/// Set active namespace for highlights while redrawing.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_set_hl_ns_fast(ns_id: i64, err: *mut crate::Error) {
+    let _ = err; // fast variant does not validate
+    rs_nvim_set_hl_ns_fast_impl(ns_id);
+}
+
+/// Gets the active highlight namespace.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_hl_ns(
+    has_winid: bool,
+    winid: c_int,
+    err: *mut crate::Error,
+) -> i64 {
+    rs_nvim_get_hl_ns_impl(has_winid, winid, err) as i64
+}
+
+/// Gets all or specific highlight groups in a namespace.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_get_hl(
+    ns_id: i64,
+    opts: *mut GetHlOpts,
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Dict {
+    rs_nvim_get_hl_impl(ns_id, opts, arena, err)
+}
+
+/// Gets the paths contained in runtime-search-path.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_list_runtime_paths(
+    arena: *mut Arena,
+    err: *mut crate::Error,
+) -> Array {
+    rs_nvim_list_runtime_paths_impl(arena, err)
+}
+
+/// Inspect the current runtime path.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim__runtime_inspect(arena: *mut Arena) -> Array {
+    rs_nvim_runtime_inspect_impl(arena)
+}
