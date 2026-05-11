@@ -240,6 +240,12 @@ extern void rs_tui_screenshot(TUIData *tui, const char *path, size_t path_len);
 extern void rs_tui_sigwinch_cb(SignalWatcher *watcher, int signum, void *cbdata);
 extern void rs_tui_terminal_after_startup(TUIData *tui);
 
+// Phase 5: Rust implementations for flush_buf_start and flush_buf_end
+extern size_t rs_flush_buf_start(TUIData *tui, char *buf, size_t len);
+extern size_t rs_flush_buf_end(TUIData *tui, char *buf, size_t len);
+extern void rs_terminfo_out(TUIData *tui, int what);
+extern void rs_terminfo_print_num(TUIData *tui, int what, int num1, int num2, int num3);
+
 // TUIData Accessor Functions for Rust
 
 
@@ -365,8 +371,6 @@ void nvim_tui_out_resize(TUIData *tui, int height, int width)
 // Forward declarations for output functions defined later
 static void out(TUIData *tui, const char *str, size_t len);
 static void out_len(TUIData *tui, const char *str);
-static void terminfo_out(TUIData *tui, TerminfoDef what);
-static void terminfo_print_num(TUIData *tui, TerminfoDef what, int num1, int num2, int num3);
 static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params);
 static void cursor_goto(TUIData *tui, int row, int col);
 static void invalidate(TUIData *tui, int top, int bot, int left, int right);
@@ -392,19 +396,19 @@ void nvim_tui_ugrid_scroll(TUIData *tui, int top, int bot, int left, int right, 
 /// Write raw bytes to output buffer
 void nvim_tui_out(TUIData *tui, const char *str, size_t len) { rs_out(tui, str, len); }
 
-/// Output a terminfo escape sequence
-void nvim_tui_terminfo_out(TUIData *tui, int what) { terminfo_out(tui, (TerminfoDef)what); }
+/// Output a terminfo escape sequence (calls Rust rs_terminfo_out directly)
+void nvim_tui_terminfo_out(TUIData *tui, int what) { rs_terminfo_out(tui, what); }
 
 /// Output a terminfo escape sequence with 1 parameter
 void nvim_tui_terminfo_print_num1(TUIData *tui, int what, int num1)
 {
-  terminfo_print_num(tui, (TerminfoDef)what, num1, 0, 0);
+  rs_terminfo_print_num(tui, what, num1, 0, 0);
 }
 
 /// Output a terminfo escape sequence with 2 parameters
 void nvim_tui_terminfo_print_num2(TUIData *tui, int what, int num1, int num2)
 {
-  terminfo_print_num(tui, (TerminfoDef)what, num1, num2, 0);
+  rs_terminfo_print_num(tui, what, num1, num2, 0);
 }
 
 /// Get grid row position
@@ -440,6 +444,7 @@ bool nvim_tui_get_default_attr(TUIData *tui) { return tui->default_attr; }
 
 
 void nvim_tui_set_busy(TUIData *tui, bool busy) { tui->busy = busy; }
+bool nvim_tui_get_busy(TUIData *tui) { return tui->busy; }
 
 bool nvim_tui_get_mouse_enabled(TUIData *tui) { return tui->mouse_enabled; }
 
@@ -549,7 +554,7 @@ void nvim_tui_ugrid_clear_chunk(TUIData *tui, int row, int col, int endcol, satt
 /// Output 3-param terminfo sequence
 void nvim_tui_terminfo_print_num3(TUIData *tui, int what, int n1, int n2, int n3)
 {
-  terminfo_print_num(tui, (TerminfoDef)what, n1, n2, n3);
+  rs_terminfo_print_num(tui, what, n1, n2, n3);
 }
 
 /// Output kTerm_set_attributes with 9 params
@@ -694,6 +699,11 @@ int nvim_tui_input_get_key_encoding(TUIData *tui) { return (int)tui->input.key_e
 // Phase 3 accessors: focus reporting, sigwinch/startup callback helpers
 const char *nvim_tui_get_enable_focus_reporting(TUIData *tui) { return tui->terminfo_ext.enable_focus_reporting; }
 
+// Phase 5 accessors: flush_buf_start/end fields
+bool nvim_tui_get_sync_output(TUIData *tui) { return tui->sync_output; }
+bool nvim_tui_get_is_invisible(TUIData *tui) { return tui->is_invisible; }
+void nvim_tui_set_is_invisible(TUIData *tui, bool val) { tui->is_invisible = val; }
+
 /// Wrapper for tui_reset_key_encoding (static) callable from Rust
 void nvim_tui_reset_key_encoding(TUIData *tui) { tui_reset_key_encoding(tui); }
 
@@ -753,9 +763,6 @@ void nvim_tui_out_len(TUIData *tui, const char *str) { out_len(tui, str); }
 
 #define TERMINFO_SEQ_LIMIT 128
 
-#define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
-#define terminfo_print_num2(tui, what, num1, num2) terminfo_print_num(tui, what, num1, num2, 0)
-#define terminfo_print_num3 terminfo_print_num
 
 static Set(cstr_t) urls = SET_INIT;
 
@@ -1023,9 +1030,9 @@ static void terminfo_start(TUIData *tui)
   t_colors = tui->ti.max_colors;
   // Enter alternate screen, save title, and clear.
   // NOTE: Do this *before* changing terminal settings. #6433
-  terminfo_out(tui, kTerm_enter_ca_mode);
-  terminfo_out(tui, kTerm_keypad_xmit);
-  terminfo_out(tui, kTerm_clear_screen);
+  nvim_tui_terminfo_out(tui, kTerm_enter_ca_mode);
+  nvim_tui_terminfo_out(tui, kTerm_keypad_xmit);
+  nvim_tui_terminfo_out(tui, kTerm_clear_screen);
 
   /// Terminals usually ignore unrecognized private modes, and there is no
   /// known ambiguity with these. So we just set them unconditionally.
@@ -1116,7 +1123,7 @@ static void terminfo_stop(TUIData *tui)
     // Position the cursor on the last screen line, below all the text
     cursor_goto(tui, tui->height - 1, 0);
     // Exit alternate screen.
-    terminfo_out(tui, kTerm_exit_ca_mode);
+    nvim_tui_terminfo_out(tui, kTerm_exit_ca_mode);
   }
 
   flush_buf(tui);
@@ -1543,21 +1550,6 @@ void out_printf(TUIData *tui, size_t limit, const char *fmt, ...)
   }
 }
 
-static void terminfo_out(TUIData *tui, TerminfoDef what)
-{
-  TPVAR null_params[9] = { 0 };
-  terminfo_print(tui, what, null_params);
-}
-
-static void terminfo_print_num(TUIData *tui, TerminfoDef what, int num1, int num2, int num3)
-{
-  TPVAR params[9] = { 0 };
-  params[0].num = num1;
-  params[1].num = num2;
-  params[2].num = num3;
-  terminfo_print(tui, what, params);
-}
-
 static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params)
 {
   if (what >= kTermCount) {
@@ -1597,44 +1589,16 @@ static void terminfo_set_if_empty(TUIData *tui, TerminfoDef str, const char *val
 static void terminfo_set_str(TUIData *tui, TerminfoDef str, const char *val) { tui->ti.defs[str] = val; }
 
 
-static bool should_invisible(TUIData *tui) { return tui->busy || tui->want_invisible; }
-
+/// Compute flush prefix (sync start / hide cursor). Rust implementation.
 static size_t flush_buf_start(TUIData *tui, char *buf, size_t len)
 {
-  if (tui->sync_output && tui->has_sync_mode) {
-    memcpy(buf, S_LEN("\x1b[?2026h"));
-    return sizeof("\x1b[?2026h") - 1;
-  } else if (!tui->is_invisible) {
-    tui->is_invisible = true;
-    const char *str = tui->ti.defs[kTerm_cursor_invisible];
-    if (str) {
-      TPVAR null_params[9] = { 0 };
-      return rs_terminfo_fmt(buf, buf + len, str, null_params);
-    }
-  }
-  return 0;
+  return rs_flush_buf_start(tui, buf, len);
 }
 
+/// Compute flush suffix (sync end / show/hide cursor). Rust implementation.
 static size_t flush_buf_end(TUIData *tui, char *buf, size_t len)
 {
-  size_t offset = 0;
-  if (tui->sync_output && tui->has_sync_mode) {
-    memcpy(buf + offset, S_LEN("\x1b[?2026l"));
-    offset += sizeof("\x1b[?2026l") - 1;
-  }
-  const char *str = NULL;
-  if (tui->is_invisible && !should_invisible(tui)) {
-    tui->is_invisible = false;
-    str = tui->ti.defs[kTerm_cursor_normal];
-  } else if (!tui->is_invisible && should_invisible(tui)) {
-    tui->is_invisible = true;
-    str = tui->ti.defs[kTerm_cursor_invisible];
-  }
-  if (str) {
-    TPVAR null_params[9] = { 0 };
-    offset += rs_terminfo_fmt(buf + offset, buf + len, str, null_params);
-  }
-  return offset;
+  return rs_flush_buf_end(tui, buf, len);
 }
 
 static void flush_buf(TUIData *tui)
@@ -1644,7 +1608,7 @@ static void flush_buf(TUIData *tui)
   char pre[32];
   char post[32];
 
-  if (tui->bufpos <= 0 && tui->is_invisible == should_invisible(tui)) {
+  if (tui->bufpos <= 0 && tui->is_invisible == (tui->busy || tui->want_invisible)) {
     return;
   }
 

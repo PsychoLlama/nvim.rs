@@ -2680,6 +2680,133 @@ pub unsafe extern "C" fn rs_tui_terminal_after_startup(tui: *mut TuiHandle) {
 // rs_tui_after_startup_cb is implemented as a thin C wrapper in tui.c
 // (kept there because extracting handle->data requires knowledge of uv_timer_t layout)
 
+// ============================================================================
+// Phase 5: flush_buf_start and flush_buf_end
+// ============================================================================
+
+extern "C" {
+    fn nvim_tui_get_sync_output(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_has_sync_mode(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_is_invisible(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_set_is_invisible(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_get_busy(tui: *mut TuiHandle) -> bool;
+    // nvim_tui_get_want_invisible already declared above
+}
+
+extern "C" {
+    fn rs_terminfo_fmt(
+        buf_start: *mut libc::c_char,
+        buf_end: *const libc::c_char,
+        str_ptr: *const libc::c_char,
+        params: *mut TpVar,
+    ) -> usize;
+}
+
+// kTerm_cursor_invisible = 7 (0-indexed in terminfo_enum_defs.h)
+const KTERM_CURSOR_INVISIBLE: c_int = 7;
+// kTerm_cursor_normal = 10 — already defined above as KTERM_CURSOR_NORMAL
+
+/// Compute flush prefix: sync-start marker or cursor-hide sequence.
+///
+/// Returns the number of bytes written to `buf`.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+/// - `buf` must point to a writable buffer of at least `len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_flush_buf_start(
+    tui: *mut TuiHandle,
+    buf: *mut libc::c_char,
+    len: usize,
+) -> usize {
+    if tui.is_null() || buf.is_null() {
+        return 0;
+    }
+
+    if nvim_tui_get_sync_output(tui) && nvim_tui_get_has_sync_mode(tui) {
+        // Emit DEC private mode set for synchronized output
+        let seq = b"\x1b[?2026h";
+        let n = seq.len().min(len);
+        std::ptr::copy_nonoverlapping(seq.as_ptr(), buf as *mut u8, n);
+        return n;
+    }
+
+    if !nvim_tui_get_is_invisible(tui) {
+        nvim_tui_set_is_invisible(tui, true);
+        let str_ptr = nvim_tui_get_ti_def(tui, KTERM_CURSOR_INVISIBLE);
+        if !str_ptr.is_null() && *str_ptr != 0 {
+            let mut null_params = [TpVar {
+                num: 0,
+                string: std::ptr::null_mut(),
+            }; 9];
+            return rs_terminfo_fmt(
+                buf,
+                buf.add(len) as *const libc::c_char,
+                str_ptr as *const libc::c_char,
+                null_params.as_mut_ptr(),
+            );
+        }
+    }
+    0
+}
+
+/// Compute flush suffix: sync-end marker and cursor show/hide sequence.
+///
+/// Returns the number of bytes written to `buf`.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+/// - `buf` must point to a writable buffer of at least `len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_flush_buf_end(
+    tui: *mut TuiHandle,
+    buf: *mut libc::c_char,
+    len: usize,
+) -> usize {
+    if tui.is_null() || buf.is_null() {
+        return 0;
+    }
+
+    let mut offset = 0usize;
+
+    if nvim_tui_get_sync_output(tui) && nvim_tui_get_has_sync_mode(tui) {
+        // Emit DEC private mode reset for synchronized output
+        let seq = b"\x1b[?2026l";
+        let n = seq.len().min(len - offset);
+        std::ptr::copy_nonoverlapping(seq.as_ptr(), buf.add(offset) as *mut u8, n);
+        offset += n;
+    }
+
+    let is_invisible = nvim_tui_get_is_invisible(tui);
+    let should_invisible = nvim_tui_get_busy(tui) || nvim_tui_get_want_invisible(tui);
+
+    let str_ptr: *const u8 = if is_invisible && !should_invisible {
+        nvim_tui_set_is_invisible(tui, false);
+        nvim_tui_get_ti_def(tui, KTERM_CURSOR_NORMAL)
+    } else if !is_invisible && should_invisible {
+        nvim_tui_set_is_invisible(tui, true);
+        nvim_tui_get_ti_def(tui, KTERM_CURSOR_INVISIBLE)
+    } else {
+        std::ptr::null()
+    };
+
+    if !str_ptr.is_null() && *str_ptr != 0 && offset < len {
+        let mut null_params = [TpVar {
+            num: 0,
+            string: std::ptr::null_mut(),
+        }; 9];
+        offset += rs_terminfo_fmt(
+            buf.add(offset),
+            buf.add(len) as *const libc::c_char,
+            str_ptr as *const libc::c_char,
+            null_params.as_mut_ptr(),
+        );
+    }
+    offset
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
