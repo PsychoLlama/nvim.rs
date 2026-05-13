@@ -10,4 +10,5 @@ crate-type = ["rlib"]
 
 [dependencies]
 nvim-ex-cmds-types = { path = "../ex_cmds_types" }
+nvim-eval = { path = "../eval" }
 nvim-eval-exec = { path = "../eval_exec" }

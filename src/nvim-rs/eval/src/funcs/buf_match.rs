@@ -111,10 +111,7 @@ extern "C" {
     // Use *const c_void to match dispatch.rs.
     fn nvim_tv_idx(argvars: TypevalPtr, i: c_int) -> TypevalPtr;
     fn nvim_tv_get_type(tv: *const c_void) -> c_int;
-    fn nvim_tv_get_string_buf_chk(
-        tv: TypevalPtr,
-        buf: *mut c_char,
-    ) -> *const c_char;
+    fn nvim_tv_get_string_buf_chk(tv: TypevalPtr, buf: *mut c_char) -> *const c_char;
 
     // p_ic
     fn nvim_search_get_p_ic() -> c_int;
@@ -150,8 +147,7 @@ extern "C" {
     #[link_name = "tv_dict_add_nr"]
     fn tv_dict_add_nr(dict: DictPtr, key: *const c_char, key_len: usize, nr: i64) -> c_int;
     #[link_name = "tv_dict_add_list"]
-    fn tv_dict_add_list(dict: DictPtr, key: *const c_char, key_len: usize, list: ListPtr)
-        -> c_int;
+    fn tv_dict_add_list(dict: DictPtr, key: *const c_char, key_len: usize, list: ListPtr) -> c_int;
     fn tv_dict_add_str_len(
         dict: DictPtr,
         key: *const c_char,
@@ -160,11 +156,7 @@ extern "C" {
         len: c_int,
     ) -> c_int;
     // Use *const c_void and isize to match system.rs/misc.rs declarations.
-    fn tv_dict_find(
-        dict: *const c_void,
-        key: *const c_char,
-        len: isize,
-    ) -> *mut c_void;
+    fn tv_dict_find(dict: *const c_void, key: *const c_char, len: isize) -> *mut c_void;
 
     // Error messages
     fn semsg(fmt: *const c_char, ...);
@@ -286,10 +278,7 @@ pub unsafe extern "C" fn rs_f_matchbufline(
     let buf = nvim_eval_tv_get_buf(argvars);
     if buf.is_null() {
         if nvim_eval_get_did_emsg() == prev_did_emsg {
-            semsg(
-                e_invalid_buffer_name_str.as_ptr(),
-                tv_get_string(argvars),
-            );
+            semsg(e_invalid_buffer_name_str.as_ptr(), tv_get_string(argvars));
         }
         return;
     }
@@ -357,13 +346,23 @@ pub unsafe extern "C" fn rs_f_matchbufline(
     nvim_eval_set_p_cpo_empty();
 
     let regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-    let mut regmatch = RegmatchT { regprog, ..RegmatchT::default() };
+    let mut regmatch = RegmatchT {
+        regprog,
+        ..RegmatchT::default()
+    };
     if !regmatch.regprog.is_null() {
         regmatch.rm_ic = nvim_search_get_p_ic() != 0;
 
         while slnum <= elnum {
             let str_ptr = nvim_eval_buf_ml_get(buf, slnum);
-            get_matches_in_str(str_ptr, &raw mut regmatch, retlist, i64::from(slnum), submatches, true);
+            get_matches_in_str(
+                str_ptr,
+                &raw mut regmatch,
+                retlist,
+                i64::from(slnum),
+                submatches,
+                true,
+            );
             slnum += 1;
         }
 

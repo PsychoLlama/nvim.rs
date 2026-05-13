@@ -172,5 +172,8 @@ extern ufunc_T *find_func(const char *name);
 extern int apply_autocmds_for_funcundefined(const char *name);
 // Wave 2 Phase 2: ex_call migrated to Rust (excmd.rs).
 extern void ex_call(exarg_T *eap);
+// Wave 2 Phase 3: trans_function_name migrated to Rust (names.rs).
+extern char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp,
+                                 partial_T **partial);
 
 #include "eval/userfunc.h.generated.h"
