@@ -266,17 +266,8 @@ static inline bool eval_fname_sid(const char *const name)
 
 // get_func_arity migrated to Rust (lookup.rs Phase 6)
 
-/// Find a function by name, return pointer to it in ufuncs.
-///
-/// @return  NULL for unknown function.
-ufunc_T *find_func(const char *name)
-{
-  hashitem_T *hi = hash_find(&func_hashtab, name);
-  if (!HASHITEM_EMPTY(hi)) {
-    return HI2UF(hi);
-  }
-  return NULL;
-}
+// find_func migrated to Rust (hashtab.rs Wave 2 Phase 1). Symbol provided by libnvim_rs.a.
+extern ufunc_T *find_func(const char *name);
 
 /// Add a number variable "name" to dict "dp" with value "nr".
 /// Logic lives in Rust (hashtab.rs Phase 1). Thin wrapper for C callers.
@@ -1553,11 +1544,8 @@ dict_T *nvim_partial_get_dict(const partial_T *pt) { return pt ? pt->pt_dict : N
 // nvim_partial_is_auto, nvim_funcexe_get_partial, nvim_funcexe_get_selfdict,
 // nvim_funcexe_get_evaluate -- dead, no Rust callers (Phase 17)
 
-/// Apply FuncUndefined autocmd and return result.
-int apply_autocmds_for_funcundefined(const char *name)
-{
-  return apply_autocmds(EVENT_FUNCUNDEFINED, name, name, true, NULL);
-}
+// apply_autocmds_for_funcundefined migrated to Rust (hashtab.rs Wave 2 Phase 1).
+extern int apply_autocmds_for_funcundefined(const char *name);
 
 /// Check if name is a builtin function (wrapper for static function).
 int nvim_is_builtin_function(const char *name, int len) { return rs_builtin_function(name, len); }

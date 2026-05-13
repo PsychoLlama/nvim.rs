@@ -6,18 +6,41 @@
 //! - `register_closure` (Rust: rs_register_closure)
 //! - `nvim_func_remove_impl` (inlined into rs_func_remove_ht)
 //! - `nvim_set_ref_in_functions_impl` (inlined into rs_set_ref_in_functions via nvim_func_ht_foreach)
+//!
+//! Wave 2 Phase 1: `find_func` body moved to Rust (exported as `find_func`).
+//! `apply_autocmds_for_funcundefined` body moved to Rust.
 
 #![allow(clippy::missing_safety_doc)]
 
 use std::ffi::{c_char, c_int, c_void};
 
+// EVENT_FUNCUNDEFINED value (autocmd_defs.h kEventFuncundefined = 68)
+const EVENT_FUNCUNDEFINED: c_int = 68;
+
 extern "C" {
     // Global func hashtab lookup/remove (Phase 1 new accessors)
     fn nvim_func_ht_remove_fp(fp: *mut c_void) -> c_int;
 
-    // Hash-find in global func hashtab (already existing in C as find_func — but we use
-    // find_func directly for name-based lookup in Rust callers)
-    fn find_func(name: *const c_char) -> *mut c_void;
+    // func_tbl_get: returns &func_hashtab (hashtab_T *)
+    fn func_tbl_get() -> *mut c_void;
+
+    // hash_find: find key in hashtab, returns hashitem_T * (Rust-implemented, export_name="hash_find")
+    fn hash_find(ht: *mut c_void, key: *const c_char) -> *mut c_void;
+
+    // hashitem empty check (HASHITEM_EMPTY macro equivalent)
+    fn nvim_hashitem_is_empty(hi: *const c_void) -> c_int;
+
+    // HI2UF macro equivalent
+    fn nvim_hashitem_to_ufunc(hi: *const c_void) -> *mut c_void;
+
+    // apply_autocmds for funcundefined
+    fn apply_autocmds(
+        event: c_int,
+        fname: *const c_char,
+        fname_io: *const c_char,
+        force: bool,
+        buf: *mut c_void,
+    ) -> bool;
 
     // funccall_T accessors for register_closure
     fn get_current_funccal() -> *mut c_void;
@@ -45,17 +68,41 @@ extern "C" {
 }
 
 // =============================================================================
-// rs_find_func
+// find_func  (Wave 2 Phase 1: C body deleted, Rust owns the symbol)
 // =============================================================================
 
 /// Find a function by name in the global function hashtable.
 /// Returns NULL if not found.
 ///
+/// Replaces C `find_func` — body is now here; C file has `extern` decl only.
+///
 /// # Safety
 /// `name` must be a valid NUL-terminated C string.
-#[no_mangle]
+#[unsafe(export_name = "find_func")]
 pub unsafe extern "C" fn rs_find_func(name: *const c_char) -> *mut c_void {
-    unsafe { find_func(name) }
+    let ht = unsafe { func_tbl_get() };
+    let hi = unsafe { hash_find(ht, name) };
+    if unsafe { nvim_hashitem_is_empty(hi) } != 0 {
+        return std::ptr::null_mut();
+    }
+    unsafe { nvim_hashitem_to_ufunc(hi) }
+}
+
+// =============================================================================
+// apply_autocmds_for_funcundefined  (Wave 2 Phase 1: C body deleted)
+// =============================================================================
+
+/// Apply FuncUndefined autocmd and return result.
+///
+/// Replaces C `apply_autocmds_for_funcundefined` — body is now here.
+///
+/// # Safety
+/// `name` must be a valid NUL-terminated C string.
+#[unsafe(export_name = "apply_autocmds_for_funcundefined")]
+pub unsafe extern "C" fn rs_apply_autocmds_for_funcundefined(name: *const c_char) -> c_int {
+    c_int::from(unsafe {
+        apply_autocmds(EVENT_FUNCUNDEFINED, name, name, true, std::ptr::null_mut())
+    })
 }
 
 // =============================================================================

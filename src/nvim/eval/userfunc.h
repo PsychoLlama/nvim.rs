@@ -167,4 +167,8 @@ extern char *get_user_func_name(expand_T *xp, int idx);
 extern int get_func_tv(const char *name, int len, typval_T *rettv, char **arg,
                        evalarg_T *const evalarg, funcexe_T *funcexe);
 
+// Wave 2 Phase 1: find_func and apply_autocmds_for_funcundefined migrated to Rust (hashtab.rs).
+extern ufunc_T *find_func(const char *name);
+extern int apply_autocmds_for_funcundefined(const char *name);
+
 #include "eval/userfunc.h.generated.h"
