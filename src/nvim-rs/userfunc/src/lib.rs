@@ -19,6 +19,8 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::struct_excessive_bools)]
+#![allow(clippy::fn_params_excessive_bools)]
+#![allow(clippy::inline_always)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::doc_markdown)]
 

@@ -155,6 +155,8 @@ static funccall_T *previous_funccal = NULL;
 
 static const char *e_funcexts = N_("E122: Function %s already exists, add ! to replace it");
 static const char *e_funcdict = N_("E717: Dictionary entry already exists");
+// Wave 2 Phase 4: sequential number for nameless dict functions (was local to ex_function)
+static int func_nr = 0;
 static const char *e_funcref = N_("E718: Funcref required");
 static const char *e_nofunc = N_("E130: Unknown function: %s");
 static const char e_function_list_was_modified[]
@@ -743,386 +745,14 @@ extern int call_func(const char *funcname, int len, typval_T *rettv, int argcoun
 /// This stops at "endfunction".
 /// "newlines" must already have been initialized.
 /// Phase 7 (plan db85cc6b): body moved to Rust rs_get_function_body (body.rs).
-static int get_function_body(exarg_T *eap, garray_T *newlines, char *line_arg_in,
-                             char **line_to_free, bool show_block)
+// No longer static: Rust (excmd.rs) calls this as an extern C function.
+int get_function_body(exarg_T *eap, garray_T *newlines, char *line_arg_in,
+                      char **line_to_free, bool show_block)
 {
   return rs_get_function_body(eap, newlines, line_arg_in, line_to_free, show_block);
 }
 
-/// ":function"
-void ex_function(exarg_T *eap)
-{
-  char *line_to_free = NULL;
-  char *arg;
-  char *line_arg = NULL;
-  garray_T newargs;
-  garray_T default_args;
-  garray_T newlines;
-  int varargs = false;
-  int flags = 0;
-  ufunc_T *fp = NULL;
-  bool free_fp = false;
-  bool overwrite = false;
-  funcdict_T fudi;
-  static int func_nr = 0;           // number for nameless function
-  hashtab_T *ht;
-  bool show_block = false;
-
-  // ":function" without argument: list functions.
-  if (ends_excmd(*eap->arg)) {
-    if (!eap->skip) {
-      rs_list_functions();
-    }
-    eap->nextcmd = check_nextcmd(eap->arg);
-    return;
-  }
-
-  // ":function /pat": list functions matching pattern.
-  if (*eap->arg == '/') {
-    char *p = rs_list_functions_matching_pat(eap);
-    eap->nextcmd = check_nextcmd(p);
-    return;
-  }
-
-  // Get the function name.  There are these situations:
-  // func        function name
-  //             "name" == func, "fudi.fd_dict" == NULL
-  // dict.func   new dictionary entry
-  //             "name" == NULL, "fudi.fd_dict" set,
-  //             "fudi.fd_di" == NULL, "fudi.fd_newkey" == func
-  // dict.func   existing dict entry with a Funcref
-  //             "name" == func, "fudi.fd_dict" set,
-  //             "fudi.fd_di" set, "fudi.fd_newkey" == NULL
-  // dict.func   existing dict entry that's not a Funcref
-  //             "name" == NULL, "fudi.fd_dict" set,
-  //             "fudi.fd_di" set, "fudi.fd_newkey" == NULL
-  // s:func      script-local function name
-  // g:func      global function name, same as "func"
-  char *p = eap->arg;
-  char *name = save_function_name(&p, eap->skip, TFN_NO_AUTOLOAD, &fudi);
-  int paren = (vim_strchr(p, '(') != NULL);
-  if (name == NULL && (fudi.fd_dict == NULL || !paren) && !eap->skip) {
-    // Return on an invalid expression in braces, unless the expression
-    // evaluation has been cancelled due to an aborting error, an
-    // interrupt, or an exception.
-    if (!aborting()) {
-      if (fudi.fd_newkey != NULL) {
-        semsg(_(e_dictkey), fudi.fd_newkey);
-      }
-      xfree(fudi.fd_newkey);
-      return;
-    }
-    eap->skip = true;
-  }
-
-  // An error in a function call during evaluation of an expression in magic
-  // braces should not cause the function not to be defined.
-  const int saved_did_emsg = did_emsg;
-  did_emsg = false;
-
-  // ":function func" with only function name: list function.
-  if (!paren) {
-    fp = rs_list_one_function(eap, name, p);
-    goto ret_free;
-  }
-
-  // ":function name(arg1, arg2)" Define function.
-  p = skipwhite(p);
-  if (*p != '(') {
-    if (!eap->skip) {
-      semsg(_("E124: Missing '(': %s"), eap->arg);
-      goto ret_free;
-    }
-    // attempt to continue by skipping some text
-    if (vim_strchr(p, '(') != NULL) {
-      p = vim_strchr(p, '(');
-    }
-  }
-  p = skipwhite(p + 1);
-
-  ga_init(&newargs, (int)sizeof(char *), 3);
-  ga_init(&newlines, (int)sizeof(char *), 3);
-
-  if (!eap->skip) {
-    // Check the name of the function.  Unless it's a dictionary function
-    // (that we are overwriting).
-    if (name != NULL) {
-      arg = name;
-    } else {
-      arg = fudi.fd_newkey;
-    }
-    if (arg != NULL && (fudi.fd_di == NULL || !tv_is_func(fudi.fd_di->di_tv))) {
-      char *name_base = arg;
-      if ((uint8_t)(*arg) == K_SPECIAL) {
-        name_base = vim_strchr(arg, '_');
-        if (name_base == NULL) {
-          name_base = arg + 3;
-        } else {
-          name_base++;
-        }
-      }
-      int i;
-      for (i = 0; name_base[i] != NUL && (i == 0
-                                          ? rs_eval_isnamec1(name_base[i])
-                                          : rs_eval_isnamec(name_base[i])); i++) {}
-      if (name_base[i] != NUL) {
-        emsg_funcname(e_invarg2, arg);
-        goto ret_free;
-      }
-    }
-    // Disallow using the g: dict.
-    if (fudi.fd_dict != NULL && fudi.fd_dict->dv_scope == VAR_DEF_SCOPE) {
-      emsg(_("E862: Cannot use g: here"));
-      goto ret_free;
-    }
-  }
-
-  if (get_function_args(&p, ')', &newargs, &varargs,
-                        &default_args, eap->skip) == FAIL) {
-    goto errret_2;
-  }
-
-  if (KeyTyped && ui_has(kUICmdline)) {
-    show_block = true;
-    ui_ext_cmdline_block_append(0, eap->cmd);
-  }
-
-  // find extra arguments "range", "dict", "abort" and "closure"
-  while (true) {
-    p = skipwhite(p);
-    if (strncmp(p, "range", 5) == 0) {
-      flags |= FC_RANGE;
-      p += 5;
-    } else if (strncmp(p, "dict", 4) == 0) {
-      flags |= FC_DICT;
-      p += 4;
-    } else if (strncmp(p, "abort", 5) == 0) {
-      flags |= FC_ABORT;
-      p += 5;
-    } else if (strncmp(p, "closure", 7) == 0) {
-      flags |= FC_CLOSURE;
-      p += 7;
-      if (current_funccal == NULL) {
-        emsg_funcname(N_("E932: Closure function should not be at top level: %s"),
-                      name == NULL ? "" : name);
-        goto erret;
-      }
-    } else {
-      break;
-    }
-  }
-
-  // When there is a line break use what follows for the function body.
-  // Makes 'exe "func Test()\n...\nendfunc"' work.
-  if (*p == '\n') {
-    line_arg = p + 1;
-  } else if (*p != NUL && *p != '"' && !eap->skip && !did_emsg) {
-    semsg(_(e_trailing_arg), p);
-  }
-
-  // Read the body of the function, until ":endfunction" is found.
-  if (KeyTyped) {
-    // Check if the function already exists, don't let the user type the
-    // whole function before telling them it doesn't work!  For a script we
-    // need to skip the body to be able to find what follows.
-    if (!eap->skip && !eap->forceit) {
-      if (fudi.fd_dict != NULL && fudi.fd_newkey == NULL) {
-        emsg(_(e_funcdict));
-      } else if (name != NULL && find_func(name) != NULL) {
-        emsg_funcname(e_funcexts, name);
-      }
-    }
-
-    if (!eap->skip && did_emsg) {
-      goto erret;
-    }
-
-    if (!ui_has(kUICmdline)) {
-      msg_putchar('\n');              // don't overwrite the function name
-    }
-    cmdline_row = msg_row;
-  }
-
-  // Save the starting line number.
-  linenr_T sourcing_lnum_top = SOURCING_LNUM;
-
-  // Do not define the function when getting the body fails and when skipping.
-  if (get_function_body(eap, &newlines, line_arg, &line_to_free, show_block) == FAIL
-      || eap->skip) {
-    goto erret;
-  }
-
-  // If there are no errors, add the function
-  size_t namelen = 0;
-  if (fudi.fd_dict == NULL) {
-    dictitem_T *v = find_var(name, strlen(name), &ht, false);
-    if (v != NULL && v->di_tv.v_type == VAR_FUNC) {
-      emsg_funcname(N_("E707: Function name conflicts with variable: %s"), name);
-      goto erret;
-    }
-
-    fp = find_func(name);
-    if (fp != NULL) {
-      // Function can be replaced with "function!" and when sourcing the
-      // same script again, but only once.
-      if (!eap->forceit
-          && (fp->uf_script_ctx.sc_sid != current_sctx.sc_sid
-              || fp->uf_script_ctx.sc_seq == current_sctx.sc_seq)) {
-        emsg_funcname(e_funcexts, name);
-        goto errret_keep;
-      }
-      if (fp->uf_calls > 0) {
-        emsg_funcname(N_("E127: Cannot redefine function %s: It is in use"), name);
-        goto errret_keep;
-      }
-      if (fp->uf_refcount > 1) {
-        // This function is referenced somewhere, don't redefine it but
-        // create a new one.
-        (fp->uf_refcount)--;
-        fp->uf_flags |= FC_REMOVED;
-        fp = NULL;
-        overwrite = true;
-      } else {
-        char *exp_name = fp->uf_name_exp;
-        // redefine existing function, keep the expanded name
-        XFREE_CLEAR(name);
-        fp->uf_name_exp = NULL;
-        rs_func_clear_items(fp);
-        fp->uf_name_exp = exp_name;
-        fp->uf_profiling = false;
-        fp->uf_prof_initialized = false;
-      }
-    }
-  } else {
-    char numbuf[NUMBUFLEN];
-
-    fp = NULL;
-    if (fudi.fd_newkey == NULL && !eap->forceit) {
-      emsg(_(e_funcdict));
-      goto erret;
-    }
-    if (fudi.fd_di == NULL) {
-      if (value_check_lock(fudi.fd_dict->dv_lock, eap->arg, TV_CSTRING)) {
-        // Can't add a function to a locked dictionary
-        goto erret;
-      }
-    } else if (value_check_lock(fudi.fd_di->di_tv.v_lock, eap->arg, TV_CSTRING)) {
-      // Can't change an existing function if it is locked
-      goto erret;
-    }
-
-    // Give the function a sequential number.  Can only be used with a
-    // Funcref!
-    xfree(name);
-    namelen = (size_t)snprintf(numbuf, sizeof(numbuf), "%d", ++func_nr);
-    name = xmemdupz(numbuf, namelen);
-  }
-
-  if (fp == NULL) {
-    if (fudi.fd_dict == NULL && vim_strchr(name, AUTOLOAD_CHAR) != NULL) {
-      // Check that the autoload name matches the script name.
-      int j = FAIL;
-      if (SOURCING_NAME != NULL) {
-        char *scriptname = autoload_name(name, strlen(name));
-        p = vim_strchr(scriptname, '/');
-        int plen = (int)strlen(p);
-        int slen = (int)strlen(SOURCING_NAME);
-        if (slen > plen && path_fnamecmp(p, SOURCING_NAME + slen - plen) == 0) {
-          j = OK;
-        }
-        xfree(scriptname);
-      }
-      if (j == FAIL) {
-        semsg(_("E746: Function name does not match script file name: %s"),
-              name);
-        goto erret;
-      }
-    }
-
-    if (namelen == 0) {
-      namelen = strlen(name);
-    }
-    fp = alloc_ufunc(name, namelen);
-
-    if (fudi.fd_dict != NULL) {
-      if (fudi.fd_di == NULL) {
-        // Add new dict entry
-        fudi.fd_di = tv_dict_item_alloc(fudi.fd_newkey);
-        if (tv_dict_add(fudi.fd_dict, fudi.fd_di) == FAIL) {
-          xfree(fudi.fd_di);
-          XFREE_CLEAR(fp);
-          goto erret;
-        }
-      } else {
-        // Overwrite existing dict entry.
-        tv_clear(&fudi.fd_di->di_tv);
-      }
-      fudi.fd_di->di_tv.v_type = VAR_FUNC;
-      fudi.fd_di->di_tv.vval.v_string = xmemdupz(name, namelen);
-
-      // behave like "dict" was used
-      flags |= FC_DICT;
-    }
-
-    // insert the new function in the function list
-    if (overwrite) {
-      hashitem_T *hi = hash_find(&func_hashtab, name);
-      hi->hi_key = UF2HIKEY(fp);
-    } else if (hash_add(&func_hashtab, UF2HIKEY(fp)) == FAIL) {
-      free_fp = true;
-      goto erret;
-    }
-    fp->uf_refcount = 1;
-  }
-  fp->uf_args = newargs;
-  fp->uf_def_args = default_args;
-  fp->uf_lines = newlines;
-  if ((flags & FC_CLOSURE) != 0) {
-    register_closure(fp);
-  } else {
-    fp->uf_scoped = NULL;
-  }
-  if (prof_def_func()) {
-    func_do_profile(fp);
-  }
-  fp->uf_varargs = varargs;
-  if (sandbox) {
-    flags |= FC_SANDBOX;
-  }
-  fp->uf_flags = flags;
-  fp->uf_calls = 0;
-  fp->uf_script_ctx = current_sctx;
-  fp->uf_script_ctx.sc_lnum += sourcing_lnum_top;
-  nlua_set_sctx(&fp->uf_script_ctx);
-
-  goto ret_free;
-
-erret:
-  if (fp != NULL) {
-    // these were set to "newargs" and "default_args", which are cleared below
-    ga_init(&fp->uf_args, (int)sizeof(char *), 1);
-    ga_init(&fp->uf_def_args, (int)sizeof(char *), 1);
-  }
-errret_2:
-  if (fp != NULL) {
-    XFREE_CLEAR(fp->uf_name_exp);
-  }
-  if (free_fp) {
-    XFREE_CLEAR(fp);
-  }
-errret_keep:
-  ga_clear_strings(&newargs);
-  ga_clear_strings(&default_args);
-  ga_clear_strings(&newlines);
-ret_free:
-  xfree(line_to_free);
-  xfree(fudi.fd_newkey);
-  xfree(name);
-  did_emsg |= saved_did_emsg;
-  if (show_block) {
-    ui_ext_cmdline_block_leave();
-  }
-}
+// Wave 2 Phase 4: ex_function migrated to Rust (excmd.rs).
 
 // get_user_func_name migrated to Rust (expand.rs Phase 3).
 // rs_get_user_func_name now implements the logic directly via export_name = "get_user_func_name".
@@ -1847,6 +1477,7 @@ void nvim_fc_set_returned(funccall_T *fc, int v) { if (fc) { fc->fc_returned = (
 typval_T *nvim_fc_get_rettv(funccall_T *fc) { return fc ? fc->fc_rettv : NULL; }
 cstack_T *nvim_eap_get_cstack(const exarg_T *eap) { return eap ? eap->cstack : NULL; }
 // Wave 2 Phase 2: ex_call migration accessors
+void nvim_eap_set_skip(exarg_T *eap, int v) { if (eap) { eap->skip = (bool)v; } }
 int nvim_cstack_get_trylevel(const cstack_T *cs) { return cs ? cs->cs_trylevel : 0; }
 int nvim_cmd_defer_idx(void) { return (int)CMD_defer; }
 void nvim_semsg_e_missingparen(const char *name) { semsg(_(e_missingparen), name); }
@@ -1989,7 +1620,9 @@ void nvim_ufunc_init_luaref_fields(ufunc_T *fp, LuaRef ref)
   fp->uf_luaref = ref;
 }
 
-/// Add fp to the global function hashtab (hash_add).
+/// Add fp to the global function hashtab (hash_add). Returns OK on success, FAIL on collision.
+int nvim_func_ht_try_add_fp(ufunc_T *fp) { return hash_add(&func_hashtab, UF2HIKEY(fp)); }
+/// Add fp to the global function hashtab (hash_add). Asserts no collision (use for known-unique).
 void nvim_func_ht_add_fp(ufunc_T *fp)
 {
   hash_add(&func_hashtab, UF2HIKEY(fp));
@@ -2121,3 +1754,81 @@ void nvim_userfunc_emsg_e1058(void) { emsg(_(e_function_nesting_too_deep)); }
 
 /// Emit error E1145 (missing heredoc end marker).
 void nvim_userfunc_semsg_e1145(const char *marker) { semsg(_(e_missing_heredoc_end_marker_str), marker); }
+
+// Wave 2 Phase 4: ex_function migration accessors
+int nvim_keytyped(void) { return (int)KeyTyped; }
+int nvim_get_msg_row(void) { return msg_row; }
+void nvim_set_cmdline_row(int v) { cmdline_row = v; }
+/// Increment the file-level func_nr counter and return the new value.
+/// Used to generate sequential nameless-function names ("%d").
+int nvim_next_func_nr(void) { return ++func_nr; }
+/// Overwrite existing func_hashtab entry for fp: sets hi->hi_key = UF2HIKEY(fp).
+void nvim_func_ht_overwrite_fp(const char *name, ufunc_T *fp)
+{
+  hashitem_T *hi = hash_find(&func_hashtab, name);
+  hi->hi_key = UF2HIKEY(fp);
+}
+/// Copy newargs / default_args / newlines garrays into fp.
+void nvim_ufunc_set_garray_fields(ufunc_T *fp, garray_T *args, garray_T *def_args,
+                                  garray_T *lines)
+{
+  if (!fp) { return; }
+  fp->uf_args = *args;
+  fp->uf_def_args = *def_args;
+  fp->uf_lines = *lines;
+}
+/// Set fp->uf_varargs, uf_flags (adding FC_SANDBOX if sandbox is on),
+/// uf_calls=0, uf_script_ctx = current_sctx adjusted by sourcing_lnum_top,
+/// then call nlua_set_sctx.
+void nvim_ufunc_finalize_user_func(ufunc_T *fp, int varargs, int flags, linenr_T sourcing_lnum_top)
+{
+  if (!fp) { return; }
+  fp->uf_varargs = varargs;
+  if (sandbox) { flags |= FC_SANDBOX; }
+  fp->uf_flags = flags;
+  fp->uf_calls = 0;
+  fp->uf_script_ctx = current_sctx;
+  fp->uf_script_ctx.sc_lnum += sourcing_lnum_top;
+  nlua_set_sctx(&fp->uf_script_ctx);
+}
+/// Emit error messages for ex_function
+void nvim_emsg_e124_missing_paren(const char *arg) { semsg(_("E124: Missing '(': %s"), arg); }
+void nvim_emsg_e707_func_name_conflict(const char *name)
+{
+  emsg_funcname(N_("E707: Function name conflicts with variable: %s"), name);
+}
+void nvim_emsg_e127_cannot_redefine(const char *name)
+{
+  emsg_funcname(N_("E127: Cannot redefine function %s: It is in use"), name);
+}
+void nvim_emsg_e122_func_exists(const char *name) { emsg_funcname(e_funcexts, name); }
+void nvim_emsg_e746_autoload_mismatch(const char *name)
+{
+  semsg(_("E746: Function name does not match script file name: %s"), name);
+}
+void nvim_emsg_e932_closure_toplevel(const char *name)
+{
+  emsg_funcname(N_("E932: Closure function should not be at top level: %s"),
+                name == NULL ? "" : name);
+}
+void nvim_emsg_e862_no_g_dict(void) { emsg(_("E862: Cannot use g: here")); }
+void nvim_emsg_e717_funcdict(void) { emsg(_(e_funcdict)); }
+// Additional Phase 4 accessors for ufunc fields and script context
+int nvim_ufunc_get_script_ctx_seq(const ufunc_T *fp) { return fp ? fp->uf_script_ctx.sc_seq : 0; }
+int nvim_current_sctx_get_seq(void) { return current_sctx.sc_seq; }
+void nvim_ufunc_set_name_exp(ufunc_T *fp, char *v) { if (fp) { fp->uf_name_exp = v; } }
+/// XFREE_CLEAR(fp->uf_name_exp): free and set to NULL.
+void nvim_ufunc_free_name_exp(ufunc_T *fp) { if (fp) { XFREE_CLEAR(fp->uf_name_exp); } }
+/// Return fp->uf_name (pointer to the name array inside ufunc_T).
+const char *nvim_ufunc_get_uf_name_ptr(const ufunc_T *fp) { return fp ? fp->uf_name : NULL; }
+/// Set di->di_tv to VAR_FUNC with xmemdupz(name, namelen).
+void nvim_dictitem_set_tv_func(dictitem_T *di, const char *name, size_t namelen)
+{
+  if (!di) { return; }
+  di->di_tv.v_type = VAR_FUNC;
+  di->di_tv.vval.v_string = xmemdupz(name, namelen);
+}
+/// Decrement fp->uf_refcount by 1.
+void nvim_ufunc_dec_refcount(ufunc_T *fp) { if (fp) { (fp->uf_refcount)--; } }
+/// Get v_lock from a typval_T pointer.
+int nvim_tv_get_lock(const typval_T *tv) { return tv ? (int)tv->v_lock : 0; }

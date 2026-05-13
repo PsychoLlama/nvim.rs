@@ -175,5 +175,7 @@ extern void ex_call(exarg_T *eap);
 // Wave 2 Phase 3: trans_function_name migrated to Rust (names.rs).
 extern char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp,
                                  partial_T **partial);
+// Wave 2 Phase 4: ex_function migrated to Rust (excmd.rs).
+extern void ex_function(exarg_T *eap);
 
 #include "eval/userfunc.h.generated.h"

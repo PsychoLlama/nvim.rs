@@ -669,7 +669,9 @@ pub unsafe fn searchpair_cmn(argvars: Tv, match_pos: *mut PosT) -> c_int {
         }
     }
 
-    retval = rs_do_searchpair(spat, mpat, epat, dir, skip, flags, match_pos, lnum_stop, time_limit);
+    retval = rs_do_searchpair(
+        spat, mpat, epat, dir, skip, flags, match_pos, lnum_stop, time_limit,
+    );
 
     nvim_set_p_ws(save_p_ws);
     retval
