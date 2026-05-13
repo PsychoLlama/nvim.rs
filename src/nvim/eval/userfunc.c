@@ -113,12 +113,9 @@ extern void rs_user_func_error(int error, const char *name, int found_var);
 extern char *get_func_line(int c, void *cookie, int indent, bool do_concat);
 
 // Phase 1 (plan db85cc6b): Small hashtab foundations (implemented in Rust userfunc/src/hashtab.rs)
-extern void rs_register_closure(ufunc_T *fp);
 extern void rs_add_nr_var(dict_T *dp, dictitem_T *v, const char *name, int64_t nr);
 
-// Phase 2 (plan db85cc6b): lambda / alloc_ufunc / register_luafunc (Rust userfunc/src/lambda.rs)
-extern size_t rs_get_lambda_name(char *buf, size_t bufsize);
-extern ufunc_T *rs_alloc_ufunc(const char *name, size_t namelen);
+// Phase 2 (plan db85cc6b): lambda / register_luafunc (Rust userfunc/src/lambda.rs)
 
 // Phase 5 (plan db85cc6b): get_lambda_tv (Rust userfunc/src/lambda.rs)
 extern int rs_get_lambda_tv(char **arg, typval_T *rettv, evalarg_T *evalarg);
@@ -178,27 +175,6 @@ hashtab_T *func_tbl_get(void) { return &func_hashtab; }
 // one_function_arg and get_function_args migrated to Rust (parsing.rs Phase 20)
 extern int get_function_args(char **argp, char endchar, garray_T *newargs, int *varargs,
                              garray_T *default_args, bool skip);
-
-/// Register function "fp" as using "current_funccal" as its scope.
-/// Logic lives in Rust (hashtab.rs Phase 1). Thin wrapper for C callers.
-static void register_closure(ufunc_T *fp) { rs_register_closure(fp); }
-
-static char lambda_name[8 + NUMBUFLEN];
-
-/// @return  a name for a lambda.  Returned in static memory.
-/// Logic (counter) lives in Rust (lambda.rs Phase 2). Thin wrapper for C callers.
-static String get_lambda_name(void)
-{
-  size_t len = rs_get_lambda_name(lambda_name, sizeof(lambda_name));
-  return cbuf_as_string(lambda_name, len);
-}
-
-/// Allocate a "ufunc_T" for a function called "name".
-/// Logic lives in Rust (lambda.rs Phase 2). Thin wrapper for C callers.
-static ufunc_T *alloc_ufunc(const char *name, size_t namelen)
-{
-  return rs_alloc_ufunc(name, namelen);
-}
 
 /// Parse a lambda expression and get a Funcref from "*arg".
 /// Logic lives in Rust (lambda.rs Phase 5). Thin wrapper for C callers.
