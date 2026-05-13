@@ -45,6 +45,7 @@ pub mod misc;
 pub mod path;
 pub mod random;
 pub mod search;
+pub mod search_cmn;
 pub mod simple;
 pub mod string;
 pub mod system;

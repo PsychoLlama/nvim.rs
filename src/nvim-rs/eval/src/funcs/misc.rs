@@ -360,7 +360,6 @@ extern "C" {
     fn nvim_eval_max_min(argvars: *const c_void, rettv: *mut c_void, domax: bool);
     fn nvim_eval_set_position(argvars: *const c_void, rettv: *mut c_void, charpos: bool);
     fn nvim_eval_set_cursorpos(argvars: *const c_void, rettv: *mut c_void, charcol: bool);
-    fn nvim_eval_searchpair_cmn(argvars: *const c_void) -> c_int;
     fn nvim_eval_find_some_match(argvars: *const c_void, rettv: *mut c_void, kind: c_int);
 
     // Direct underlying functions (Phase 2 inlining)
@@ -841,7 +840,8 @@ pub unsafe extern "C" fn rs_f_searchpair(
     _fptr: *mut c_void,
 ) {
     let rettv = TypevalPtrMut::from_raw(rettv);
-    rettv_set_number(rettv, i64::from(nvim_eval_searchpair_cmn(argvars)));
+    let result = crate::funcs::search_cmn::do_searchpair_fn(argvars.cast_mut());
+    rettv_set_number(rettv, i64::from(result));
 }
 
 /// "match()" function - find pattern match position
@@ -925,8 +925,8 @@ extern "C" {
     fn nvim_eval_libcall(argvars: *const c_void, rettv: *mut c_void, retstr: bool);
     // nvim_eval_script_host_eval: inlined — calls script_host_eval directly
     fn script_host_eval(name: *mut c_char, argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_search(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_eval_searchpairpos(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_search: migrated to Rust (search_cmn::do_search)
+    // nvim_eval_searchpairpos: migrated to Rust (search_cmn::do_searchpairpos)
     // nvim_eval_swapfilelist: inlined into rs_f_swapfilelist below
     // nvim_eval_swapinfo: inlined into rs_f_swapinfo below
 
@@ -1172,7 +1172,7 @@ pub unsafe extern "C" fn rs_f_search(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_search(argvars, rettv);
+    crate::funcs::search_cmn::do_search(argvars.cast_mut(), rettv);
 }
 
 /// "searchpairpos()" function - search for matching bracket pair, return position
@@ -1185,7 +1185,7 @@ pub unsafe extern "C" fn rs_f_searchpairpos(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_searchpairpos(argvars, rettv);
+    crate::funcs::search_cmn::do_searchpairpos(argvars.cast_mut(), rettv);
 }
 
 /// "swapfilelist()" function - get list of swap files
@@ -1246,7 +1246,7 @@ extern "C" {
     fn p6_nvim_tv_set_string_copy(tv: *mut c_void, s: *const u8, len: c_int);
     fn nvim_eval_state(argvars: *const c_void, rettv: *mut c_void);
     // nvim_eval_searchdecl: inlined into rs_f_searchdecl below
-    fn nvim_eval_searchpos(argvars: *const c_void, rettv: *mut c_void);
+    // nvim_eval_searchpos: migrated to Rust (search_cmn::do_searchpos)
 
     // searchdecl inlining
     fn find_decl(
@@ -1550,7 +1550,7 @@ pub unsafe extern "C" fn rs_f_searchpos(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_eval_searchpos(argvars, rettv);
+    crate::funcs::search_cmn::do_searchpos(argvars.cast_mut(), rettv);
 }
 
 // =============================================================================
