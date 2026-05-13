@@ -1368,96 +1368,8 @@ extern int ex_call_inner(exarg_T *eap, char *name, char **arg, char *startarg,
 // rs_handle_defer_one now implements the logic directly.
 
 
-/// ":1,25call func(arg1, arg2)" function call.
-/// ":defer func(arg1, arg2)"    deferred function call.
-void ex_call(exarg_T *eap)
-{
-  char *arg = eap->arg;
-  bool failed = false;
-  funcdict_T fudi;
-  partial_T *partial = NULL;
-  evalarg_T evalarg;
-
-  fill_evalarg_from_eap(&evalarg, eap, eap->skip);
-  if (eap->skip) {
-    typval_T rettv;
-    // trans_function_name() doesn't work well when skipping, use eval0()
-    // instead to skip to any following command, e.g. for:
-    //   :if 0 | call dict.foo().bar() | endif.
-    emsg_skip++;
-    if (eval0(eap->arg, &rettv, eap, &evalarg) != FAIL) {
-      tv_clear(&rettv);
-    }
-    emsg_skip--;
-    clear_evalarg(&evalarg, eap);
-    return;
-  }
-
-  char *tofree = trans_function_name(&arg, false, TFN_INT, &fudi, &partial);
-  if (fudi.fd_newkey != NULL) {
-    // Still need to give an error message for missing key.
-    semsg(_(e_dictkey), fudi.fd_newkey);
-    xfree(fudi.fd_newkey);
-  }
-  if (tofree == NULL) {
-    return;
-  }
-
-  // Increase refcount on dictionary, it could get deleted when evaluating
-  // the arguments.
-  if (fudi.fd_dict != NULL) {
-    fudi.fd_dict->dv_refcount++;
-  }
-
-  // If it is the name of a variable of type VAR_FUNC or VAR_PARTIAL use its
-  // contents. For VAR_PARTIAL get its partial, unless we already have one
-  // from trans_function_name().
-  int len = (int)strlen(tofree);
-  bool found_var = false;
-  char *name = deref_func_name(tofree, &len, partial != NULL ? NULL : &partial, false, &found_var);
-
-  // Skip white space to allow ":call func ()".  Not good, but required for
-  // backward compatibility.
-  char *startarg = skipwhite(arg);
-
-  if (*startarg != '(') {
-    semsg(_(e_missingparen), eap->arg);
-    goto end;
-  }
-
-  if (eap->cmdidx == CMD_defer) {
-    arg = startarg;
-    failed = rs_ex_defer_inner(name, &arg, partial, &evalarg) == FAIL;
-  } else {
-    funcexe_T funcexe = FUNCEXE_INIT;
-    funcexe.fe_partial = partial;
-    funcexe.fe_selfdict = fudi.fd_dict;
-    funcexe.fe_firstline = eap->line1;
-    funcexe.fe_lastline = eap->line2;
-    funcexe.fe_found_var = found_var;
-    funcexe.fe_evaluate = true;
-    failed = ex_call_inner(eap, name, &arg, startarg, &funcexe, &evalarg);
-  }
-
-  // When inside :try we need to check for following "| catch" or "| endtry".
-  // Not when there was an error, but do check if an exception was thrown.
-  if ((!aborting() || did_throw) && (!failed || eap->cstack->cs_trylevel > 0)) {
-    // Check for trailing illegal characters and a following command.
-    if (!ends_excmd(*arg)) {
-      if (!failed && !aborting()) {
-        emsg_severe = true;
-        semsg(_(e_trailing_arg), arg);
-      }
-    } else {
-      eap->nextcmd = check_nextcmd(arg);
-    }
-  }
-  clear_evalarg(&evalarg, eap);
-
-end:
-  tv_dict_unref(fudi.fd_dict);
-  xfree(tofree);
-}
+// ex_call migrated to Rust (excmd.rs Wave 2 Phase 2). Symbol provided by libnvim_rs.a.
+extern void ex_call(exarg_T *eap);
 
 /// Return from a function.  Possibly makes the return pending.  Also called
 /// for a pending return at the ":endtry" or after returning from an extra
@@ -2144,6 +2056,10 @@ int nvim_fc_postincrement_linenr(funccall_T *fc) { return fc ? fc->fc_linenr++ :
 void nvim_fc_set_returned(funccall_T *fc, int v) { if (fc) { fc->fc_returned = (bool)v; } }
 typval_T *nvim_fc_get_rettv(funccall_T *fc) { return fc ? fc->fc_rettv : NULL; }
 cstack_T *nvim_eap_get_cstack(const exarg_T *eap) { return eap ? eap->cstack : NULL; }
+// Wave 2 Phase 2: ex_call migration accessors
+int nvim_cstack_get_trylevel(const cstack_T *cs) { return cs ? cs->cs_trylevel : 0; }
+int nvim_cmd_defer_idx(void) { return (int)CMD_defer; }
+void nvim_semsg_e_missingparen(const char *name) { semsg(_(e_missingparen), name); }
 void nvim_cstack_set_pending(cstack_T *cs, int idx, int val)
 {
   if (cs && idx >= 0 && idx < CSTACK_LEN) { cs->cs_pending[idx] = (char)val; }

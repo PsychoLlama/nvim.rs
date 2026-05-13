@@ -170,5 +170,7 @@ extern int get_func_tv(const char *name, int len, typval_T *rettv, char **arg,
 // Wave 2 Phase 1: find_func and apply_autocmds_for_funcundefined migrated to Rust (hashtab.rs).
 extern ufunc_T *find_func(const char *name);
 extern int apply_autocmds_for_funcundefined(const char *name);
+// Wave 2 Phase 2: ex_call migrated to Rust (excmd.rs).
+extern void ex_call(exarg_T *eap);
 
 #include "eval/userfunc.h.generated.h"
