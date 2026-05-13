@@ -220,6 +220,31 @@ linenr_T nvim_eval_curbuf_ml_line_count(void)
 }
 
 // =============================================================================
+// matchbufline / matchstrlist helpers (used by Rust f_matchbufline / f_matchstrlist)
+// =============================================================================
+
+/// Get buf_T* from typval (never restricts to curtab).
+void *nvim_eval_tv_get_buf(typval_T *tv) { return tv_get_buf(tv, false); }
+
+/// Get line text from buf at lnum.
+const char *nvim_eval_buf_ml_get(void *buf, int lnum)
+{
+  return ml_get_buf((buf_T *)buf, (linenr_T)lnum);
+}
+
+/// Saved p_cpo for nvim_eval_set_p_cpo_empty / nvim_eval_restore_p_cpo.
+static char *nvim_eval_saved_cpo = NULL;
+
+/// Save p_cpo and set it to empty_string_option.
+void nvim_eval_set_p_cpo_empty(void) { nvim_eval_saved_cpo = p_cpo; p_cpo = empty_string_option; }
+
+/// Restore p_cpo from the saved value.
+void nvim_eval_restore_p_cpo(void) { p_cpo = nvim_eval_saved_cpo; }
+
+/// Return current did_emsg value.
+int nvim_eval_get_did_emsg(void) { return did_emsg; }
+
+// =============================================================================
 // nextnonblank / prevnonblank helpers
 // =============================================================================
 
@@ -3958,222 +3983,6 @@ void get_user_input(const typval_T *const argvars, typval_T *const rettv, const 
   // Since the user typed this, no need to wait for return.
   need_wait_return = false;
   msg_didout = false;
-}
-
-// =============================================================================
-// Phase 30: matchbufline/matchstrlist/msgpackdump/msgpackparse (moved from funcs.c)
-// =============================================================================
-
-/// Return all the matches in string "str" for pattern "rmp".
-/// The matches are returned in the List "mlist".
-/// If "submatches" is true, then submatch information is also returned.
-/// "matchbuf" is true when called for matchbufline().
-static void get_matches_in_str(const char *str, regmatch_T *rmp, list_T *mlist, int idx,
-                               bool submatches, bool matchbuf)
-{
-  size_t len = strlen(str);
-  int match = 0;
-  colnr_T startidx = 0;
-
-  while (true) {
-    match = vim_regexec_nl(rmp, str, startidx);
-    if (!match) {
-      break;
-    }
-
-    dict_T *d = tv_dict_alloc();
-    tv_list_append_dict(mlist, d);
-
-    if (matchbuf) {
-      tv_dict_add_nr(d, S_LEN("lnum"), idx);
-    } else {
-      tv_dict_add_nr(d, S_LEN("idx"), idx);
-    }
-
-    tv_dict_add_nr(d, S_LEN("byteidx"),
-                   (colnr_T)(rmp->startp[0] - str));
-
-    tv_dict_add_str_len(d, S_LEN("text"), rmp->startp[0],
-                        (int)(rmp->endp[0] - rmp->startp[0]));
-
-    if (submatches) {
-      list_T *sml = tv_list_alloc(NSUBEXP - 1);
-
-      tv_dict_add_list(d, S_LEN("submatches"), sml);
-
-      // return a list with the submatches
-      for (int i = 1; i < NSUBEXP; i++) {
-        if (rmp->endp[i] == NULL) {
-          tv_list_append_string(sml, "", 0);
-        } else {
-          tv_list_append_string(sml, rmp->startp[i], rmp->endp[i] - rmp->startp[i]);
-        }
-      }
-    }
-    startidx = (colnr_T)(rmp->endp[0] - str);
-    if (startidx >= (colnr_T)len || str + startidx <= rmp->startp[0]) {
-      break;
-    }
-  }
-}
-
-/// "matchbufline()" function
-void f_matchbufline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = -1;
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-  list_T *retlist = rettv->vval.v_list;
-
-  if (tv_check_for_buffer_arg(argvars, 0) == FAIL
-      || tv_check_for_string_arg(argvars, 1) == FAIL
-      || tv_check_for_lnum_arg(argvars, 2) == FAIL
-      || tv_check_for_lnum_arg(argvars, 3) == FAIL
-      || tv_check_for_opt_dict_arg(argvars, 4) == FAIL) {
-    return;
-  }
-
-  const int prev_did_emsg = did_emsg;
-  buf_T *buf = tv_get_buf(&argvars[0], false);
-  if (buf == NULL) {
-    if (did_emsg == prev_did_emsg) {
-      semsg(_(e_invalid_buffer_name_str), tv_get_string(&argvars[0]));
-    }
-    return;
-  }
-  if (buf->b_ml.ml_mfp == NULL) {
-    emsg(_(e_buffer_is_not_loaded));
-    return;
-  }
-
-  char patbuf[NUMBUFLEN];
-  const char *pat = tv_get_string_buf(&argvars[1], patbuf);
-
-  const int did_emsg_before = did_emsg;
-  linenr_T slnum = tv_get_lnum_buf(&argvars[2], buf);
-  if (did_emsg > did_emsg_before) {
-    return;
-  }
-  if (slnum < 1) {
-    semsg(_(e_invargval), "lnum");
-    return;
-  }
-
-  linenr_T elnum = tv_get_lnum_buf(&argvars[3], buf);
-  if (did_emsg > did_emsg_before) {
-    return;
-  }
-  if (elnum < 1 || elnum < slnum) {
-    semsg(_(e_invargval), "end_lnum");
-    return;
-  }
-
-  if (elnum > buf->b_ml.ml_line_count) {
-    elnum = buf->b_ml.ml_line_count;
-  }
-
-  bool submatches = false;
-  if (argvars[4].v_type != VAR_UNKNOWN) {
-    dict_T *d = argvars[4].vval.v_dict;
-    if (d != NULL) {
-      dictitem_T *di = tv_dict_find(d, S_LEN("submatches"));
-      if (di != NULL) {
-        if (di->di_tv.v_type != VAR_BOOL) {
-          semsg(_(e_invargval), "submatches");
-          return;
-        }
-        submatches = tv_get_bool(&di->di_tv);
-      }
-    }
-  }
-
-  // Make 'cpoptions' empty, the 'l' flag should not be used here.
-  char *const save_cpo = p_cpo;
-  p_cpo = empty_string_option;
-
-  regmatch_T regmatch;
-  regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-  if (regmatch.regprog == NULL) {
-    goto theend;
-  }
-  regmatch.rm_ic = p_ic;
-
-  while (slnum <= elnum) {
-    const char *str = ml_get_buf(buf, slnum);
-    get_matches_in_str(str, &regmatch, retlist, slnum, submatches, true);
-    slnum++;
-  }
-
-  vim_regfree(regmatch.regprog);
-
-theend:
-  p_cpo = save_cpo;
-}
-
-/// "matchstrlist()" function
-void f_matchstrlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  rettv->vval.v_number = -1;
-  tv_list_alloc_ret(rettv, kListLenUnknown);
-  list_T *retlist = rettv->vval.v_list;
-
-  if (tv_check_for_list_arg(argvars, 0) == FAIL
-      || tv_check_for_string_arg(argvars, 1) == FAIL
-      || tv_check_for_opt_dict_arg(argvars, 2) == FAIL) {
-    return;
-  }
-
-  list_T *l = NULL;
-  if ((l = argvars[0].vval.v_list) == NULL) {
-    return;
-  }
-
-  char patbuf[NUMBUFLEN];
-  const char *pat = tv_get_string_buf_chk(&argvars[1], patbuf);
-  if (pat == NULL) {
-    return;
-  }
-
-  // Make 'cpoptions' empty, the 'l' flag should not be used here.
-  char *const save_cpo = p_cpo;
-  p_cpo = empty_string_option;
-
-  regmatch_T regmatch;
-  regmatch.regprog = vim_regcomp(pat, RE_MAGIC + RE_STRING);
-  if (regmatch.regprog == NULL) {
-    goto theend;
-  }
-  regmatch.rm_ic = p_ic;
-
-  bool submatches = false;
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    dict_T *d = argvars[2].vval.v_dict;
-    if (d != NULL) {
-      dictitem_T *di = tv_dict_find(d, S_LEN("submatches"));
-      if (di != NULL) {
-        if (di->di_tv.v_type != VAR_BOOL) {
-          semsg(_(e_invargval), "submatches");
-          goto cleanup;
-        }
-        submatches = tv_get_bool(&di->di_tv);
-      }
-    }
-  }
-
-  int idx = 0;
-  TV_LIST_ITER_CONST(l, li, {
-    const typval_T *const li_tv = TV_LIST_ITEM_TV(li);
-    if (li_tv->v_type == VAR_STRING && li_tv->vval.v_string != NULL) {
-      const char *str = li_tv->vval.v_string;
-      get_matches_in_str(str, &regmatch, retlist, idx, submatches, false);
-    }
-    idx++;
-  });
-
-cleanup:
-  vim_regfree(regmatch.regprog);
-
-theend:
-  p_cpo = save_cpo;
 }
 
 /// Get maximal/minimal number value in a list or dictionary

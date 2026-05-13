@@ -7,6 +7,7 @@
 //! - `list2fpos`: Convert list typval to position
 
 #![allow(
+    clashing_extern_declarations,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
