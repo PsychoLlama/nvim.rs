@@ -941,3 +941,184 @@ buf_T *get_buf_arg(typval_T *arg)
 // migrated to Rust in src/nvim-rs/eval/src/funcs/cmdline.rs
 
 // get_user_input: moved to funcs_shim.c (Phase 29)
+
+// =============================================================================
+// Rust FFI helpers for Phase cf235259 migration
+// =============================================================================
+
+/// Lua/Arena peer-augment for f_serverlist Rust migration.
+/// Takes the existing VimL list and the addrs array (now owned by the list),
+/// calls vim._core.server.serverlist() via Lua and appends any new servers.
+void nvim_eval_serverlist_peer_augment(list_T *l, char **addrs, size_t n)
+{
+  Arena arena = ARENA_EMPTY;
+  Array addrs_arr = arena_array(&arena, n);
+  for (size_t i = 0; i < n; i++) {
+    ADD_C(addrs_arr, CSTR_AS_OBJ(addrs[i]));
+  }
+
+  MAXSIZE_TEMP_ARRAY(args, 1);
+  ADD_C(args, ARRAY_OBJ(addrs_arr));
+
+  Error err = ERROR_INIT;
+  Object rv = NLUA_EXEC_STATIC("return require('vim._core.server').serverlist(...)",
+                               args, kRetObject,
+                               &arena, &err);
+  if (!ERROR_SET(&err)) {
+    for (size_t i = 0; i < rv.data.array.size; i++) {
+      char *curr_server = rv.data.array.items[i].data.string.data;
+      tv_list_append_string(l, curr_server, -1);
+    }
+  } else {
+    ELOG("vim._core.serverlist failed: %s", err.msg);
+  }
+  arena_mem_free(arena_finish(&arena));
+}
+
+/// Expand special characters in a command string.
+/// Wraps the exarg_T setup and expand_filename() call so Rust never sees exarg_T.
+char *nvim_eval_expandcmd_run(const char *src, bool emsgoff)
+{
+  const char *errormsg = NULL;
+  char *cmdstr = xstrdup(src);
+  exarg_T eap = {
+    .cmd = cmdstr,
+    .arg = cmdstr,
+    .usefilter = false,
+    .nextcmd = NULL,
+    .cmdidx = CMD_USER,
+  };
+  eap.argt |= EX_NOSPC;
+
+  if (emsgoff) {
+    emsg_off++;
+  }
+  if (expand_filename(&eap, &cmdstr, &errormsg) == FAIL) {
+    if (!emsgoff && errormsg != NULL && *errormsg != NUL) {
+      emsg(errormsg);
+    }
+  }
+  if (emsgoff) {
+    emsg_off--;
+  }
+  return cmdstr;
+}
+
+/// Check whether a variable name expression refers to a locked variable.
+/// Returns -1 on error, 0 if unlocked, 1 if locked.
+int nvim_eval_islocked_check(const char *name)
+{
+  lval_T lv;
+  int result = -1;
+
+  const char *const end = get_lval((char *)name,
+                                   NULL,
+                                   &lv, false, false,
+                                   GLV_NO_AUTOLOAD|GLV_READ_ONLY,
+                                   FNE_CHECK_START);
+  if (end != NULL && lv.ll_name != NULL) {
+    if (*end != NUL) {
+      semsg(_(lv.ll_name_len == 0 ? e_invarg2 : e_trailing_arg), end);
+    } else {
+      if (lv.ll_tv == NULL) {
+        dictitem_T *di = find_var(lv.ll_name, lv.ll_name_len, NULL, true);
+        if (di != NULL) {
+          result = (int)(((di->di_flags & DI_FLAGS_LOCK) != 0)
+                         || tv_islocked(&di->di_tv));
+        }
+      } else if (lv.ll_range) {
+        emsg(_("E786: Range not allowed"));
+      } else if (lv.ll_newkey != NULL) {
+        semsg(_(e_dictkey), lv.ll_newkey);
+      } else if (lv.ll_list != NULL) {
+        result = (int)tv_islocked(TV_LIST_ITEM_TV(lv.ll_li));
+      } else {
+        result = (int)tv_islocked(&lv.ll_di->di_tv);
+      }
+    }
+  }
+
+  clear_lval(&lv);
+  return result;
+}
+
+/// Build the getchangelist() result into rettv.
+/// rettv must be a freshly zeroed typval_T.
+void nvim_eval_getchangelist_run(typval_T *argvars, typval_T *rettv)
+{
+  tv_list_alloc_ret(rettv, 2);
+
+  const buf_T *buf;
+  if (argvars[0].v_type == VAR_UNKNOWN) {
+    buf = curbuf;
+  } else {
+    vim_ignored = (int)tv_get_number(&argvars[0]);  // issue errmsg if type error
+    emsg_off++;
+    buf = tv_get_buf(&argvars[0], false);
+    emsg_off--;
+  }
+  if (buf == NULL) {
+    return;
+  }
+
+  list_T *const l = tv_list_alloc(buf->b_changelistlen);
+  tv_list_append_list(rettv->vval.v_list, l);
+
+  int changelistindex;
+  if (buf == curwin->w_buffer) {
+    changelistindex = curwin->w_changelistidx;
+  } else {
+    changelistindex = buf->b_changelistlen;
+    for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
+      WinInfo *wip = kv_A(buf->b_wininfo, i);
+      if (wip->wi_win == curwin) {
+        changelistindex = wip->wi_changelistidx;
+        break;
+      }
+    }
+  }
+  tv_list_append_number(rettv->vval.v_list, (varnumber_T)changelistindex);
+
+  for (int i = 0; i < buf->b_changelistlen; i++) {
+    if (buf->b_changelist[i].mark.lnum == 0) {
+      continue;
+    }
+    dict_T *const d = tv_dict_alloc();
+    tv_list_append_dict(l, d);
+    tv_dict_add_nr(d, S_LEN("lnum"), buf->b_changelist[i].mark.lnum);
+    tv_dict_add_nr(d, S_LEN("col"), buf->b_changelist[i].mark.col);
+    tv_dict_add_nr(d, S_LEN("coladd"), buf->b_changelist[i].mark.coladd);
+  }
+}
+
+/// Build the getjumplist() result into rettv.
+/// rettv must be a freshly zeroed typval_T.
+void nvim_eval_getjumplist_run(typval_T *argvars, typval_T *rettv)
+{
+  tv_list_alloc_ret(rettv, kListLenMayKnow);
+  win_T *const wp = find_tabwin(&argvars[0], &argvars[1]);
+  if (wp == NULL) {
+    return;
+  }
+
+  cleanup_jumplist(wp, true);
+
+  list_T *const l = tv_list_alloc(wp->w_jumplistlen);
+  tv_list_append_list(rettv->vval.v_list, l);
+  tv_list_append_number(rettv->vval.v_list, wp->w_jumplistidx);
+
+  for (int i = 0; i < wp->w_jumplistlen; i++) {
+    if (wp->w_jumplist[i].fmark.mark.lnum == 0) {
+      continue;
+    }
+    dict_T *const d = tv_dict_alloc();
+    tv_list_append_dict(l, d);
+    tv_dict_add_nr(d, S_LEN("lnum"), wp->w_jumplist[i].fmark.mark.lnum);
+    tv_dict_add_nr(d, S_LEN("col"), wp->w_jumplist[i].fmark.mark.col);
+    tv_dict_add_nr(d, S_LEN("coladd"), wp->w_jumplist[i].fmark.mark.coladd);
+    tv_dict_add_nr(d, S_LEN("bufnr"), wp->w_jumplist[i].fmark.fnum);
+    if (wp->w_jumplist[i].fname != NULL) {
+      tv_dict_add_str(d, S_LEN("filename"), wp->w_jumplist[i].fname);
+    }
+  }
+}

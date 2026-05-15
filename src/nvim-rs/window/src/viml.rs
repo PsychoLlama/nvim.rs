@@ -166,6 +166,15 @@ extern "C" {
 
     // error strings
     static e_invexpr2: [c_char; 0];
+
+    // Phase 3 additions: swapname, tagstack, tabpagebuflist
+    fn xstrdup(s: *const c_char) -> *mut c_char;
+    fn nvim_buf_get_ml_mfp_fname(buf: *mut c_void) -> *mut c_char;
+    fn rs_get_tagstack(wp: *mut c_void, retdict: *mut c_void);
+    fn rs_set_tagstack(wp: *mut c_void, d: *const c_void, action: c_int) -> c_int;
+    fn tv_check_for_dict_arg(argvars: TypvalPtr, idx: c_int) -> c_int;
+    fn tv_check_for_string_arg(argvars: TypvalPtr, idx: c_int) -> c_int;
+    fn nvim_eval_tv_get_buf(tv: TypvalPtr) -> *mut c_void;
 }
 
 // =============================================================================
@@ -1086,6 +1095,151 @@ pub unsafe extern "C" fn rs_f_winrestview(
             }
         }
         nvim_check_topfill(curwin, 1); // 1 = true (down)
+    }
+}
+
+// =============================================================================
+// Phase 3: swapname, tabpagebuflist, gettagstack, settagstack
+// =============================================================================
+
+const VAR_DICT_P3: c_int = 5;
+const FAIL_P3: c_int = 0;
+const OK_P3: c_int = 1;
+
+/// "swapname({bufnr})" function -- returns the swap file name for a buffer.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval pointers.
+#[export_name = "f_swapname"]
+pub unsafe extern "C" fn rs_f_swapname(argvars: TypvalPtr, rettv: TypvalPtr, _fptr: EvalFuncData) {
+    unsafe {
+        nvim_eval_tv_set_type(rettv, VAR_STRING);
+        let buf = nvim_eval_tv_get_buf(argvars);
+        let fname = if buf.is_null() {
+            std::ptr::null_mut()
+        } else {
+            nvim_buf_get_ml_mfp_fname(buf)
+        };
+        if fname.is_null() {
+            nvim_eval_tv_set_string(rettv, std::ptr::null_mut());
+        } else {
+            nvim_eval_tv_set_string(rettv, xstrdup(fname));
+        }
+    }
+}
+
+/// "tabpagebuflist([tabnr])" function -- returns list of buffer numbers for a tabpage.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval pointers.
+#[export_name = "f_tabpagebuflist"]
+pub unsafe extern "C" fn rs_f_tabpagebuflist(
+    argvars: TypvalPtr,
+    rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        let tv0 = argvar_at(argvars, 0);
+        let mut wp = if (*tv0.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
+            nvim_get_firstwin()
+        } else {
+            let tp = rs_find_tabpage(tv_get_number(tv0) as c_int);
+            if tp.is_null() {
+                return;
+            }
+            if tp == nvim_get_curtab() {
+                nvim_get_firstwin()
+            } else {
+                nvim_tabpage_get_firstwin(tp)
+            }
+        };
+        tv_list_alloc_ret(rettv, K_LIST_LEN_MAY_KNOW);
+        let list = (*rettv.cast::<TypvalT>()).vval.v_list;
+        while !wp.is_null() {
+            let buf = crate::BufHandle(win_ref(wp).w_buffer);
+            tv_list_append_number(list, i64::from(nvim_buf_get_fnum(buf)));
+            wp = win_ref(wp).w_next;
+        }
+    }
+}
+
+/// "gettagstack([{winnr}])" function -- returns tag stack as a dict.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval pointers.
+#[export_name = "f_gettagstack"]
+pub unsafe extern "C" fn rs_f_gettagstack(
+    argvars: TypvalPtr,
+    rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        let tv0 = argvar_at(argvars, 0);
+        tv_dict_alloc_ret(rettv);
+        let dict = (*rettv.cast::<TypvalT>()).vval.v_dict;
+        let wp = if (*tv0.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
+            nvim_get_curwin()
+        } else {
+            let wp = find_win_by_nr_or_id(argvars);
+            if wp.is_null() {
+                return;
+            }
+            wp
+        };
+        rs_get_tagstack(wp.0, dict);
+    }
+}
+
+/// "settagstack({nr}, {dict} [, {action}])" function -- sets tag stack from a dict.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval pointers.
+#[export_name = "f_settagstack"]
+pub unsafe extern "C" fn rs_f_settagstack(
+    argvars: TypvalPtr,
+    rettv: TypvalPtr,
+    _fptr: EvalFuncData,
+) {
+    unsafe {
+        nvim_eval_tv_set_number(rettv, -1);
+
+        let wp = find_win_by_nr_or_id(argvars);
+        if wp.is_null() {
+            return;
+        }
+
+        if tv_check_for_dict_arg(argvars, 1) == FAIL_P3 {
+            return;
+        }
+        let d = (*argvar_at(argvars, 1).cast::<TypvalT>()).vval.v_dict;
+        if d.is_null() {
+            return;
+        }
+
+        // third argument: action ('a', 'r', 't'); default 'r'
+        let mut action = b'r' as c_int;
+        let tv2 = argvar_at(argvars, 2);
+        if (*tv2.cast::<TypvalT>()).v_type != VAR_UNKNOWN {
+            if tv_check_for_string_arg(argvars, 2) == FAIL_P3 {
+                return;
+            }
+            let actstr = tv_get_string_chk(tv2);
+            if actstr.is_null() {
+                return;
+            }
+            let c0 = *actstr as u8;
+            let c1 = *actstr.add(1) as u8;
+            if (c0 == b'r' || c0 == b'a' || c0 == b't') && c1 == 0 {
+                action = c_int::from(c0);
+            } else {
+                semsg(c"E962: Invalid action: '%s'".as_ptr(), actstr);
+                return;
+            }
+        }
+
+        if rs_set_tagstack(wp.0, d.cast::<c_void>(), action) == OK_P3 {
+            nvim_eval_tv_set_number(rettv, 0);
+        }
     }
 }
 

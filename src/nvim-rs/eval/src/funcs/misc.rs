@@ -3774,3 +3774,280 @@ pub unsafe extern "C" fn rs_f_dictwatcherdel(
 
     callback_free(&raw mut callback);
 }
+
+// =============================================================================
+// Phase 7: serverlist, prompt_getprompt, prompt_getinput, expandcmd, islocked
+// =============================================================================
+
+const TYPVAL_SIZE_P7: usize = 16;
+const VAR_UNKNOWN_P7: c_int = 0;
+const VAR_DICT_P7: c_int = 5;
+
+extern "C" {
+    // typval list operations for Phase 7
+    // Returns list_T* (opaque pointer); used by rs_f_serverlist, rs_f_getmarklist
+    #[link_name = "tv_list_alloc_ret"]
+    fn p7_tv_list_alloc_ret(rettv: *mut c_void, len: isize) -> *mut c_void;
+    // tv_list_append_allocated_string: takes ownership of the string
+    fn tv_list_append_allocated_string(list: *mut c_void, s: *mut c_char);
+    #[link_name = "nvim_tv_get_dict"]
+    fn p7_nvim_tv_get_dict(tv: *const c_void) -> *const c_void;
+    fn tv_dict_get_bool(dict: *const c_void, key: *const c_char, def: i64) -> i64;
+    // Peer augment helper: does the Lua/Arena call and appends extra server names
+    fn nvim_eval_serverlist_peer_augment(list: *mut c_void, addrs: *mut *mut c_char, n: usize);
+    // expandcmd helper: does the exarg_T plumbing and returns the expanded string
+    fn nvim_eval_expandcmd_run(src: *const c_char, emsgoff: bool) -> *mut c_char;
+    // islocked helper: does the full get_lval/clear_lval/find_var dance
+    fn nvim_eval_islocked_check(name: *const c_char) -> c_int;
+    // prompt buffer helpers
+    fn tv_get_buf_from_arg(tv: *mut c_void) -> *mut c_void;
+    fn rs_bt_prompt(buf: *mut c_void) -> bool;
+    fn buf_prompt_text(buf: *const c_void) -> *const c_char;
+    fn prompt_get_input(buf: *const c_void) -> *mut c_char;
+    #[link_name = "xstrdup"]
+    fn p7_xstrdup(s: *const c_char) -> *mut c_char;
+    #[link_name = "xfree"]
+    fn p7_xfree(ptr: *mut c_void);
+    #[link_name = "tv_get_string"]
+    fn p7_tv_get_string(tv: *mut c_void) -> *const c_char;
+    #[link_name = "nvim_tv_get_type"]
+    fn p7_nvim_tv_get_type(tv: *const c_void) -> c_int;
+    #[link_name = "nvim_tv_set_number"]
+    fn p7_nvim_tv_set_number(tv: *mut c_void, n: i64);
+    #[link_name = "nvim_tv_set_type"]
+    fn p7_nvim_tv_set_type(tv: *mut c_void, t: c_int);
+    #[link_name = "nvim_tv_set_string"]
+    fn p7_nvim_tv_set_string(tv: *mut c_void, s: *mut u8);
+    // getmarklist helpers
+    fn nvim_eval_tv_get_buf(tv: *mut c_void) -> *mut c_void;
+    fn get_global_marks(list: *mut c_void);
+    fn get_buf_local_marks(buf: *mut c_void, list: *mut c_void);
+    // Full changelist / jumplist builders (keep struct access in C)
+    fn nvim_eval_getchangelist_run(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_eval_getjumplist_run(argvars: *const c_void, rettv: *mut c_void);
+}
+
+#[inline]
+unsafe fn arg_at_p7(argvars: *const c_void, idx: usize) -> *const c_void {
+    argvars
+        .cast::<u8>()
+        .add(idx * TYPVAL_SIZE_P7)
+        .cast::<c_void>()
+}
+
+/// "getmarklist()" function -- returns list of global or buffer-local marks.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getmarklist"]
+pub unsafe extern "C" fn rs_f_getmarklist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        let arg0 = arg_at_p7(argvars, 0).cast_mut();
+        let list = p7_tv_list_alloc_ret(rettv, -2); // kListLenMayKnow = -2
+
+        if p7_nvim_tv_get_type(arg0.cast_const()) == VAR_UNKNOWN_P7 {
+            get_global_marks(list);
+        } else {
+            let buf = nvim_eval_tv_get_buf(arg0);
+            if !buf.is_null() {
+                get_buf_local_marks(buf, list);
+            }
+        }
+    }
+}
+
+/// "getchangelist()" function -- returns [list, idx] for buffer change positions.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getchangelist"]
+pub unsafe extern "C" fn rs_f_getchangelist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        nvim_eval_getchangelist_run(argvars, rettv);
+    }
+}
+
+/// "getjumplist()" function -- returns [list, idx] for window jump positions.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_getjumplist"]
+pub unsafe extern "C" fn rs_f_getjumplist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        nvim_eval_getjumplist_run(argvars, rettv);
+    }
+}
+
+/// "serverlist()" function -- returns list of server addresses.
+///
+/// With `{peer: v:true}`, also queries vim._core.server.serverlist() via Lua.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_serverlist"]
+pub unsafe extern "C" fn rs_f_serverlist(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        let mut n: usize = 0;
+        let addrs = server_address_list(&raw mut n);
+
+        // Build the VimL list from the server_address_list entries.
+        // p7_tv_list_alloc_ret allocates the list and assigns it to rettv, returns list_T*.
+        let list = p7_tv_list_alloc_ret(rettv, isize::try_from(n).unwrap_or(isize::MAX));
+
+        for i in 0..n {
+            // tv_list_append_allocated_string takes ownership of the string
+            tv_list_append_allocated_string(list, *addrs.add(i));
+        }
+
+        // Check if peer=true was requested
+        let arg0 = arg_at_p7(argvars, 0);
+        if p7_nvim_tv_get_type(arg0) == VAR_DICT_P7 {
+            let dict = p7_nvim_tv_get_dict(arg0);
+            if !dict.is_null() && tv_dict_get_bool(dict, c"peer".as_ptr(), 0) != 0 {
+                // Delegate the Lua/Arena machinery to a C helper.
+                // addrs entries are now owned by the list; we pass the original
+                // pointer and count so the helper can pass them to Lua.
+                nvim_eval_serverlist_peer_augment(list, addrs, n);
+            }
+        }
+
+        // Free the pointer array itself (strings are now owned by the list or freed by peer helper)
+        p7_xfree(addrs.cast::<c_void>());
+    }
+}
+
+/// "prompt_getprompt({buffer})" function -- returns the prompt text for a buffer.
+///
+/// Returns empty string if not a prompt buffer.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_prompt_getprompt"]
+pub unsafe extern "C" fn rs_f_prompt_getprompt(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        // Default: empty string (VAR_STRING with NULL)
+        p7_nvim_tv_set_type(rettv, 2); // VAR_STRING = 2
+        p7_nvim_tv_set_string(rettv, std::ptr::null_mut::<u8>());
+
+        let arg0 = arg_at_p7(argvars, 0).cast_mut();
+        let buf = tv_get_buf_from_arg(arg0);
+        if buf.is_null() {
+            return;
+        }
+        if !rs_bt_prompt(buf) {
+            return;
+        }
+        let text = buf_prompt_text(buf.cast::<c_void>());
+        p7_nvim_tv_set_string(rettv, p7_xstrdup(text).cast::<u8>());
+    }
+}
+
+/// "prompt_getinput({buffer})" function -- returns the current input for a prompt buffer.
+///
+/// Returns empty string if not a prompt buffer.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_prompt_getinput"]
+pub unsafe extern "C" fn rs_f_prompt_getinput(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        // Default: empty string (VAR_STRING with NULL)
+        p7_nvim_tv_set_type(rettv, 2); // VAR_STRING = 2
+        p7_nvim_tv_set_string(rettv, std::ptr::null_mut::<u8>());
+
+        let arg0 = arg_at_p7(argvars, 0).cast_mut();
+        let buf = tv_get_buf_from_arg(arg0);
+        if buf.is_null() {
+            return;
+        }
+        if !rs_bt_prompt(buf) {
+            return;
+        }
+        let input = prompt_get_input(buf.cast::<c_void>());
+        p7_nvim_tv_set_string(rettv, input.cast::<u8>());
+    }
+}
+
+/// "expandcmd({string} [, {options}])" function -- expands special characters in a cmdline string.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_expandcmd"]
+pub unsafe extern "C" fn rs_f_expandcmd(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        p7_nvim_tv_set_type(rettv, 2); // VAR_STRING = 2
+
+        let arg0 = arg_at_p7(argvars, 0);
+        let arg1 = arg_at_p7(argvars, 1);
+
+        let src = p7_tv_get_string(arg0.cast_mut());
+        if src.is_null() {
+            p7_nvim_tv_set_string(rettv, std::ptr::null_mut::<u8>());
+            return;
+        }
+
+        // Check errmsg option in second arg dict
+        let emsgoff = if p7_nvim_tv_get_type(arg1) == VAR_DICT_P7 {
+            let dict = p7_nvim_tv_get_dict(arg1);
+            !dict.is_null() && tv_dict_get_bool(dict, c"errmsg".as_ptr(), 0) == 0
+        } else {
+            true
+        };
+
+        let result = nvim_eval_expandcmd_run(src, emsgoff);
+        p7_nvim_tv_set_string(rettv, result.cast::<u8>());
+    }
+}
+
+/// "islocked({varname})" function -- returns true if the variable is locked.
+///
+/// Returns -1 on error, 0 if unlocked, 1 if locked.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[export_name = "f_islocked"]
+pub unsafe extern "C" fn rs_f_islocked(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    unsafe {
+        p7_nvim_tv_set_number(rettv, -1);
+
+        let arg0 = arg_at_p7(argvars, 0);
+        let name = p7_tv_get_string(arg0.cast_mut());
+        if name.is_null() {
+            return;
+        }
+        let result = nvim_eval_islocked_check(name);
+        p7_nvim_tv_set_number(rettv, i64::from(result));
+    }
+}
