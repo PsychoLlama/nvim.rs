@@ -425,13 +425,11 @@ bool nvim_register_buf_ml_mfp_is_null(buf_T *buf)
   return buf->b_ml.ml_mfp == NULL;
 }
 int nvim_register_buf_line_count(buf_T *buf) { return (int)buf->b_ml.ml_line_count; }
-int nvim_register_buf_fnum(buf_T *buf) { return buf->b_fnum; }
 int nvim_register_curbuf_fnum(void) { return curbuf->b_fnum; }
 int nvim_register_ml_get_buf_len(buf_T *buf, int lnum)
 {
   return (int)ml_get_buf_len(buf, (linenr_T)lnum);
 }
-char *nvim_register_ml_get_pos(pos_T *pos) { return ml_get_pos(pos); }
 
 // --- Position helpers ---
 
@@ -449,9 +447,6 @@ void nvim_register_getvvcol(pos_T *pos, int *sc, int *ec)
   *sc = (int)s;
   *ec = (int)e;
 }
-
-/// Wraps unadjust_for_sel_inner(p2). Returns true when it went back to prev line.
-bool nvim_register_unadjust_for_sel_inner(pos_T *p) { return unadjust_for_sel_inner(p); }
 
 /// Returns utfc_ptr2len(ml_get_pos(p)).
 int nvim_register_utfc_ptr2len_ml_get_pos(pos_T *p)
@@ -483,7 +478,6 @@ void nvim_oap_set_for_blockwise(oparg_T *oap, pos_T *start, pos_T *end,
   oap->start_vcol = (colnr_T)start_vcol;
   oap->end_vcol = (colnr_T)end_vcol;
 }
-void nvim_oap_zero(oparg_T *oap) { memset(oap, 0, sizeof(*oap)); }
 
 // --- typval argument accessors for setreg ---
 
@@ -517,36 +511,16 @@ void nvim_register_rettv_set_number(typval_T *rettv, int n)
   rettv->vval.v_number = (varnumber_T)n;
 }
 
-/// Returns tv_dict_len(d).
+/// Returns tv_dict_len(d) — needed because tv_dict_len is a static inline.
 int nvim_register_tv_dict_len(dict_T *d) { return (int)tv_dict_len(d); }
 
 /// Returns the di_tv pointer inside tv_dict_find(d, key, -1), or NULL.
+/// di_tv is the first field of dictitem_T so the pointer identity holds.
 typval_T *nvim_register_tv_dict_find_tv(dict_T *d, const char *key)
 {
   dictitem_T *di = tv_dict_find(d, key, -1);
   return di ? &di->di_tv : NULL;
 }
-
-/// Returns tv_dict_get_string(d, key, false) or NULL.
-const char *nvim_register_tv_dict_get_string(dict_T *d, const char *key)
-{
-  return tv_dict_get_string(d, key, false);
-}
-
-/// Returns tv_dict_get_number(d, key).
-int64_t nvim_register_tv_dict_get_number(dict_T *d, const char *key)
-{
-  return (int64_t)tv_dict_get_number(d, key);
-}
-
-/// Returns tv_dict_get_bool(d, key, def).
-bool nvim_register_tv_dict_get_bool(dict_T *d, const char *key, bool def)
-{
-  return tv_dict_get_bool(d, key, def);
-}
-
-/// Returns tv_list_len(ll).
-int nvim_register_tv_list_len(list_T *ll) { return (int)tv_list_len(ll); }
 
 /// Build and write a VimL list as register contents, then free the temp buffer.
 /// Returns OK(0) on success, FAIL(-1) on type error.
@@ -588,60 +562,20 @@ int nvim_register_setreg_write_lst(int regname, list_T *ll, bool append,
   return OK;
 }
 
-/// Returns tv_get_string_chk on a typval_T* directly (e.g. regcontents).
-const char *nvim_register_tv_get_string_chk_tv(typval_T *tv)
-{
-  return tv_get_string_chk(tv);
-}
+// --- getdigits_int wrapper: expose the false/0 defaults as a simpler API ---
 
-/// Returns a pointer to argvars[idx] as a typval_T*.
-typval_T *nvim_register_tv_get_tv(typval_T *argvars, int idx)
-{
-  return &argvars[idx];
-}
-
-// --- Argument validation for getregion/getregionpos ---
-
-/// Wraps tv_check_for_list_arg + tv_check_for_opt_dict_arg.
-/// Returns OK(0) or FAIL(-1).
-int nvim_register_check_region_args(typval_T *argvars)
-{
-  if (tv_check_for_list_arg(argvars, 0) == FAIL
-      || tv_check_for_list_arg(argvars, 1) == FAIL
-      || tv_check_for_opt_dict_arg(argvars, 2) == FAIL) {
-    return FAIL;
-  }
-  return OK;
-}
-
-// --- getdigits_int wrapper (for regtype/block_width parsing) ---
-
-/// Wraps getdigits_int(pp, false, 0).
+/// Wraps getdigits_int(pp, false, 0) — expose default params for Rust.
 int nvim_register_getdigits_int(char **pp)
 {
   return getdigits_int(pp, false, 0);
 }
 
-// --- list/dict alloc for getregionpos result building ---
+// --- kListLenMayKnow wrapper (constant not accessible from Rust) ---
 
-list_T *nvim_register_tv_list_alloc(int n) { return tv_list_alloc((linenr_T)n); }
-void nvim_register_tv_list_append_list(list_T *parent, list_T *child)
-{
-  tv_list_append_list(parent, child);
-}
-void nvim_register_tv_list_append_number(list_T *l, int64_t n)
-{
-  tv_list_append_number(l, (varnumber_T)n);
-}
 void nvim_register_tv_list_alloc_ret(typval_T *rettv)
 {
   tv_list_alloc_ret(rettv, kListLenMayKnow);
 }
-void nvim_register_tv_list_append_allocated_string(list_T *l, char *s)
-{
-  tv_list_append_allocated_string(l, s);
-}
-list_T *nvim_register_rettv_list(typval_T *rettv) { return rettv->vval.v_list; }
 
 // --- Error message emitters (keep gettext/_()/NGETTEXT in C) ---
 
