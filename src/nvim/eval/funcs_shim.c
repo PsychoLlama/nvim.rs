@@ -2846,17 +2846,14 @@ void f_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-// get_yank_type: migrated to Rust (src/nvim-rs/register/src/lib.rs) via register.c run-helper
-// f_setreg: migrated to Rust (src/nvim-rs/register/src/lib.rs) via nvim_register_setreg_run
-
-// =============================================================================
-// Phase 28: getregion / getregionpos helpers — migrated to Rust
-// =============================================================================
-// block_def2str:     migrated to Rust (src/nvim-rs/register/src/lib.rs) via register.c
-// getregionpos:      migrated to Rust (src/nvim-rs/register/src/lib.rs) via register.c
-// f_getregion:       migrated to Rust (src/nvim-rs/register/src/lib.rs) via nvim_register_getregion_run
-// add_regionpos_range: migrated to Rust (src/nvim-rs/register/src/lib.rs) via register.c
-// f_getregionpos:    migrated to Rust (src/nvim-rs/register/src/lib.rs) via nvim_register_getregionpos_run
+// Phase 28: setreg / getregion / getregionpos — migrated to Rust
+// get_yank_type:      → parse_yank_type()       in src/nvim-rs/register/src/lib.rs
+// f_setreg:           → rs_f_setreg()           in src/nvim-rs/register/src/lib.rs
+// block_def2str:      → block_def_to_string()   in src/nvim-rs/register/src/lib.rs
+// getregionpos:       → region_resolve()        in src/nvim-rs/register/src/lib.rs
+// f_getregion:        → rs_f_getregion()        in src/nvim-rs/register/src/lib.rs
+// add_regionpos_range:→ add_regionpos_range()   in src/nvim-rs/register/src/lib.rs
+// f_getregionpos:     → rs_f_getregionpos()     in src/nvim-rs/register/src/lib.rs
 
 // =============================================================================
 // Phase 29: f_wait, has_wsl, input functions (moved from funcs.c)
