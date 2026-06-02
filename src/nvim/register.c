@@ -406,121 +406,41 @@ void nvim_dp_semsg_E353(int regname) { semsg(_("E353: Nothing in register %s"), 
 // arithmetic via oparg_T, gettext message formatting).
 // =============================================================================
 
-// --- Global get/set accessors ---
-
+// --- Global get/set: curbuf/virtual_op are C globals not reachable from Rust ---
 buf_T *nvim_register_get_curbuf(void) { return curbuf; }
 void nvim_register_set_curbuf(buf_T *buf) { curbuf = buf; }
 void nvim_register_set_curwin_buffer(buf_T *buf) { curwin->w_buffer = buf; }
 int nvim_register_get_virtual_op(void) { return (int)virtual_op; }
 void nvim_register_set_virtual_op(int v) { virtual_op = (TriState)v; }
-void nvim_register_set_virtual_op_from_curwin(void)
-{
-  virtual_op = virtual_active(curwin);
-}
+void nvim_register_set_virtual_op_from_curwin(void) { virtual_op = virtual_active(curwin); }
 
-// --- Buffer / line accessors ---
-
-bool nvim_register_buf_ml_mfp_is_null(buf_T *buf)
-{
-  return buf->b_ml.ml_mfp == NULL;
-}
+// --- Buffer / line: nested struct fields not reachable from Rust ---
+bool nvim_register_buf_ml_mfp_is_null(buf_T *buf) { return buf->b_ml.ml_mfp == NULL; }
 int nvim_register_buf_line_count(buf_T *buf) { return (int)buf->b_ml.ml_line_count; }
 int nvim_register_curbuf_fnum(void) { return curbuf->b_fnum; }
-int nvim_register_ml_get_buf_len(buf_T *buf, int lnum)
-{
-  return (int)ml_get_buf_len(buf, (linenr_T)lnum);
-}
 
-// --- Position helpers ---
-
-/// Wraps list2fpos(argvars + idx, ..., NULL, false). Returns OK(0) or FAIL(-1).
-int nvim_register_list2fpos(typval_T *argvars, int idx, pos_T *pos, int *fnum)
-{
-  return list2fpos(&argvars[idx], pos, fnum, NULL, false);
-}
-
-/// Wraps getvvcol(curwin, pos, sc, NULL, ec).
+// --- Position helper: getvvcol needs curwin ---
 void nvim_register_getvvcol(pos_T *pos, int *sc, int *ec)
 {
   colnr_T s, e;
   getvvcol(curwin, pos, &s, NULL, &e);
-  *sc = (int)s;
-  *ec = (int)e;
-}
-
-/// Returns utfc_ptr2len(ml_get_pos(p)).
-int nvim_register_utfc_ptr2len_ml_get_pos(pos_T *p)
-{
-  return utfc_ptr2len(ml_get_pos(p));
-}
-
-/// Returns *ml_get_pos(p) == NUL.
-bool nvim_register_ml_get_pos_is_nul(pos_T *p) { return *ml_get_pos(p) == NUL; }
-
-/// Returns mb_prevptr(line, p) - line (byte offset).
-int nvim_register_mb_prevptr_offset(char *line, char *p)
-{
-  return (int)(mb_prevptr(line, p) - line);
+  *sc = (int)s; *ec = (int)e;
 }
 
 // --- oparg_T setters ---
 
-/// Zero-initialise a stack oparg_T and set the blockwise fields.
+/// Zero-init oparg_T, set blockwise motion fields for block_prep.
 void nvim_oap_set_for_blockwise(oparg_T *oap, pos_T *start, pos_T *end,
                                 int start_vcol, int end_vcol)
 {
   memset(oap, 0, sizeof(*oap));
-  oap->motion_type = kMTBlockWise;
-  oap->inclusive = true;
-  oap->op_type = OP_NOP;
-  oap->start = *start;
-  oap->end = *end;
-  oap->start_vcol = (colnr_T)start_vcol;
-  oap->end_vcol = (colnr_T)end_vcol;
-}
-
-// --- typval argument accessors for setreg ---
-
-/// Returns tv_get_string_chk(&argvars[idx]) or NULL.
-const char *nvim_register_tv_get_string_chk(typval_T *argvars, int idx)
-{
-  return tv_get_string_chk(&argvars[idx]);
-}
-
-/// Returns argvars[idx].v_type.
-int nvim_register_tv_get_type(typval_T *argvars, int idx)
-{
-  return (int)argvars[idx].v_type;
-}
-
-/// Returns argvars[idx].vval.v_dict (may be NULL).
-dict_T *nvim_register_tv_get_dict(typval_T *argvars, int idx)
-{
-  return argvars[idx].vval.v_dict;
-}
-
-/// Returns argvars[idx].vval.v_list (may be NULL).
-list_T *nvim_register_tv_get_list(typval_T *argvars, int idx)
-{
-  return argvars[idx].vval.v_list;
-}
-
-/// Sets rettv->vval.v_number.
-void nvim_register_rettv_set_number(typval_T *rettv, int n)
-{
-  rettv->vval.v_number = (varnumber_T)n;
+  oap->motion_type = kMTBlockWise; oap->inclusive = true; oap->op_type = OP_NOP;
+  oap->start = *start; oap->end = *end;
+  oap->start_vcol = (colnr_T)start_vcol; oap->end_vcol = (colnr_T)end_vcol;
 }
 
 /// Returns tv_dict_len(d) — needed because tv_dict_len is a static inline.
 int nvim_register_tv_dict_len(dict_T *d) { return (int)tv_dict_len(d); }
-
-/// Returns the di_tv pointer inside tv_dict_find(d, key, -1), or NULL.
-/// di_tv is the first field of dictitem_T so the pointer identity holds.
-typval_T *nvim_register_tv_dict_find_tv(dict_T *d, const char *key)
-{
-  dictitem_T *di = tv_dict_find(d, key, -1);
-  return di ? &di->di_tv : NULL;
-}
 
 /// Build and write a VimL list as register contents, then free the temp buffer.
 /// Returns OK(0) on success, FAIL(-1) on type error.
@@ -562,53 +482,14 @@ int nvim_register_setreg_write_lst(int regname, list_T *ll, bool append,
   return OK;
 }
 
-// --- getdigits_int wrapper: expose the false/0 defaults as a simpler API ---
-
-/// Wraps getdigits_int(pp, false, 0) — expose default params for Rust.
-int nvim_register_getdigits_int(char **pp)
-{
-  return getdigits_int(pp, false, 0);
-}
-
-// --- kListLenMayKnow wrapper (constant not accessible from Rust) ---
-
-void nvim_register_tv_list_alloc_ret(typval_T *rettv)
-{
-  tv_list_alloc_ret(rettv, kListLenMayKnow);
-}
+// --- kListLenMayKnow is a C enum; wrap the constant for Rust ---
+void nvim_register_tv_list_alloc_ret(typval_T *rettv) { tv_list_alloc_ret(rettv, kListLenMayKnow); }
 
 // --- Error message emitters (keep gettext/_()/NGETTEXT in C) ---
-
-void nvim_register_emsg_buffer_not_loaded(void)
-{
-  emsg(_(e_buffer_is_not_loaded));
-}
-void nvim_register_semsg_invalid_line(int lnum)
-{
-  semsg(_(e_invalid_line_number_nr), (long)lnum);
-}
-void nvim_register_semsg_invalid_col(int col)
-{
-  semsg(_(e_invalid_column_number_nr), (long)col);
-}
-void nvim_register_semsg_invargNval_type(const char *val)
-{
-  semsg(_(e_invargNval), "type", val);
-}
-void nvim_register_semsg_invargval_value(void)
-{
-  semsg(_(e_invargval), "value");
-}
-void nvim_register_semsg_toomanyarg_setreg(void)
-{
-  semsg(_(e_toomanyarg), "setreg");
-}
-
-// --- write_reg_contents wrappers (already declared extern in Rust but also
-//     needed here as a C symbol for the setreg empty-dict path) ---
-void nvim_register_write_reg_empty(int regname)
-{
-  char *lstval[2] = { NULL, NULL };
-  write_reg_contents_lst((char)regname, lstval, false, kMTUnknown, -1);
-}
+void nvim_register_emsg_buffer_not_loaded(void) { emsg(_(e_buffer_is_not_loaded)); }
+void nvim_register_semsg_invalid_line(int lnum) { semsg(_(e_invalid_line_number_nr), (long)lnum); }
+void nvim_register_semsg_invalid_col(int col) { semsg(_(e_invalid_column_number_nr), (long)col); }
+void nvim_register_semsg_invargNval_type(const char *val) { semsg(_(e_invargNval), "type", val); }
+void nvim_register_semsg_invargval_value(void) { semsg(_(e_invargval), "value"); }
+void nvim_register_semsg_toomanyarg_setreg(void) { semsg(_(e_toomanyarg), "setreg"); }
 

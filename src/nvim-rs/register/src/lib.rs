@@ -4431,22 +4431,13 @@ extern "C" {
     fn nvim_register_set_virtual_op(v: c_int);
     fn nvim_register_set_virtual_op_from_curwin(); // virtual_op = virtual_active(curwin)
 
-    // --- buffer / line accessors ---
-    fn nvim_register_buf_ml_mfp_is_null(buf: *mut c_void) -> bool; // struct nested access
-    fn nvim_register_buf_line_count(buf: *mut c_void) -> c_int; // struct nested access
+    // --- buffer / line accessors (struct-nested, no direct Rust equivalent) ---
+    fn nvim_register_buf_ml_mfp_is_null(buf: *mut c_void) -> bool;
+    fn nvim_register_buf_line_count(buf: *mut c_void) -> c_int;
     fn nvim_register_curbuf_fnum() -> c_int;
-    fn nvim_register_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
-    fn nvim_register_ml_get_pos_is_nul(pos: *mut PosT) -> bool; // combines ml_get_pos + NUL check
-    fn nvim_register_utfc_ptr2len_ml_get_pos(pos: *mut PosT) -> c_int; // combines utfc_ptr2len + ml_get_pos
-    fn nvim_register_mb_prevptr_offset(line: *mut c_char, p: *mut c_char) -> c_int;
+    fn ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
 
-    // --- position helpers requiring curwin ---
-    fn nvim_register_list2fpos(
-        argvars: *const c_void,
-        idx: c_int,
-        pos: *mut PosT,
-        fnum: *mut c_int,
-    ) -> c_int;
+    // --- position helpers requiring curwin or combining calls ---
     fn nvim_register_getvvcol(pos: *mut PosT, sc: *mut c_int, ec: *mut c_int); // needs curwin
 
     // --- oparg_T setter (oparg_T layout is opaque to Rust) ---
@@ -4458,14 +4449,8 @@ extern "C" {
         end_vcol: c_int,
     );
 
-    // --- typval struct-field accessors (typval_T layout not mirrored in Rust) ---
-    fn nvim_register_tv_get_string_chk(argvars: *const c_void, idx: c_int) -> *const c_char;
-    fn nvim_register_tv_get_type(argvars: *const c_void, idx: c_int) -> c_int;
-    fn nvim_register_tv_get_dict(argvars: *const c_void, idx: c_int) -> *mut c_void; // dict_T*
-    fn nvim_register_tv_get_list(argvars: *const c_void, idx: c_int) -> *mut c_void; // list_T*
-    fn nvim_register_rettv_set_number(rettv: *mut c_void, n: c_int);
-    fn nvim_register_tv_dict_len(d: *mut c_void) -> c_int; // tv_dict_len is static inline
-    fn nvim_register_tv_dict_find_tv(d: *mut c_void, key: *const c_char) -> *mut c_void; // typval_T*
+    // --- tv_dict_len is static inline; keep a C wrapper ---
+    fn nvim_register_tv_dict_len(d: *mut c_void) -> c_int;
 
     // --- setreg list-write helper (TV_LIST_ITER_CONST is a C macro) ---
     fn nvim_register_setreg_write_lst(
@@ -4475,9 +4460,6 @@ extern "C" {
         yank_type: c_int,
         block_len: c_int,
     ) -> c_int;
-
-    // --- getdigits wrapper (exposes false/0 defaults) ---
-    fn nvim_register_getdigits_int(pp: *mut *mut c_char) -> c_int;
 
     // --- kListLenMayKnow wrapper (constant not accessible from Rust) ---
     fn nvim_register_tv_list_alloc_ret(rettv: *mut c_void);
@@ -4489,9 +4471,6 @@ extern "C" {
     fn nvim_register_semsg_invargNval_type(val: *const c_char);
     fn nvim_register_semsg_invargval_value();
     fn nvim_register_semsg_toomanyarg_setreg();
-
-    // --- write_reg_contents_lst helper for empty-dict path ---
-    fn nvim_register_write_reg_empty(regname: c_int);
 
     // --- direct C externs (no wrapper needed) ---
     fn unadjust_for_sel_inner(p: *mut PosT) -> bool;
@@ -4505,6 +4484,46 @@ extern "C" {
     fn tv_get_string_chk(tv: *const c_void) -> *const c_char;
     /// Returns &argvars[idx] — the typval_T* at the given index.
     fn nvim_typval_array_get(args: *const c_void, idx: c_int) -> *const c_void;
+    fn ml_get_pos(pos: *const PosT) -> *mut c_char;
+    fn mb_prevptr(line: *mut c_char, p: *mut c_char) -> *mut c_char;
+    fn list2fpos(
+        arg: *const c_void,
+        pos: *mut PosT,
+        fnum: *mut c_int,
+        curswantp: *mut c_int,
+        charcol: bool,
+    ) -> c_int;
+    /// tv_dict_find returns dictitem_T* where di_tv is the first field (offset 0).
+    /// Safe to cast to *mut TypvalT to access the typval_T directly.
+    fn tv_dict_find(d: *const c_void, key: *const c_char, len: isize) -> *mut TypvalT;
+}
+
+/// Thin mirror of C's typval_T (16 bytes on 64-bit platforms).
+///
+/// Layout: `{ VarType v_type (4 bytes), VarLockStatus v_lock (4 bytes), union vval (8 bytes) }`
+/// Only the fields we read are accessed; the union is opaque beyond `v_type`.
+#[repr(C)]
+struct TypvalT {
+    v_type: c_int, // VarType enum (int)
+    v_lock: c_int, // VarLockStatus (int)
+    vval: u64,     // union — 8 bytes; interpret via v_type
+}
+const _: () = assert!(std::mem::size_of::<TypvalT>() == 16);
+
+impl TypvalT {
+    /// Return the v_list pointer (valid when v_type == VAR_LIST).
+    fn as_list(&self) -> *mut c_void {
+        // The union starts at offset 8; a pointer is at offset 8 on 64-bit.
+        self.vval as usize as *mut c_void
+    }
+    /// Return the v_dict pointer (valid when v_type == VAR_DICT).
+    fn as_dict(&self) -> *mut c_void {
+        self.vval as usize as *mut c_void
+    }
+    /// Set v_number (the int64_t union member).
+    unsafe fn set_number(ptr: *mut Self, n: i64) {
+        (*ptr).vval = n as u64;
+    }
 }
 
 // VAR_* type constants matching eval/typval_defs.h.
@@ -4513,6 +4532,17 @@ const VAR_LIST: c_int = 4;
 const VAR_DICT: c_int = 5;
 
 // CTRL-V byte value (0x16 = 22), already declared above as CTRL_V.
+
+/// Convenience: get `argvars[idx]` as `*const TypvalT`.
+unsafe fn tv_at(argvars: *const c_void, idx: c_int) -> *const TypvalT {
+    nvim_typval_array_get(argvars, idx).cast::<TypvalT>()
+}
+/// Convenience: get `argvars[idx]` as `*mut TypvalT`.
+unsafe fn tv_at_mut(argvars: *mut c_void, idx: c_int) -> *mut TypvalT {
+    nvim_typval_array_get(argvars.cast_const(), idx)
+        .cast::<TypvalT>()
+        .cast_mut()
+}
 
 /// Parse a regtype string character into (MotionType, block_len_delta, advance).
 /// Returns `Some((motion_type, block_len))` or `None` on failure.
@@ -4534,7 +4564,7 @@ unsafe fn parse_yank_type(pp: *mut *mut c_char) -> Option<(c_int, c_int)> {
             if (*next as u8).is_ascii_digit() {
                 // advance into the digit sequence
                 *pp = next;
-                block_len = nvim_register_getdigits_int(pp) - 1;
+                block_len = getdigits_int(pp, false, 0) - 1;
                 // pp now points one past the last digit; we back up one so
                 // the outer loop's stropt++ lands on the right position.
                 *pp = (*pp).sub(1);
@@ -4560,9 +4590,9 @@ pub unsafe extern "C" fn rs_f_setreg(
     let mut block_len: c_int = -1;
     let mut yank_type: c_int = K_MT_UNKNOWN;
 
-    nvim_register_rettv_set_number(rettv, 1); // FAIL is default.
+    TypvalT::set_number(rettv.cast::<TypvalT>(), 1); // FAIL is default.
 
-    let strregname = nvim_register_tv_get_string_chk(argvars, 0);
+    let strregname = tv_get_string_chk(nvim_typval_array_get(argvars, 0));
     if strregname.is_null() {
         return;
     }
@@ -4572,19 +4602,28 @@ pub unsafe extern "C" fn rs_f_setreg(
     }
 
     // argvars[1]: either a dict or the regcontents value directly.
-    let arg1_type = nvim_register_tv_get_type(argvars, 1);
-    let mut regcontents_tv: *mut c_void = std::ptr::null_mut(); // typval_T*
+    let arg1 = tv_at(argvars, 1);
+    let arg1_type = (*arg1).v_type;
+    let mut regcontents_tv: *mut TypvalT = std::ptr::null_mut();
     let mut pointreg: u8 = 0;
 
     if arg1_type == VAR_DICT {
-        let d = nvim_register_tv_get_dict(argvars, 1);
+        let d = (*arg1).as_dict();
 
         if nvim_register_tv_dict_len(d) == 0 {
-            nvim_register_write_reg_empty(c_int::from(regname));
+            // Empty dict: clear the register with an empty list.
+            let mut empty: [*mut c_char; 2] = [std::ptr::null_mut(), std::ptr::null_mut()];
+            rs_write_reg_contents_lst(
+                c_int::from(regname),
+                empty.as_mut_ptr(),
+                false,
+                K_MT_UNKNOWN,
+                -1,
+            );
             return;
         }
 
-        let di = nvim_register_tv_dict_find_tv(d, c"regcontents".as_ptr());
+        let di = tv_dict_find(d, c"regcontents".as_ptr(), -1);
         if !di.is_null() {
             regcontents_tv = di;
         }
@@ -4623,17 +4662,18 @@ pub unsafe extern "C" fn rs_f_setreg(
         }
     } else {
         // argvars[1] is the regcontents value directly.
-        regcontents_tv = nvim_typval_array_get(argvars, 1).cast_mut();
+        regcontents_tv = tv_at(argvars, 1).cast_mut();
     }
 
     let mut set_unnamed = false;
-    let arg2_type = nvim_register_tv_get_type(argvars, 2);
+    let arg2 = tv_at(argvars, 2);
+    let arg2_type = (*arg2).v_type;
     if arg2_type != VAR_UNKNOWN {
         if yank_type != K_MT_UNKNOWN {
             nvim_register_semsg_toomanyarg_setreg();
             return;
         }
-        let stropt = nvim_register_tv_get_string_chk(argvars, 2);
+        let stropt = tv_get_string_chk(arg2.cast::<c_void>());
         if stropt.is_null() {
             return;
         }
@@ -4660,9 +4700,9 @@ pub unsafe extern "C" fn rs_f_setreg(
     }
 
     if !regcontents_tv.is_null() {
-        let tv_type = nvim_register_tv_get_type(regcontents_tv as *const c_void, 0);
+        let tv_type = (*regcontents_tv).v_type;
         if tv_type == VAR_LIST {
-            let ll = nvim_register_tv_get_list(regcontents_tv as *const c_void, 0);
+            let ll = (*regcontents_tv).as_list();
             let ret = nvim_register_setreg_write_lst(
                 c_int::from(regname),
                 ll,
@@ -4675,7 +4715,7 @@ pub unsafe extern "C" fn rs_f_setreg(
                 return;
             }
         } else {
-            let strval = tv_get_string_chk(regcontents_tv);
+            let strval = tv_get_string_chk(regcontents_tv.cast::<c_void>());
             if strval.is_null() {
                 return;
             }
@@ -4693,7 +4733,7 @@ pub unsafe extern "C" fn rs_f_setreg(
     if pointreg != 0 {
         rs_get_yank_register(c_int::from(pointreg), 1 /* YREG_YANK */);
     }
-    nvim_register_rettv_set_number(rettv, 0); // success
+    TypvalT::set_number(rettv.cast::<TypvalT>(), 0); // success
 
     if set_unnamed {
         rs_op_reg_set_previous(regname as c_char);
@@ -4739,20 +4779,23 @@ unsafe fn region_resolve(
 
     let mut fnum1: c_int = -1;
     let mut fnum2: c_int = -1;
-    if nvim_register_list2fpos(argvars, 0, p1, &raw mut fnum1) != 0
-        || nvim_register_list2fpos(argvars, 1, p2, &raw mut fnum2) != 0
+    let arg0 = nvim_typval_array_get(argvars, 0);
+    let arg1 = nvim_typval_array_get(argvars, 1);
+    if list2fpos(arg0, p1, &raw mut fnum1, std::ptr::null_mut(), false) != 0
+        || list2fpos(arg1, p2, &raw mut fnum2, std::ptr::null_mut(), false) != 0
         || fnum1 != fnum2
     {
         return false;
     }
 
     // Read opts dict for exclusive / type.
-    let arg2_type = nvim_register_tv_get_type(argvars, 2);
+    let arg2 = tv_at(argvars, 2);
+    let arg2_type = (*arg2).v_type;
     let is_exclusive: bool;
     let type_str: *const c_char;
 
     if arg2_type == VAR_DICT {
-        let d = nvim_register_tv_get_dict(argvars, 2);
+        let d = (*arg2).as_dict();
         // default exclusive = (*p_sel == 'e')
         let p_sel_char = *nvim_get_p_sel() as u8;
         is_exclusive =
@@ -4781,7 +4824,7 @@ unsafe fn region_resolve(
         *region_type = K_MT_BLOCK_WISE;
         if type_bytes[1] != 0 {
             let mut p = type_str.add(1) as *mut c_char;
-            let digits = nvim_register_getdigits_int(&raw mut p);
+            let digits = getdigits_int(&raw mut p, false, 0);
             if digits <= 0 || *p != 0 {
                 nvim_register_semsg_invargNval_type(type_str);
                 return false;
@@ -4810,8 +4853,8 @@ unsafe fn region_resolve(
         return false;
     }
     if (*p1).col == MAXCOL {
-        (*p1).col = nvim_register_ml_get_buf_len(findbuf, (*p1).lnum) + 1;
-    } else if (*p1).col < 1 || (*p1).col > nvim_register_ml_get_buf_len(findbuf, (*p1).lnum) + 1 {
+        (*p1).col = ml_get_buf_len(findbuf, (*p1).lnum) + 1;
+    } else if (*p1).col < 1 || (*p1).col > ml_get_buf_len(findbuf, (*p1).lnum) + 1 {
         nvim_register_semsg_invalid_col((*p1).col);
         return false;
     }
@@ -4822,8 +4865,8 @@ unsafe fn region_resolve(
         return false;
     }
     if (*p2).col == MAXCOL {
-        (*p2).col = nvim_register_ml_get_buf_len(findbuf, (*p2).lnum) + 1;
-    } else if (*p2).col < 1 || (*p2).col > nvim_register_ml_get_buf_len(findbuf, (*p2).lnum) + 1 {
+        (*p2).col = ml_get_buf_len(findbuf, (*p2).lnum) + 1;
+    } else if (*p2).col < 1 || (*p2).col > ml_get_buf_len(findbuf, (*p2).lnum) + 1 {
         nvim_register_semsg_invalid_col((*p2).col);
         return false;
     }
@@ -4848,8 +4891,10 @@ unsafe fn region_resolve(
             *inclusive = !unadjust_for_sel_inner(p2);
         }
         // If p2 is on NUL (end of line) and not virtual, inclusive becomes false.
-        if *inclusive && nvim_register_get_virtual_op() == 0 /* kFalse */
-            && nvim_register_ml_get_pos_is_nul(p2)
+        if *inclusive
+            && nvim_register_get_virtual_op() == 0 /* kFalse */
+            && *ml_get_pos(p2) == 0
+        // NUL
         {
             *inclusive = false;
         }
@@ -4874,7 +4919,7 @@ unsafe fn region_resolve(
     }
 
     // Include the trailing byte of a multi-byte char.
-    let l = nvim_register_utfc_ptr2len_ml_get_pos(p2);
+    let l = utfc_ptr2len(ml_get_pos(p2));
     if l > 1 {
         (*p2).col += l - 1;
     }
@@ -4940,7 +4985,7 @@ pub unsafe extern "C" fn rs_f_getregion(
     }
 
     let oap = oap_storage.as_mut_ptr() as *mut c_void;
-    let result_list = nvim_register_tv_get_list(rettv, 0);
+    let result_list = (*tv_at_mut(rettv, 0)).as_list();
 
     let mut lnum = p1.lnum;
     while lnum <= p2.lnum {
@@ -5026,14 +5071,14 @@ pub unsafe extern "C" fn rs_f_getregionpos(
 
     let oap = oap_storage.as_mut_ptr() as *mut c_void;
 
-    let allow_eol: bool = if nvim_register_tv_get_type(argvars, 2) == VAR_DICT {
-        let d = nvim_register_tv_get_dict(argvars, 2);
+    let allow_eol: bool = if (*tv_at(argvars, 2)).v_type == VAR_DICT {
+        let d = (*tv_at(argvars, 2)).as_dict();
         tv_dict_get_bool(d, c"eol".as_ptr(), 0) != 0
     } else {
         false
     };
 
-    let result_list = nvim_register_tv_get_list(rettv, 0);
+    let result_list = (*tv_at_mut(rettv, 0)).as_list();
     let fnum = nvim_register_curbuf_fnum();
 
     let mut lnum = p1.lnum;
@@ -5069,7 +5114,7 @@ pub unsafe extern "C" fn rs_f_getregionpos(
 
             if bd.is_one_char != 0 {
                 if region_type == K_MT_BLOCK_WISE {
-                    rp1.col = nvim_register_mb_prevptr_offset(line, bd.textstart) + 1;
+                    rp1.col = mb_prevptr(line, bd.textstart).offset_from(line) as c_int + 1;
                     rp1.coladd = bd.start_char_vcols - (bd.start_vcol - oap_start_vcol);
                 } else {
                     rp1.col = p1.col + 1;
@@ -5080,7 +5125,7 @@ pub unsafe extern "C" fn rs_f_getregionpos(
                 rp1.coladd = oap_start_vcol - bd.start_vcol;
                 bd.is_one_char = 1; // bd.is_oneChar = true (flag)
             } else if bd.startspaces > 0 {
-                rp1.col = nvim_register_mb_prevptr_offset(line, bd.textstart) + 1;
+                rp1.col = mb_prevptr(line, bd.textstart).offset_from(line) as c_int + 1;
                 rp1.coladd = bd.start_char_vcols - bd.startspaces;
             } else {
                 rp1.col = bd.textcol + 1;
