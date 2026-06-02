@@ -4415,17 +4415,142 @@ unsafe fn libc_strchr(s: *mut c_char, ch: u8) -> *mut c_char {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 28: f_setreg, f_getregion, f_getregionpos exports
+// Phase 28: f_setreg, f_getregion, f_getregionpos — real Rust implementations
 //
-// All business logic lives in C run-helpers (register.c) so that the dense
-// typval / struct / global plumbing stays in C.  The Rust side provides only
-// the exported symbol that the VimL dispatch table resolves.
+// Logic ported branch-for-branch from the original C bodies (funcs_shim.c /
+// register.c).  C is retained only for the small accessor functions that wrap
+// struct field access and gettext-formatted error messages.
 // ---------------------------------------------------------------------------
 
 extern "C" {
-    fn nvim_register_setreg_run(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_register_getregion_run(argvars: *const c_void, rettv: *mut c_void);
-    fn nvim_register_getregionpos_run(argvars: *const c_void, rettv: *mut c_void);
+    // --- global get/set ---
+    fn nvim_register_get_curbuf() -> *mut c_void; // buf_T*
+    fn nvim_register_set_curbuf(buf: *mut c_void);
+    fn nvim_register_set_curwin_buffer(buf: *mut c_void);
+    fn nvim_register_get_virtual_op() -> c_int;
+    fn nvim_register_set_virtual_op(v: c_int);
+    fn nvim_register_set_virtual_op_from_curwin();
+
+    // --- buffer/line ---
+    fn nvim_register_buf_ml_mfp_is_null(buf: *mut c_void) -> bool;
+    fn nvim_register_buf_line_count(buf: *mut c_void) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_register_buf_fnum(buf: *mut c_void) -> c_int;
+    fn nvim_register_curbuf_fnum() -> c_int;
+    fn nvim_register_ml_get_buf_len(buf: *mut c_void, lnum: c_int) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_register_ml_get_pos(pos: *mut PosT) -> *mut c_char;
+    fn nvim_register_ml_get_pos_is_nul(pos: *mut PosT) -> bool;
+    fn nvim_register_utfc_ptr2len_ml_get_pos(pos: *mut PosT) -> c_int;
+
+    // --- position helpers ---
+    fn nvim_register_list2fpos(
+        argvars: *const c_void,
+        idx: c_int,
+        pos: *mut PosT,
+        fnum: *mut c_int,
+    ) -> c_int;
+    fn nvim_register_getvvcol(pos: *mut PosT, sc: *mut c_int, ec: *mut c_int);
+    fn nvim_register_unadjust_for_sel_inner(p: *mut PosT) -> bool;
+    fn nvim_register_mb_prevptr_offset(line: *mut c_char, p: *mut c_char) -> c_int;
+
+    // --- oparg_T setters ---
+    fn nvim_oap_set_for_blockwise(
+        oap: *mut c_void,
+        start: *mut PosT,
+        end: *mut PosT,
+        start_vcol: c_int,
+        end_vcol: c_int,
+    );
+    #[allow(dead_code)]
+    fn nvim_oap_zero(oap: *mut c_void);
+
+    // --- typval accessors for setreg ---
+    fn nvim_register_tv_get_string_chk(argvars: *const c_void, idx: c_int) -> *const c_char;
+    fn nvim_register_tv_get_type(argvars: *const c_void, idx: c_int) -> c_int;
+    fn nvim_register_tv_get_dict(argvars: *const c_void, idx: c_int) -> *mut c_void; // dict_T*
+    fn nvim_register_tv_get_list(argvars: *const c_void, idx: c_int) -> *mut c_void; // list_T*
+    fn nvim_register_rettv_set_number(rettv: *mut c_void, n: c_int);
+    fn nvim_register_tv_dict_len(d: *mut c_void) -> c_int;
+    fn nvim_register_tv_dict_find_tv(d: *mut c_void, key: *const c_char) -> *mut c_void; // typval_T*
+    fn nvim_register_tv_dict_get_string(d: *mut c_void, key: *const c_char) -> *const c_char;
+    fn nvim_register_tv_dict_get_number(d: *mut c_void, key: *const c_char) -> i64;
+    fn nvim_register_tv_dict_get_bool(d: *mut c_void, key: *const c_char, def: bool) -> bool;
+    #[allow(dead_code)]
+    fn nvim_register_tv_list_len(ll: *mut c_void) -> c_int;
+    /// Build lstval, call write_reg_contents_lst, free lstval. Returns OK(0) or FAIL(-1).
+    fn nvim_register_setreg_write_lst(
+        regname: c_int,
+        ll: *mut c_void,
+        append: bool,
+        yank_type: c_int,
+        block_len: c_int,
+    ) -> c_int;
+    fn nvim_register_tv_get_string_chk_tv(tv: *mut c_void) -> *const c_char;
+    fn nvim_register_tv_get_tv(argvars: *const c_void, idx: c_int) -> *mut c_void; // typval_T*
+
+    // --- arg validation for getregion ---
+    fn nvim_register_check_region_args(argvars: *const c_void) -> c_int;
+
+    // --- getdigits wrapper ---
+    fn nvim_register_getdigits_int(pp: *mut *mut c_char) -> c_int;
+
+    // --- list alloc / append for getregionpos result ---
+    fn nvim_register_tv_list_alloc(n: c_int) -> *mut c_void; // list_T*
+    fn nvim_register_tv_list_append_list(parent: *mut c_void, child: *mut c_void);
+    fn nvim_register_tv_list_append_number(l: *mut c_void, n: i64);
+    fn nvim_register_tv_list_alloc_ret(rettv: *mut c_void);
+    fn nvim_register_tv_list_append_allocated_string(l: *mut c_void, s: *mut c_char);
+    fn nvim_register_rettv_list(rettv: *mut c_void) -> *mut c_void; // list_T*
+
+    // --- error message emitters ---
+    fn nvim_register_emsg_buffer_not_loaded();
+    fn nvim_register_semsg_invalid_line(lnum: c_int);
+    fn nvim_register_semsg_invalid_col(col: c_int);
+    fn nvim_register_semsg_invargNval_type(val: *const c_char);
+    fn nvim_register_semsg_invargval_value();
+    fn nvim_register_semsg_toomanyarg_setreg();
+
+    // --- write_reg_contents wrappers ---
+    fn nvim_register_write_reg_empty(regname: c_int);
+}
+
+// VAR_* type constants matching eval/typval_defs.h.
+const VAR_UNKNOWN: c_int = 0;
+const VAR_LIST: c_int = 4;
+const VAR_DICT: c_int = 5;
+
+// CTRL-V byte value (0x16 = 22), already declared above as CTRL_V.
+
+/// Parse a regtype string character into (MotionType, block_len_delta, advance).
+/// Returns `Some((motion_type, block_len))` or `None` on failure.
+/// On success the caller should advance the pointer by 1 (the consumed char);
+/// for blockwise with digits the pointer is returned already past the digits.
+///
+/// # Safety
+///
+/// `pp` must point to a valid NUL-terminated C string.
+unsafe fn parse_yank_type(pp: *mut *mut c_char) -> Option<(c_int, c_int)> {
+    let stropt = *pp;
+    let first = *stropt as u8;
+    match first {
+        b'v' | b'c' => Some((K_MT_CHAR_WISE, -1)),
+        b'V' | b'l' => Some((K_MT_LINE_WISE, -1)),
+        b'b' | 0x16 /* Ctrl_V */ => {
+            let mut block_len: c_int = -1;
+            let next = stropt.add(1);
+            if (*next as u8).is_ascii_digit() {
+                // advance into the digit sequence
+                *pp = next;
+                block_len = nvim_register_getdigits_int(pp) - 1;
+                // pp now points one past the last digit; we back up one so
+                // the outer loop's stropt++ lands on the right position.
+                *pp = (*pp).sub(1);
+            }
+            Some((K_MT_BLOCK_WISE, block_len))
+        }
+        _ => None,
+    }
 }
 
 /// "setreg()" function — sets register contents from a VimL value/dict.
@@ -4439,7 +4564,350 @@ pub unsafe extern "C" fn rs_f_setreg(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_register_setreg_run(argvars, rettv);
+    let mut append = false;
+    let mut block_len: c_int = -1;
+    let mut yank_type: c_int = K_MT_UNKNOWN;
+
+    nvim_register_rettv_set_number(rettv, 1); // FAIL is default.
+
+    let strregname = nvim_register_tv_get_string_chk(argvars, 0);
+    if strregname.is_null() {
+        return;
+    }
+    let mut regname = *strregname as u8;
+    if regname == 0 || regname == b'@' {
+        regname = b'"';
+    }
+
+    // argvars[1]: either a dict or the regcontents value directly.
+    let arg1_type = nvim_register_tv_get_type(argvars, 1);
+    let mut regcontents_tv: *mut c_void = std::ptr::null_mut(); // typval_T*
+    let mut pointreg: u8 = 0;
+
+    if arg1_type == VAR_DICT {
+        let d = nvim_register_tv_get_dict(argvars, 1);
+
+        if nvim_register_tv_dict_len(d) == 0 {
+            nvim_register_write_reg_empty(c_int::from(regname));
+            return;
+        }
+
+        let di = nvim_register_tv_dict_find_tv(d, c"regcontents".as_ptr());
+        if !di.is_null() {
+            regcontents_tv = di;
+        }
+
+        let stropt = nvim_register_tv_dict_get_string(d, c"regtype".as_ptr());
+        if !stropt.is_null() {
+            let mut p = stropt as *mut c_char;
+            match parse_yank_type(&raw mut p) {
+                None => {
+                    nvim_register_semsg_invargval_value();
+                    return;
+                }
+                Some((yt, bl)) => {
+                    // advance p by 1 for the consumed character
+                    p = p.add(1);
+                    if *p != 0 {
+                        nvim_register_semsg_invargval_value();
+                        return;
+                    }
+                    yank_type = yt;
+                    if bl >= 0 {
+                        block_len = bl;
+                    }
+                }
+            }
+        }
+
+        if regname == b'"' {
+            let pt = nvim_register_tv_dict_get_string(d, c"points_to".as_ptr());
+            if !pt.is_null() {
+                pointreg = *pt as u8;
+                regname = pointreg;
+            }
+        } else if nvim_register_tv_dict_get_number(d, c"isunnamed".as_ptr()) != 0 {
+            pointreg = regname;
+        }
+    } else {
+        // argvars[1] is the regcontents value directly.
+        regcontents_tv = nvim_register_tv_get_tv(argvars, 1);
+    }
+
+    let mut set_unnamed = false;
+    let arg2_type = nvim_register_tv_get_type(argvars, 2);
+    if arg2_type != VAR_UNKNOWN {
+        if yank_type != K_MT_UNKNOWN {
+            nvim_register_semsg_toomanyarg_setreg();
+            return;
+        }
+        let stropt = nvim_register_tv_get_string_chk(argvars, 2);
+        if stropt.is_null() {
+            return;
+        }
+        let mut p = stropt as *mut c_char;
+        while *p != 0 {
+            match *p as u8 {
+                b'a' | b'A' => {
+                    append = true;
+                }
+                b'u' | b'"' => {
+                    set_unnamed = true;
+                }
+                _ => {
+                    if let Some((yt, bl)) = parse_yank_type(&raw mut p) {
+                        yank_type = yt;
+                        if bl >= 0 {
+                            block_len = bl;
+                        }
+                    }
+                }
+            }
+            p = p.add(1);
+        }
+    }
+
+    if !regcontents_tv.is_null() {
+        let tv_type = nvim_register_tv_get_type(regcontents_tv as *const c_void, 0);
+        if tv_type == VAR_LIST {
+            let ll = nvim_register_tv_get_list(regcontents_tv as *const c_void, 0);
+            let ret = nvim_register_setreg_write_lst(
+                c_int::from(regname),
+                ll,
+                append,
+                yank_type,
+                block_len,
+            );
+            if ret != 0 {
+                // FAIL: type error in list items
+                return;
+            }
+        } else {
+            let strval = nvim_register_tv_get_string_chk_tv(regcontents_tv);
+            if strval.is_null() {
+                return;
+            }
+            rs_write_reg_contents_ex(
+                c_int::from(regname),
+                strval,
+                -1, // use strlen
+                append,
+                yank_type,
+                block_len,
+            );
+        }
+    }
+
+    if pointreg != 0 {
+        rs_get_yank_register(c_int::from(pointreg), 1 /* YREG_YANK */);
+    }
+    nvim_register_rettv_set_number(rettv, 0); // success
+
+    if set_unnamed {
+        rs_op_reg_set_previous(regname as c_char);
+    }
+}
+
+/// Opaque oparg_T storage — 160 bytes, enough to hold oparg_T on any platform.
+/// The actual C struct is accessed only through nvim_oap_* accessors.
+const OPARG_T_SIZE: usize = 160;
+type OpaqueOap = [u8; OPARG_T_SIZE];
+
+/// Core region resolver — ported from funcs_shim.c `getregionpos`.
+///
+/// Parses two list positions + opts dict, validates buf/line/col,
+/// mutates curbuf/curwin->w_buffer/virtual_op (callers save/restore),
+/// fills `oap` for blockwise.
+///
+/// Returns `true` on success, `false` on failure (rettv list already allocated
+/// by nvim_register_tv_list_alloc_ret before calling).
+///
+/// # Safety
+///
+/// `argvars`, `p1`, `p2`, `inclusive`, `region_type`, `oap` must all be valid.
+unsafe fn region_resolve(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    p1: *mut PosT,
+    p2: *mut PosT,
+    inclusive: *mut bool,
+    region_type: *mut c_int,
+    oap: *mut OpaqueOap,
+) -> bool {
+    nvim_register_tv_list_alloc_ret(rettv);
+
+    // validate arg types: list, list, opt-dict
+    if nvim_register_check_region_args(argvars) == -1 {
+        return false;
+    }
+
+    let mut fnum1: c_int = -1;
+    let mut fnum2: c_int = -1;
+    if nvim_register_list2fpos(argvars, 0, p1, &raw mut fnum1) != 0
+        || nvim_register_list2fpos(argvars, 1, p2, &raw mut fnum2) != 0
+        || fnum1 != fnum2
+    {
+        return false;
+    }
+
+    // Read opts dict for exclusive / type.
+    let arg2_type = nvim_register_tv_get_type(argvars, 2);
+    let is_exclusive: bool;
+    let type_str: *const c_char;
+
+    if arg2_type == VAR_DICT {
+        let d = nvim_register_tv_get_dict(argvars, 2);
+        // default exclusive = (*p_sel == 'e')
+        let p_sel_char = *nvim_get_p_sel() as u8;
+        is_exclusive = nvim_register_tv_dict_get_bool(d, c"exclusive".as_ptr(), p_sel_char == b'e');
+        type_str = nvim_register_tv_dict_get_string(d, c"type".as_ptr());
+    } else {
+        let p_sel_char = *nvim_get_p_sel() as u8;
+        is_exclusive = p_sel_char == b'e';
+        type_str = std::ptr::null();
+    }
+
+    // Parse the type string.
+    let type_bytes: &[u8] = if type_str.is_null() {
+        b"v"
+    } else {
+        let len = libc::strlen(type_str);
+        std::slice::from_raw_parts(type_str as *const u8, len + 1)
+    };
+
+    let mut block_width: c_int = 0;
+    if type_bytes[0] == b'v' && type_bytes[1] == 0 {
+        *region_type = K_MT_CHAR_WISE;
+    } else if type_bytes[0] == b'V' && type_bytes[1] == 0 {
+        *region_type = K_MT_LINE_WISE;
+    } else if type_bytes[0] == CTRL_V {
+        *region_type = K_MT_BLOCK_WISE;
+        if type_bytes[1] != 0 {
+            let mut p = type_str.add(1) as *mut c_char;
+            let digits = nvim_register_getdigits_int(&raw mut p);
+            if digits <= 0 || *p != 0 {
+                nvim_register_semsg_invargNval_type(type_str);
+                return false;
+            }
+            block_width = digits;
+        }
+    } else {
+        nvim_register_semsg_invargNval_type(type_str);
+        return false;
+    }
+
+    // Find the buffer.
+    let findbuf: *mut c_void = if fnum1 != 0 {
+        buflist_findnr(fnum1)
+    } else {
+        nvim_register_get_curbuf()
+    };
+    if findbuf.is_null() || nvim_register_buf_ml_mfp_is_null(findbuf) {
+        nvim_register_emsg_buffer_not_loaded();
+        return false;
+    }
+
+    // Validate p1.
+    if (*p1).lnum < 1 || (*p1).lnum > nvim_register_buf_line_count(findbuf) {
+        nvim_register_semsg_invalid_line((*p1).lnum);
+        return false;
+    }
+    if (*p1).col == MAXCOL {
+        (*p1).col = nvim_register_ml_get_buf_len(findbuf, (*p1).lnum) + 1;
+    } else if (*p1).col < 1 || (*p1).col > nvim_register_ml_get_buf_len(findbuf, (*p1).lnum) + 1 {
+        nvim_register_semsg_invalid_col((*p1).col);
+        return false;
+    }
+
+    // Validate p2.
+    if (*p2).lnum < 1 || (*p2).lnum > nvim_register_buf_line_count(findbuf) {
+        nvim_register_semsg_invalid_line((*p2).lnum);
+        return false;
+    }
+    if (*p2).col == MAXCOL {
+        (*p2).col = nvim_register_ml_get_buf_len(findbuf, (*p2).lnum) + 1;
+    } else if (*p2).col < 1 || (*p2).col > nvim_register_ml_get_buf_len(findbuf, (*p2).lnum) + 1 {
+        nvim_register_semsg_invalid_col((*p2).col);
+        return false;
+    }
+
+    // Set curbuf / curwin->w_buffer / virtual_op.
+    nvim_register_set_curbuf(findbuf);
+    nvim_register_set_curwin_buffer(findbuf);
+    nvim_register_set_virtual_op_from_curwin();
+
+    // Adjust col from 1-based external to 0-based internal.
+    (*p1).col -= 1;
+    (*p2).col -= 1;
+
+    // Swap if p1 > p2.
+    if !pos_lt(*p1, *p2) {
+        std::ptr::swap(p1, p2);
+    }
+
+    if *region_type == K_MT_CHAR_WISE {
+        if is_exclusive && !pos_equal(*p1, *p2) {
+            // When backing up to previous line, inclusive becomes false.
+            *inclusive = !nvim_register_unadjust_for_sel_inner(p2);
+        }
+        // If p2 is on NUL (end of line) and not virtual, inclusive becomes false.
+        if *inclusive && nvim_register_get_virtual_op() == 0 /* kFalse */
+            && nvim_register_ml_get_pos_is_nul(p2)
+        {
+            *inclusive = false;
+        }
+    } else if *region_type == K_MT_BLOCK_WISE {
+        let mut sc1: c_int = 0;
+        let mut ec1: c_int = 0;
+        let mut sc2: c_int = 0;
+        let mut ec2: c_int = 0;
+        nvim_register_getvvcol(p1, &raw mut sc1, &raw mut ec1);
+        nvim_register_getvvcol(p2, &raw mut sc2, &raw mut ec2);
+
+        let start_vcol = sc1.min(sc2);
+        let end_vcol = if block_width > 0 {
+            start_vcol + block_width - 1
+        } else if is_exclusive && ec1 < sc2 && 0 < sc2 && ec2 > ec1 {
+            sc2 - 1
+        } else {
+            ec1.max(ec2)
+        };
+
+        nvim_oap_set_for_blockwise(oap as *mut c_void, p1, p2, start_vcol, end_vcol);
+    }
+
+    // Include the trailing byte of a multi-byte char.
+    let l = nvim_register_utfc_ptr2len_ml_get_pos(p2);
+    if l > 1 {
+        (*p2).col += l - 1;
+    }
+
+    true
+}
+
+/// pos_T less-than (lnum first, then col).
+fn pos_lt(a: PosT, b: PosT) -> bool {
+    a.lnum < b.lnum || (a.lnum == b.lnum && a.col < b.col)
+}
+
+/// pos_T equality.
+fn pos_equal(a: PosT, b: PosT) -> bool {
+    a.lnum == b.lnum && a.col == b.col
+}
+
+/// Render a `BlockDef` into a heap-allocated NUL-terminated string.
+/// Ownership is transferred to the caller (must be freed with xfree).
+unsafe fn block_def_to_string(bd: *const BlockDef) -> *mut c_char {
+    let size = ((*bd).startspaces + (*bd).endspaces + (*bd).textlen) as usize;
+    let ret = xmallocz(size) as *mut c_char;
+    let mut p = ret;
+    std::ptr::write_bytes(p, b' ', (*bd).startspaces as usize);
+    p = p.add((*bd).startspaces as usize);
+    std::ptr::copy((*bd).textstart, p, (*bd).textlen as usize);
+    p = p.add((*bd).textlen as usize);
+    std::ptr::write_bytes(p, b' ', (*bd).endspaces as usize);
+    // xmallocz already wrote the NUL terminator.
+    ret
 }
 
 /// "getregion()" function — returns a list of strings from a region.
@@ -4453,7 +4921,78 @@ pub unsafe extern "C" fn rs_f_getregion(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_register_getregion_run(argvars, rettv);
+    let save_curbuf = nvim_register_get_curbuf();
+    let save_virtual = nvim_register_get_virtual_op();
+
+    let mut p1 = PosT::default();
+    let mut p2 = PosT::default();
+    let mut inclusive = true;
+    let mut region_type: c_int = K_MT_UNKNOWN;
+    let mut oap_storage: OpaqueOap = [0u8; OPARG_T_SIZE];
+
+    if !region_resolve(
+        argvars,
+        rettv,
+        &raw mut p1,
+        &raw mut p2,
+        &raw mut inclusive,
+        &raw mut region_type,
+        &raw mut oap_storage,
+    ) {
+        return;
+    }
+
+    let oap = oap_storage.as_mut_ptr() as *mut c_void;
+    let result_list = nvim_register_rettv_list(rettv);
+
+    let mut lnum = p1.lnum;
+    while lnum <= p2.lnum {
+        let akt: *mut c_char = if region_type == K_MT_LINE_WISE {
+            xstrdup(ml_get(lnum))
+        } else if region_type == K_MT_BLOCK_WISE {
+            let mut bd = BlockDef::zeroed();
+            block_prep(oap, &raw mut bd, lnum, false);
+            block_def_to_string(&raw const bd)
+        } else if p1.lnum < lnum && lnum < p2.lnum {
+            xstrdup(ml_get(lnum))
+        } else {
+            let mut bd = BlockDef::zeroed();
+            charwise_block_prep(p1, p2, &raw mut bd, lnum, inclusive);
+            block_def_to_string(&raw const bd)
+        };
+
+        nvim_register_tv_list_append_allocated_string(result_list, akt);
+        lnum += 1;
+    }
+
+    nvim_register_set_curbuf(save_curbuf);
+    nvim_register_set_curwin_buffer(save_curbuf);
+    nvim_register_set_virtual_op(save_virtual);
+}
+
+/// Append `[[buf,lnum,col,coladd],[buf,lnum,col,coladd]]` to the result list.
+///
+/// # Safety
+///
+/// `result_list` must be a valid list_T*.
+unsafe fn add_regionpos_range(result_list: *mut c_void, fnum: c_int, ret_p1: PosT, ret_p2: PosT) {
+    let l1 = nvim_register_tv_list_alloc(2);
+    nvim_register_tv_list_append_list(result_list, l1);
+
+    let l2 = nvim_register_tv_list_alloc(4);
+    nvim_register_tv_list_append_list(l1, l2);
+    let l3 = nvim_register_tv_list_alloc(4);
+    nvim_register_tv_list_append_list(l1, l3);
+
+    nvim_register_tv_list_append_number(l2, i64::from(fnum));
+    nvim_register_tv_list_append_number(l2, i64::from(ret_p1.lnum));
+    nvim_register_tv_list_append_number(l2, i64::from(ret_p1.col));
+    nvim_register_tv_list_append_number(l2, i64::from(ret_p1.coladd));
+
+    nvim_register_tv_list_append_number(l3, i64::from(fnum));
+    nvim_register_tv_list_append_number(l3, i64::from(ret_p2.lnum));
+    nvim_register_tv_list_append_number(l3, i64::from(ret_p2.col));
+    nvim_register_tv_list_append_number(l3, i64::from(ret_p2.coladd));
 }
 
 /// "getregionpos()" function — returns positions of a region.
@@ -4467,7 +5006,133 @@ pub unsafe extern "C" fn rs_f_getregionpos(
     rettv: *mut c_void,
     _fptr: *mut c_void,
 ) {
-    nvim_register_getregionpos_run(argvars, rettv);
+    let save_curbuf = nvim_register_get_curbuf();
+    let save_virtual = nvim_register_get_virtual_op();
+
+    let mut p1 = PosT::default();
+    let mut p2 = PosT::default();
+    let mut inclusive = true;
+    let mut region_type: c_int = K_MT_UNKNOWN;
+    let mut oap_storage: OpaqueOap = [0u8; OPARG_T_SIZE];
+
+    if !region_resolve(
+        argvars,
+        rettv,
+        &raw mut p1,
+        &raw mut p2,
+        &raw mut inclusive,
+        &raw mut region_type,
+        &raw mut oap_storage,
+    ) {
+        return;
+    }
+
+    let oap = oap_storage.as_mut_ptr() as *mut c_void;
+
+    let allow_eol: bool = if nvim_register_tv_get_type(argvars, 2) == VAR_DICT {
+        let d = nvim_register_tv_get_dict(argvars, 2);
+        nvim_register_tv_dict_get_bool(d, c"eol".as_ptr(), false)
+    } else {
+        false
+    };
+
+    let result_list = nvim_register_rettv_list(rettv);
+    let fnum = nvim_register_curbuf_fnum();
+
+    let mut lnum = p1.lnum;
+    while lnum <= p2.lnum {
+        let line: *mut c_char = ml_get(lnum);
+        let line_len: c_int = ml_get_len(lnum);
+
+        let (ret_p1, ret_p2): (PosT, PosT) = if region_type == K_MT_LINE_WISE {
+            (
+                PosT {
+                    lnum,
+                    col: 1,
+                    coladd: 0,
+                },
+                PosT {
+                    lnum,
+                    col: MAXCOL,
+                    coladd: 0,
+                },
+            )
+        } else {
+            let mut bd = BlockDef::zeroed();
+            if region_type == K_MT_BLOCK_WISE {
+                block_prep(oap, &raw mut bd, lnum, false);
+            } else {
+                charwise_block_prep(p1, p2, &raw mut bd, lnum, inclusive);
+            }
+
+            let oap_start_vcol = nvim_oap_get_start_vcol(oap);
+
+            let mut rp1 = PosT::default();
+            let mut rp2 = PosT::default();
+
+            if bd.is_one_char != 0 {
+                if region_type == K_MT_BLOCK_WISE {
+                    rp1.col = nvim_register_mb_prevptr_offset(line, bd.textstart) + 1;
+                    rp1.coladd = bd.start_char_vcols - (bd.start_vcol - oap_start_vcol);
+                } else {
+                    rp1.col = p1.col + 1;
+                    rp1.coladd = p1.coladd;
+                }
+            } else if region_type == K_MT_BLOCK_WISE && oap_start_vcol > bd.start_vcol {
+                rp1.col = MAXCOL;
+                rp1.coladd = oap_start_vcol - bd.start_vcol;
+                bd.is_one_char = 1; // bd.is_oneChar = true (flag)
+            } else if bd.startspaces > 0 {
+                rp1.col = nvim_register_mb_prevptr_offset(line, bd.textstart) + 1;
+                rp1.coladd = bd.start_char_vcols - bd.startspaces;
+            } else {
+                rp1.col = bd.textcol + 1;
+                rp1.coladd = 0;
+            }
+
+            if bd.is_one_char != 0 {
+                rp2.col = rp1.col;
+                rp2.coladd = rp1.coladd + bd.startspaces + bd.endspaces;
+            } else if bd.endspaces > 0 {
+                rp2.col = bd.textcol + bd.textlen + 1;
+                rp2.coladd = bd.endspaces;
+            } else {
+                rp2.col = bd.textcol + bd.textlen;
+                rp2.coladd = 0;
+            }
+
+            (rp1, rp2)
+        };
+
+        // Clamp ret_p1.
+        let mut ret_p1 = ret_p1;
+        let mut ret_p2 = ret_p2;
+        if !allow_eol && ret_p1.col > line_len {
+            ret_p1.col = 0;
+            ret_p1.coladd = 0;
+        } else if ret_p1.col > line_len + 1 {
+            ret_p1.col = line_len + 1;
+        }
+
+        // Clamp ret_p2.
+        if !allow_eol && ret_p2.col > line_len {
+            ret_p2.col = if ret_p1.col == 0 { 0 } else { line_len };
+            ret_p2.coladd = 0;
+        } else if ret_p2.col > line_len + 1 {
+            ret_p2.col = line_len + 1;
+        }
+
+        ret_p1.lnum = lnum;
+        ret_p2.lnum = lnum;
+
+        add_regionpos_range(result_list, fnum, ret_p1, ret_p2);
+
+        lnum += 1;
+    }
+
+    nvim_register_set_curbuf(save_curbuf);
+    nvim_register_set_curwin_buffer(save_curbuf);
+    nvim_register_set_virtual_op(save_virtual);
 }
 
 // ---------------------------------------------------------------------------
