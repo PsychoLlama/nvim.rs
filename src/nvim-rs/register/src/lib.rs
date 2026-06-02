@@ -4415,6 +4415,62 @@ unsafe fn libc_strchr(s: *mut c_char, ch: u8) -> *mut c_char {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 28: f_setreg, f_getregion, f_getregionpos exports
+//
+// All business logic lives in C run-helpers (register.c) so that the dense
+// typval / struct / global plumbing stays in C.  The Rust side provides only
+// the exported symbol that the VimL dispatch table resolves.
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn nvim_register_setreg_run(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_register_getregion_run(argvars: *const c_void, rettv: *mut c_void);
+    fn nvim_register_getregionpos_run(argvars: *const c_void, rettv: *mut c_void);
+}
+
+/// "setreg()" function — sets register contents from a VimL value/dict.
+///
+/// # Safety
+///
+/// Caller must provide valid pointers to typval_T arrays.
+#[unsafe(export_name = "f_setreg")]
+pub unsafe extern "C" fn rs_f_setreg(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_register_setreg_run(argvars, rettv);
+}
+
+/// "getregion()" function — returns a list of strings from a region.
+///
+/// # Safety
+///
+/// Caller must provide valid pointers to typval_T arrays.
+#[unsafe(export_name = "f_getregion")]
+pub unsafe extern "C" fn rs_f_getregion(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_register_getregion_run(argvars, rettv);
+}
+
+/// "getregionpos()" function — returns positions of a region.
+///
+/// # Safety
+///
+/// Caller must provide valid pointers to typval_T arrays.
+#[unsafe(export_name = "f_getregionpos")]
+pub unsafe extern "C" fn rs_f_getregionpos(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    nvim_register_getregionpos_run(argvars, rettv);
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
