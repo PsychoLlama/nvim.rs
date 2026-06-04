@@ -445,3 +445,223 @@ mod tests {
         assert!(!WinNavDir::Left.is_vertical());
     }
 }
+
+// =============================================================================
+// f_line / f_virtcol VimL built-in implementations
+// =============================================================================
+
+// These are appended to window.rs because they are logically window-position
+// functions, and they reuse the switchwin_T opaque buffer defined here.
+
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_ptr_alignment)]
+#[allow(clippy::ptr_as_ptr)]
+#[allow(clippy::ptr_cast_constness)]
+#[allow(clashing_extern_declarations)]
+mod window_funcs {
+    use std::ffi::{c_int, c_void};
+
+    use crate::indexing::PosT;
+    use crate::typval::TypvalT;
+
+    // ─── Constants ────────────────────────────────────────────────────────────
+
+    const VAR_UNKNOWN: c_int = 0;
+    const OK: c_int = 1;
+
+    /// Size of switchwin_T opaque buffer.
+    /// Pinned by `_Static_assert(sizeof(switchwin_T) == SWITCHWIN_T_SIZE)` in C.
+    const SWITCHWIN_T_SIZE: usize = 24;
+
+    /// EvalFuncData — opaque union passed by value
+    type EvalFuncData = *mut c_void;
+
+    // ─── FFI imports ──────────────────────────────────────────────────────────
+
+    extern "C" {
+        fn tv_get_number(tv: *const c_void) -> i64;
+        fn tv_get_bool(tv: *const c_void) -> c_int;
+        fn win_id2wp_tp(id: c_int, tpp: *mut *mut c_void) -> *mut c_void;
+        fn nvim_option_switch_win_noblock(
+            switchwin: *mut c_void,
+            win: *mut c_void,
+            tabpage: *mut c_void,
+        ) -> c_int;
+        fn nvim_option_restore_win_noblock(switchwin: *mut c_void);
+        fn check_cursor(wp: *mut c_void);
+        fn var2fpos(tv: *const c_void, dolpos: bool, fnum: *mut c_int, charcol: bool) -> *mut PosT;
+        fn nvim_eval_curwin() -> *mut c_void;
+        fn nvim_eval_line_should_skip_topline(sw: *mut c_void, wp: *mut c_void) -> bool;
+        fn nvim_eval_set_skip_update_topline(v: bool);
+        fn getvvcol(
+            wp: *mut c_void,
+            pos: *mut PosT,
+            start: *mut c_int,
+            cursor: *mut c_int,
+            end: *mut c_int,
+        );
+        fn ml_get_len(lnum: i32) -> c_int;
+        fn nvim_eval_curbuf_fnum() -> c_int;
+        fn nvim_eval_curbuf_line_count() -> c_int;
+        fn tv_list_alloc_ret(rettv: *mut c_void, len: isize) -> *mut c_void;
+        fn tv_list_append_number(l: *mut c_void, n: i64);
+    }
+
+    /// Return a pointer to `argvars[i]` (each typval_T is 16 bytes).
+    #[inline]
+    unsafe fn argvar(argvars: *const c_void, i: usize) -> *const c_void {
+        argvars.cast::<u8>().add(i * 16).cast::<c_void>()
+    }
+
+    // ─── f_line ──────────────────────────────────────────────────────────────
+
+    /// `line()` VimL function — line number for a position, optionally in a window.
+    ///
+    /// # Safety
+    ///
+    /// `argvars` and `rettv` must be valid `typval_T *`.
+    #[export_name = "f_line"]
+    pub unsafe extern "C" fn rs_f_line(
+        argvars: *const c_void,
+        rettv: *mut c_void,
+        _fptr: EvalFuncData,
+    ) {
+        let mut lnum: i32 = 0;
+        let mut fp: *mut PosT = std::ptr::null_mut();
+        let mut fnum: c_int = 0;
+
+        let arg1 = argvar(argvars, 1);
+        if (*arg1.cast::<TypvalT>()).v_type == VAR_UNKNOWN {
+            // use current window
+            fp = var2fpos(argvar(argvars, 0), true, &raw mut fnum, false);
+        } else {
+            // use window specified in the second argument
+            let id = tv_get_number(arg1) as c_int;
+            let mut tp: *mut c_void = std::ptr::null_mut();
+            let wp = win_id2wp_tp(id, &raw mut tp);
+            if !wp.is_null() && !tp.is_null() {
+                // Stack-allocate switchwin_T as an opaque byte buffer
+                let mut switchwin = [0u8; SWITCHWIN_T_SIZE];
+                let sw_ptr = switchwin.as_mut_ptr().cast::<c_void>();
+                if nvim_option_switch_win_noblock(sw_ptr, wp, tp) == OK {
+                    // With 'splitkeep' != cursor and in diff mode, prevent window scroll
+                    if nvim_eval_line_should_skip_topline(sw_ptr, wp) {
+                        nvim_eval_set_skip_update_topline(true);
+                    }
+                    check_cursor(nvim_eval_curwin());
+                    fp = var2fpos(argvar(argvars, 0), true, &raw mut fnum, false);
+                }
+                nvim_eval_set_skip_update_topline(false);
+                nvim_option_restore_win_noblock(sw_ptr);
+            }
+        }
+
+        if !fp.is_null() {
+            lnum = (*fp).lnum;
+        }
+        (*rettv.cast::<TypvalT>()).vval.v_number = i64::from(lnum);
+    }
+
+    // ─── f_virtcol ───────────────────────────────────────────────────────────
+
+    /// `virtcol()` VimL function — virtual column of a position.
+    ///
+    /// # Safety
+    ///
+    /// `argvars` and `rettv` must be valid `typval_T *`.
+    #[export_name = "f_virtcol"]
+    pub unsafe extern "C" fn rs_f_virtcol(
+        argvars: *const c_void,
+        rettv: *mut c_void,
+        _fptr: EvalFuncData,
+    ) {
+        let mut vcol_start: c_int = 0;
+        let mut vcol_end: c_int = 0;
+        let mut switchwin = [0u8; SWITCHWIN_T_SIZE];
+        let sw_ptr = switchwin.as_mut_ptr().cast::<c_void>();
+        let mut winchanged = false;
+
+        let arg1 = argvar(argvars, 1);
+        let arg2 = argvar(argvars, 2);
+
+        if (*arg1.cast::<TypvalT>()).v_type != VAR_UNKNOWN
+            && (*arg2.cast::<TypvalT>()).v_type != VAR_UNKNOWN
+        {
+            // use the window specified in the third argument
+            let mut tp: *mut c_void = std::ptr::null_mut();
+            let wp = win_id2wp_tp(tv_get_number(arg2) as c_int, &raw mut tp);
+            if wp.is_null() || tp.is_null() {
+                // goto theend
+                virtcol_theend(argvars, rettv, vcol_start, vcol_end, winchanged, sw_ptr);
+                return;
+            }
+
+            if nvim_option_switch_win_noblock(sw_ptr, wp, tp) != OK {
+                // goto theend
+                virtcol_theend(argvars, rettv, vcol_start, vcol_end, winchanged, sw_ptr);
+                return;
+            }
+
+            check_cursor(nvim_eval_curwin());
+            winchanged = true;
+        }
+
+        let cur_fnum = nvim_eval_curbuf_fnum();
+        let mut fnum = cur_fnum;
+        let arg0 = argvar(argvars, 0);
+        let fp = var2fpos(arg0, false, &raw mut fnum, false);
+
+        if !fp.is_null() && (*fp).lnum <= nvim_eval_curbuf_line_count() && fnum == cur_fnum {
+            // Limit column to a valid value
+            if (*fp).col < 0 {
+                (*fp).col = 0;
+            } else {
+                let len = ml_get_len((*fp).lnum);
+                if (*fp).col > len {
+                    (*fp).col = len;
+                }
+            }
+            getvvcol(
+                nvim_eval_curwin(),
+                fp,
+                &raw mut vcol_start,
+                std::ptr::null_mut(),
+                &raw mut vcol_end,
+            );
+            vcol_start += 1;
+            vcol_end += 1;
+        }
+
+        virtcol_theend(argvars, rettv, vcol_start, vcol_end, winchanged, sw_ptr);
+    }
+
+    /// Helper for the `theend:` label in `f_virtcol` — set return value and restore window.
+    #[inline]
+    unsafe fn virtcol_theend(
+        argvars: *const c_void,
+        rettv: *mut c_void,
+        vcol_start: c_int,
+        vcol_end: c_int,
+        winchanged: bool,
+        sw_ptr: *mut c_void,
+    ) {
+        let arg1 = argvar(argvars, 1);
+        if (*arg1.cast::<TypvalT>()).v_type != VAR_UNKNOWN && tv_get_bool(arg1) != 0 {
+            // list form: [start, end]
+            let retlist = tv_list_alloc_ret(rettv, 2);
+            tv_list_append_number(retlist, i64::from(vcol_start));
+            tv_list_append_number(retlist, i64::from(vcol_end));
+        } else {
+            (*rettv.cast::<TypvalT>()).vval.v_number = i64::from(vcol_end);
+        }
+
+        if winchanged {
+            nvim_option_restore_win_noblock(sw_ptr);
+        }
+    }
+}
+
+pub use window_funcs::{rs_f_line, rs_f_virtcol};

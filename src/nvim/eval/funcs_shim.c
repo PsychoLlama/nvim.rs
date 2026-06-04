@@ -261,6 +261,34 @@ uint8_t nvim_eval_blob_get(const blob_T *b, int idx) { return tv_blob_get(b, idx
 /// TV_LIST_ITEM_TV accessor (macro → &li->li_tv); returns typval_T*.
 typval_T *nvim_tv_list_item_tv(listitem_T *li) { return TV_LIST_ITEM_TV(li); }
 
+/// Size of switchwin_T opaque buffer (pinned by static_assert).
+#define SWITCHWIN_T_SIZE 24
+_Static_assert(sizeof(switchwin_T) == SWITCHWIN_T_SIZE,
+               "switchwin_T size mismatch — update SWITCHWIN_T_SIZE in Rust");
+
+/// Composite check for the skip_update_topline condition in f_line/f_virtcol.
+/// Returns true if skip_update_topline should be set.
+bool nvim_eval_line_should_skip_topline(switchwin_T *sw, win_T *wp)
+{
+  (void)wp;
+  return *p_spk != 'c' || (curwin->w_p_diff && sw->sw_curwin->w_p_diff);
+}
+
+/// Set / clear the skip_update_topline global.
+void nvim_eval_set_skip_update_topline(bool v) { skip_update_topline = v; }
+
+/// Return current curwin pointer (for check_cursor and other callers).
+void *nvim_eval_curwin(void) { return curwin; }
+
+/// Return sw_curwin from a switchwin_T — needed by f_line for the diff check.
+void *nvim_eval_switchwin_get_curwin(switchwin_T *sw) { return sw->sw_curwin; }
+
+/// curbuf->b_fnum accessor (for f_virtcol).
+int nvim_eval_curbuf_fnum(void) { return curbuf->b_fnum; }
+
+/// curbuf->b_ml.ml_line_count accessor (for f_virtcol).
+int nvim_eval_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
+
 // =============================================================================
 // nextnonblank / prevnonblank helpers
 // =============================================================================
@@ -2405,102 +2433,11 @@ void nvim_eval_printf(typval_T *argvars, typval_T *rettv)
 // Phase 23: f_ VimL functions moved from funcs.c
 // =============================================================================
 
-/// "line()" function - get line number from position
-void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  linenr_T lnum = 0;
-  pos_T *fp = NULL;
-  int fnum;
-
-  if (argvars[1].v_type != VAR_UNKNOWN) {
-    // use window specified in the second argument
-    int id = (int)tv_get_number(&argvars[1]);
-    tabpage_T *tp;
-    win_T *wp = win_id2wp_tp(id, &tp);
-    if (wp != NULL && tp != NULL) {
-      switchwin_T switchwin;
-      if (switch_win_noblock(&switchwin, wp, tp, true) == OK) {
-        // With 'splitkeep' != cursor and in diff mode, prevent that the
-        // window scrolls and keep the topline.
-        if (*p_spk != 'c' || (curwin->w_p_diff && switchwin.sw_curwin->w_p_diff)) {
-          skip_update_topline = true;
-        }
-        check_cursor(curwin);
-        fp = var2fpos(&argvars[0], true, &fnum, false);
-      }
-      skip_update_topline = false;
-      restore_win_noblock(&switchwin, true);
-    }
-  } else {
-    // use current window
-    fp = var2fpos(&argvars[0], true, &fnum, false);
-  }
-
-  if (fp != NULL) {
-    lnum = fp->lnum;
-  }
-  rettv->vval.v_number = lnum;
-}
-
+// f_line: migrated to Rust (src/nvim-rs/eval/src/funcs/window.rs)
 // f_serverlist: migrated to Rust (src/nvim-rs/eval/src/funcs/misc.rs)
 // f_swapname: migrated to Rust (src/nvim-rs/window/src/viml.rs)
 // f_tabpagebuflist: migrated to Rust (src/nvim-rs/window/src/viml.rs)
-
-/// "virtcol({expr}, [, {list} [, {winid}]])" function
-void f_virtcol(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  colnr_T vcol_start = 0;
-  colnr_T vcol_end = 0;
-  switchwin_T switchwin;
-  bool winchanged = false;
-
-  if (argvars[1].v_type != VAR_UNKNOWN && argvars[2].v_type != VAR_UNKNOWN) {
-    // use the window specified in the third argument
-    tabpage_T *tp;
-    win_T *wp = win_id2wp_tp((int)tv_get_number(&argvars[2]), &tp);
-    if (wp == NULL || tp == NULL) {
-      goto theend;
-    }
-
-    if (switch_win_noblock(&switchwin, wp, tp, true) != OK) {
-      goto theend;
-    }
-
-    check_cursor(curwin);
-    winchanged = true;
-  }
-
-  int fnum = curbuf->b_fnum;
-  pos_T *fp = var2fpos(&argvars[0], false, &fnum, false);
-  if (fp != NULL && fp->lnum <= curbuf->b_ml.ml_line_count
-      && fnum == curbuf->b_fnum) {
-    // Limit the column to a valid value, getvvcol() doesn't check.
-    if (fp->col < 0) {
-      fp->col = 0;
-    } else {
-      const colnr_T len = ml_get_len(fp->lnum);
-      if (fp->col > len) {
-        fp->col = len;
-      }
-    }
-    getvvcol(curwin, fp, &vcol_start, NULL, &vcol_end);
-    vcol_start++;
-    vcol_end++;
-  }
-
-theend:
-  if (argvars[1].v_type != VAR_UNKNOWN && tv_get_bool(&argvars[1])) {
-    tv_list_alloc_ret(rettv, 2);
-    tv_list_append_number(rettv->vval.v_list, vcol_start);
-    tv_list_append_number(rettv->vval.v_list, vcol_end);
-  } else {
-    rettv->vval.v_number = vcol_end;
-  }
-
-  if (winchanged) {
-    restore_win_noblock(&switchwin, true);
-  }
-}
+// f_virtcol: migrated to Rust (src/nvim-rs/eval/src/funcs/window.rs)
 
 // f_getchangelist: migrated to Rust (src/nvim-rs/eval/src/funcs/misc.rs)
 // f_getjumplist: migrated to Rust (src/nvim-rs/eval/src/funcs/misc.rs)
