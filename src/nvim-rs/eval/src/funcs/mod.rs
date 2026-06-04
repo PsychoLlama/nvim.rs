@@ -39,6 +39,7 @@ pub mod cursor;
 pub mod dict;
 mod dispatch;
 pub mod display;
+pub mod expand;
 pub mod fs;
 pub mod get;
 pub mod list;

@@ -289,6 +289,31 @@ int nvim_eval_curbuf_fnum(void) { return curbuf->b_fnum; }
 /// curbuf->b_ml.ml_line_count accessor (for f_virtcol).
 int nvim_eval_curbuf_line_count(void) { return curbuf->b_ml.ml_line_count; }
 
+/// Size of expand_T opaque buffer (pinned by static_assert).
+#define EXPAND_T_SIZE 392
+_Static_assert(sizeof(expand_T) == EXPAND_T_SIZE,
+               "expand_T size mismatch — update EXPAND_T_SIZE in Rust");
+
+/// p_verbose accessor (for f_expand emsg_off logic).
+int nvim_eval_get_p_verbose(void) { return (int)p_verbose; }
+
+/// emsg_off increment/decrement (for f_expand).
+void nvim_eval_emsg_off_inc(void) { emsg_off++; }
+void nvim_eval_emsg_off_dec(void) { emsg_off--; }
+
+/// p_wic (wildignorecase) accessor (for f_expand).
+int nvim_eval_get_p_wic(void) { return p_wic; }
+
+/// p_csl save/restore accessors for f_expand (Windows-only: #ifdef BACKSLASH_IN_FILENAME).
+#ifdef BACKSLASH_IN_FILENAME
+static char *nvim_eval_saved_csl = NULL;
+void nvim_eval_expand_save_csl(void) { nvim_eval_saved_csl = p_csl; p_csl = empty_string_option; }
+void nvim_eval_expand_restore_csl(void) { p_csl = nvim_eval_saved_csl; }
+#else
+void nvim_eval_expand_save_csl(void) {}
+void nvim_eval_expand_restore_csl(void) {}
+#endif
+
 // =============================================================================
 // nextnonblank / prevnonblank helpers
 // =============================================================================
@@ -516,6 +541,15 @@ int nvim_eval_xpc_get_context(void *xpc)
 void nvim_eval_xpc_set_context(void *xpc, int ctx)
 {
   ((expand_T *)xpc)->xp_context = ctx;
+}
+
+/// xp_numfiles accessor (for f_expand list return).
+int nvim_eval_expand_numfiles(void *xpc) { return ((expand_T *)xpc)->xp_numfiles; }
+
+/// xp_files[i] accessor (for f_expand list return).
+const char *nvim_eval_expand_file_at(void *xpc, int i)
+{
+  return ((expand_T *)xpc)->xp_files[i];
 }
 
 /// Get xp_pattern from expand_T (may be NULL).
@@ -2455,80 +2489,7 @@ void nvim_eval_printf(typval_T *argvars, typval_T *rettv)
 
 // f_call: migrated to Rust (src/nvim-rs/eval/src/funcs/call.rs)
 
-/// "expand()" function
-void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  int options = WILD_SILENT|WILD_USE_NL|WILD_LIST_NOTFOUND;
-  bool error = false;
-#ifdef BACKSLASH_IN_FILENAME
-  char *p_csl_save = p_csl;
-
-  // avoid using 'completeslash' here
-  p_csl = empty_string_option;
-#endif
-
-  rettv->v_type = VAR_STRING;
-  if (argvars[1].v_type != VAR_UNKNOWN
-      && argvars[2].v_type != VAR_UNKNOWN
-      && tv_get_number_chk(&argvars[2], &error)
-      && !error) {
-    tv_list_set_ret(rettv, NULL);
-  }
-
-  const char *s = tv_get_string(&argvars[0]);
-  if (*s == '%' || *s == '#' || *s == '<') {
-    if (p_verbose == 0) {
-      emsg_off++;
-    }
-    size_t len;
-    const char *errormsg = NULL;
-    char *result = eval_vars((char *)s, s, &len, NULL, &errormsg, NULL, false);
-    if (p_verbose == 0) {
-      emsg_off--;
-    } else if (errormsg != NULL) {
-      emsg(errormsg);
-    }
-    if (rettv->v_type == VAR_LIST) {
-      tv_list_alloc_ret(rettv, (result != NULL));
-      if (result != NULL) {
-        tv_list_append_string(rettv->vval.v_list, result, -1);
-      }
-      XFREE_CLEAR(result);
-    } else {
-      rettv->vval.v_string = result;
-    }
-  } else {
-    // When the optional second argument is non-zero, don't remove matches
-    // for 'wildignore' and don't put matches for 'suffixes' at the end.
-    if (argvars[1].v_type != VAR_UNKNOWN
-        && tv_get_number_chk(&argvars[1], &error)) {
-      options |= WILD_KEEP_ALL;
-    }
-    if (!error) {
-      expand_T xpc;
-      ExpandInit(&xpc);
-      xpc.xp_context = EXPAND_FILES;
-      if (p_wic) {
-        options += WILD_ICASE;
-      }
-      if (rettv->v_type == VAR_STRING) {
-        rettv->vval.v_string = ExpandOne(&xpc, (char *)s, NULL, options, WILD_ALL);
-      } else {
-        ExpandOne(&xpc, (char *)s, NULL, options, WILD_ALL_KEEP);
-        tv_list_alloc_ret(rettv, xpc.xp_numfiles);
-        for (int i = 0; i < xpc.xp_numfiles; i++) {
-          tv_list_append_string(rettv->vval.v_list, xpc.xp_files[i], -1);
-        }
-        ExpandCleanup(&xpc);
-      }
-    } else {
-      rettv->vval.v_string = NULL;
-    }
-  }
-#ifdef BACKSLASH_IN_FILENAME
-  p_csl = p_csl_save;
-#endif
-}
+// f_expand: migrated to Rust (src/nvim-rs/eval/src/funcs/expand.rs)
 
 // f_split: migrated to Rust (src/nvim-rs/eval/src/funcs/string_split.rs)
 
