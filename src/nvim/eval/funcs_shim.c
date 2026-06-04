@@ -2516,62 +2516,7 @@ theend:
 // Phase 26: more f_ VimL functions moved from funcs.c
 // =============================================================================
 
-/// "call(func, arglist [, dict])" function
-void f_call(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_list_arg(argvars, 1) == FAIL) {
-    return;
-  }
-  if (argvars[1].vval.v_list == NULL) {
-    return;
-  }
-
-  bool owned = false;
-  char *func;
-  partial_T *partial = NULL;
-  if (argvars[0].v_type == VAR_FUNC) {
-    func = argvars[0].vval.v_string;
-  } else if (argvars[0].v_type == VAR_PARTIAL) {
-    partial = argvars[0].vval.v_partial;
-    func = rs_partial_name(partial);
-  } else if (nlua_is_table_from_lua(&argvars[0])) {
-    // TODO(tjdevries): UnifiedCallback
-    func = nlua_register_table_as_callable(&argvars[0]);
-    owned = true;
-  } else {
-    func = (char *)tv_get_string(&argvars[0]);
-  }
-
-  if (func == NULL || *func == NUL) {
-    return;         // type error, empty name or null function
-  }
-  char *tofree = NULL;
-  if (argvars[0].v_type == VAR_STRING) {
-    char *p = func;
-    tofree = trans_function_name(&p, false, TFN_INT|TFN_QUIET, NULL, NULL);
-    if (tofree == NULL) {
-      emsg_funcname(e_unknown_function_str, func);
-      return;
-    }
-    func = tofree;
-  }
-
-  dict_T *selfdict = NULL;
-  if (argvars[2].v_type != VAR_UNKNOWN) {
-    if (tv_check_for_dict_arg(argvars, 2) == FAIL) {
-      goto done;
-    }
-    selfdict = argvars[2].vval.v_dict;
-  }
-
-  func_call(func, &argvars[1], partial, selfdict, rettv);
-
-done:
-  if (owned) {
-    func_unref(func);
-  }
-  xfree(tofree);
-}
+// f_call: migrated to Rust (src/nvim-rs/eval/src/funcs/call.rs)
 
 /// "expand()" function
 void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)

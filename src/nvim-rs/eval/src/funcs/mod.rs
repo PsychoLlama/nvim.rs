@@ -31,6 +31,7 @@
 pub mod bitwise;
 pub mod buf_match;
 pub mod buffer;
+pub mod call;
 pub mod channel;
 pub mod cmdline;
 pub mod collections;
