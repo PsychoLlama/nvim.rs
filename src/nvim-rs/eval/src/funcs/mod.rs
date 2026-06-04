@@ -48,6 +48,7 @@ pub mod search;
 pub mod search_cmn;
 pub mod simple;
 pub mod string;
+pub mod string_split;
 pub mod system;
 pub mod text;
 pub mod timer;
