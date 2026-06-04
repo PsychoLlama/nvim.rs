@@ -21,10 +21,10 @@ Maximize C lines deleted. Push agents toward ambitious tasks — left alone they
 0. **Orient** (startup only): read `ref/crates.md` and check `git log --notes` for recent work. Explore to assess progress.
 1. **Plan**: launch `migration-planner` via Task to produce a plan file. Explore first if you need to refine goals. You can run multiple planners in parallel for different targets.
 2. **Select**: pick the task that deletes the most C.
-3. **Execute**: launch `migration-executor` via Task with the plan. Monitor progress via git log.
+3. **Execute**: launch `migration-executor` via Task with the plan. Monitor progress via git log. Don't attempt concurrency of changes; maximum of one executor at a time.
 4. **Verify**: did it advance the goal? Check `wc -l` on target files. Run `just build && just smoke-test` if needed.
-5. **Report**: Write your own summary of what was accomplished and attach it as a git note: `git notes add -m "<your summary>" HEAD`.
-6. **Repeat**.
+5. **Report**: write your own summary of what was accomplished and attach it as a git note: `git notes add -m "<your summary>" HEAD`.
+6. **Repeat**: after finishing the loop, start over at step 1. Keep going until asked to stop.
 
 ## Context Management
 
