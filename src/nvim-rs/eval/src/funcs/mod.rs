@@ -39,6 +39,7 @@ pub mod dict;
 mod dispatch;
 pub mod display;
 pub mod fs;
+pub mod get;
 pub mod list;
 pub mod math;
 pub mod misc;

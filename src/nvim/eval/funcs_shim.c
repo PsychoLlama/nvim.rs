@@ -249,6 +249,19 @@ char *nvim_eval_save_cpo(void) { char *s = p_cpo; p_cpo = empty_string_option; r
 int nvim_eval_get_did_emsg(void) { return did_emsg; }
 
 // =============================================================================
+// Phase 30: f_get / f_call / f_line / f_virtcol / f_expand accessors
+// =============================================================================
+
+/// Blob length accessor (wraps static-inline tv_blob_len).
+int nvim_eval_blob_len(const blob_T *b) { return tv_blob_len(b); }
+
+/// Blob byte accessor (wraps static-inline tv_blob_get).
+uint8_t nvim_eval_blob_get(const blob_T *b, int idx) { return tv_blob_get(b, idx); }
+
+/// TV_LIST_ITEM_TV accessor (macro → &li->li_tv); returns typval_T*.
+typval_T *nvim_tv_list_item_tv(listitem_T *li) { return TV_LIST_ITEM_TV(li); }
+
+// =============================================================================
 // nextnonblank / prevnonblank helpers
 // =============================================================================
 
@@ -2641,133 +2654,7 @@ void f_expand(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 // Phase 27: more f_ VimL functions moved from funcs.c
 // =============================================================================
 
-/// "get()" function
-void f_get(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  typval_T *tv = NULL;
-  bool what_is_dict = false;
-
-  if (argvars[0].v_type == VAR_BLOB) {
-    bool error = false;
-    int idx = (int)tv_get_number_chk(&argvars[1], &error);
-
-    if (!error) {
-      rettv->v_type = VAR_NUMBER;
-      if (idx < 0) {
-        idx = tv_blob_len(argvars[0].vval.v_blob) + idx;
-      }
-      if (idx < 0 || idx >= tv_blob_len(argvars[0].vval.v_blob)) {
-        rettv->vval.v_number = -1;
-      } else {
-        rettv->vval.v_number = tv_blob_get(argvars[0].vval.v_blob, idx);
-        tv = rettv;
-      }
-    }
-  } else if (argvars[0].v_type == VAR_LIST) {
-    list_T *l = argvars[0].vval.v_list;
-    if (l != NULL) {
-      bool error = false;
-
-      listitem_T *li = tv_list_find(l, (int)tv_get_number_chk(&argvars[1], &error));
-      if (!error && li != NULL) {
-        tv = TV_LIST_ITEM_TV(li);
-      }
-    }
-  } else if (argvars[0].v_type == VAR_DICT) {
-    dict_T *d = argvars[0].vval.v_dict;
-    if (d != NULL) {
-      dictitem_T *di = tv_dict_find(d, tv_get_string(&argvars[1]), -1);
-      if (di != NULL) {
-        tv = &di->di_tv;
-      }
-    }
-  } else if (tv_is_func(argvars[0])) {
-    partial_T *pt;
-    partial_T fref_pt;
-
-    if (argvars[0].v_type == VAR_PARTIAL) {
-      pt = argvars[0].vval.v_partial;
-    } else {
-      CLEAR_FIELD(fref_pt);
-      fref_pt.pt_name = argvars[0].vval.v_string;
-      pt = &fref_pt;
-    }
-
-    if (pt != NULL) {
-      const char *const what = tv_get_string(&argvars[1]);
-
-      if (strcmp(what, "func") == 0 || strcmp(what, "name") == 0) {
-        const char *name = rs_partial_name(pt);
-        rettv->v_type = (*what == 'f' ? VAR_FUNC : VAR_STRING);
-        assert(name != NULL);
-        if (rettv->v_type == VAR_FUNC) {
-          func_ref((char *)name);
-        }
-        if (*what == 'n' && pt->pt_name == NULL && pt->pt_func != NULL) {
-          // use <SNR> instead of the byte code
-          name = printable_func_name(pt->pt_func);
-        }
-        rettv->vval.v_string = xstrdup(name);
-      } else if (strcmp(what, "dict") == 0) {
-        what_is_dict = true;
-        if (pt->pt_dict != NULL) {
-          tv_dict_set_ret(rettv, pt->pt_dict);
-        }
-      } else if (strcmp(what, "args") == 0) {
-        rettv->v_type = VAR_LIST;
-        tv_list_alloc_ret(rettv, pt->pt_argc);
-        for (int i = 0; i < pt->pt_argc; i++) {
-          tv_list_append_tv(rettv->vval.v_list, &pt->pt_argv[i]);
-        }
-      } else if (strcmp(what, "arity") == 0) {
-        int required = 0;
-        int optional = 0;
-        bool varargs = false;
-        const char *name = rs_partial_name(pt);
-
-        get_func_arity(name, &required, &optional, &varargs);
-
-        rettv->v_type = VAR_DICT;
-        tv_dict_alloc_ret(rettv);
-        dict_T *dict = rettv->vval.v_dict;
-
-        // Take into account the arguments of the partial, if any.
-        // Note that it is possible to supply more arguments than the function
-        // accepts.
-        if (pt->pt_argc >= required + optional) {
-          required = optional = 0;
-        } else if (pt->pt_argc > required) {
-          optional -= pt->pt_argc - required;
-          required = 0;
-        } else {
-          required -= pt->pt_argc;
-        }
-
-        tv_dict_add_nr(dict, S_LEN("required"), required);
-        tv_dict_add_nr(dict, S_LEN("optional"), optional);
-        tv_dict_add_bool(dict, S_LEN("varargs"), varargs);
-      } else {
-        semsg(_(e_invarg2), what);
-      }
-
-      // When {what} == "dict" and pt->pt_dict == NULL, evaluate the
-      // third argument
-      if (!what_is_dict) {
-        return;
-      }
-    }
-  } else {
-    semsg(_(e_listdictblobarg), "get()");
-  }
-
-  if (tv == NULL) {
-    if (argvars[2].v_type != VAR_UNKNOWN) {
-      tv_copy(&argvars[2], rettv);
-    }
-  } else {
-    tv_copy(tv, rettv);
-  }
-}
+// f_get: migrated to Rust (src/nvim-rs/eval/src/funcs/get.rs)
 
 // Phase 28: setreg / getregion / getregionpos — migrated to Rust
 // get_yank_type:      → parse_yank_type()       in src/nvim-rs/register/src/lib.rs
