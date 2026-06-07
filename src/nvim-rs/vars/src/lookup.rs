@@ -209,14 +209,6 @@ extern "C" {
         no_autoload: c_int,
     ) -> DictitemHandle;
 
-    fn find_var_in_ht(
-        ht: HashtabHandle,
-        htname: c_int,
-        varname: *const c_char,
-        varname_len: usize,
-        no_autoload: c_int,
-    ) -> DictitemHandle;
-
     fn find_var_in_scoped_ht(
         name: *const c_char,
         name_len: usize,
@@ -233,6 +225,25 @@ extern "C" {
     fn nvim_vars_get_eval_lavars_used() -> *mut bool;
     fn nvim_vars_get_funccal_local_ht() -> *mut c_void;
     fn nvim_vars_get_funccal_args_ht() -> *mut c_void;
+
+    // Phase 13: scope-dict item accessors (return DictitemHandle)
+    fn nvim_vars_globvars_var() -> DictitemHandle;
+    fn nvim_vars_vimvars_var() -> DictitemHandle;
+    fn nvim_vars_curbuf_bufvar() -> DictitemHandle;
+    fn nvim_vars_curwin_winvar() -> DictitemHandle;
+    fn nvim_vars_curtab_winvar() -> DictitemHandle;
+    fn nvim_vars_script_sv_var(sid: c_int) -> DictitemHandle;
+
+    // Funccal scope-var accessors (linkable from userfunc.c)
+    fn get_funccal_local_var() -> DictitemHandle;
+    fn get_funccal_args_var() -> DictitemHandle;
+
+    // Globvar hashtab (for autoload comparison)
+    fn get_globvar_ht() -> HashtabHandle;
+
+    // Autoload
+    fn script_autoload(name: *const c_char, name_len: usize, reload: bool) -> bool;
+    fn aborting() -> bool;
 }
 
 // =============================================================================
@@ -543,6 +554,68 @@ pub unsafe extern "C" fn rs_check_vars(name: *const c_char, len: usize) {
             *lavars = true;
         }
     }
+}
+
+// =============================================================================
+// Phase 13: find_var_in_ht — replacing the C implementation
+// =============================================================================
+
+/// Find a variable in a hashtable, handling scope-dict shortcuts and autoload.
+///
+/// When `varname_len == 0`, the `htname` character selects the scope-dict item
+/// directly (matching the C `switch(htname)` behaviour). Otherwise we do a
+/// hashtable lookup with optional g: autoload retry.
+///
+/// Exported as the `find_var_in_ht` symbol, replacing the C function body.
+///
+/// # Safety
+/// - `ht` must be a valid `hashtab_T*` (or null only when `varname_len == 0`)
+/// - `varname` must be valid for `varname_len` bytes
+#[unsafe(export_name = "find_var_in_ht")]
+pub unsafe extern "C" fn rs_find_var_in_ht(
+    ht: HashtabHandle,
+    htname: c_int,
+    varname: *const c_char,
+    varname_len: usize,
+    no_autoload: c_int,
+) -> DictitemHandle {
+    if varname_len == 0 {
+        // Empty varname: return the scope-dict item for this scope character.
+        // Mirrors the C switch(htname) block.
+        let ch = htname as u8;
+        return match ch {
+            b's' => {
+                let sid = nvim_get_current_sctx_sid();
+                nvim_vars_script_sv_var(sid)
+            }
+            b'g' => nvim_vars_globvars_var(),
+            b'v' => nvim_vars_vimvars_var(),
+            b'b' => nvim_vars_curbuf_bufvar(),
+            b'w' => nvim_vars_curwin_winvar(),
+            b't' => nvim_vars_curtab_winvar(),
+            b'l' => get_funccal_local_var(),
+            b'a' => get_funccal_args_var(),
+            _ => DictitemHandle::null(),
+        };
+    }
+
+    // Normal hashtable lookup.
+    let mut hi = hash_find_len(ht, varname, varname_len);
+    if nvim_hashitem_empty(hi) != 0 {
+        // For global variables, attempt to autoload the script once.
+        // NOTE: script_autoload() may invalidate `hi`; always re-fetch after.
+        let globvarht = get_globvar_ht();
+        if ht.as_ptr() == globvarht.as_ptr() && no_autoload == 0 {
+            if !script_autoload(varname, varname_len, false) || aborting() {
+                return DictitemHandle::null();
+            }
+            hi = hash_find_len(ht, varname, varname_len);
+        }
+        if nvim_hashitem_empty(hi) != 0 {
+            return DictitemHandle::null();
+        }
+    }
+    nvim_hi2dictitem(hi)
 }
 
 // =============================================================================

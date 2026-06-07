@@ -775,6 +775,11 @@ int eval_variable(const char *name, int len, typval_T *rettv, dictitem_T **dip, 
 void check_vars(const char *name, size_t len)
 { rs_check_vars(name, len); }
 
+// find_var_in_ht: implemented in Rust (src/nvim-rs/vars/src/lookup.rs).
+// Symbol exported as find_var_in_ht via #[export_name].
+extern dictitem_T *find_var_in_ht(hashtab_T *const ht, int htname, const char *const varname,
+                                   const size_t varname_len, int no_autoload);
+
 /// Find variable "name" in the list of variables.
 /// Careful: "a:0" variables don't have a name.
 /// When "htp" is not NULL we are writing to the variable, set "htp" to the
@@ -802,66 +807,6 @@ dictitem_T *find_var(const char *const name, const size_t name_len, hashtab_T **
 
   // Search in parent scope for lambda
   return find_var_in_scoped_ht(name, name_len, no_autoload || htp != NULL);
-}
-
-/// Find variable in hashtab.
-/// When "varname" is empty returns curwin/curtab/etc vars dictionary.
-///
-/// @param[in]  ht  Hashtab to find variable in.
-/// @param[in]  htname  Hashtab name (first character).
-/// @param[in]  varname  Variable name.
-/// @param[in]  varname_len  Variable name length.
-/// @param[in]  no_autoload  If true then autoload scripts will not be sourced
-///                          if autoload variable was not found.
-///
-/// @return pointer to the dictionary item with the found variable or NULL if it
-///         was not found.
-dictitem_T *find_var_in_ht(hashtab_T *const ht, int htname, const char *const varname,
-                           const size_t varname_len, int no_autoload)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
-{
-  if (varname_len == 0) {
-    // Must be something like "s:", otherwise "ht" would be NULL.
-    switch (htname) {
-    case 's':
-      return (dictitem_T *)&SCRIPT_SV(current_sctx.sc_sid)->sv_var;
-    case 'g':
-      return (dictitem_T *)&globvars_var;
-    case 'v':
-      return (dictitem_T *)&vimvars_var;
-    case 'b':
-      return (dictitem_T *)&curbuf->b_bufvar;
-    case 'w':
-      return (dictitem_T *)&curwin->w_winvar;
-    case 't':
-      return (dictitem_T *)&curtab->tp_winvar;
-    case 'l':
-      return get_funccal_local_var();
-    case 'a':
-      return get_funccal_args_var();
-    }
-    return NULL;
-  }
-
-  hashitem_T *hi = hash_find_len(ht, varname, varname_len);
-  if (HASHITEM_EMPTY(hi)) {
-    // For global variables we may try auto-loading the script.  If it
-    // worked find the variable again.  Don't auto-load a script if it was
-    // loaded already, otherwise it would be loaded every time when
-    // checking if a function name is a Funcref variable.
-    if (ht == get_globvar_ht() && !no_autoload) {
-      // Note: script_autoload() may make "hi" invalid. It must either
-      // be obtained again or not used.
-      if (!script_autoload(varname, varname_len, false) || aborting()) {
-        return NULL;
-      }
-      hi = hash_find_len(ht, varname, varname_len);
-    }
-    if (HASHITEM_EMPTY(hi)) {
-      return NULL;
-    }
-  }
-  return TV_DICT_HI2DI(hi);
 }
 
 /// Finds the dict (g:, l:, s:, …) and hashtable used for a variable.
@@ -1379,6 +1324,20 @@ int nvim_script_items_len(void) { return script_items.ga_len; }
 
 /// Get current script context SID.
 int nvim_get_current_sctx_sid(void) { return current_sctx.sc_sid; }
+
+// Phase 13 (find_var_in_ht): scope-dict item accessors for Rust FFI.
+/// Return &globvars_var (the g: scope dictitem).
+void *nvim_vars_globvars_var(void) { return &globvars_var; }
+/// Return &vimvars_var (the v: scope dictitem).
+void *nvim_vars_vimvars_var(void) { return &vimvars_var; }
+/// Return &curbuf->b_bufvar (the b: scope dictitem).
+void *nvim_vars_curbuf_bufvar(void) { return &curbuf->b_bufvar; }
+/// Return &curwin->w_winvar (the w: scope dictitem).
+void *nvim_vars_curwin_winvar(void) { return &curwin->w_winvar; }
+/// Return &curtab->tp_winvar (the t: scope dictitem).
+void *nvim_vars_curtab_winvar(void) { return &curtab->tp_winvar; }
+/// Return &SCRIPT_SV(sid)->sv_var (the s: scope dictitem for a given SID).
+void *nvim_vars_script_sv_var(int sid) { return &SCRIPT_SV(sid)->sv_var; }
 
 /// Get typval from dictitem.
 typval_T *nvim_dictitem_get_tv(dictitem_T *di)
