@@ -51,10 +51,13 @@ run *ARGS:
 # The regexp smoke test has a 30s timeout to catch infinite loops without
 # leaving zombie processes. It exercises buffer search (vim_regexec_multi),
 # substitution, and syntax highlighting — paths the baseline test doesn't cover.
+# smoke-test-types: VarType constant correctness (chdir, writefile, getmousepos,
+# matchstrlist, float/redir) — guards against wrong per-file VarType integer copies.
 smoke-test:
     @just smoke-test-run
     @just smoke-test-regexp
     @just smoke-test-throw
+    @just smoke-test-types
 
 smoke-test-run:
     NVIM=./build/bin/nvim VIMRUNTIME=./runtime timeout -s 9 30 expect scripts/open_file.exp justfile just || { echo "FAIL: nvim startup smoke test timed out or failed (exit $?)"; exit 1; }
@@ -64,6 +67,9 @@ smoke-test-regexp:
 
 smoke-test-throw:
     timeout -s 9 15 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/throw_smoke.vim 2>&1' || { echo "FAIL: throw smoke test timed out or failed (exit $?)"; exit 1; }
+
+smoke-test-types:
+    timeout -s 9 15 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/type_smoke.vim 2>&1' || { echo "FAIL: type smoke test timed out or failed (exit $?)"; exit 1; }
 
 # Show nvim version
 version:
