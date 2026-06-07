@@ -267,12 +267,7 @@ _Static_assert(SID_STR == -10, "SID_STR");
 //          nvim_scriptitem_set_name, nvim_scriptitem_set_prof_on — replaced by
 //          direct ScriptitemT/script_items field access in Rust.
 
-/// Full implementation of get_scriptname, callable from Rust.
-char *nvim_rt_get_scriptname(int sc_sid, uint64_t sc_chan, bool *should_free)
-{
-  sctx_T ctx = { .sc_sid = sc_sid, .sc_chan = sc_chan };
-  return get_scriptname(ctx, should_free);
-}
+// Deleted: nvim_rt_get_scriptname — logic ported into rs_get_scriptname (script.rs).
 
 // Deleted: nvim_rt_exarg_get_addr_count — Rust uses ExargT.addr_count directly.
 // Deleted: nvim_rt_exarg_get_line2 — Rust uses ExargT.line2 directly.

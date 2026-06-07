@@ -15,7 +15,15 @@ use nvim_ex_eval::ExargT;
 // SID Constants (verified by _Static_assert in runtime_ffi.c)
 // =============================================================================
 
+const SID_MODELINE: ScidT = -1;
+const SID_CMDARG: ScidT = -2;
+const SID_CARG: ScidT = -3;
+const SID_ENV: ScidT = -4;
+const SID_ERROR: ScidT = -5;
+const SID_WINLAYOUT: ScidT = -7;
 const SID_LUA: ScidT = -8;
+const SID_API_CLIENT: ScidT = -9;
+const SID_STR: ScidT = -10;
 
 // =============================================================================
 // C Accessor Extern Declarations
@@ -31,8 +39,11 @@ extern "C" {
     #[link_name = "path_fnamecmp"]
     fn nvim_rt_path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
 
-    // get_scriptname delegate
-    fn nvim_rt_get_scriptname(sc_sid: c_int, sc_chan: u64, should_free: *mut bool) -> *mut c_char;
+    // home_replace_save(NULL, src): returns owned (xmalloc'd) string
+    fn home_replace_save(buf: *mut c_void, src: *const c_char) -> *mut c_char;
+
+    // libc snprintf (variadic)
+    fn snprintf(s: *mut c_char, n: usize, fmt: *const c_char, ...) -> c_int;
 
     // (exarg_T fields accessed directly via nvim_ex_eval::ExargT)
     #[link_name = "expand_env"]
@@ -288,8 +299,13 @@ pub unsafe extern "C" fn rs_script_is_lua(sid: ScidT) -> bool {
 
 /// Get a pointer to a script name. Used for ":verbose set".
 ///
-/// Delegates entirely to C because the return value may be a static string,
-/// IObuff, or an allocated string, which is complex to manage across FFI.
+/// Genuine Rust port of the original C `get_scriptname` switch logic.
+/// Semantics:
+/// - IObuff/gettext paths: `should_free` stays false, return is borrowed.
+/// - Default file-path path with non-null `should_free`: sets `*should_free =
+///   true`, returns an owned (xmalloc'd) string from `home_replace_save`.
+/// - Default file-path path with null `should_free`: returns the raw
+///   `sn_name` pointer (borrowed).
 ///
 /// # Safety
 ///
@@ -300,7 +316,48 @@ pub unsafe extern "C" fn rs_get_scriptname(
     sc_chan: u64,
     should_free: *mut bool,
 ) -> *mut c_char {
-    nvim_rt_get_scriptname(sc_sid, sc_chan, should_free)
+    // Default should_free to false; only the owned-return path sets it true.
+    if !should_free.is_null() {
+        *should_free = false;
+    }
+
+    let iobuff = nvim_rt_iobuff_arr.as_ptr().cast_mut();
+
+    match sc_sid {
+        SID_MODELINE => gettext(c"modeline".as_ptr()).cast_mut(),
+        SID_CMDARG => gettext(c"--cmd argument".as_ptr()).cast_mut(),
+        SID_CARG => gettext(c"-c argument".as_ptr()).cast_mut(),
+        SID_ENV => gettext(c"environment variable".as_ptr()).cast_mut(),
+        SID_ERROR => gettext(c"error handler".as_ptr()).cast_mut(),
+        SID_WINLAYOUT => gettext(c"changed window size".as_ptr()).cast_mut(),
+        SID_LUA => gettext(c"Lua".as_ptr()).cast_mut(),
+        SID_API_CLIENT => {
+            // PRIu64 expands to "lu" on LP64 Linux (verified).
+            // gettext msgid must be byte-identical to C source spelling post-preprocessing.
+            let fmt = gettext(c"API client (channel id %lu)".as_ptr());
+            snprintf(iobuff, IOSIZE, fmt, sc_chan);
+            iobuff
+        }
+        SID_STR => gettext(c"anonymous :source".as_ptr()).cast_mut(),
+        _ => {
+            let si = globals::script_item_get(sc_sid);
+            let sname = if si.is_null() {
+                std::ptr::null_mut()
+            } else {
+                (*si).sn_name
+            };
+            if sname.is_null() {
+                let fmt = gettext(c"anonymous :source (script id %d)".as_ptr());
+                snprintf(iobuff, IOSIZE, fmt, sc_sid);
+                iobuff
+            } else if !should_free.is_null() {
+                *should_free = true;
+                home_replace_save(std::ptr::null_mut(), sname.cast_const())
+            } else {
+                sname
+            }
+        }
+    }
 }
 
 // --- 5. ex_scriptnames ---

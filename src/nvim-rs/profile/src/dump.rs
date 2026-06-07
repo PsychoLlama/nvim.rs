@@ -47,7 +47,8 @@ extern "C" {
     fn nvim_ufunc_get_tml_total_i(fp: UFuncHandle, i: c_int) -> Proftime;
     fn nvim_ufunc_get_tml_self_i(fp: UFuncHandle, i: c_int) -> Proftime;
 
-    // get_scriptname
+    // get_scriptname — implemented in runtime/src/script.rs, exported as rs_get_scriptname
+    #[link_name = "rs_get_scriptname"]
     fn nvim_rt_get_scriptname(sc_sid: c_int, sc_chan: u64, should_free: *mut bool) -> *mut c_char;
     fn nvim_profile_xfree_ptr(ptr: *mut c_void);
 

@@ -43,7 +43,8 @@ pub struct SctxT {
 // =============================================================================
 
 extern "C" {
-    // get_scriptname delegate (in runtime_ffi.c)
+    // get_scriptname — implemented in runtime/src/script.rs, exported as rs_get_scriptname
+    #[link_name = "rs_get_scriptname"]
     fn nvim_rt_get_scriptname(sc_sid: c_int, sc_chan: u64, should_free: *mut bool) -> *mut c_char;
 
     // script_is_lua (implemented in runtime/src/script.rs, exposed as rs_script_is_lua)
