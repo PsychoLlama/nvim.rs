@@ -47,6 +47,7 @@ pub mod lookup;
 pub mod misc;
 pub mod option_conv;
 pub mod redirect;
+pub mod set_var;
 pub mod unlet_lock;
 pub mod viml_funcs;
 pub mod vimvar_accessors;

@@ -86,6 +86,12 @@ extern bool rs_valid_varname(const char *varname);
 // Phase 13: find_var_ht_dict replacement in Rust
 extern hashtab_T *rs_find_var_ht_dict(const char *name, size_t name_len,
                                        const char **varname, dict_T **d);
+// Phase 13: before_set_vvar / set_var_const / set_var replacements in Rust
+extern bool before_set_vvar(const char *varname, dictitem_T *di, typval_T *tv,
+                              bool copy, bool watched, bool *type_error);
+extern void set_var_const(const char *name, size_t name_len, typval_T *tv,
+                           bool copy, bool is_const);
+extern void set_var(const char *name, size_t name_len, typval_T *tv, bool copy);
 
 // v: variable accessor functions in Rust
 extern typval_T *rs_get_vim_var_tv(VimVarIndex idx);
@@ -812,12 +818,6 @@ dictitem_T *find_var(const char *const name, const size_t name_len, hashtab_T **
   return find_var_in_scoped_ht(name, name_len, no_autoload || htp != NULL);
 }
 
-// find_var_ht_dict: implemented in Rust (src/nvim-rs/vars/src/lookup.rs).
-// Thin forwarder to rs_find_var_ht_dict; kept so set_var_const can still call it.
-static hashtab_T *find_var_ht_dict(const char *name, const size_t name_len, const char **varname,
-                                   dict_T **d)
-{ return rs_find_var_ht_dict(name, name_len, varname, d); }
-
 /// Find the hashtable used for a variable
 ///
 /// @param[in]  name  Variable name, possibly with scope prefix.
@@ -920,193 +920,11 @@ static void delete_var(hashtab_T *ht, hashitem_T *hi)
 }
 
 
-/// Additional handling for setting a v: variable.
-///
-/// @return  true if the variable should be set normally,
-///          false if nothing else needs to be done.
-bool before_set_vvar(const char *const varname, dictitem_T *const di, typval_T *const tv,
-                     const bool copy, const bool watched, bool *const type_error)
-{
-  if (di->di_tv.v_type == VAR_STRING) {
-    typval_T oldtv = TV_INITIAL_VALUE;
-    if (watched) {
-      tv_copy(&di->di_tv, &oldtv);
-    }
-    XFREE_CLEAR(di->di_tv.vval.v_string);
-    if (copy || tv->v_type != VAR_STRING) {
-      const char *const val = tv_get_string(tv);
-      // Careful: when assigning to v:errmsg and tv_get_string()
-      // causes an error message the variable will already be set.
-      if (di->di_tv.vval.v_string == NULL) {
-        di->di_tv.vval.v_string = xstrdup(val);
-      }
-    } else {
-      // Take over the string to avoid an extra alloc/free.
-      di->di_tv.vval.v_string = tv->vval.v_string;
-      tv->vval.v_string = NULL;
-    }
-    // Notify watchers
-    if (watched) {
-      tv_dict_watcher_notify(&vimvardict, varname, &di->di_tv, &oldtv);
-      tv_clear(&oldtv);
-    }
-    return false;
-  } else if (di->di_tv.v_type == VAR_NUMBER) {
-    typval_T oldtv = TV_INITIAL_VALUE;
-    if (watched) {
-      tv_copy(&di->di_tv, &oldtv);
-    }
-    di->di_tv.vval.v_number = tv_get_number(tv);
-    if (strcmp(varname, "searchforward") == 0) {
-      set_search_direction(di->di_tv.vval.v_number ? '/' : '?');
-    } else if (strcmp(varname, "hlsearch") == 0) {
-      no_hlsearch = !di->di_tv.vval.v_number;
-      redraw_all_later(UPD_SOME_VALID);
-    }
-    // Notify watchers
-    if (watched) {
-      tv_dict_watcher_notify(&vimvardict, varname, &di->di_tv, &oldtv);
-      tv_clear(&oldtv);
-    }
-    return false;
-  } else if (di->di_tv.v_type != tv->v_type) {
-    *type_error = true;
-    return false;
-  }
-  return true;
-}
+// before_set_vvar, set_var, set_var_const: implemented in Rust (set_var.rs).
+// Declared extern above.
 
-/// Set variable to the given value
-///
-/// If the variable already exists, the value is updated. Otherwise the variable
-/// is created.
-///
-/// @param[in]  name  Variable name to set.
-/// @param[in]  name_len  Length of the variable name.
-/// @param  tv  Variable value.
-/// @param[in]  copy  True if value in tv is to be copied.
-void set_var(const char *name, const size_t name_len, typval_T *const tv, const bool copy)
-  FUNC_ATTR_NONNULL_ALL
-{
-  set_var_const(name, name_len, tv, copy, false);
-}
-
-/// Set variable to the given value
-///
-/// If the variable already exists, the value is updated. Otherwise the variable
-/// is created.
-///
-/// @param[in]  name  Variable name to set.
-/// @param[in]  name_len  Length of the variable name.
-/// @param  tv  Variable value.
-/// @param[in]  copy  True if value in tv is to be copied.
-/// @param[in]  is_const  True if value in tv is to be locked.
-void set_var_const(const char *name, const size_t name_len, typval_T *const tv, const bool copy,
-                   const bool is_const)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *varname;
-  dict_T *dict;
-  hashtab_T *ht = find_var_ht_dict(name, name_len, &varname, &dict);
-  const bool watched = tv_dict_is_watched(dict);
-
-  if (ht == NULL || *varname == NUL) {
-    semsg(_(e_illvar), name);
-    return;
-  }
-  const size_t varname_len = name_len - (size_t)(varname - name);
-  dictitem_T *di = find_var_in_ht(ht, 0, varname, varname_len, true);
-
-  // Search in parent scope which is possible to reference from lambda
-  if (di == NULL) {
-    di = find_var_in_scoped_ht(name, name_len, true);
-  }
-
-  if (tv_is_func(*tv) && var_wrong_func_name(name, di == NULL)) {
-    return;
-  }
-
-  typval_T oldtv = TV_INITIAL_VALUE;
-  if (di != NULL) {
-    if (is_const) {
-      emsg(_(e_cannot_mod));
-      return;
-    }
-
-    // Check in this order for backwards compatibility:
-    // - Whether the variable is read-only
-    // - Whether the variable value is locked
-    // - Whether the variable is locked
-    if (var_check_ro(di->di_flags, name, name_len)
-        || value_check_lock(di->di_tv.v_lock, name, name_len)
-        || var_check_lock(di->di_flags, name, name_len)) {
-      return;
-    }
-
-    // existing variable, need to clear the value
-
-    // Handle setting internal v: variables separately where needed to
-    // prevent changing the type.
-    bool type_error = false;
-    if (ht == &vimvarht
-        && !before_set_vvar(varname, di, tv, copy, watched, &type_error)) {
-      if (type_error) {
-        semsg(_(e_setting_v_str_to_value_with_wrong_type), varname);
-      }
-      return;
-    }
-
-    if (watched) {
-      tv_copy(&di->di_tv, &oldtv);
-    }
-    tv_clear(&di->di_tv);
-  } else {  // Add a new variable.
-    // Can't add "v:" or "a:" variable.
-    if (ht == &vimvarht || ht == get_funccal_args_ht()) {
-      semsg(_(e_illvar), name);
-      return;
-    }
-
-    // Make sure the variable name is valid.
-    if (!valid_varname(varname)) {
-      return;
-    }
-
-    // Make sure dict is valid
-    assert(dict != NULL);
-
-    di = xmalloc(offsetof(dictitem_T, di_key) + varname_len + 1);
-    memcpy(di->di_key, varname, varname_len + 1);
-    if (hash_add(ht, di->di_key) == FAIL) {
-      xfree(di);
-      return;
-    }
-    di->di_flags = DI_FLAGS_ALLOC;
-    if (is_const) {
-      di->di_flags |= DI_FLAGS_LOCK;
-    }
-  }
-
-  if (copy || tv->v_type == VAR_NUMBER || tv->v_type == VAR_FLOAT) {
-    tv_copy(tv, &di->di_tv);
-  } else {
-    di->di_tv = *tv;
-    di->di_tv.v_lock = VAR_UNLOCKED;
-    tv_init(tv);
-  }
-
-  if (watched) {
-    tv_dict_watcher_notify(dict, di->di_key, &di->di_tv, &oldtv);
-    tv_clear(&oldtv);
-  }
-
-  if (is_const) {
-    // Like :lockvar! name: lock the value and what it contains, but only
-    // if the reference count is up to one.  That locks only literal
-    // values.
-    tv_item_lock(&di->di_tv, DICT_MAXNEST, true, true);
-  }
-}
+// set_var, set_var_const, before_set_vvar: implemented in Rust (set_var.rs).
+// Declared extern above.
 
 // Variable check wrappers (logic in Rust checks.rs)
 bool var_check_ro(const int flags, const char *name, size_t name_len)
@@ -1890,3 +1708,53 @@ list_T *nvim_eval_msgpack_type_list(int idx)
 {
   return (list_T *)eval_msgpack_type_lists[idx];
 }
+
+// Phase 13 (set_var_const/before_set_vvar): accessor shims for Rust FFI.
+
+/// Set di->di_flags.
+void nvim_vars_dictitem_set_flags(void *di, uint8_t flags)
+{ ((dictitem_T *)di)->di_flags = flags; }
+
+/// Return offsetof(dictitem_T, di_key) for dynamic dictitem allocation in Rust.
+size_t nvim_vars_dictitem_keyoff(void) { return offsetof(dictitem_T, di_key); }
+
+/// Wrap static-inline tv_dict_is_watched.
+bool nvim_vars_dict_is_watched(const void *dict)
+{ return tv_dict_is_watched((const dict_T *)dict); }
+
+/// Wrap tv_is_func macro/inline.
+bool nvim_vars_tv_is_func(const void *tv)
+{ return tv_is_func(*(const typval_T *)tv); }
+
+/// Wrap inline tv_init.
+void nvim_vars_tv_init(void *tv) { tv_init((typval_T *)tv); }
+
+/// Lock a typval_T as :lockvar! would (DICT_MAXNEST, lock=true, check_refcount=true).
+void nvim_vars_tv_item_lock_const(void *tv)
+{ tv_item_lock((typval_T *)tv, DICT_MAXNEST, true, true); }
+
+/// Set no_hlsearch EXTERN global.
+void nvim_vars_set_no_hlsearch(bool v) { no_hlsearch = v; }
+
+/// Return &vimvarht (for comparing against ht in set_var_const).
+void *nvim_vars_get_vimvarht(void) { return &vimvarht; }
+
+/// Return &vimvardict (for tv_dict_watcher_notify target in before_set_vvar).
+void *nvim_vars_get_vimvardict(void) { return &vimvardict; }
+
+/// Return translated e_illvar string for semsg.
+const char *nvim_vars_e_illvar(void) { return _(e_illvar); }
+
+/// Return translated e_cannot_mod string for emsg.
+const char *nvim_vars_e_cannot_mod(void) { return _(e_cannot_mod); }
+
+/// Return translated e_setting_v_str_to_value_with_wrong_type string for semsg.
+const char *nvim_vars_e_setting_v_wrong_type(void)
+{ return _(e_setting_v_str_to_value_with_wrong_type); }
+
+/// di->di_key accessor: return pointer to key buffer.
+char *nvim_vars_dictitem_key_ptr(void *di) { return ((dictitem_T *)di)->di_key; }
+
+/// Get pointer to di->di_tv (always at offset 0 of dictitem_T).
+/// Same as nvim_vars_dictitem_get_tv_ptr but with void* for di.
+void *nvim_vars_di_tv(void *di) { return &((dictitem_T *)di)->di_tv; }
