@@ -17,6 +17,9 @@ bool before_set_vvar(const char *varname, dictitem_T *di, typval_T *tv,
 void set_var(const char *name, size_t name_len, typval_T *tv, bool copy);
 void set_var_const(const char *name, size_t name_len, typval_T *tv, bool copy, bool is_const);
 
+// Phase 4 (ex_let): declaration for function implemented in Rust (ex_let.rs).
+void ex_let(exarg_T *eap);
+
 /// Array mapping values from MessagePackType to corresponding list pointers
 extern const list_T *eval_msgpack_type_lists[NUM_MSGPACK_TYPES];
 

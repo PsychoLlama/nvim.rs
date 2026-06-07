@@ -551,114 +551,7 @@ char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate) { return rs_ev
 list_T *heredoc_get(exarg_T *eap, char *cmd, bool script_get)
 { return rs_heredoc_get(eap, cmd, script_get); }
 
-/// ":let" list all variable values
-/// ":let var1 var2" list variable values
-/// ":let var = expr" assignment command.
-/// ":let var += expr" assignment command.
-/// ":let var -= expr" assignment command.
-/// ":let var *= expr" assignment command.
-/// ":let var /= expr" assignment command.
-/// ":let var %= expr" assignment command.
-/// ":let var .= expr" assignment command.
-/// ":let var ..= expr" assignment command.
-/// ":let [var1, var2] = expr" unpack list.
-/// ":let [name, ..., ; lastname] = expr" unpack list.
-///
-/// ":cons[t] var = expr1" define constant
-/// ":cons[t] [name1, name2, ...] = expr1" define constants unpacking list
-/// ":cons[t] [name, ..., ; lastname] = expr" define constants unpacking list
-void ex_let(exarg_T *eap)
-{
-  const bool is_const = eap->cmdidx == CMD_const;
-  char *arg = eap->arg;
-  char *expr = NULL;
-  typval_T rettv;
-  int var_count = 0;
-  int semicolon = 0;
-  char op[2];
-  const char *argend;
-  int first = true;
-
-  argend = skip_var_list(arg, &var_count, &semicolon, false);
-  if (argend == NULL) {
-    return;
-  }
-  expr = skipwhite(argend);
-  bool concat = strncmp(expr, "..=", 3) == 0;
-  bool has_assign = *expr == '=' || (vim_strchr("+-*/%.", (uint8_t)(*expr)) != NULL
-                                     && expr[1] == '=');
-  if (!has_assign && !concat) {
-    // ":let" without "=": list variables
-    if (*arg == '[') {
-      emsg(_(e_invarg));
-    } else if (!ends_excmd(*arg)) {
-      // ":let var1 var2"
-      arg = (char *)rs_list_arg_vars(eap, arg, &first);
-    } else if (!eap->skip) {
-      // ":let"
-      rs_list_hashtable_vars(&globvarht, "", true, &first);
-      rs_list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", true, &first);
-      rs_list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", true, &first);
-      rs_list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", true, &first);
-      nvim_list_script_vars(&first);
-      list_func_vars(&first);
-      nvim_list_vim_vars(&first);
-    }
-    eap->nextcmd = check_nextcmd(arg);
-    return;
-  }
-
-  if (expr[0] == '=' && expr[1] == '<' && expr[2] == '<') {
-    // HERE document
-    list_T *l = heredoc_get(eap, expr + 3, false);
-    if (l != NULL) {
-      tv_list_set_ret(&rettv, l);
-      if (!eap->skip) {
-        op[0] = '=';
-        op[1] = NUL;
-        ex_let_vars(eap->arg, &rettv, false, semicolon, var_count, is_const, op);
-      }
-      tv_clear(&rettv);
-    }
-    return;
-  }
-
-  rettv.v_type = VAR_UNKNOWN;
-
-  op[0] = '=';
-  op[1] = NUL;
-  if (*expr != '=') {
-    if (vim_strchr("+-*/%.", (uint8_t)(*expr)) != NULL) {
-      op[0] = *expr;  // +=, -=, *=, /=, %= or .=
-      if (expr[0] == '.' && expr[1] == '.') {  // ..=
-        expr++;
-      }
-    }
-    expr += 2;
-  } else {
-    expr += 1;
-  }
-
-  expr = skipwhite(expr);
-
-  if (eap->skip) {
-    emsg_skip++;
-  }
-  evalarg_T evalarg;
-  fill_evalarg_from_eap(&evalarg, eap, eap->skip);
-  int eval_res = eval0(expr, &rettv, eap, &evalarg);
-  if (eap->skip) {
-    emsg_skip--;
-  }
-  clear_evalarg(&evalarg, eap);
-
-  if (!eap->skip && eval_res != FAIL) {
-    ex_let_vars(eap->arg, &rettv, false, semicolon, var_count, is_const, op);
-  }
-  if (eval_res != FAIL) {
-    tv_clear(&rettv);
-  }
-}
+// ex_let is implemented in Rust (src/nvim-rs/vars/src/ex_let.rs).
 
 /// Assign the typevalue "tv" to the variable or variables at "arg_start".
 /// Handles both "var" with any type and "[var, var; var]" with a list type.
@@ -1758,3 +1651,32 @@ char *nvim_vars_dictitem_key_ptr(void *di) { return ((dictitem_T *)di)->di_key; 
 /// Get pointer to di->di_tv (always at offset 0 of dictitem_T).
 /// Same as nvim_vars_dictitem_get_tv_ptr but with void* for di.
 void *nvim_vars_di_tv(void *di) { return &((dictitem_T *)di)->di_tv; }
+
+// Phase 4 (ex_let): accessor shims for Rust FFI.
+
+/// Return _(e_invarg) string for ex_let error reporting.
+const char *nvim_vars_e_invarg(void) { return _(e_invarg); }
+
+/// Return CMD_const constant for ex_let is_const check.
+int nvim_cmd_const(void) { return CMD_const; }
+
+/// Wrap tv_list_set_ret (static inline) for Rust FFI.
+void nvim_vars_tv_list_set_ret(void *tv, void *l)
+{
+  tv_list_set_ret((typval_T *)tv, (list_T *)l);
+}
+
+/// Wrap fill_evalarg_from_eap + eval0 + clear_evalarg for Rust FFI.
+/// Increments/decrements emsg_skip around eval0 if eap->skip is set.
+/// Returns FAIL/OK as eval0 does.
+int nvim_vars_eval_let_expr(void *eap, char *expr, void *rettv)
+{
+  bool skip = ((exarg_T *)eap)->skip;
+  evalarg_T evalarg;
+  if (skip) { emsg_skip++; }
+  fill_evalarg_from_eap(&evalarg, (exarg_T *)eap, skip);
+  int res = eval0(expr, (typval_T *)rettv, (exarg_T *)eap, &evalarg);
+  if (skip) { emsg_skip--; }
+  clear_evalarg(&evalarg, (exarg_T *)eap);
+  return res;
+}
