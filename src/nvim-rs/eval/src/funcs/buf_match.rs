@@ -12,6 +12,8 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+use crate::expr::constants::{VAR_BOOL, VAR_UNKNOWN};
+
 // ─── Opaque handles ──────────────────────────────────────────────────────────
 
 /// Opaque `typval_T *`
@@ -31,9 +33,7 @@ type EvalFuncData = *mut c_void;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-/// `VAR_UNKNOWN = 0`, `VAR_BOOL = 6`
-const VAR_UNKNOWN: c_int = 0;
-const VAR_BOOL: c_int = 6;
+// VAR_UNKNOWN (= 0) and VAR_BOOL (= 7) imported from crate::expr::constants
 
 /// `RE_MAGIC = 1`, `RE_STRING = 32`
 const RE_MAGIC: c_int = 1;

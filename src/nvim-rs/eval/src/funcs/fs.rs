@@ -17,6 +17,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use super::dispatch::{argvar_at, rettv_set_bool, rettv_set_number, TypevalPtrMut};
+use crate::expr::constants::{VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING};
 
 // =============================================================================
 // C accessor declarations
@@ -663,10 +664,7 @@ pub unsafe extern "C" fn rs_f_pathshorten(
 // For typval fields we use argvar_at() from dispatch.
 // For direct field access (v_type check, v_string etc) we use nvim_tv_get_*.
 
-// VAR_STRING type value (from typval_defs.h)
-const VAR_STRING: i32 = 6;
-// VAR_NUMBER type value
-const VAR_NUMBER: i32 = 2;
+// VAR_STRING (= 2) and VAR_NUMBER (= 1) imported from crate::expr::constants
 
 /// "chdir({dir} [, {scope}])" function
 ///
@@ -1315,10 +1313,7 @@ const K_FILE_MK_DIR: c_int = 256;
 // FileDescriptor opaque size (48 bytes: verified in C)
 const FILE_DESCRIPTOR_SIZE: usize = 48;
 
-// VAR_BLOB type value (from typval_defs.h)
-const VAR_BLOB: i32 = 10;
-// VAR_LIST type value
-const VAR_LIST: i32 = 5;
+// VAR_BLOB (= 10) and VAR_LIST (= 4) imported from crate::expr::constants
 
 // Error message for write errors
 const E_ERROR_WHILE_WRITING: &[u8] = b"E80: Error while writing: %s\0";
