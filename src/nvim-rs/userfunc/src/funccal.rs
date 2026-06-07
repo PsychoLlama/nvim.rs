@@ -109,15 +109,6 @@ extern "C" {
         argvars: *mut c_void,
         rettv: *mut c_void,
     ) -> c_int;
-    fn call_user_func(
-        fp: *mut c_void,
-        argcount: c_int,
-        argvars: *mut c_void,
-        rettv: *mut c_void,
-        firstline: i32,
-        lastline: i32,
-        selfdict: *mut c_void,
-    );
     fn check_user_func_argcount(fp: *mut c_void, argcount: c_int) -> c_int;
     fn nvim_funcexe_get_doesrange(fe: *mut c_void) -> *mut bool;
     fn nvim_funcexe_get_firstline(fe: *mut c_void) -> i32;
@@ -1097,17 +1088,15 @@ pub unsafe extern "C" fn rs_call_user_func_check(
     } else {
         std::ptr::null_mut()
     };
-    unsafe {
-        call_user_func(
-            fp,
-            argcount,
-            argvars,
-            rettv,
-            firstline,
-            lastline,
-            effective_selfdict,
-        );
-    };
+    rs_call_user_func(
+        fp,
+        argcount,
+        argvars,
+        rettv,
+        firstline,
+        lastline,
+        effective_selfdict,
+    );
 
     FCERR_NONE
 }
@@ -1789,12 +1778,11 @@ pub unsafe extern "C" fn rs_func_call(
 }
 
 // =============================================================================
-// call_user_func (Phase A / plan 5e037151)
+// call_user_func (Phase B / plan 5e037151)
 // =============================================================================
 //
-// Phase A: Rust scaffold for call_user_func. Exported as `rs_call_user_func`
-// (distinct symbol to avoid duplicate-symbol link error with C `call_user_func`).
-// Phase B will flip the export name to `call_user_func` and delete the C body.
+// Phase B: Rust port of call_user_func, now exported under the canonical symbol.
+// The C `call_user_func` body (userfunc.c lines 275-661) has been deleted.
 
 // Recursion depth guard (mirrors C function-static `static int depth`).
 static CUF_DEPTH: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
@@ -1810,15 +1798,15 @@ const MSG_BUF_LEN: usize = 480;
 #[allow(clippy::cast_possible_wrap)]
 const MSG_BUF_CLEN: c_int = (MSG_BUF_LEN / 6) as c_int; // 80
 
-/// Rust port of C `call_user_func` (Phase A: exported under distinct name).
+/// Call a user function (VimL user-function execution engine).
 ///
-/// This is the VimL user-function execution engine. It matches the C body
-/// branch-for-branch per the 23-point semantics checklist in the migration plan.
+/// Matches the C body branch-for-branch per the 23-point semantics checklist
+/// in migration plan 5e037151.
 ///
 /// # Safety
 /// All pointer arguments must be valid. `fp`, `argvars`, `rettv` are non-null.
 /// `selfdict` may be null.
-#[no_mangle]
+#[unsafe(export_name = "call_user_func")]
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::cast_possible_wrap)]
