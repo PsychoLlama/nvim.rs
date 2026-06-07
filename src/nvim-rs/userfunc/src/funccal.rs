@@ -8,6 +8,19 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+// SctxT layout: sc_sid(i32) + sc_seq(i32) + sc_lnum(i32) + _pad(i32) + sc_chan(u64) = 24 bytes.
+// Must match C's sctx_T exactly.
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SctxT {
+    sc_sid: c_int,
+    sc_seq: c_int,
+    sc_lnum: i32,
+    _pad: i32,
+    sc_chan: u64,
+}
+
+#[allow(clashing_extern_declarations)]
 extern "C" {
     // Phase 27: for rs_funccal_unref inlining
     fn nvim_get_previous_funccal() -> *mut c_void;
@@ -274,6 +287,140 @@ extern "C" {
     fn nvim_fc_l_avars_dv_refcount(fc: *const c_void) -> c_int;
     fn nvim_fc_varlist_lv_refcount(fc: *const c_void) -> c_int;
     fn nvim_get_fc_refcount(fc: *const c_void) -> c_int;
+
+    // === Phase call_user_func (plan 5e037151) ===
+    fn nvim_fc_fixvar_item(fc: *mut c_void, idx: c_int) -> *mut c_void; // dictitem_T*
+    fn nvim_fc_listitem_tv(fc: *mut c_void, ai: c_int) -> *mut c_void; // typval_T*
+    fn nvim_fc_set_level(fc: *mut c_void, v: c_int);
+    fn nvim_get_current_sctx() -> SctxT;
+    fn nvim_set_current_sctx(s: SctxT);
+    fn nvim_redrawing_disabled_incr();
+    fn nvim_redrawing_disabled_decr();
+    fn nvim_no_wait_return_incr();
+    fn nvim_no_wait_return_decr();
+    fn nvim_sandbox_incr();
+    fn nvim_sandbox_decr();
+    fn nvim_ex_nesting_level_incr();
+    fn nvim_ex_nesting_level_decr();
+    fn nvim_get_trylevel() -> c_int;
+    fn nvim_ufunc_incr_calls(fp: *mut c_void);
+    fn nvim_sizeof_save_redo() -> usize;
+    // save/restore search patterns and redo buffer
+    fn save_search_patterns();
+    fn restore_search_patterns();
+    fn saveRedobuff(save_redo: *mut c_void);
+    fn restoreRedobuff(save_redo: *mut c_void);
+    fn rs_ins_compl_active() -> c_int;
+    fn line_breakcheck();
+    // funccal setup helpers
+    fn nvim_fc_l_vars_dict(fc: *mut c_void) -> *mut c_void; // dict_T*
+    fn nvim_fc_l_vars_var_ptr(fc: *mut c_void) -> *mut c_void; // ScopeDictDictItem*
+    fn nvim_fc_l_avars_dict(fc: *mut c_void) -> *mut c_void; // dict_T*
+    fn nvim_fc_l_avars_var_ptr(fc: *mut c_void) -> *mut c_void; // ScopeDictDictItem*
+    fn nvim_fc_l_varlist(fc: *mut c_void) -> *mut c_void; // list_T*
+    fn nvim_fc_l_vars_ht(fc: *mut c_void) -> *mut c_void; // hashtab_T*
+    fn nvim_fc_l_avars_ht(fc: *mut c_void) -> *mut c_void; // hashtab_T*
+    fn init_var_dict(dict: *mut c_void, dict_var: *mut c_void, scope: c_int);
+    fn hash_add(ht: *mut c_void, key: *const c_char) -> c_int;
+    fn tv_dict_item_alloc_len(key: *const c_char, len: usize) -> *mut c_void; // dictitem_T*
+    fn tv_list_init_static(list: *mut c_void);
+    fn nvim_tv_list_set_lock(list: *mut c_void, lock: c_int);
+    // estack
+    fn estack_push_ufunc(fp: *mut c_void, lnum: i32);
+    fn estack_pop();
+    // verbose
+    fn verbose_enter_scroll();
+    fn verbose_leave_scroll();
+    fn smsg(hifmt: c_int, fmt: *const c_char, ...) -> c_int;
+    fn msg_puts(s: *const c_char);
+    fn msg_outnum(n: c_int);
+    fn encode_tv2string(tv: *const c_void, len: *mut usize) -> *mut c_char;
+    fn vim_strsize(s: *const c_char) -> c_int;
+    fn trunc_string(s: *const c_char, buf: *mut c_char, maxlen: c_int, buflen: usize);
+    fn nvim_tv_get_type(tv: *const c_void) -> c_int;
+    fn nvim_tv_get_number(tv: *const c_void) -> i64;
+    // profiling
+    fn func_do_profile(fp: *mut c_void);
+    fn has_profiling(file: bool, fname: *const c_char, prop: *mut c_void) -> bool;
+    fn profile_start() -> u64;
+    fn profile_end(tm: u64) -> u64;
+    fn profile_sub_wait(wait_start: u64, tm: u64) -> u64;
+    fn profile_add(tm1: u64, tm2: u64) -> u64;
+    fn profile_self(self_tm: u64, tm: u64, children: u64) -> u64;
+    fn profile_zero() -> u64;
+    fn script_prof_save(wait_start: *mut u64);
+    fn script_prof_restore(wait_start: *const u64);
+    fn nvim_ufunc_get_profiling(fp: *const c_void) -> c_int;
+    fn nvim_ufunc_set_profiling(fp: *mut c_void, val: c_int);
+    fn nvim_ufunc_get_tm_count(fp: *const c_void) -> c_int;
+    fn nvim_ufunc_set_tm_count(fp: *mut c_void, val: c_int);
+    fn nvim_ufunc_get_tm_total(fp: *const c_void) -> u64;
+    fn nvim_ufunc_set_tm_total(fp: *mut c_void, val: u64);
+    fn nvim_ufunc_get_tm_self(fp: *const c_void) -> u64;
+    fn nvim_ufunc_set_tm_self(fp: *mut c_void, val: u64);
+    fn nvim_ufunc_get_tm_children(fp: *const c_void) -> u64;
+    fn nvim_ufunc_set_tm_children(fp: *mut c_void, val: u64);
+    fn nvim_ufunc_get_tml_children(fp: *const c_void) -> u64;
+    fn nvim_ufunc_set_tml_children(fp: *mut c_void, val: u64);
+    fn nvim_get_did_emsg() -> bool;
+    fn nvim_set_did_emsg(val: bool);
+    fn nvim_aborting() -> bool;
+    fn nvim_sourcing_name_get() -> *const c_char;
+    fn nvim_ufunc_get_args_len(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_get_arg(fp: *mut c_void, i: c_int) -> *const c_char;
+    fn nvim_ufunc_get_def_args_len(fp: *mut c_void) -> c_int;
+    fn nvim_ufunc_get_def_arg(fp: *mut c_void, i: c_int) -> *const c_char;
+    fn nvim_ufunc_get_name_ptr(fp: *mut c_void) -> *mut c_char;
+    fn nvim_ufunc_get_script_ctx(fp: *mut c_void) -> SctxT;
+    // nvim_ufunc_get_refcount / get_calls already declared in Phase 32 block above
+    // dictitem field accessors
+    fn nvim_dictitem_set_flags(di: *mut c_void, flags: c_int);
+    fn nvim_dictitem_strcpy_key(di: *mut c_void, name: *const c_char);
+    fn nvim_dictitem_key_ptr(di: *const c_void) -> *const c_char;
+    fn nvim_dictitem_copy_tv(di: *mut c_void, src: *const c_void);
+    fn nvim_dictitem_tv_set_lock(di: *mut c_void, lock: c_int);
+    fn nvim_dictitem_tv_set_type(di: *mut c_void, vtype: c_int);
+    fn nvim_dictitem_tv_set_vval_dict(di: *mut c_void, dict: *mut c_void);
+    fn nvim_dictitem_tv_set_vval_list(di: *mut c_void, list: *mut c_void);
+    fn nvim_dictitem_tv_ptr(di: *mut c_void) -> *mut c_void; // typval_T*
+    fn nvim_dictitem_or_flags_ro_fix(di: *mut c_void);
+    fn nvim_dict_incr_refcount(dict: *mut c_void);
+    fn nvim_ufunc_lambda_body_ptr(fp: *mut c_void) -> *mut c_char;
+    fn nvim_format_vararg_name(buf: *mut c_char, bufsz: usize, ai_plus_1: c_int) -> c_int;
+    fn nvim_get_numbuflen() -> c_int;
+    fn nvim_var_def_scope() -> c_int;
+    fn nvim_var_scope() -> c_int;
+    fn nvim_var_fixed() -> c_int;
+    fn nvim_var_unlocked() -> c_int;
+    fn nvim_var_number() -> c_int;
+    fn nvim_var_dict() -> c_int;
+    fn nvim_var_list() -> c_int;
+    fn nvim_fixvar_cnt() -> c_int;
+    fn nvim_var_short_len() -> c_int;
+    fn nvim_di_flags_ro_fix() -> c_int;
+    fn rs_func_clear_free(fp: *mut c_void, force: c_int);
+    fn rs_handle_defer_one(funccal: *mut c_void);
+    fn rs_add_nr_var(dp: *mut c_void, v: *mut c_void, name: *const c_char, nr: i64);
+    // get_func_line is already exported as extern fn; pass the symbol pointer to do_cmdline
+    fn do_cmdline(
+        cmdline: *mut c_char,
+        fgetline: Option<unsafe extern "C" fn(c_int, *mut c_void, c_int, bool) -> *mut c_char>,
+        cookie: *mut c_void,
+        flags: c_int,
+    ) -> c_int;
+    static mut p_mfd: i64;
+    fn nvim_emsg_e132();
+    fn eval1(arg: *mut *mut c_char, rettv: *mut c_void, evalarg: *mut c_void) -> c_int;
+    fn nvim_get_ex_nesting_level() -> c_int;
+    fn nvim_fc_ufuncs_ga_init_wrapper(fc: *mut c_void);
+    fn nvim_fc_l_avars_set_lock(fc: *mut c_void, lock: c_int);
+    fn nvim_fc_listitem_append(fc: *mut c_void, ai: c_int, list: *mut c_void);
+    fn nvim_emsg_off_inc();
+    fn nvim_emsg_off_dec();
+    fn nvim_get_p_verbose() -> c_int;
+    fn nvim_fc_get_rettv(fc: *mut c_void) -> *mut c_void; // typval_T*
+    fn nvim_ufunc_set_calls(fp: *mut c_void, v: c_int);
+    static mut EVALARG_EVALUATE: c_void;
 }
 
 // =============================================================================
@@ -1639,4 +1786,645 @@ pub unsafe extern "C" fn rs_func_call(
     }
 
     r
+}
+
+// =============================================================================
+// call_user_func (Phase A / plan 5e037151)
+// =============================================================================
+//
+// Phase A: Rust scaffold for call_user_func. Exported as `rs_call_user_func`
+// (distinct symbol to avoid duplicate-symbol link error with C `call_user_func`).
+// Phase B will flip the export name to `call_user_func` and delete the C body.
+
+// Recursion depth guard (mirrors C function-static `static int depth`).
+static CUF_DEPTH: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+// DOCMD flags
+const DOCMD_NOWAIT: c_int = 0x02;
+const DOCMD_VERBOSE: c_int = 0x01;
+const DOCMD_REPEAT: c_int = 0x04;
+
+// MSG_BUF constants
+const MSG_BUF_LEN: usize = 480;
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+const MSG_BUF_CLEN: c_int = (MSG_BUF_LEN / 6) as c_int; // 80
+
+/// Rust port of C `call_user_func` (Phase A: exported under distinct name).
+///
+/// This is the VimL user-function execution engine. It matches the C body
+/// branch-for-branch per the 23-point semantics checklist in the migration plan.
+///
+/// # Safety
+/// All pointer arguments must be valid. `fp`, `argvars`, `rettv` are non-null.
+/// `selfdict` may be null.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::similar_names)]
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::ptr_cast_constness)]
+#[allow(clippy::semicolon_if_nothing_returned)]
+#[allow(clippy::cast_ptr_alignment)]
+#[allow(clippy::ptr_as_ptr)]
+#[allow(clippy::needless_range_loop)]
+#[allow(clippy::unnecessary_operation)]
+pub unsafe extern "C" fn rs_call_user_func(
+    fp: *mut c_void,
+    argcount: c_int,
+    argvars: *mut c_void,
+    rettv: *mut c_void,
+    firstline: i32,
+    lastline: i32,
+    selfdict: *mut c_void,
+) {
+    use std::sync::atomic::Ordering;
+
+    // --- Depth guard (checklist #1) ---
+    // Early return BEFORE any save/alloc. depth++ after the guard.
+    let depth = CUF_DEPTH.load(Ordering::Relaxed);
+    let p_mfd_val = unsafe { p_mfd } as c_int;
+    if depth >= p_mfd_val {
+        unsafe { nvim_emsg_e132() };
+        unsafe { nvim_tv_set_number(rettv, -1) };
+        return;
+    }
+    CUF_DEPTH.store(depth + 1, Ordering::Relaxed);
+
+    // --- Save search patterns + redo buffer (checklist #2) ---
+    unsafe { save_search_patterns() };
+    let redo_size = unsafe { nvim_sizeof_save_redo() };
+    let save_redo = unsafe { xcalloc(1, redo_size) };
+    let did_save_redo = if unsafe { rs_ins_compl_active() } == 0 {
+        unsafe { saveRedobuff(save_redo) };
+        true
+    } else {
+        false
+    };
+
+    // fp->uf_calls++; line_breakcheck()
+    unsafe { nvim_ufunc_incr_calls(fp) };
+    unsafe { line_breakcheck() };
+
+    // --- Create funccal (checklist #3) ---
+    let fc = unsafe { rs_create_funccal(fp, rettv) };
+    // fc->fc_level = ex_nesting_level (we read via ex_nesting_level_incr trick:
+    // we need the current value, not to increment. We'll save it by calling
+    // nvim_fc_set_level with the result of nvim_get_ex_nesting_level).
+    // We don't have a getter, but we can: increment then decrement to get it.
+    // Actually, we have no getter. Let's add one... but the plan says we can
+    // use nvim_ex_nesting_level_incr/decr. A cleaner approach: since ex_nesting_level
+    // is only written from a few places, we can use a C accessor that just reads it.
+    // Per plan, we add a getter when needed. Use nvim_get_ex_nesting_level.
+    // WAIT: the plan says incr/decr only. But we need the VALUE here.
+    // The plan lists: nvim_ex_nesting_level_incr/decr. We need fc_level = ex_nesting_level.
+    // We cannot get the value without a getter. We must add one.
+    // Since the plan says "add inc/dec only if a writable static is not already viable",
+    // and since we genuinely need the current value, we add a getter.
+    // However, to stay within plan scope: we can use a C shim
+    // nvim_get_ex_nesting_level() - we'll add it below. For now, use a local workaround:
+    // We temporarily call nvim_ex_nesting_level_incr, read a C global, then decr.
+    // That's wrong. We need to call a getter. Let's just add a getter accessor to userfunc.c
+    // as a 1-liner (it's a read-only global access, justified by plan assumption 2).
+    // For this initial compile, we call the C function that was already declared above.
+    // Since we don't have the getter yet, we'll use a C helper below.
+    // For now: use a separate extern declared below.
+    unsafe { nvim_fc_set_level(fc, nvim_get_ex_nesting_level()) };
+
+    // fc_breakpoint, fc_dbg_tick
+    let fp_name = unsafe { nvim_ufunc_get_name_ptr(fp) };
+    let bp = unsafe { dbg_find_breakpoint(false, fp_name.cast_const(), 0) };
+    let bp_ptr = unsafe { nvim_fc_get_breakpoint_ptr(fc) };
+    unsafe { *bp_ptr = bp };
+    let dbg_tick_val = unsafe { debug_tick };
+    let dbg_tick_ptr = unsafe { nvim_fc_get_dbg_tick_ptr(fc) };
+    unsafe { *dbg_tick_ptr = dbg_tick_val };
+
+    // ga_init(&fc->fc_ufuncs, sizeof(ufunc_T*), 1)
+    // create_funccal already does ga_init in the current Rust impl (check):
+    // Actually create_funccal just allocs and sets func/rettv/caller. ga_init for
+    // fc_ufuncs is done here per the C code. We need nvim_fc_ufuncs_ga_init accessor.
+    // But wait: create_funccal in funccal.rs is already Rust (rs_create_funccal).
+    // Looking at rs_create_funccal: it does xcalloc (zeroes memory), so ga_len=0,
+    // ga_maxlen=0 initially. Then C's ga_init sets ga_itemsize and ga_growsize.
+    // We need nvim_fc_ga_init_ufuncs or just call ga_init directly on fc_ufuncs ptr.
+    // The plan says: ga_init already used in crate. Let's use it.
+    unsafe { nvim_fc_ufuncs_ga_init_wrapper(fc) };
+
+    // --- islambda (checklist #4) ---
+    // strncmp(fp->uf_name, "<lambda>", 8) == 0
+    let islambda = !fp_name.is_null()
+        && unsafe {
+            let name_ptr = fp_name as *const u8;
+            let prefix = b"<lambda>";
+            let mut eq = true;
+            for k in 0..8usize {
+                if *name_ptr.add(k) != prefix[k] {
+                    eq = false;
+                    break;
+                }
+            }
+            eq
+        };
+
+    // --- l: init + l:self (checklist #5) ---
+    let l_vars = unsafe { nvim_fc_l_vars_dict(fc) };
+    let l_vars_var = unsafe { nvim_fc_l_vars_var_ptr(fc) };
+    let var_def_scope = unsafe { nvim_var_def_scope() };
+    unsafe { init_var_dict(l_vars, l_vars_var, var_def_scope) };
+
+    let mut fixvar_idx: c_int = 0;
+    if !selfdict.is_null() {
+        let v = unsafe { nvim_fc_fixvar_item(fc, fixvar_idx) };
+        fixvar_idx += 1;
+        let flags = unsafe { nvim_di_flags_ro_fix() };
+        unsafe { nvim_dictitem_set_flags(v, flags) };
+        unsafe { nvim_dictitem_strcpy_key(v, c"self".as_ptr()) };
+        let l_vars_ht = unsafe { nvim_fc_l_vars_ht(fc) };
+        let key = unsafe { nvim_dictitem_key_ptr(v) };
+        unsafe { hash_add(l_vars_ht, key) };
+        let var_dict = unsafe { nvim_var_dict() };
+        let var_unlocked = unsafe { nvim_var_unlocked() };
+        unsafe { nvim_dictitem_tv_set_type(v, var_dict) };
+        unsafe { nvim_dictitem_tv_set_lock(v, var_unlocked) };
+        unsafe { nvim_dictitem_tv_set_vval_dict(v, selfdict) };
+        unsafe { nvim_dict_incr_refcount(selfdict) };
+    }
+
+    // --- a: init (checklist #6) ---
+    let l_avars = unsafe { nvim_fc_l_avars_dict(fc) };
+    let l_avars_var = unsafe { nvim_fc_l_avars_var_ptr(fc) };
+    let var_scope = unsafe { nvim_var_scope() };
+    unsafe { init_var_dict(l_avars, l_avars_var, var_scope) };
+
+    let fc_noargs_flag: c_int = 0x200; // FC_NOARGS
+    let uf_flags = unsafe { nvim_ufunc_get_flags(fp) };
+
+    if (uf_flags & fc_noargs_flag) == 0 {
+        // add_nr_var for a:0
+        let v0 = unsafe { nvim_fc_fixvar_item(fc, fixvar_idx) };
+        fixvar_idx += 1;
+        let args_len = unsafe { nvim_ufunc_get_args_len(fp) };
+        let a0_val = if argcount >= args_len {
+            (argcount - args_len) as i64
+        } else {
+            0i64
+        };
+        unsafe { rs_add_nr_var(l_avars, v0, c"0".as_ptr(), a0_val) };
+    }
+
+    // l_avars.dv_lock = VAR_FIXED
+    let var_fixed = unsafe { nvim_var_fixed() };
+    unsafe { nvim_fc_l_avars_set_lock(fc, var_fixed) };
+
+    if (uf_flags & fc_noargs_flag) == 0 {
+        // a:000 variable
+        let v000 = unsafe { nvim_fc_fixvar_item(fc, fixvar_idx) };
+        fixvar_idx += 1;
+        let flags = unsafe { nvim_di_flags_ro_fix() };
+        unsafe { nvim_dictitem_set_flags(v000, flags) };
+        unsafe { nvim_dictitem_strcpy_key(v000, c"000".as_ptr()) };
+        let l_avars_ht = unsafe { nvim_fc_l_avars_ht(fc) };
+        let key = unsafe { nvim_dictitem_key_ptr(v000) };
+        unsafe { hash_add(l_avars_ht, key) };
+        let var_list = unsafe { nvim_var_list() };
+        unsafe { nvim_dictitem_tv_set_type(v000, var_list) };
+        unsafe { nvim_dictitem_tv_set_lock(v000, var_fixed) };
+        let l_varlist = unsafe { nvim_fc_l_varlist(fc) };
+        unsafe { nvim_dictitem_tv_set_vval_list(v000, l_varlist) };
+    }
+    // tv_list_init_static(&fc->fc_l_varlist); tv_list_set_lock(VAR_FIXED)
+    let l_varlist = unsafe { nvim_fc_l_varlist(fc) };
+    unsafe { tv_list_init_static(l_varlist) };
+    unsafe { nvim_tv_list_set_lock(l_varlist, var_fixed) };
+
+    // --- a:firstline, a:lastline (checklist #7) ---
+    if (uf_flags & fc_noargs_flag) == 0 {
+        let v_fl = unsafe { nvim_fc_fixvar_item(fc, fixvar_idx) };
+        fixvar_idx += 1;
+        unsafe { rs_add_nr_var(l_avars, v_fl, c"firstline".as_ptr(), firstline as i64) };
+        let v_ll = unsafe { nvim_fc_fixvar_item(fc, fixvar_idx) };
+        fixvar_idx += 1;
+        unsafe { rs_add_nr_var(l_avars, v_ll, c"lastline".as_ptr(), lastline as i64) };
+    }
+
+    // --- Arg loop (checklist #8) ---
+    // NUMBUFLEN = 65, VAR_SHORT_LEN = 20, FIXVAR_CNT = 12
+    let numbuflen = unsafe { nvim_get_numbuflen() } as usize;
+    let var_short_len = unsafe { nvim_var_short_len() };
+    let fixvar_cnt = unsafe { nvim_fixvar_cnt() };
+    let args_len = unsafe { nvim_ufunc_get_args_len(fp) };
+    let max_i = argcount.max(args_len);
+    let mut default_arg_err = false;
+    // tv_to_free: up to MAX_FUNC_ARGS (20) pointers to typval_T* needing tv_clear
+    let mut tv_to_free: [*mut c_void; 20] = [std::ptr::null_mut(); 20];
+    let mut tv_to_free_len: usize = 0;
+    // numbuf for vararg names ("%d")
+    let mut numbuf = vec![0u8; numbuflen];
+    let l_vars_ht = unsafe { nvim_fc_l_vars_ht(fc) };
+    let l_avars_ht = unsafe { nvim_fc_l_avars_ht(fc) };
+
+    let mut i = 0i32;
+    while i < max_i {
+        let mut addlocal = false;
+        let mut isdefault = false;
+        // def_rettv: typval_T on stack (16 bytes, zero = VAR_UNKNOWN)
+        let mut def_rettv = [0u8; 16];
+        let def_rettv_ptr = def_rettv.as_mut_ptr().cast::<c_void>();
+
+        let ai = i - args_len;
+        let name: *const c_char;
+        let namelen: usize;
+
+        if ai < 0 {
+            // named argument
+            name = unsafe { nvim_ufunc_get_arg(fp, i) };
+            if islambda {
+                addlocal = true;
+            }
+            // isdefault: ai + def_args_len >= 0 && i >= argcount
+            let def_args_len = unsafe { nvim_ufunc_get_def_args_len(fp) };
+            isdefault = (ai + def_args_len >= 0) && (i >= argcount);
+            if isdefault {
+                // default expression eval
+                unsafe { nvim_tv_set_number(def_rettv_ptr, -1) };
+                let default_expr_orig = unsafe { nvim_ufunc_get_def_arg(fp, ai + def_args_len) };
+                // eval1 takes *mut *mut c_char; we need a mutable copy of the pointer
+                let mut default_expr = default_expr_orig as *mut c_char;
+                if unsafe {
+                    eval1(
+                        std::ptr::addr_of_mut!(default_expr),
+                        def_rettv_ptr,
+                        std::ptr::addr_of_mut!(EVALARG_EVALUATE),
+                    )
+                } == FAIL
+                {
+                    default_arg_err = true;
+                    break;
+                }
+            }
+            // namelen = strlen(name)
+            namelen = unsafe {
+                let mut n = 0usize;
+                while *name.add(n) != 0 {
+                    n += 1;
+                }
+                n
+            };
+        } else {
+            // vararg: FC_NOARGS → break
+            if (uf_flags & fc_noargs_flag) != 0 {
+                break;
+            }
+            // name = "%d" % (ai+1) into numbuf
+            let written = unsafe {
+                nvim_format_vararg_name(numbuf.as_mut_ptr().cast::<c_char>(), numbuflen, ai + 1)
+            };
+            name = numbuf.as_ptr().cast::<c_char>();
+            namelen = written as usize;
+        }
+
+        // Allocate/select dictitem slot
+        let v: *mut c_void;
+        let flags = unsafe { nvim_di_flags_ro_fix() };
+        if fixvar_idx < fixvar_cnt && (namelen as c_int) <= var_short_len {
+            v = unsafe { nvim_fc_fixvar_item(fc, fixvar_idx) };
+            fixvar_idx += 1;
+            unsafe { nvim_dictitem_set_flags(v, flags) };
+            unsafe { nvim_dictitem_strcpy_key(v, name) };
+        } else {
+            v = unsafe { tv_dict_item_alloc_len(name, namelen) };
+            unsafe { nvim_dictitem_or_flags_ro_fix(v) };
+        }
+
+        // v->di_tv = isdefault ? def_rettv : argvars[i]
+        if isdefault {
+            unsafe { nvim_dictitem_copy_tv(v, def_rettv_ptr.cast_const()) };
+        } else {
+            let argvars_i = unsafe { argvars.cast::<u8>().add(i as usize * 16).cast::<c_void>() };
+            unsafe { nvim_dictitem_copy_tv(v, argvars_i.cast_const()) };
+        }
+        unsafe { nvim_dictitem_tv_set_lock(v, var_fixed) };
+
+        // Track for tv_clear in teardown
+        if isdefault {
+            let di_tv = unsafe { nvim_dictitem_tv_ptr(v) };
+            if tv_to_free_len < tv_to_free.len() {
+                tv_to_free[tv_to_free_len] = di_tv;
+                tv_to_free_len += 1;
+            }
+        }
+
+        // Add to l: or a: hashtab
+        let key = unsafe { nvim_dictitem_key_ptr(v) };
+        if addlocal {
+            // lambda: tv_copy(&v->di_tv, &v->di_tv) (self-copy for closure)
+            let di_tv = unsafe { nvim_dictitem_tv_ptr(v) };
+            unsafe { tv_copy(di_tv.cast_const(), di_tv) };
+            unsafe { hash_add(l_vars_ht, key) };
+        } else {
+            unsafe { hash_add(l_avars_ht, key) };
+        }
+
+        // If vararg (ai>=0) and within MAX_FUNC_ARGS, append to a:000 list
+        if ai >= 0 && ai < MAX_FUNC_ARGS as c_int {
+            let li_tv = unsafe { nvim_fc_listitem_tv(fc, ai) };
+            let argvars_i = unsafe { argvars.cast::<u8>().add(i as usize * 16).cast::<c_void>() };
+            // *TV_LIST_ITEM_TV(li) = argvars[i]
+            unsafe {
+                std::ptr::copy_nonoverlapping(argvars_i.cast::<u8>(), li_tv.cast::<u8>(), 16)
+            };
+            // v_lock = VAR_FIXED (at offset 4 in typval_T: i32 v_type, i32 v_lock)
+            unsafe { *(li_tv.cast::<u8>().add(4) as *mut i32) = var_fixed };
+            // tv_list_append(&fc->fc_l_varlist, li)
+            // We need the listitem_T* not just the tv_ptr.
+            // nvim_fc_listitem_tv gives us &li->li_tv; we need &li (the listitem).
+            // li_tv IS &li->li_tv where li_tv == &fc->fc_l_listitems[ai].li_tv.
+            // li_tv is the first field of listitem_T (or not?). Let me check.
+            // Actually li_tv points INSIDE the listitem. We need the listitem pointer.
+            // tv_list_append takes listitem_T*. We need nvim_fc_listitem(fc, ai).
+            // We only have nvim_fc_listitem_tv. We need to add nvim_fc_listitem accessor.
+            // Use the raw pointer arithmetic: listitem_T has {listitem_T* li_next,
+            // listitem_T* li_prev, typval_T li_tv}. li_tv is at offset 2*sizeof(ptr).
+            // Actually the layout might have li_tv first. Let's add a C accessor.
+            // For now use nvim_fc_get_listitem which we'll add, or use a shim.
+            // We'll call nvim_fc_listitem_append helper (see below).
+            unsafe { nvim_fc_listitem_append(fc, ai, l_varlist) };
+        }
+
+        i += 1;
+    }
+
+    // --- RedrawingDisabled++ (checklist #9) ---
+    unsafe { nvim_redrawing_disabled_incr() };
+
+    // --- Sandbox (checklist #10) ---
+    let fc_sandbox_flag: c_int = 0x40; // FC_SANDBOX
+    let using_sandbox = (uf_flags & fc_sandbox_flag) != 0;
+    if using_sandbox {
+        unsafe { nvim_sandbox_incr() };
+    }
+
+    // --- estack_push_ufunc (checklist #11) ---
+    unsafe { estack_push_ufunc(fp, 1) };
+
+    // --- Verbose entry (checklist #12) ---
+    let p_verbose = unsafe { nvim_get_p_verbose() };
+    if p_verbose >= 12 {
+        unsafe { nvim_no_wait_return_incr() };
+        unsafe { verbose_enter_scroll() };
+        let sourcing_name = unsafe { nvim_sourcing_name_get() };
+        unsafe { smsg(0, c"calling %s".as_ptr(), sourcing_name) };
+        if p_verbose >= 14 {
+            unsafe { msg_puts(c"(".as_ptr()) };
+            let mut vi = 0i32;
+            while vi < argcount {
+                if vi > 0 {
+                    unsafe { msg_puts(c", ".as_ptr()) };
+                }
+                let argv_i = unsafe { argvars.cast::<u8>().add(vi as usize * 16).cast::<c_void>() };
+                let var_number = unsafe { nvim_var_number() };
+                if unsafe { nvim_tv_get_type(argv_i.cast_const()) } == var_number {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let n = unsafe { nvim_tv_get_number(argv_i.cast_const()) } as c_int;
+                    unsafe { msg_outnum(n) };
+                } else {
+                    // emsg_off++; encode_tv2string; trunc if needed; msg_puts; xfree; emsg_off--
+                    unsafe { nvim_emsg_off_inc() };
+                    let tofree =
+                        unsafe { encode_tv2string(argv_i.cast_const(), std::ptr::null_mut()) };
+                    unsafe { nvim_emsg_off_dec() };
+                    if !tofree.is_null() {
+                        let mut s = tofree;
+                        let mut buf = [0u8; MSG_BUF_LEN];
+                        if unsafe { vim_strsize(s.cast_const()) } > MSG_BUF_CLEN {
+                            unsafe {
+                                trunc_string(
+                                    s.cast_const(),
+                                    buf.as_mut_ptr().cast::<c_char>(),
+                                    MSG_BUF_CLEN,
+                                    MSG_BUF_LEN,
+                                )
+                            };
+                            s = buf.as_mut_ptr().cast::<c_char>();
+                        }
+                        unsafe { msg_puts(s.cast_const()) };
+                        unsafe { xfree(tofree.cast::<c_void>()) };
+                    }
+                }
+                vi += 1;
+            }
+            unsafe { msg_puts(c")".as_ptr()) };
+        }
+        unsafe { msg_puts(c"\n".as_ptr()) };
+        unsafe { verbose_leave_scroll() };
+        unsafe { nvim_no_wait_return_decr() };
+    }
+
+    // --- Profiling setup (checklist #13) ---
+    let do_profiling_yes = unsafe { do_profiling } == PROF_YES;
+    let uf_profiling = unsafe { nvim_ufunc_get_profiling(fp) } != 0;
+    let fp_name_cstr = unsafe { nvim_ufunc_get_name_ptr(fp) }.cast_const();
+
+    let func_not_yet_profiling_but_should = do_profiling_yes
+        && !uf_profiling
+        && unsafe { has_profiling(false, fp_name_cstr, std::ptr::null_mut()) };
+
+    let mut started_profiling = false;
+    if func_not_yet_profiling_but_should {
+        started_profiling = true;
+        unsafe { func_do_profile(fp) };
+    }
+
+    let caller = unsafe { nvim_fc_get_caller(fc) };
+    let caller_profiling =
+        !caller.is_null() && unsafe { nvim_ufunc_get_profiling(nvim_fc_get_func(caller)) } != 0;
+    let uf_profiling2 = unsafe { nvim_ufunc_get_profiling(fp) } != 0; // re-read after func_do_profile
+
+    let func_or_func_caller_profiling = do_profiling_yes && (uf_profiling2 || caller_profiling);
+
+    let mut call_start: u64 = 0;
+    let mut wait_start: u64 = 0;
+    if func_or_func_caller_profiling {
+        let count = unsafe { nvim_ufunc_get_tm_count(fp) };
+        unsafe { nvim_ufunc_set_tm_count(fp, count + 1) };
+        call_start = unsafe { profile_start() };
+        unsafe { nvim_ufunc_set_tm_children(fp, profile_zero()) };
+    }
+    if do_profiling_yes {
+        unsafe { script_prof_save(std::ptr::addr_of_mut!(wait_start)) };
+    }
+
+    // --- sctx + did_emsg save (checklist #14) ---
+    let save_current_sctx = unsafe { nvim_get_current_sctx() };
+    let script_ctx = unsafe { nvim_ufunc_get_script_ctx(fp) };
+    unsafe { nvim_set_current_sctx(script_ctx) };
+    let save_did_emsg = unsafe { nvim_get_did_emsg() };
+    unsafe { nvim_set_did_emsg(false) };
+
+    // --- Body dispatch (checklist #15) ---
+    if default_arg_err && ((uf_flags & FC_ABORT != 0) || unsafe { nvim_get_trylevel() } > 0) {
+        unsafe { nvim_set_did_emsg(true) };
+    } else if islambda {
+        let p_orig = unsafe { nvim_ufunc_lambda_body_ptr(fp) };
+        let mut p = p_orig;
+        unsafe { nvim_ex_nesting_level_incr() };
+        unsafe {
+            eval1(
+                std::ptr::addr_of_mut!(p),
+                rettv,
+                std::ptr::addr_of_mut!(EVALARG_EVALUATE),
+            )
+        };
+        unsafe { nvim_ex_nesting_level_decr() };
+    } else {
+        unsafe {
+            do_cmdline(
+                std::ptr::null_mut(),
+                Some(rs_get_func_line),
+                fc,
+                DOCMD_NOWAIT | DOCMD_VERBOSE | DOCMD_REPEAT,
+            )
+        };
+    }
+
+    // --- Defer (checklist #16) ---
+    // Note: current_funccal, NOT fc
+    let cur_funccal = unsafe { get_current_funccal() };
+    unsafe { rs_handle_defer_one(cur_funccal) };
+
+    // --- RedrawingDisabled-- (checklist #17) ---
+    unsafe { nvim_redrawing_disabled_decr() };
+
+    // --- Abort rettv (checklist #18) ---
+    let fc_abort_flag: c_int = FC_ABORT;
+    let did_emsg_now = unsafe { nvim_get_did_emsg() };
+    let rettv_type = unsafe { nvim_tv_get_type(rettv.cast_const()) };
+    let var_unknown: c_int = 0;
+    if (did_emsg_now && (uf_flags & fc_abort_flag != 0)) || rettv_type == var_unknown {
+        unsafe { tv_clear(rettv) };
+        unsafe { nvim_tv_set_number(rettv, -1) };
+    }
+
+    // --- Profiling aggregation (checklist #19) ---
+    if func_or_func_caller_profiling {
+        call_start = unsafe { profile_end(call_start) };
+        call_start = unsafe { profile_sub_wait(wait_start, call_start) };
+        let total = unsafe { nvim_ufunc_get_tm_total(fp) };
+        unsafe { nvim_ufunc_set_tm_total(fp, profile_add(total, call_start)) };
+        let self_tm = unsafe { nvim_ufunc_get_tm_self(fp) };
+        let children = unsafe { nvim_ufunc_get_tm_children(fp) };
+        unsafe { nvim_ufunc_set_tm_self(fp, profile_self(self_tm, call_start, children)) };
+        if !caller.is_null() && caller_profiling {
+            let caller_func = unsafe { nvim_fc_get_func(caller) };
+            let c_children = unsafe { nvim_ufunc_get_tm_children(caller_func) };
+            unsafe { nvim_ufunc_set_tm_children(caller_func, profile_add(c_children, call_start)) };
+            let c_tml_children = unsafe { nvim_ufunc_get_tml_children(caller_func) };
+            unsafe {
+                nvim_ufunc_set_tml_children(caller_func, profile_add(c_tml_children, call_start))
+            };
+        }
+        if started_profiling {
+            unsafe { nvim_ufunc_set_profiling(fp, 0) };
+        }
+    }
+
+    // --- Verbose exit (checklist #20) ---
+    let p_verbose2 = unsafe { nvim_get_p_verbose() };
+    if p_verbose2 >= 12 {
+        unsafe { nvim_no_wait_return_incr() };
+        unsafe { verbose_enter_scroll() };
+        let sourcing_name = unsafe { nvim_sourcing_name_get() };
+        let fc_rettv = unsafe { nvim_fc_get_rettv(fc) };
+        if unsafe { nvim_aborting() } {
+            unsafe { smsg(0, c"%s aborted".as_ptr(), sourcing_name) };
+        } else if !fc_rettv.is_null()
+            && unsafe { nvim_tv_get_type(fc_rettv.cast_const()) } == unsafe { nvim_var_number() }
+        {
+            let n = unsafe { nvim_tv_get_number(fc_rettv.cast_const()) };
+            unsafe { smsg(0, c"%s returning #%ld".as_ptr(), sourcing_name, n as i64) };
+        } else {
+            let mut buf = [0u8; MSG_BUF_LEN];
+            unsafe { nvim_emsg_off_inc() };
+            let tofree = if fc_rettv.is_null() {
+                std::ptr::null_mut()
+            } else {
+                unsafe { encode_tv2string(fc_rettv.cast_const(), std::ptr::null_mut()) }
+            };
+            unsafe { nvim_emsg_off_dec() };
+            if !tofree.is_null() {
+                let mut s = tofree;
+                if unsafe { vim_strsize(s.cast_const()) } > MSG_BUF_CLEN {
+                    unsafe {
+                        trunc_string(
+                            s.cast_const(),
+                            buf.as_mut_ptr().cast::<c_char>(),
+                            MSG_BUF_CLEN,
+                            MSG_BUF_LEN,
+                        )
+                    };
+                    s = buf.as_mut_ptr().cast::<c_char>();
+                }
+                unsafe { smsg(0, c"%s returning %s".as_ptr(), sourcing_name, s) };
+                unsafe { xfree(tofree.cast::<c_void>()) };
+            }
+        }
+        unsafe { msg_puts(c"\n".as_ptr()) };
+        unsafe { verbose_leave_scroll() };
+        unsafe { nvim_no_wait_return_decr() };
+    }
+
+    // --- estack_pop; sctx restore; script_prof_restore; sandbox-- (checklist #21) ---
+    unsafe { estack_pop() };
+    unsafe { nvim_set_current_sctx(save_current_sctx) };
+    if do_profiling_yes {
+        unsafe { script_prof_restore(std::ptr::addr_of!(wait_start)) };
+    }
+    if using_sandbox {
+        unsafe { nvim_sandbox_decr() };
+    }
+
+    // --- Verbose continuing (checklist #22) ---
+    let p_verbose3 = unsafe { nvim_get_p_verbose() };
+    if p_verbose3 >= 12 {
+        let sourcing_name3 = unsafe { nvim_sourcing_name_get() };
+        if !sourcing_name3.is_null() {
+            unsafe { nvim_no_wait_return_incr() };
+            unsafe { verbose_enter_scroll() };
+            unsafe { smsg(0, c"continuing in %s".as_ptr(), sourcing_name3) };
+            unsafe { msg_puts(c"\n".as_ptr()) };
+            unsafe { verbose_leave_scroll() };
+            unsafe { nvim_no_wait_return_decr() };
+        }
+    }
+
+    // --- Teardown tail (checklist #23) ---
+    let did_emsg_final = unsafe { nvim_get_did_emsg() };
+    unsafe { nvim_set_did_emsg(did_emsg_final | save_did_emsg) };
+    CUF_DEPTH.store(CUF_DEPTH.load(Ordering::Relaxed) - 1, Ordering::Relaxed);
+
+    // Free default-arg tvs
+    for k in 0..tv_to_free_len {
+        unsafe { tv_clear(tv_to_free[k]) };
+    }
+
+    unsafe { rs_cleanup_function_call(fc) };
+
+    // If fp->uf_calls goes to 0 and uf_refcount <= 0, free the function
+    // Matches C: if (--fp->uf_calls <= 0 && fp->uf_refcount <= 0)
+    let calls = unsafe { nvim_ufunc_get_calls(fp) } - 1;
+    unsafe { nvim_ufunc_set_calls(fp, calls) };
+    if calls <= 0 && unsafe { nvim_ufunc_get_refcount(fp) } <= 0 {
+        unsafe { rs_func_clear_free(fp, 0) };
+    }
+
+    // Restore redo buffer and search patterns
+    if did_save_redo {
+        unsafe { restoreRedobuff(save_redo) };
+    }
+    unsafe { xfree(save_redo) };
+    unsafe { restore_search_patterns() };
 }

@@ -37,6 +37,7 @@ pub struct SctxT {
 // C Extern Declarations
 // =============================================================================
 
+#[allow(clashing_extern_declarations)]
 extern "C" {
     // ufunc_T field accessors (added to userfunc.c Phase 1)
     fn nvim_ufunc_get_name(fp: UfuncHandle) -> *const c_char;

@@ -1808,3 +1808,163 @@ void nvim_dictitem_set_tv_func(dictitem_T *di, const char *name, size_t namelen)
 void nvim_ufunc_dec_refcount(ufunc_T *fp) { if (fp) { (fp->uf_refcount)--; } }
 /// Get v_lock from a typval_T pointer.
 int nvim_tv_get_lock(const typval_T *tv) { return tv ? (int)tv->v_lock : 0; }
+
+/// Emit E132 error message (function call depth too high).
+void nvim_emsg_e132(void) { emsg(_("E132: Function call depth is higher than 'maxfuncdepth'")); }
+
+// === Phase call_user_func dictitem/tv field accessors (plan 5e037151) ===
+
+/// Set di->di_flags.
+void nvim_dictitem_set_flags(dictitem_T *di, int flags) { if (di) { di->di_flags = (char)flags; } }
+
+/// STRCPY(di->di_key, name) — copy name string into the di_key fixed buffer.
+void nvim_dictitem_strcpy_key(dictitem_T *di, const char *name) { if (di && name) { STRCPY(di->di_key, name); } }
+
+/// Return di->di_key as *const char (for hash_add).
+const char *nvim_dictitem_key_ptr(const dictitem_T *di) { return di ? di->di_key : NULL; }
+
+/// Assign *src (typval_T) into di->di_tv (struct copy, matching `v->di_tv = argvars[i]`).
+void nvim_dictitem_copy_tv(dictitem_T *di, const typval_T *src) { if (di && src) { di->di_tv = *src; } }
+
+/// Set di->di_tv.v_lock.
+void nvim_dictitem_tv_set_lock(dictitem_T *di, int lock) { if (di) { di->di_tv.v_lock = lock; } }
+
+/// Set di->di_tv.v_type.
+void nvim_dictitem_tv_set_type(dictitem_T *di, int vtype) { if (di) { di->di_tv.v_type = vtype; } }
+
+/// Set di->di_tv.vval.v_dict = dict (for l:self).
+void nvim_dictitem_tv_set_vval_dict(dictitem_T *di, dict_T *dict) { if (di) { di->di_tv.vval.v_dict = dict; } }
+
+/// Set di->di_tv.vval.v_list = list (for a:000).
+void nvim_dictitem_tv_set_vval_list(dictitem_T *di, list_T *list) { if (di) { di->di_tv.vval.v_list = list; } }
+
+/// Return &di->di_tv (pointer to the typval_T inside a dictitem).
+typval_T *nvim_dictitem_tv_ptr(dictitem_T *di) { return di ? &di->di_tv : NULL; }
+
+/// Return the ufunc_T* whose lines.ga_data[0] is used for lambda body.
+/// Returns *(char **)fp->uf_lines.ga_data + 7 (skip "return ").
+char *nvim_ufunc_lambda_body_ptr(ufunc_T *fp)
+{
+  return fp ? (*(char **)fp->uf_lines.ga_data + 7) : NULL;
+}
+
+/// snprintf(numbuf, NUMBUFLEN, "%d", ai+1) — format vararg name into buffer.
+/// Returns length written (not including NUL).
+int nvim_format_vararg_name(char *buf, size_t bufsz, int ai_plus_1)
+{
+  return snprintf(buf, bufsz, "%d", ai_plus_1);
+}
+
+/// Return NUMBUFLEN constant.
+int nvim_get_numbuflen(void) { return NUMBUFLEN; }
+
+/// Return VAR_DEF_SCOPE constant.
+int nvim_var_def_scope(void) { return VAR_DEF_SCOPE; }
+
+/// Return VAR_SCOPE constant.
+int nvim_var_scope(void) { return VAR_SCOPE; }
+
+/// Return VAR_FIXED lock value.
+int nvim_var_fixed(void) { return VAR_FIXED; }
+
+/// Return VAR_UNLOCKED lock value.
+int nvim_var_unlocked(void) { return VAR_UNLOCKED; }
+
+/// Return VAR_NUMBER v_type value.
+int nvim_var_number(void) { return VAR_NUMBER; }
+
+// nvim_var_dict and nvim_var_list already defined in vars.c (vars.c:1417/1420).
+
+/// Return FIXVAR_CNT constant.
+int nvim_fixvar_cnt(void) { return FIXVAR_CNT; }
+
+/// Return VAR_SHORT_LEN constant.
+int nvim_var_short_len(void) { return VAR_SHORT_LEN; }
+
+/// Return DI_FLAGS_RO | DI_FLAGS_FIX value.
+int nvim_di_flags_ro_fix(void) { return DI_FLAGS_RO | DI_FLAGS_FIX; }
+
+/// Return DI_FLAGS_RO | DI_FLAGS_FIX | DI_FLAGS_ALLOC — for heap alloc'd dictitems.
+int nvim_di_flags_ro_fix_alloc(void) { return DI_FLAGS_RO | DI_FLAGS_FIX; }
+
+/// Set di->di_flags |= (DI_FLAGS_RO | DI_FLAGS_FIX) for heap-alloc'd item.
+void nvim_dictitem_or_flags_ro_fix(dictitem_T *di) { if (di) { di->di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX; } }
+
+// === Phase call_user_func accessors (plan 5e037151) ===
+
+/// Return &fc->fc_fixvar[idx] (struct fixed-array index, macro-equivalent).
+dictitem_T *nvim_fc_fixvar_item(funccall_T *fc, int idx)
+{
+  return fc ? (dictitem_T *)&fc->fc_fixvar[idx] : NULL;
+}
+
+/// Return &fc->fc_l_listitems[ai] (struct fixed-array index for a:000 list).
+listitem_T *nvim_fc_listitem(funccall_T *fc, int ai)
+{
+  return fc ? &fc->fc_l_listitems[ai] : NULL;
+}
+
+/// Return TV_LIST_ITEM_TV(&fc->fc_l_listitems[ai]) (typval_T* of list item).
+typval_T *nvim_fc_listitem_tv(funccall_T *fc, int ai)
+{
+  return fc ? TV_LIST_ITEM_TV(&fc->fc_l_listitems[ai]) : NULL;
+}
+
+/// Set fc->fc_level.
+void nvim_fc_set_level(funccall_T *fc, int v) { if (fc) { fc->fc_level = v; } }
+
+/// Set current_sctx (global struct save/restore).
+void nvim_set_current_sctx(sctx_T s) { current_sctx = s; }
+
+/// Increment RedrawingDisabled.
+void nvim_redrawing_disabled_incr(void) { RedrawingDisabled++; }
+
+/// Decrement RedrawingDisabled.
+void nvim_redrawing_disabled_decr(void) { RedrawingDisabled--; }
+
+/// Increment no_wait_return.
+void nvim_no_wait_return_incr(void) { no_wait_return++; }
+
+/// Decrement no_wait_return.
+void nvim_no_wait_return_decr(void) { no_wait_return--; }
+
+/// Increment sandbox.
+void nvim_sandbox_incr(void) { sandbox++; }
+
+/// Decrement sandbox.
+void nvim_sandbox_decr(void) { sandbox--; }
+
+/// Increment ex_nesting_level.
+void nvim_ex_nesting_level_incr(void) { ex_nesting_level++; }
+
+/// Decrement ex_nesting_level.
+void nvim_ex_nesting_level_decr(void) { ex_nesting_level--; }
+
+/// Return trylevel.
+int nvim_get_trylevel(void) { return trylevel; }
+
+/// Increment fp->uf_calls.
+void nvim_ufunc_incr_calls(ufunc_T *fp) { if (fp) { fp->uf_calls++; } }
+
+/// Return sizeof(save_redo_T) for heap allocation from Rust.
+size_t nvim_sizeof_save_redo(void) { return sizeof(save_redo_T); }
+
+/// Return get_current_funccal() as void* (alias for use from call_user_func context).
+void *nvim_get_current_funccal_ptr(void) { return current_funccal; }
+
+/// Return ex_nesting_level.
+int nvim_get_ex_nesting_level(void) { return ex_nesting_level; }
+
+/// ga_init(&fc->fc_ufuncs, sizeof(ufunc_T*), 1) wrapper.
+void nvim_fc_ufuncs_ga_init_wrapper(funccall_T *fc) { if (fc) { ga_init(&fc->fc_ufuncs, sizeof(ufunc_T *), 1); } }
+
+// nvim_tv_list_set_lock already defined in eval_shim.c.
+
+/// Set fc->fc_l_avars.dv_lock.
+void nvim_fc_l_avars_set_lock(funccall_T *fc, int lock) { if (fc) { fc->fc_l_avars.dv_lock = lock; } }
+
+/// tv_list_append(&fc->fc_l_varlist, &fc->fc_l_listitems[ai]).
+void nvim_fc_listitem_append(funccall_T *fc, int ai, list_T *list)
+{
+  if (fc) { tv_list_append(list, &fc->fc_l_listitems[ai]); }
+}
