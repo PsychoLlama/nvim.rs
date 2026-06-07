@@ -47,8 +47,9 @@ use std::ffi::{c_char, c_int, c_void};
 const VAR_UNKNOWN: c_int = 0;
 const VAR_NUMBER: c_int = 1;
 const VAR_STRING: c_int = 2;
-const VAR_FLOAT: c_int = 3;
+const VAR_FLOAT: c_int = 6;
 // VAR_LIST, VAR_DICT, etc. — not needed for our switch
+const _: () = assert!(VAR_NUMBER == 1 && VAR_STRING == 2 && VAR_FLOAT == 6);
 
 // VAR_UNLOCKED = 0 (VarLockStatus)
 const VAR_UNLOCKED: c_int = 0;

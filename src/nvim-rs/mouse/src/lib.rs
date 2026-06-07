@@ -3686,7 +3686,8 @@ struct StlClickDefinition {
 }
 
 // typval_T type constants (from eval/typval_defs.h)
-const VAR_NUMBER: c_int = 4;
+// VAR_NUMBER (= 1) imported from nvim_eval::expr::constants
+use nvim_eval::expr::constants::VAR_NUMBER;
 const VAR_STRING: c_int = 2;
 // VarLockStatus VAR_FIXED = 1
 const VAR_FIXED: c_int = 1;

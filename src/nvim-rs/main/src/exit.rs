@@ -304,8 +304,9 @@ const EVENT_VIMLEAVE: c_int = 130;
 
 // VV_EXITING enum value (from eval_defs.h, 90th entry starting from VV_COUNT=0)
 const VV_EXITING: c_int = 90;
-// VAR_NUMBER typval type (from eval/typval_defs.h)
-const VAR_NUMBER: c_int = 4;
+// VAR_NUMBER typval type (from eval/typval_defs.h, VAR_NUMBER = 1)
+const VAR_NUMBER: c_int = 1;
+const _: () = assert!(VAR_NUMBER == 1);
 
 use std::ffi::c_char;
 

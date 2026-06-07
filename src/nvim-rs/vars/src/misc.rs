@@ -18,11 +18,14 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
-// VAR_STRING typval type constant (matches C VarType::VAR_STRING = 1)
-const VAR_STRING: c_int = 1;
+// VAR_STRING typval type constant (matches C VarType::VAR_STRING = 2)
+const VAR_STRING: c_int = nvim_typval::VarType::String as c_int;
+const _: () = assert!(VAR_STRING == 2);
 
-// Typval size in bytes (must match sizeof(typval_T) = 24)
-const TYPVAL_SIZE: usize = 24;
+// Typval size in bytes: int v_type (4) + int v_lock (4) + union vval (8) = 16
+// Must match sizeof(typval_T) in typval_defs.h (verified by register crate assert)
+const TYPVAL_SIZE: usize = 16;
+const _: () = assert!(TYPVAL_SIZE == 16);
 
 // OK / FAIL return codes
 const OK: c_int = 1;

@@ -51,8 +51,8 @@ const CMD_LADDEXPR: c_int = 216;
 const CMD_CEXPR: c_int = 64;
 const CMD_LEXPR: c_int = 232;
 
-// typval v_type values (from eval/typval_defs.h VAR_*)
-const VAR_STRING: c_int = 1;
+// VAR_STRING (= 2) imported from nvim_eval::expr::constants
+use nvim_eval::expr::constants::VAR_STRING;
 
 // Autocmd event constants (from auevents_enum.generated.h, validated by _Static_assert)
 const EVENT_QUICKFIXCMDPRE: c_int = 89;

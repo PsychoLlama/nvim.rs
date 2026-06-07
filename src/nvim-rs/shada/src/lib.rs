@@ -6799,8 +6799,10 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
     // v_type values
     const VAR_FUNC: c_int = 3;
     const VAR_PARTIAL: c_int = 9;
-    const VAR_DICT: c_int = 6;
-    const VAR_LIST: c_int = 5;
+    const VAR_DICT: c_int = 5;
+    const VAR_LIST: c_int = 4;
+    const _: () = assert!(VAR_DICT == 5);
+    const _: () = assert!(VAR_LIST == 4);
 
     let cur_timestamp = os_time();
     let mut var_iter: *const c_void = std::ptr::null();

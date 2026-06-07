@@ -49,8 +49,9 @@ static mut ccs: [u8; CCS_SIZE] = [0u8; CCS_SIZE];
 // VarType constants
 // =============================================================================
 
-/// VAR_LIST - list value type constant (from typval_defs.h)
-const VAR_LIST: c_int = 5;
+/// VAR_LIST - list value type constant (from typval_defs.h, VAR_LIST = 4)
+const VAR_LIST: c_int = 4;
+const _: () = assert!(VAR_LIST == 4);
 
 // =============================================================================
 // Opaque pointer types
