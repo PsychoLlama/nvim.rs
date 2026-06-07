@@ -83,6 +83,9 @@ extern bool rs_var_check_lock(int flags, const char *name, size_t name_len);
 extern bool rs_var_check_fixed(int flags, const char *name, size_t name_len);
 extern bool rs_var_wrong_func_name(const char *name, bool new_var);
 extern bool rs_valid_varname(const char *varname);
+// Phase 13: find_var_ht_dict replacement in Rust
+extern hashtab_T *rs_find_var_ht_dict(const char *name, size_t name_len,
+                                       const char **varname, dict_T **d);
 
 // v: variable accessor functions in Rust
 extern typval_T *rs_get_vim_var_tv(VimVarIndex idx);
@@ -809,87 +812,11 @@ dictitem_T *find_var(const char *const name, const size_t name_len, hashtab_T **
   return find_var_in_scoped_ht(name, name_len, no_autoload || htp != NULL);
 }
 
-/// Finds the dict (g:, l:, s:, …) and hashtable used for a variable.
-///
-/// Assigns SID if s: scope is accessed from Lua or anonymous Vimscript. #15994
-///
-/// @param[in]  name  Variable name, possibly with scope prefix.
-/// @param[in]  name_len  Variable name length.
-/// @param[out]  varname  Will be set to the start of the name without scope
-///                       prefix.
-/// @param[out]  d  Scope dictionary.
-///
-/// @return Scope hashtab, NULL if name is not valid.
+// find_var_ht_dict: implemented in Rust (src/nvim-rs/vars/src/lookup.rs).
+// Thin forwarder to rs_find_var_ht_dict; kept so set_var_const can still call it.
 static hashtab_T *find_var_ht_dict(const char *name, const size_t name_len, const char **varname,
                                    dict_T **d)
-{
-  *d = NULL;
-
-  if (name_len == 0) {
-    return NULL;
-  }
-  if (name_len == 1 || name[1] != ':') {
-    // name has implicit scope
-    if (name[0] == ':' || name[0] == AUTOLOAD_CHAR) {
-      // The name must not start with a colon or #.
-      return NULL;
-    }
-    *varname = name;
-
-    // "version" is "v:version" in all scopes
-    hashitem_T *hi = hash_find_len(&compat_hashtab, name, name_len);
-    if (!HASHITEM_EMPTY(hi)) {
-      return &compat_hashtab;
-    }
-
-    *d = get_funccal_local_dict();
-    if (*d != NULL) {  // local variable
-      goto end;
-    }
-
-    *d = get_globvar_dict();  // global variable
-    goto end;
-  }
-
-  *varname = name + 2;
-  if (*name == 'g') {  // global variable
-    *d = get_globvar_dict();
-  } else if (name_len > 2
-             && (memchr(name + 2, ':', name_len - 2) != NULL
-                 || memchr(name + 2, AUTOLOAD_CHAR, name_len - 2) != NULL)) {
-    // There must be no ':' or '#' in the rest of the name if g: was not used
-    return NULL;
-  }
-
-  if (*name == 'b') {  // buffer variable
-    *d = curbuf->b_vars;
-  } else if (*name == 'w') {  // window variable
-    *d = curwin->w_vars;
-  } else if (*name == 't') {  // tab page variable
-    *d = curtab->tp_vars;
-  } else if (*name == 'v') {  // v: variable
-    *d = get_vimvar_dict();
-  } else if (*name == 'a') {  // a: function argument
-    *d = get_funccal_args_dict();
-  } else if (*name == 'l') {  // l: local variable
-    *d = get_funccal_local_dict();
-  } else if (*name == 's'  // script variable
-             && (current_sctx.sc_sid > 0 || current_sctx.sc_sid == SID_STR
-                 || current_sctx.sc_sid == SID_LUA)
-             && current_sctx.sc_sid <= script_items.ga_len) {
-    // For anonymous scripts without a script item, create one now so script vars can be used
-    // Try to resolve lua filename & linenr so it can be shown in last-set messages.
-    nlua_set_sctx(&current_sctx);
-    if (current_sctx.sc_sid == SID_STR || current_sctx.sc_sid == SID_LUA) {
-      // Create SID if s: scope is accessed from Lua or anon Vimscript. #15994
-      new_script_item(NULL, &current_sctx.sc_sid);
-    }
-    *d = &SCRIPT_SV(current_sctx.sc_sid)->sv_dict;
-  }
-
-end:
-  return *d ? &(*d)->dv_hashtab : NULL;
-}
+{ return rs_find_var_ht_dict(name, name_len, varname, d); }
 
 /// Find the hashtable used for a variable
 ///
@@ -902,7 +829,7 @@ end:
 hashtab_T *find_var_ht(const char *name, const size_t name_len, const char **varname)
 {
   dict_T *d;
-  return find_var_ht_dict(name, name_len, varname, &d);
+  return rs_find_var_ht_dict(name, name_len, varname, &d);
 }
 
 /// @return  the string value of a (global/local) variable or
@@ -1339,6 +1266,23 @@ void *nvim_vars_curtab_winvar(void) { return &curtab->tp_winvar; }
 /// Return &SCRIPT_SV(sid)->sv_var (the s: scope dictitem for a given SID).
 void *nvim_vars_script_sv_var(int sid) { return &SCRIPT_SV(sid)->sv_var; }
 
+// Phase 13 (find_var_ht_dict): s: branch accessor - handles SID assignment and returns sv_dict.
+/// Resolve the script dict for the current s: scope, creating a SID if needed.
+/// Encapsulates the nlua_set_sctx / new_script_item side-effects (kept in C).
+/// Returns &SCRIPT_SV(sid)->sv_dict, or NULL if the s: scope is not valid.
+dict_T *nvim_vars_resolve_script_dict(void)
+{
+  int sid = current_sctx.sc_sid;
+  if (!((sid > 0 || sid == SID_STR || sid == SID_LUA) && sid <= script_items.ga_len)) {
+    return NULL;
+  }
+  nlua_set_sctx(&current_sctx);
+  if (current_sctx.sc_sid == SID_STR || current_sctx.sc_sid == SID_LUA) {
+    new_script_item(NULL, &current_sctx.sc_sid);
+  }
+  return &SCRIPT_SV(current_sctx.sc_sid)->sv_dict;
+}
+
 /// Get typval from dictitem.
 typval_T *nvim_dictitem_get_tv(dictitem_T *di)
 {
@@ -1560,11 +1504,6 @@ char *nvim_eap_call_getline(void *eap_void, int c, int indent)
 
 /// Get *eap->cmdlinep (the command line string for trim indent detection).
 const char *nvim_eap_get_cmdlinep_str(const void *eap) { return *((const exarg_T *)eap)->cmdlinep; }
-
-/// find_var_ht_dict wrapper for Rust FFI (static in C).
-/// Returns ht or NULL; sets *varname and *dict_out.
-void *nvim_vars_find_var_ht_dict(const char *name, size_t name_len, const char **varname, void **dict_out)
-{ return find_var_ht_dict(name, name_len, varname, (dict_T **)dict_out); }
 
 /// delete_var wrapper for Rust FFI (static in C).
 void nvim_vars_delete_var(void *ht, void *hi)

@@ -76,7 +76,7 @@ extern "C" {
     fn nvim_lval_inc_n1(lv: *mut c_void);
 
     // --- var lookup ---
-    fn nvim_vars_find_var_ht_dict(
+    fn rs_find_var_ht_dict(
         name: *const c_char,
         name_len: usize,
         varname: *mut *const c_char,
@@ -477,7 +477,7 @@ pub unsafe extern "C" fn rs_do_unlet(
 ) -> c_int {
     let mut varname: *const c_char = std::ptr::null();
     let mut dict_ptr: *mut c_void = std::ptr::null_mut();
-    let mut ht = nvim_vars_find_var_ht_dict(name, name_len, &mut varname, &mut dict_ptr);
+    let mut ht = rs_find_var_ht_dict(name, name_len, &mut varname, &mut dict_ptr);
     let dict = dict_ptr; // the containing dict
 
     if !ht.is_null() && !varname.is_null() && *varname != 0 {

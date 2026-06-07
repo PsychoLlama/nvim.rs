@@ -244,6 +244,9 @@ extern "C" {
     // Autoload
     fn script_autoload(name: *const c_char, name_len: usize, reload: bool) -> bool;
     fn aborting() -> bool;
+
+    // Phase 13 (find_var_ht_dict): s: branch accessor
+    fn nvim_vars_resolve_script_dict() -> DictHandle;
 }
 
 // =============================================================================
@@ -413,6 +416,93 @@ pub unsafe fn get_var_value_impl(name: *const c_char) -> *const c_char {
 // =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Find the hashtable and scope dictionary for a variable name.
+///
+/// Mirrors the C `find_var_ht_dict` function. The s: scope SID-creation
+/// side-effects are delegated to `nvim_vars_resolve_script_dict` (C accessor).
+///
+/// # Safety
+/// - `name` must be valid for `name_len` bytes
+/// - `varname` must be a valid output pointer
+/// - `d` must be a valid output pointer for a `dict_T*`
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_var_ht_dict(
+    name: *const c_char,
+    name_len: usize,
+    varname: *mut *const c_char,
+    d: *mut DictHandle,
+) -> HashtabHandle {
+    // Always initialize *d to NULL.
+    *d = DictHandle::null();
+
+    if name_len == 0 {
+        return HashtabHandle::null();
+    }
+
+    let name_slice = std::slice::from_raw_parts(name.cast::<u8>(), name_len);
+
+    // Implicit scope: no "x:" prefix (len==1, or second char is not ':')
+    if name_len == 1 || name_slice[1] != b':' {
+        // Name must not start with ':' or '#'
+        if name_slice[0] == b':' || name_slice[0] == AUTOLOAD_CHAR {
+            return HashtabHandle::null();
+        }
+        *varname = name;
+
+        // "version" is accessible without v: via the compat hashtab
+        let compat_ht = nvim_get_compat_hashtab();
+        let hi = hash_find_len(compat_ht, name, name_len);
+        if nvim_hashitem_empty(hi) == 0 {
+            // *d stays NULL (no owning dict for compat vars)
+            return compat_ht;
+        }
+
+        // Try function-local scope first, fall back to global
+        let local_dict = get_funccal_local_dict();
+        if !local_dict.is_null() {
+            *d = local_dict;
+        } else {
+            *d = get_globvar_dict();
+        }
+        // Fall through to `end` label equivalent below
+    } else {
+        // Explicit scope prefix ("x:...")
+        *varname = name.add(2);
+        let prefix_char = name_slice[0];
+
+        if prefix_char == b'g' {
+            *d = get_globvar_dict();
+        } else if name_len > 2
+            && (name_slice[2..].contains(&b':') || name_slice[2..].contains(&AUTOLOAD_CHAR))
+        {
+            // Non-g: scope with ':' or '#' in rest of name is illegal
+            return HashtabHandle::null();
+        }
+
+        // Dispatch on scope character for non-g: scopes
+        match prefix_char {
+            b'b' => *d = nvim_curbuf_get_vars(),
+            b'w' => *d = nvim_curwin_get_vars(),
+            b't' => *d = nvim_curtab_get_vars(),
+            b'v' => *d = get_vimvar_dict(),
+            b'a' => *d = get_funccal_args_dict(),
+            b'l' => *d = get_funccal_local_dict(),
+            b's' => {
+                // s: branch: SID creation is a C side-effect; delegate entirely
+                *d = nvim_vars_resolve_script_dict();
+            }
+            _ => {} // g: already handled above; unknown scopes leave *d=NULL
+        }
+    }
+
+    // Return the hashtab for the resolved dict (NULL if no dict)
+    if d.is_null() || (*d).is_null() {
+        HashtabHandle::null()
+    } else {
+        nvim_dict_get_hashtab(*d)
+    }
+}
 
 /// Find the hashtable for a variable name.
 ///
