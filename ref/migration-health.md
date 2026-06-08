@@ -116,6 +116,27 @@ system_spec HANG is real). `script/` dir PASSES 98/98 → the test runner itself
 ### Recommended fix order
 A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix codes) → E/F/G → H/I.
 
+### STATUS (updated 2026-06-08, fix waves in progress)
+- **Cluster A — FIXED** (commit 916bdf7d3b): root cause was `TV_SIZE=24` vs real 16 in the
+  `vars` crate (argvar stride corruption) + a null-`first` deref in `:let b:` + a msg_row
+  clamp. buf_functions 30/30, changedtick 10/10. Guard: test/buf_smoke.vim.
+- **Cluster C — FIXED** (commit 2fadb04b26): `tv_list_equal/tv_dict_equal/tv_blob_equal`
+  declared `-> c_int` but defined `-> bool` (x86-64 partial-register garbage). json 77/77,
+  msgpack 71/71.
+- **Cluster B — FIXED** (commit d596ba7ba8): wrong VarType magic numbers (5 vs VAR_STRING=2)
+  + NULL deref in setqflist/setloclist. All arg-validation tests green (the T9 hang is D).
+- **FFI Class A/B/C signature mismatches — FIXED** (commit 8ac4c7fe1d, 82 files): 59 bool/c_int
+  return-type symbols corrected + arena_alloc + operators.rs param. Also fixed **let_spec
+  CRASH → 9/9**. See ref/ffi-audit.md. REMAINING: Class D/E param mismatches (~170 sites, MEDIUM).
+- **Cluster D — STILL OPEN, genuine deadlocks** (NOT the text_locked ABI bug — that's fixed yet
+  hangs persist). Confirmed hangs: errorlist T9 (setloclist window-closed), map_functions T13
+  (mapset replace_keycodes), null T58 (complete() w/ NULL list), setpos (insert() in before_each),
+  window (set_buf in cmdwin), tabpage (set_win when textlocked), + whole dirs editor/lua/ui/etc.
+  Sub-themes: (a) insert/feedkeys/complete() event-loop, (b) cmdwin/textlock guards.
+- **Cluster H — partially open**: let_spec FIXED; ctx_functions still 5 FAIL (register/jumplist/
+  buflist round-trip), match_functions 1 FAIL (matchaddpos zero-length) + setmatches was CRASH
+  (recheck), editor/ctrl_c/fold, api/autocmd lambda.
+
 ## Lessons for executors (anti-patterns observed)
 
 - **Relocate-not-port** (wave 66, and the get_scriptname trampoline): moving C logic
