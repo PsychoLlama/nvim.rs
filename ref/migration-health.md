@@ -128,11 +128,17 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
 - **FFI Class A/B/C signature mismatches — FIXED** (commit 8ac4c7fe1d, 82 files): 59 bool/c_int
   return-type symbols corrected + arena_alloc + operators.rs param. Also fixed **let_spec
   CRASH → 9/9**. See ref/ffi-audit.md. REMAINING: Class D/E param mismatches (~170 sites, MEDIUM).
-- **Cluster D — STILL OPEN, genuine deadlocks** (NOT the text_locked ABI bug — that's fixed yet
-  hangs persist). Confirmed hangs: errorlist T9 (setloclist window-closed), map_functions T13
-  (mapset replace_keycodes), null T58 (complete() w/ NULL list), setpos (insert() in before_each),
-  window (set_buf in cmdwin), tabpage (set_win when textlocked), + whole dirs editor/lua/ui/etc.
-  Sub-themes: (a) insert/feedkeys/complete() event-loop, (b) cmdwin/textlock guards.
+- **Cluster D — insert/feedkeys sub-theme FIXED** (commit 5e7aed2dc0): `VimState` struct in
+  `edit/src/dispatch.rs` had `execute`/`check` fields in the WRONG ORDER vs `state_defs.h` /
+  `state/src/lib.rs`. `state_enter` reads by offset, so the check handler was called as the
+  execute handler — always returned "continue", spinning at 100% CPU in insert mode and never
+  consuming ESC → hang. One-line field-order swap. Unblocks every spec using `insert()` in setup.
+  setpos_spec now completes (5 tests, was a 200s hang). Guard: test/insert_smoke.vim.
+- **Cluster D — STILL OPEN, cmdwin/textlock sub-theme** (separate deadlock, persists after the
+  VimState fix): window (set_buf in cmdwin), tabpage (set_win when textlocked), errorlist T9
+  (setloclist window-closed), null T58 (complete() w/ NULL list), map_functions T13 (mapset
+  replace_keycodes). Need their own backtrace/root-cause. Re-run whole dirs (editor/lua/ui/etc.)
+  now that the insert-spin is gone — many may have been hanging only on the insert() spin.
 - **Cluster H — partially open**: let_spec FIXED; ctx_functions still 5 FAIL (register/jumplist/
   buflist round-trip), match_functions 1 FAIL (matchaddpos zero-length) + setmatches was CRASH
   (recheck), editor/ctrl_c/fold, api/autocmd lambda.
