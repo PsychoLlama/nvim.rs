@@ -46,27 +46,75 @@ Wired into `just smoke-test` (so `just check` now covers them):
   constants / adding compile-time guards. Commits `795f4403ef`, `a8ffac30c8`,
   `e4d6b49f15`.
 
-## OPEN functional-suite failures (triage needed) — found 2026-06-07
+## OPEN functional-suite failures — AUTHORITATIVE TRIAGE (2026-06-08)
 
-Partial run of `test/functional/vimscript/` (timed out / hung at `errorlist_spec`
-`setloclist` — itself a likely crash/hang regression; only ~7 of ~40 specs ran).
-Each needs root-cause + fix + a regression guard. Likely several share a root cause
-(as the VarType cluster did). **Verify each is a real product bug vs. a test-env
-artifact before fixing.**
+Two independent full triage passes (vimscript + api fully per-spec; core mostly;
+other dirs sampled) CORROBORATE the clusters below. The migration has pervasive,
+severe functional regressions invisible to `just check`. Fix-wave order is by
+leverage (a single root cause often clears a whole spec). Per-spec logs were saved
+under `/tmp/triage/` during the run (may be gone after reboot — re-run as needed).
 
-- `buf_functions_spec`: `getbufvar()` error-handling (T19, T20); `bufnr("$")` returns
-  wrong value (T27).
-- `ctx_functions_spec`: context stack — `ctxpush/ctxpop` register save/restore (T52),
-  jumplist save/restore (T53), `ctxget()` (T61), `ctxset()` (T64).
-- `errorlist_spec`: `setqflist()` `{action}`/`{what}` arg validation (T71, T74);
-  `setloclist()` `{action}` validation (T76); **possible hang/crash at T78**
-  ("setloclist doesn't crash when window closed in the middle #13721").
-- `api_functions_spec`: textlock not enforced for eval-API (T3); vim.vim syntax
-  highlight (T8 — may be test-env/runtime, verify).
+**Reproduce any spec:** `TEST_FILE=test/functional/<path>_spec.lua timeout -s 9 560 cmake --build build --target functionaltest 2>&1 | tail -n 80`
 
-**Not yet run** (the bulk of the suite): the rest of `vimscript/`, plus
-`test/functional/{api,editor,core,ui,lua,…}`. A full triage pass is warranted —
-run the whole suite, collect the failing-spec list, and group into fix waves.
+### Cluster A — `b:` / buffer-var → E908 "Using an invalid value as a String" [HIGH, clean]
+`getbufvar()`/`setbufvar()` and `b:changedtick` access wrongly raise E908 on valid
+input. Clears TWO specs. Likely wrong VarType/typval string-coercion in the migrated
+`vars` crate. Source leads: `src/nvim-rs/vars/src/viml_funcs.rs` (getbufvar/setbufvar),
+b:changedtick dict population.
+- `vimscript/buf_functions_spec.lua` (5 FAIL + 6 ERR), `vimscript/changedtick_spec.lua` (8 ERR).
+
+### Cluster B — quickfix arg-type validation emits wrong error code [HIGH, clean]
+`setqflist()`/`setloclist()` raise E731/E928 where E928/E715 expected (and vice-versa).
+Source confirmed: `src/nvim-rs/quickfix/src/api.rs:~2003`.
+- `vimscript/errorlist_spec.lua` (also HANGS, see D), `api/vim_spec.lua` nvim_call_function.
+
+### Cluster C — JSON/msgpack codec CRASHES nvim ("EOF received") [CRITICAL]
+`json_decode(list)` and `msgpackparse(systemlist(...))` hard-crash nvim; `json_encode`
+returns '' / wrong. One crash poisons 60+ tests via EOF cascade. Source:
+`src/nvim-rs/eval_codec/{decode,encode,json}.rs`.
+- `vimscript/json_functions_spec.lua` (10F + 62E), `vimscript/msgpack_functions_spec.lua` (3F + 11E).
+
+### Cluster D — HANGS / deadlocks (cmdwin · textlock · insert-completion · feedkeys) [CRITICAL]
+A spec that hangs loses ALL its remaining tests and blocks whole-directory runs.
+Strong shared sub-theme: **cmdwin + textlock guards**, and key-feeding that waits for
+input that never arrives. Confirmed hangs: `errorlist`(setloclist window-close #13721),
+`map_functions`(mapset replace_keycodes), `null`(complete()), `setpos`(at startup),
+`system`(mid-suite), core/`fileio`(symlink backup #11349), core/`path`(gf multibyte #20517),
+core/`remote`; api/`tabpage`(set_win when textlocked/cmdwin), api/`window`(set_buf in cmdwin),
+api/`buffer`(E315), api/`extmark`(undo #25147), api/`keymap`(nowait), api/`vim`(nvim_paste insert),
+editor/`completion`(v:completed_item), editor/`count`(v:count in cmdwin). Whole dirs that
+hang on an early spec: editor, options, lua, ui, autocmd, ex_cmds, shada, treesitter,
+plugin, terminal, legacy, provider. **Fixing the cmdwin/textlock deadlock likely clears several at once.**
+
+### Cluster E — keymap dict serialization round-trip mismatch [MEDIUM, single root]
+`nvim_get_keymap`/`nvim_set_keymap` round-trip returns a structurally different dict
+(~23 "Expected objects to be the same" in `api/keymap_spec.lua`). One fix → ~20 tests.
+
+### Cluster F — cursor/pos API rejects valid [row,col] [MEDIUM, clean]
+`Argument "pos" must be a [row, col] array` on valid input. `api/buffer_spec.lua` (6E),
+`vimscript/api_functions_spec.lua` eval-API.
+
+### Cluster G — Lua function marshalling [MEDIUM]
+`nvim_eval`/`nvim_call_function` return a Lua function as a string, not callable.
+`api/vim_spec.lua` ("can return Lua function to Lua code").
+
+### Cluster H — misc eval/ex-command (likely VarType family, shares A) [MEDIUM]
+`let_spec`(:let listing curly/subscript vars CRASH), `match_functions`(setmatches CRASH),
+`ctx_functions`(ctxpush/pop/get/set round-trip + buffer-list CRASH), editor/`ctrl_c`(:global E323),
+editor/`fold`(:fold filter E493), api/`autocmd`(lambda E117 / augroup delete CRASH).
+
+### Cluster I — startup / Ex-mode / stdin-tty [MEDIUM]
+`core/startup`(10F+19E: stdin/pipe, ttyin/ttyout, -es/-Es, exrc), `core/main`(-s, Ex-mode),
+`core/exit`(:cquit redir, v:exiting try-catch).
+
+### Likely test-env artifacts (verify, de-prioritize)
+Screen/redraw diff failures: `input_spec`(17F highlight), `screenchar_spec`(floating),
+`timer`, `execute`, api/`ui`, editor/`defaults` popupmenu — noisy, terminal/timing-sensitive.
+`system_spec` shell tests (SHELL=sh) and `environ`($HOME E108) partly env-dependent (but the
+system_spec HANG is real). `script/` dir PASSES 98/98 → the test runner itself is healthy.
+
+### Recommended fix order
+A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix codes) → E/F/G → H/I.
 
 ## Lessons for executors (anti-patterns observed)
 
