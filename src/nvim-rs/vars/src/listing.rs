@@ -467,7 +467,7 @@ pub unsafe extern "C" fn rs_list_hashtable_vars(
 // =============================================================================
 
 // Constants
-const TYPVAL_SIZE: usize = 24;
+const TYPVAL_SIZE: usize = 16; // sizeof(typval_T) — verified by _Static_assert in testing_shim.c
 const FNE_INCL_BR: c_int = 1;
 const FNE_CHECK_START: c_int = 2;
 const OK: c_int = 1;

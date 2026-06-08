@@ -58,6 +58,7 @@ smoke-test:
     @just smoke-test-regexp
     @just smoke-test-throw
     @just smoke-test-types
+    @just smoke-test-buf
 
 smoke-test-run:
     NVIM=./build/bin/nvim VIMRUNTIME=./runtime timeout -s 9 30 expect scripts/open_file.exp justfile just || { echo "FAIL: nvim startup smoke test timed out or failed (exit $?)"; exit 1; }
@@ -70,6 +71,9 @@ smoke-test-throw:
 
 smoke-test-types:
     timeout -s 9 15 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/type_smoke.vim 2>&1' || { echo "FAIL: type smoke test timed out or failed (exit $?)"; exit 1; }
+
+smoke-test-buf:
+    timeout -s 9 15 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/buf_smoke.vim 2>&1' || { echo "FAIL: buf smoke test timed out or failed (exit $?)"; exit 1; }
 
 # Show nvim version
 version:

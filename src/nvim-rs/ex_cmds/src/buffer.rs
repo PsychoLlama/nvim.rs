@@ -17,33 +17,37 @@ use std::ffi::{c_char, c_int};
 // =============================================================================
 
 /// Action to perform on a buffer.
+///
+/// Numeric values MUST match `DOBUF_*` constants in `buffer.h`:
+/// `GOTO=0, SPLIT=1, UNLOAD=2, DEL=3, WIPE=4`.
+/// Verified by `_Static_assert(DOBUF_WIPE == 4)` in `buffer.c`.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BufferAction {
-    /// Switch to buffer (:buffer, :sbuffer)
+    /// Switch/goto buffer (`:buffer`, `:sbuffer`) — `DOBUF_GOTO` = 0
     #[default]
     Switch = 0,
-    /// Unload buffer (:bunload)
-    Unload = 1,
-    /// Delete buffer (:bdelete)
-    Delete = 2,
-    /// Wipe buffer (:bwipeout)
-    Wipe = 3,
+    /// Unload buffer (`:bunload`) — `DOBUF_UNLOAD` = 2
+    Unload = 2,
+    /// Delete buffer (`:bdelete`) — `DOBUF_DEL` = 3
+    Delete = 3,
+    /// Wipe buffer (`:bwipeout`) — `DOBUF_WIPE` = 4
+    Wipe = 4,
 }
 
 impl BufferAction {
-    /// Create from raw integer (matching DOBUF_* constants).
+    /// Create from raw `DOBUF_*` integer constant.
     #[must_use]
     pub const fn from_raw(value: c_int) -> Self {
         match value {
-            1 => Self::Unload,
-            2 => Self::Delete,
-            3 => Self::Wipe,
+            2 => Self::Unload,
+            3 => Self::Delete,
+            4 => Self::Wipe,
             _ => Self::Switch,
         }
     }
 
-    /// Convert to raw integer.
+    /// Convert to raw `DOBUF_*` integer constant.
     #[must_use]
     pub const fn to_raw(self) -> c_int {
         self as c_int
@@ -61,6 +65,12 @@ impl BufferAction {
         matches!(self, Self::Wipe)
     }
 }
+
+// Compile-time guards: verify DOBUF_* constant values match buffer.h.
+// C side: `_Static_assert(DOBUF_WIPE == 4, ...)` in buffer.c.
+const _: () = assert!(BufferAction::Unload as i32 == 2, "DOBUF_UNLOAD must be 2");
+const _: () = assert!(BufferAction::Delete as i32 == 3, "DOBUF_DEL must be 3");
+const _: () = assert!(BufferAction::Wipe as i32 == 4, "DOBUF_WIPE must be 4");
 
 // =============================================================================
 // Buffer List Flags
@@ -513,10 +523,15 @@ mod tests {
 
     #[test]
     fn test_buffer_action_roundtrip() {
-        for i in 0..4 {
-            let action = BufferAction::from_raw(i);
-            assert_eq!(action.to_raw(), i);
-        }
+        // DOBUF_* constants: GOTO=0, SPLIT=1 (not an action), UNLOAD=2, DEL=3, WIPE=4.
+        // Values 0 and 1 both map to Switch (=0), so roundtrip only works for
+        // the canonical action values used by close_buffer.
+        assert_eq!(BufferAction::from_raw(0).to_raw(), 0); // Switch
+        assert_eq!(BufferAction::from_raw(2).to_raw(), 2); // Unload
+        assert_eq!(BufferAction::from_raw(3).to_raw(), 3); // Delete
+        assert_eq!(BufferAction::from_raw(4).to_raw(), 4); // Wipe
+                                                           // Value 1 (DOBUF_SPLIT) is not used for close_buffer; maps to Switch.
+        assert_eq!(BufferAction::from_raw(1), BufferAction::Switch);
     }
 
     #[test]
@@ -611,8 +626,9 @@ mod tests {
 
     #[test]
     fn test_ffi_wrappers() {
-        assert_eq!(rs_buffer_action_removes_from_list(2), 1);
-        assert_eq!(rs_buffer_action_removes_from_list(0), 0);
+        assert_eq!(rs_buffer_action_removes_from_list(3), 1); // Delete removes from list
+        assert_eq!(rs_buffer_action_removes_from_list(2), 0); // Unload does not remove from list
+        assert_eq!(rs_buffer_action_removes_from_list(0), 0); // Switch does not remove from list
         assert_eq!(rs_calc_next_bufnr(5, 1, 10, 0), 6);
     }
 }

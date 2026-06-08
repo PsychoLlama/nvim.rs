@@ -658,6 +658,15 @@ pub unsafe extern "C" fn rs_msg_puts_display(
             if msg_row_pending >= 0 {
                 crate::display::rs_msg_line_flush();
             }
+            // Clamp msg_row so the adjusted row (msg_row + row_offset) is
+            // never negative. row_offset == -msg_grid_pos, so if msg_row <
+            // msg_grid_pos the underlying screengrid row would be < 0, which
+            // causes grid_line_flush_if_valid_row to abort with redrawdebug=invalid.
+            // This mirrors the identical clamp in msg_clr_eos_force.
+            let min_row = (-msg_grid_adj.row_offset).max(0);
+            if msg_row < min_row {
+                msg_row = min_row;
+            }
             grid_line_start(std::ptr::addr_of_mut!(msg_grid_adj).cast(), msg_row);
             msg_row_pending = msg_row;
         }

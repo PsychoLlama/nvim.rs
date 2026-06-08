@@ -119,34 +119,38 @@ pub mod buf_flags {
     pub const BF_DUMMY: c_int = 0x80;
 }
 
-/// Buffer action types for `close_buffer`
+/// Buffer action types for `close_buffer`.
+///
+/// Numeric values MUST match `DOBUF_*` constants in `buffer.h`:
+/// `GOTO=0, SPLIT=1, UNLOAD=2, DEL=3, WIPE=4`.
+/// Verified by `_Static_assert(DOBUF_WIPE == 4)` in `buffer.c`.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BufferAction {
-    /// Don't unload the buffer
+    /// Don't unload the buffer — `DOBUF_GOTO` = 0
     #[default]
     None = 0,
-    /// Unload the buffer
-    Unload = 1,
-    /// Delete the buffer
-    Delete = 2,
-    /// Wipe the buffer completely
-    Wipe = 3,
+    /// Unload the buffer — `DOBUF_UNLOAD` = 2
+    Unload = 2,
+    /// Delete the buffer — `DOBUF_DEL` = 3
+    Delete = 3,
+    /// Wipe the buffer completely — `DOBUF_WIPE` = 4
+    Wipe = 4,
 }
 
 impl BufferAction {
-    /// Create from raw integer (matching `DOBUF_*` constants)
+    /// Create from raw `DOBUF_*` integer constant.
     #[must_use]
     pub const fn from_raw(value: c_int) -> Self {
         match value {
-            1 => Self::Unload,
-            2 => Self::Delete,
-            3 => Self::Wipe,
+            2 => Self::Unload,
+            3 => Self::Delete,
+            4 => Self::Wipe,
             _ => Self::None,
         }
     }
 
-    /// Convert to raw integer
+    /// Convert to raw `DOBUF_*` integer constant.
     #[must_use]
     pub const fn to_raw(self) -> c_int {
         self as c_int
@@ -170,6 +174,12 @@ impl BufferAction {
         matches!(self, Self::Wipe)
     }
 }
+
+// Compile-time guards: verify DOBUF_* constant values match buffer.h.
+// C side: `_Static_assert(DOBUF_WIPE == 4, ...)` in buffer.c.
+const _: () = assert!(BufferAction::Unload as i32 == 2, "DOBUF_UNLOAD must be 2");
+const _: () = assert!(BufferAction::Delete as i32 == 3, "DOBUF_DEL must be 3");
+const _: () = assert!(BufferAction::Wipe as i32 == 4, "DOBUF_WIPE must be 4");
 
 // =============================================================================
 // Buffer Lifecycle State
@@ -2620,10 +2630,14 @@ mod tests {
 
     #[test]
     fn test_buffer_action_roundtrip() {
-        for i in 0..4 {
-            let action = BufferAction::from_raw(i);
-            assert_eq!(action.to_raw(), i);
-        }
+        // DOBUF_* constants: GOTO=0, SPLIT=1, UNLOAD=2, DEL=3, WIPE=4.
+        // Only the canonical action values round-trip; 1 maps to None (=0).
+        assert_eq!(BufferAction::from_raw(0).to_raw(), 0);
+        assert_eq!(BufferAction::from_raw(2).to_raw(), 2);
+        assert_eq!(BufferAction::from_raw(3).to_raw(), 3);
+        assert_eq!(BufferAction::from_raw(4).to_raw(), 4);
+        // Value 1 (DOBUF_SPLIT) is not used for close_buffer; maps to None.
+        assert_eq!(BufferAction::from_raw(1), BufferAction::None);
     }
 
     #[test]

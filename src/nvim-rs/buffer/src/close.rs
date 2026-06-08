@@ -264,10 +264,11 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
 ///
 /// - `win`: If not NULL, set `b_last_cursor`.
 /// - `action`: What to do when there is no longer a window for the buffer:
-///   - 0 (`DOBUF_NONE`):   buffer becomes hidden
-///   - 1 (`DOBUF_UNLOAD`): buffer is unloaded
-///   - 2 (`DOBUF_DEL`):    buffer is unloaded and removed from buffer list
-///   - 3 (`DOBUF_WIPE`):   buffer is unloaded and really deleted
+///   - 0 (`DOBUF_GOTO`):   buffer becomes hidden
+///   - 2 (`DOBUF_UNLOAD`): buffer is unloaded
+///   - 3 (`DOBUF_DEL`):    buffer is unloaded and removed from buffer list
+///   - 4 (`DOBUF_WIPE`):   buffer is unloaded and really deleted
+///     Constants match `buffer.h`; see `_Static_assert(DOBUF_WIPE == 4)` in `buffer.c`.
 ///
 ///   The `bufhidden` option can force freeing and deleting.
 /// - `abort_if_last`: If true, do not close the buffer if autocommands cause
@@ -289,9 +290,11 @@ pub unsafe extern "C" fn rs_close_buffer(
     ignore_abort: bool,
 ) -> bool {
     let action = rs_buf_effective_action(buf, action);
-    let unload_buf = action != 0;
-    let del_buf = action == 2 || action == 3; // DOBUF_DEL || DOBUF_WIPE
-    let wipe_buf = action == 3; // DOBUF_WIPE
+    // DOBUF_* constants (from buffer.h): GOTO=0, SPLIT=1, UNLOAD=2, DEL=3, WIPE=4.
+    // Verified by _Static_assert(DOBUF_WIPE == 4) in buffer.c.
+    let unload_buf = action >= 2; // DOBUF_UNLOAD, DOBUF_DEL, or DOBUF_WIPE
+    let del_buf = action == 3 || action == 4; // DOBUF_DEL || DOBUF_WIPE
+    let wipe_buf = action == 4; // DOBUF_WIPE
 
     let the_curwin = nvim_get_curwin();
     let is_curwin = !the_curwin.is_null() && nvim_win_get_buffer(the_curwin) == buf;

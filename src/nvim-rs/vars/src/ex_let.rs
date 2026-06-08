@@ -27,7 +27,7 @@ const FAIL: c_int = 0;
 const NUL: u8 = 0;
 
 // Typval size (must match C's sizeof(typval_T))
-const TYPVAL_SIZE: usize = 24;
+const TYPVAL_SIZE: usize = 16; // verified by _Static_assert in testing_shim.c
 
 // TypvalT v_type initial value (VAR_UNKNOWN)
 const VAR_UNKNOWN: c_int = 0;
@@ -153,8 +153,9 @@ pub unsafe extern "C" fn rs_ex_let(eap: *mut c_void) {
         if *arg == b'[' as c_char {
             emsg(nvim_vars_e_invarg());
         } else if !nvim_ends_excmd_char(c_int::from(*arg as u8)) {
-            // `:let var1 var2`
-            arg = rs_list_arg_vars(eap, arg, std::ptr::null_mut()) as *mut c_char;
+            // `:let var1 var2` — first=1 means "start of listing" (no preceding newline)
+            let mut first: c_int = 1;
+            arg = rs_list_arg_vars(eap, arg, &raw mut first) as *mut c_char;
         } else if nvim_eap_get_skip_val(eap) == 0 {
             // `:let`
             let mut first: c_int = 1;

@@ -318,9 +318,8 @@ pub unsafe extern "C" fn rs_get_var_from(
 unsafe fn getwinvar(argvars: *mut c_void, rettv: *mut c_void, off: usize) {
     // argvars is an array of typval_T; each is sizeof(typval_T) bytes apart.
     // We access them by offset. But since typval_T is opaque, we use C helpers.
-    // Strategy: cast argvars to *mut u8 and compute offsets manually.
-    // typval_T size = 24 bytes (from existing code patterns).
-    const TV_SIZE: usize = 24;
+    // sizeof(typval_T) == 16: confirmed by _Static_assert in testing_shim.c.
+    const TV_SIZE: usize = 16;
 
     let tp: *mut c_void = if off == 1 {
         let arg0 = (argvars as *mut u8).add(0) as *mut c_void;
@@ -355,7 +354,8 @@ unsafe fn setwinvar(argvars: *mut c_void, off: usize) {
         return;
     }
 
-    const TV_SIZE: usize = 24;
+    // sizeof(typval_T) == 16: confirmed by _Static_assert in testing_shim.c.
+    const TV_SIZE: usize = 16;
 
     let tp: *mut c_void = if off == 1 {
         let arg0 = (argvars as *mut u8).add(0) as *mut c_void;
@@ -420,7 +420,8 @@ unsafe fn setwinvar(argvars: *mut c_void, off: usize) {
 /// argvars must be a valid typval_T array with at least 3 elements.
 #[no_mangle]
 pub unsafe extern "C" fn rs_f_gettabvar(argvars: *mut c_void, rettv: *mut c_void) {
-    const TV_SIZE: usize = 24;
+    // sizeof(typval_T) == 16: confirmed by _Static_assert in testing_shim.c.
+    const TV_SIZE: usize = 16;
 
     let arg0 = argvars as *mut c_void;
     let arg1 = (argvars as *mut u8).add(TV_SIZE) as *const c_void;
@@ -476,7 +477,8 @@ pub unsafe extern "C" fn rs_f_getwinvar(argvars: *mut c_void, rettv: *mut c_void
 /// argvars must be a valid typval_T array with at least 3 elements.
 #[no_mangle]
 pub unsafe extern "C" fn rs_f_getbufvar(argvars: *mut c_void, rettv: *mut c_void) {
-    const TV_SIZE: usize = 24;
+    // sizeof(typval_T) == 16: confirmed by _Static_assert in testing_shim.c.
+    const TV_SIZE: usize = 16;
 
     let arg0 = argvars as *const c_void;
     let arg1 = (argvars as *mut u8).add(TV_SIZE) as *const c_void;
@@ -501,7 +503,8 @@ pub unsafe extern "C" fn rs_f_settabvar(argvars: *mut c_void) {
         return;
     }
 
-    const TV_SIZE: usize = 24;
+    // sizeof(typval_T) == 16: confirmed by _Static_assert in testing_shim.c.
+    const TV_SIZE: usize = 16;
     let arg0 = argvars as *mut c_void;
     let arg1 = (argvars as *mut u8).add(TV_SIZE) as *const c_void;
     let arg2 = (argvars as *mut u8).add(2 * TV_SIZE) as *mut c_void;
@@ -568,7 +571,8 @@ pub unsafe extern "C" fn rs_f_setwinvar(argvars: *mut c_void) {
 /// argvars must be a valid typval_T array with at least 3 elements.
 #[no_mangle]
 pub unsafe extern "C" fn rs_f_setbufvar(argvars: *mut c_void) {
-    const TV_SIZE: usize = 24;
+    // sizeof(typval_T) == 16: confirmed by _Static_assert in testing_shim.c.
+    const TV_SIZE: usize = 16;
     let arg0 = argvars as *const c_void;
     let arg1 = (argvars as *mut u8).add(TV_SIZE) as *const c_void;
     let arg2 = (argvars as *mut u8).add(2 * TV_SIZE) as *mut c_void;
