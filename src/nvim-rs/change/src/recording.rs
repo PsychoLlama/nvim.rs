@@ -30,7 +30,7 @@ extern "C" {
     fn nvim_get_highlight_match() -> c_int;
     fn nvim_set_highlight_match(val: c_int);
     #[link_name = "curbufIsChanged"]
-    fn nvim_curbufIsChanged() -> c_int;
+    fn nvim_curbufIsChanged() -> bool;
 
     // Message functions
     #[link_name = "msg_start"]
@@ -127,7 +127,7 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         if buf_ref(buf).b_did_warn != 0 {
             return;
         }
-        if nvim_curbufIsChanged() != 0 {
+        if nvim_curbufIsChanged() {
             return;
         }
         if nvim_get_autocmd_busy() {

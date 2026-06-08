@@ -78,7 +78,7 @@ extern "C" {
     fn hl_invalidate_blends();
     static mut p_pb: OptInt;
     fn nvim_callback_set_pum_grid_blending(value: c_int);
-    fn pum_drawn() -> c_int;
+    fn pum_drawn() -> bool;
     fn pum_redraw();
 
     // Textwidth helper
@@ -292,7 +292,7 @@ pub extern "C" fn rs_did_set_pumblend(_args: *mut c_void) -> CallbackResult {
         hl_invalidate_blends();
         let pb = p_pb;
         nvim_callback_set_pum_grid_blending(c_int::from(pb > 0));
-        if pum_drawn() != 0 {
+        if pum_drawn() {
             pum_redraw();
         }
     }

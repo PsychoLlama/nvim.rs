@@ -55,7 +55,7 @@ extern "C" {
     fn nvim_get_p_paste() -> c_int;
     fn nvim_get_no_abbr() -> c_int;
     fn nvim_get_arrow_used() -> c_int;
-    fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> c_int;
+    fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> bool;
     fn get_cursor_line_ptr() -> *mut c_char;
     fn nvim_get_Insstart_lnum() -> LinenrT;
     fn nvim_get_Insstart_col() -> ColnrT;
@@ -182,7 +182,7 @@ unsafe fn echeck_abbr_impl(c: c_int) -> bool {
         0
     };
 
-    check_abbr(c, get_cursor_line_ptr(), cursor_col, mincol) != 0
+    check_abbr(c, get_cursor_line_ptr(), cursor_col, mincol)
 }
 
 #[must_use]

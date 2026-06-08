@@ -148,7 +148,7 @@ extern "C" {
         use_formatoptions: bool,
         setmark: bool,
     ) -> c_int;
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn nvim_docmd_ex_may_print_impl(eap: *mut ExArgHandle);
     fn save_re_pat(idx: c_int, pat: *mut c_char, patlen: usize, magic: c_int);
     fn add_to_history(
@@ -162,7 +162,7 @@ extern "C" {
 
     // do_sub_msg FFI -- control flow in Rust, formatting/messaging in C
     /// Return messaging() result (1 = messaging on, 0 = off).
-    fn messaging() -> c_int;
+    fn messaging() -> bool;
     /// Format and display the substitution count message (NGETTEXT in C).
     /// Returns true if message was displayed.
     fn nvim_excmds_format_sub_msg(count_only: c_int, nsubs: c_int, nlines: c_int) -> c_int;
@@ -690,7 +690,7 @@ pub unsafe extern "C" fn rs_do_sub_msg(count_only: bool) -> bool {
     let cur_nlines = crate::sub_nlines;
     let p_report = crate::p_report;
     let key_typed = crate::KeyTyped;
-    let messaging = messaging() != 0;
+    let messaging = messaging();
     let got_int = crate::got_int;
 
     let threshold_met = (cur_nsubs as i64 > p_report
@@ -1729,7 +1729,7 @@ pub unsafe extern "C" fn rs_do_sub(
     let mut lnum = nvim_exarg_get_line1(eap);
     while lnum <= line2
         && !got_quit
-        && aborting() == 0
+        && !aborting()
         && (cmdpreview_ns <= 0
             || preview_lines.lines_needed <= p_cwh as c_int
             || lnum <= nvim_curwin_get_w_botline())
@@ -2200,7 +2200,7 @@ pub unsafe extern "C" fn rs_do_sub(
     let mut retv: c_int = 0;
 
     // Show inccommand preview
-    if cmdpreview_ns > 0 && aborting() == 0 {
+    if cmdpreview_ns > 0 && !aborting() {
         if got_quit || rs_profile_passed_limit(timeout) {
             nvim_excmds_disable_inccommand();
         } else if !p_icm.is_null() && *p_icm != 0 && !pat.is_null() {
@@ -2551,7 +2551,7 @@ unsafe fn goto_sub_main(
     subflags.do_number = subflags_save.do_number;
     subflags.do_ic = subflags_save.do_ic;
 
-    if sublen == 0 || aborting() != 0 || subflags.do_count {
+    if sublen == 0 || aborting() || subflags.do_count {
         nvim_curbuf_set_b_p_ma(save_ma);
         nvim_dec_sandbox();
         // Undo sandbox increment

@@ -29,14 +29,14 @@ extern "C" {
     fn nvim_tabpage_get_curwin(tp: TabpageHandle) -> WinHandle;
     fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_focusable(wp: WinHandle) -> c_int;
-    fn nvim_win_get_config_external(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_external(wp: WinHandle) -> bool;
     fn nvim_buf_get_locked(buf: BufHandle) -> c_int;
     fn nvim_redraw_all_later(type_: c_int);
 
     // --- Existing Rust FFI helpers ---
     fn rs_last_window(win: WinHandle) -> c_int;
     #[link_name = "is_aucmd_win"]
-    fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
+    fn rs_is_aucmd_win(wp: WinHandle) -> bool;
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
     fn rs_win_valid_any_tab(win: WinHandle) -> c_int;
     fn rs_bt_quickfix(buf: BufHandle) -> bool;
@@ -89,7 +89,7 @@ extern "C" {
     ) -> c_int;
     fn win_float_find_altwin(win: WinHandle, tp: TabpageHandle) -> WinHandle;
     fn nvim_apply_autocmds_event(event: std::ffi::c_int);
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 }
 
 // =============================================================================
@@ -172,13 +172,13 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         // Re-check conditions to emit the right message (mirrors C logic).
         if rs_last_window(win) != 0 {
             nvim_emsg_id(EMSG_E444);
-        } else if rs_is_aucmd_win(win) != 0 {
+        } else if rs_is_aucmd_win(win) {
             nvim_emsg_id(EMSG_E_AUTOCMD_CLOSE);
         } else {
             let lastwin = nvim_get_lastwin();
             if win_ref(lastwin).w_floating
                 && rs_one_window_in_tab(win, TabpageHandle::null()) != 0
-                && rs_is_aucmd_win(lastwin) != 0
+                && rs_is_aucmd_win(lastwin)
             {
                 nvim_emsg_id(EMSG_E814);
             }
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         if rs_last_window(win) != 0 {
             return 1; // FAIL
         }
-        if aborting() != 0 {
+        if aborting() {
             return 1; // FAIL
         }
     }
@@ -399,14 +399,14 @@ pub extern "C" fn rs_win_close_validate(win: WinHandle, _free_buf: c_int, _force
         }
 
         // Cannot close aucmd window.
-        if rs_is_aucmd_win(win) != 0 {
+        if rs_is_aucmd_win(win) {
             return 1;
         }
 
         // Check if closing would leave only floating windows.
         let lastwin = nvim_get_lastwin();
         if win_ref(lastwin).w_floating && rs_one_window_in_tab(win, TabpageHandle::null()) != 0 {
-            if rs_is_aucmd_win(lastwin) != 0 {
+            if rs_is_aucmd_win(lastwin) {
                 // E814
                 return 1;
             }
@@ -454,7 +454,7 @@ pub extern "C" fn rs_win_close_structural(
         if was_floating {
             nvim_ui_comp_remove_grid_win(win);
             // Fix external window curwin references in other tabpages.
-            if nvim_win_get_config_external(win) != 0 {
+            if nvim_win_get_config_external(win) {
                 fixup_external_curwin(win);
             }
         }

@@ -254,7 +254,7 @@ extern "C" {
     fn nvim_docmd_curbuf_file_id_valid() -> c_int;
     fn nvim_docmd_get_curbuf_sfname() -> *const c_char;
     fn path_fnamecmp(s1: *const c_char, s2: *const c_char) -> c_int;
-    fn otherfile(fname: *const c_char) -> c_int;
+    fn otherfile(fname: *const c_char) -> bool;
 
     // Phase 3: changedir_func helpers
     fn nvim_allbuf_locked() -> bool;
@@ -750,7 +750,7 @@ pub unsafe extern "C" fn rs_is_other_file(fnum: c_int, ffname: *const c_char) ->
         }
     }
 
-    otherfile(ffname)
+    c_int::from(otherfile(ffname))
 }
 
 // =============================================================================
@@ -2421,7 +2421,7 @@ extern "C" {
     fn cmd_vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
     fn nvim_docmd_do_cmdline_getexline();
     fn do_execreg(regname: c_int, colon: c_int, addcr: c_int, silent: c_int) -> c_int;
-    fn stuff_empty() -> c_int;
+    fn stuff_empty() -> bool;
     static mut exec_from_reg: bool;
 
     // Phase 18: ex_exit, ex_resize, ex_cd helpers
@@ -2825,7 +2825,7 @@ pub unsafe extern "C" fn rs_ex_at(eap: ExArgHandle) {
     // Execute from the typeahead buffer.
     // Continue until the stuff buffer is empty and all added characters
     // have been consumed.
-    while stuff_empty() == 0 || nvim_docmd_typebuf_tb_len() > prev_len {
+    while !stuff_empty() || nvim_docmd_typebuf_tb_len() > prev_len {
         nvim_docmd_do_cmdline_getexline();
     }
 

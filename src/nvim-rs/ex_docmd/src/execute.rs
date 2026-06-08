@@ -351,7 +351,7 @@ extern "C" {
     fn undo_cmdmod(cmod: *mut c_void);
     static mut cmdmod: u8;
     fn nvim_curbuf_modifiable() -> bool;
-    fn curbuf_locked() -> c_int;
+    fn curbuf_locked() -> bool;
     static cmdwin_type: c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
     fn text_locked() -> bool;
@@ -738,7 +738,7 @@ pub unsafe extern "C" fn rs_execute_cmd(
         && (*eap).cmdidx != crate::commands::CMD_EDIT
         && !((*eap).cmdidx == crate::commands::CMD_FILE && *(*eap).arg == 0)
         && (*eap).cmdidx >= 0
-        && curbuf_locked() != 0
+        && curbuf_locked()
     {
         goto_end_ret(errormsg, save_buf, eap, cmdinfo, retv);
         return retv;

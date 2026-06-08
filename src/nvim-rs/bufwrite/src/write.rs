@@ -146,7 +146,7 @@ extern "C" {
     // Global state
     fn nvim_bw_get_cmdmod_cmod_flags() -> c_int;
     #[link_name = "aborting"]
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     // Options
     fn nvim_bw_cpo_contains(c: c_int) -> c_int;
@@ -195,7 +195,7 @@ extern "C" {
     fn nvim_bw_set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> c_int;
     fn nvim_bw_vim_tempname() -> *mut c_char;
     #[link_name = "match_file_list"]
-    fn match_file_list(list: *const c_char, sfname: *const c_char, ffname: *const c_char) -> c_int;
+    fn match_file_list(list: *const c_char, sfname: *const c_char, ffname: *const c_char) -> bool;
     #[link_name = "os_path_exists"]
     fn os_path_exists(path: *const c_char) -> bool;
     #[link_name = "vim_rename"]
@@ -323,7 +323,7 @@ extern "C" {
         dst: *const c_char,
     ) -> c_int;
     #[link_name = "should_abort"]
-    fn should_abort(retval: c_int) -> c_int;
+    fn should_abort(retval: c_int) -> bool;
 
     // I/O
     fn nvim_bw_write_eintr_direct(fd: c_int, buf: *const c_char, len: usize) -> c_int;
@@ -647,7 +647,7 @@ pub unsafe extern "C" fn rs_buf_write(
         unsafe { p_wb != 0 } || unsafe { p_bk != 0 } || !unsafe { c_str_empty(pm_val) };
     if dobackup
         && !unsafe { c_str_empty(p_bsk) }
-        && unsafe { match_file_list(p_bsk, sfname, ffname) } != 0
+        && unsafe { match_file_list(p_bsk, sfname, ffname) }
     {
         dobackup = false;
     }
@@ -1621,7 +1621,7 @@ pub unsafe extern "C" fn rs_buf_write(
     }
 
     // Post-autocmds
-    if unsafe { should_abort(retval) } == 0 {
+    if !unsafe { should_abort(retval) } {
         unsafe {
             rs_buf_write_do_post_autocmds(
                 buf,
@@ -1633,7 +1633,7 @@ pub unsafe extern "C" fn rs_buf_write(
                 c_int::from(whole),
             );
         }
-        if unsafe { aborting() } != 0 {
+        if unsafe { aborting() } {
             retval = FAIL;
         }
     }

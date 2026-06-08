@@ -79,7 +79,7 @@ extern "C" {
     fn last_set_msg(ctx: SctxT);
 
     // misc
-    fn message_filtered(name: *const c_char) -> c_int;
+    fn message_filtered(name: *const c_char) -> bool;
     fn skip_regexp(p: *const c_char, delim: c_int, magic: c_int) -> *mut c_char;
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
     fn ends_excmd(c: c_int) -> c_int;
@@ -318,7 +318,7 @@ unsafe extern "C" fn list_functions_cb(fp: UfuncHandle, ctx_ptr: *mut c_void) {
     }
 
     // No pattern: skip refcounted and filtered functions
-    if message_filtered(name) == 0 && nvim_ufunc_name_refcount(name) == 0 {
+    if !message_filtered(name) && nvim_ufunc_name_refcount(name) == 0 {
         if rs_list_func_head(fp, 0, 0) != 0 {
             ctx.done = true;
             return;

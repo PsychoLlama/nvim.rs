@@ -24,7 +24,7 @@ extern "C" {
     fn nvim_ctrl_x_mode_reset_to_normal();
     fn nvim_emit_completefunc_not_set_error(is_function: c_int);
     fn rs_set_compl_globals(startcol: c_int, curs_col: c_int, is_cpt_compl: c_int);
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     // Compound accessors for Phase 5 (pass 5): callback management
     fn nvim_did_set_completefunc_impl(args: *mut c_void) -> *const c_char;
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn rs_get_userdefined_compl_info(
     }
 
     // -2: user wants to cancel without error; also cancel if aborting.
-    if col == -2 || aborting() != 0 {
+    if col == -2 || aborting() {
         return FAIL;
     }
 

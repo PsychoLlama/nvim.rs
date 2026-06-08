@@ -191,7 +191,7 @@ extern "C" {
 
     // op utilities
     fn op_on_lines(op: c_int) -> c_int;
-    fn inindent(extra: c_int) -> c_int;
+    fn inindent(extra: c_int) -> bool;
     fn get_op_char(op_type: c_int) -> c_int;
     fn get_extra_op_char(op_type: c_int) -> c_int;
 
@@ -816,7 +816,7 @@ unsafe fn dpo_setup_positions(cap: *mut c_void, gui_yank: bool) {
         (*oap.cast::<OpargT>()).line_count = lc - 1;
         let el = (*oap.cast::<OpargT>()).end.lnum;
         (*oap.cast::<OpargT>()).end.lnum = el - 1;
-        if inindent(0) != 0 {
+        if inindent(0) {
             (*oap.cast::<OpargT>()).motion_type = K_MT_LINE_WISE;
         } else {
             let new_end_col = ml_get_len((*oap.cast::<OpargT>()).end.lnum);

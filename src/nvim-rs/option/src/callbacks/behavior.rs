@@ -209,7 +209,7 @@ extern "C" {
     fn nvim_get_p_cedit() -> *const c_char;
     fn nvim_set_cedit_key(val: c_int);
     fn string_to_key(arg: *mut c_char) -> c_int;
-    fn vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
     static e_invarg: [c_char; 0];
 }
 
@@ -1290,7 +1290,7 @@ pub unsafe extern "C" fn rs_did_set_cedit(_args: *mut c_void) -> CallbackResult 
         std::ptr::null()
     } else {
         let n = string_to_key(p.cast_mut());
-        if n == 0 || vim_isprintc(n) != 0 {
+        if n == 0 || vim_isprintc(n) {
             // Invalid key: return e_invarg
             e_invarg.as_ptr()
         } else {

@@ -164,7 +164,7 @@ extern "C" {
     static mut g_compl_shown_match: crate::match_list::ComplMatch;
 
     // Popup menu and selection accessors
-    fn pum_visible() -> c_int;
+    fn pum_visible() -> bool;
     fn pum_get_height() -> c_int;
 }
 
@@ -819,7 +819,7 @@ pub unsafe extern "C" fn rs_ins_compl_key2dir(c: c_int) -> c_int {
 /// Check that "c" is a valid completion key only while the popup menu is shown.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_pum_key(c: c_int) -> c_int {
-    if pum_visible() == 0 {
+    if !pum_visible() {
         return 0;
     }
 

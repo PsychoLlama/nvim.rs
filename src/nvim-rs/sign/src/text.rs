@@ -33,7 +33,7 @@ extern "C" {
     fn utf_ptr2cells(s: *const c_char) -> c_int;
 
     /// Check if a character is printable
-    fn vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
 }
 
 // =============================================================================
@@ -200,7 +200,7 @@ pub unsafe fn init_sign_text_impl(
         let sc = utfc_ptr2schar(s, std::ptr::addr_of_mut!(codepoint));
 
         // Check for non-printable characters
-        if vim_isprintc(codepoint) == 0 {
+        if !vim_isprintc(codepoint) {
             return SignTextResult::Invalid;
         }
 

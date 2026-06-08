@@ -82,7 +82,7 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
                     && (ffi::nvim_al_buf_get_nwindows(buf) > 1
                         || ffi::nvim_al_win_get_width(wp) != ffi::nvim_al_get_Columns()
                         || (ffi::nvim_al_win_is_floating(wp) != 0
-                            && ffi::nvim_al_is_aucmd_win(wp) == 0)))
+                            && !ffi::nvim_al_is_aucmd_win(wp))))
             {
                 aall.opened_len
             } else {
@@ -93,15 +93,15 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
 
             if i == aall.opened_len && !aall.keep_tabs {
                 // close this window
-                if ffi::nvim_al_buf_hide(buf) != 0
+                if ffi::nvim_al_buf_hide(buf)
                     || aall.forceit
                     || ffi::nvim_al_buf_get_nwindows(buf) > 1
-                    || ffi::nvim_al_bufIsChanged(buf) == 0
+                    || !ffi::nvim_al_bufIsChanged(buf)
                 {
                     // If the buffer was changed, and we would like to hide it, try autowriting.
-                    if ffi::nvim_al_buf_hide(buf) == 0
+                    if !ffi::nvim_al_buf_hide(buf)
                         && ffi::nvim_al_buf_get_nwindows(buf) <= 1
-                        && ffi::nvim_al_bufIsChanged(buf) != 0
+                        && ffi::nvim_al_bufIsChanged(buf)
                     {
                         let bufref = ffi::nvim_al_bufref_create(buf);
                         ffi::nvim_al_autowrite(buf, 0);
@@ -130,8 +130,7 @@ unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
                         ffi::nvim_al_win_close(
                             wp,
                             c_int::from(
-                                ffi::nvim_al_buf_hide(buf) == 0
-                                    && ffi::nvim_al_bufIsChanged(buf) == 0,
+                                !ffi::nvim_al_buf_hide(buf) && !ffi::nvim_al_bufIsChanged(buf),
                             ),
                             0,
                         );
@@ -351,9 +350,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
             let ae_name = crate::query::alist_name(ae);
             let curwin = ffi::nvim_al_get_curwin();
             let win_buf = ffi::nvim_al_win_get_buffer(curwin);
-            let flags = (if ffi::nvim_al_buf_hide(win_buf) != 0
-                || ffi::nvim_al_bufIsChanged(win_buf) != 0
-            {
+            let flags = (if ffi::nvim_al_buf_hide(win_buf) || ffi::nvim_al_bufIsChanged(win_buf) {
                 ECMD_HIDE
             } else {
                 0

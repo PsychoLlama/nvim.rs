@@ -11,7 +11,7 @@ use std::os::raw::c_int;
 
 // C accessor functions
 extern "C" {
-    fn pum_visible() -> c_int;
+    fn pum_visible() -> bool;
     fn pum_get_height() -> c_int;
 }
 

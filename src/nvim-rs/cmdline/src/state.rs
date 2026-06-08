@@ -1101,7 +1101,7 @@ unsafe extern "C" {
     static mut redir_off: bool;
     static mut quit_more: bool;
     fn nvim_get_typebuf_len() -> c_int;
-    fn stuff_empty() -> c_int;
+    fn stuff_empty() -> bool;
     fn may_trigger_safestate(pending: bool);
     fn cursorcmd();
     fn ui_cursor_shape();
@@ -1680,7 +1680,7 @@ pub unsafe extern "C" fn rs_command_line_check(state: *mut c_void) -> c_int {
                   // that occurs while typing a command should
                   // cause the command not to be executed.
 
-    if stuff_empty() != 0 && nvim_get_typebuf_len() == 0 {
+    if stuff_empty() && nvim_get_typebuf_len() == 0 {
         // typebuf_len accessor kept
         // There is no pending input from sources other than user input, so
         // Vim is going to wait for the user to type a key.  Consider the
@@ -1722,7 +1722,7 @@ unsafe extern "C" {
     // cmdline pum and vim char helpers
     fn cmdline_pum_remove(skip_redraw: bool);
     fn rs_ascii_iswhite(c: c_int) -> c_int;
-    fn vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
 
     // For browse_history
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
@@ -1739,7 +1739,7 @@ unsafe extern "C" {
     static p_tbidi: c_int;
 
     // for toggle_langmap
-    fn buf_valid(buf: *mut c_void) -> c_int;
+    fn buf_valid(buf: *mut c_void) -> bool;
     static mut State: c_int;
     fn map_to_exists_mode(keys: *const c_char, mode: c_int, abbr: bool) -> c_int;
     fn set_iminsert_global(buf: *mut c_void);
@@ -1905,7 +1905,7 @@ pub unsafe extern "C" fn nvim_command_line_changed(s: *mut c_void) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn nvim_command_line_toggle_langmap(s: *mut c_void) {
     let ss = s.cast::<crate::command_line_state::CommandLineState>();
-    let b_im_ptr = if buf_valid((*ss).b_im_ptr_buf) != 0 {
+    let b_im_ptr = if buf_valid((*ss).b_im_ptr_buf) {
         (*ss).b_im_ptr
     } else {
         std::ptr::null_mut()
@@ -2022,7 +2022,7 @@ pub unsafe extern "C" fn nvim_command_line_end_wildmenu(s: *mut c_void, key_is_w
         (*ss).skip_pum_redraw = (*ss).skip_pum_redraw
             && !key_is_wc
             && rs_ascii_iswhite(c) == 0
-            && (vim_isprintc(c) != 0
+            && (vim_isprintc(c)
                 || c == K_BS_LOCAL
                 || c == CTRL_H_LOCAL
                 || c == K_DEL_LOCAL

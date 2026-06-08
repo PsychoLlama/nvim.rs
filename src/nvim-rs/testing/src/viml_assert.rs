@@ -579,7 +579,7 @@ extern "C" {
     fn tv_get_string_chk(tv: TypevalHandle) -> *const c_char;
 
     // Pattern matching
-    fn pattern_match(pat: *const c_char, text: *const c_char, ic: c_int) -> c_int;
+    fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -> c_int;
 
     // Global state for beep/silent assertions
     static mut called_vim_beep: bool;
@@ -964,7 +964,7 @@ fn assert_match_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
             return 0;
         }
 
-        let matches = pattern_match(pat, text, 0) != 0;
+        let matches = pattern_match(pat, text, false) != 0;
         let should_match = atype == AssertType::Match;
 
         if matches != should_match {
@@ -1304,7 +1304,7 @@ unsafe fn assert_fails_check(argvars: TypevalHandle, cmd: *const c_char) -> Asse
             return result;
         }
 
-        if pattern_match(expected, actual, 0) == 0 {
+        if pattern_match(expected, actual, false) == 0 {
             error_found = true;
             expected_str = expected;
         } else if list_len == 2 {
@@ -1322,7 +1322,7 @@ unsafe fn assert_fails_check(argvars: TypevalHandle, cmd: *const c_char) -> Asse
                 }
                 return result;
             }
-            if pattern_match(expected2, actual2, 0) == 0 {
+            if pattern_match(expected2, actual2, false) == 0 {
                 error_found = true;
                 expected_str = expected2;
             }
@@ -1413,7 +1413,7 @@ unsafe fn assert_fails_check_extra_args(
         let arg4_string = nvim_testing_tv_get_vstring(argvars_4);
         if !arg4_string.is_null() {
             let context = emsg_assert_fails_context;
-            if pattern_match(arg4_string, context, 0) == 0 {
+            if pattern_match(arg4_string, context, false) == 0 {
                 error_found = true;
                 error_found_index = 4;
             }

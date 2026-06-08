@@ -50,7 +50,7 @@ extern "C" {
     /// Combine highlight attributes (`hl_combine_attr`).
     fn hl_combine_attr(char_attr: c_int, comb_attr: c_int) -> c_int;
     /// Check if two strings are equal.
-    fn strequal(s1: *const c_char, s2: *const c_char) -> c_int;
+    fn strequal(s1: *const c_char, s2: *const c_char) -> bool;
     /// Compute the display width of a string.
     fn vim_strsize(s: *const c_char) -> c_int;
 }
@@ -210,12 +210,12 @@ pub unsafe extern "C" fn rs_pum_border_width() -> c_int {
     }
 
     // Check if "none"
-    if strequal(p_pumborder, opt_winborder_none) != 0 {
+    if strequal(p_pumborder, opt_winborder_none) {
         return 0;
     }
 
     // Check if "shadow" - only has right+bottom
-    if strequal(p_pumborder, opt_winborder_shadow) != 0 {
+    if strequal(p_pumborder, opt_winborder_shadow) {
         return 1;
     }
 

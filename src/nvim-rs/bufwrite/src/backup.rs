@@ -119,7 +119,7 @@ extern "C" {
         failed_dir: *mut *mut c_char,
     ) -> c_int;
     #[link_name = "os_isdir"]
-    fn os_isdir(fname: *const c_char) -> c_int;
+    fn os_isdir(fname: *const c_char) -> bool;
     fn nvim_bw_cpo_contains(c: c_int) -> c_int;
     fn nvim_bw_xfree(ptr: *mut c_char);
     fn nvim_bw_gettext(s: *const c_char) -> *const c_char;
@@ -288,7 +288,7 @@ unsafe fn backup_by_copy(
         let dir_len = unsafe { copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
         let p = unsafe { iobuff.add(dir_len) };
 
-        if unsafe { *dirp } == NUL && unsafe { os_isdir(iobuff) } == 0 {
+        if unsafe { *dirp } == NUL && !unsafe { os_isdir(iobuff) } {
             unsafe { ensure_backup_dir(iobuff) };
         }
 
@@ -438,7 +438,7 @@ unsafe fn backup_by_rename(
         let dir_len = unsafe { copy_option_part(&raw mut dirp, iobuff, iosize, c",".as_ptr()) };
         let p = unsafe { iobuff.add(dir_len) };
 
-        if unsafe { *dirp } == NUL && unsafe { os_isdir(iobuff) } == 0 {
+        if unsafe { *dirp } == NUL && !unsafe { os_isdir(iobuff) } {
             unsafe { ensure_backup_dir(iobuff) };
         }
 

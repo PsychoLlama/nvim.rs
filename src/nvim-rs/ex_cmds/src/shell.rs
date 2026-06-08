@@ -1079,7 +1079,7 @@ extern "C" {
     fn nvim_bw_os_remove(path: *const c_char) -> c_int;
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
     fn nvim_excmds_get_curbuf_identity() -> *mut std::ffi::c_void;
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn os_breakcheck();
     fn u_save(top: c_int, bot: c_int) -> c_int;
     fn nvim_curwin_set_cursor_lnum(lnum: c_int);
@@ -1214,7 +1214,7 @@ pub unsafe extern "C" fn rs_do_filter(
         if nvim_excmds_buf_write_filter(itmp, line1, line2, eap) == 0 {
             msg_putchar(b'\n' as c_int); // Keep message from buf_write()
             crate::no_wait_return -= 1;
-            if aborting() == 0 {
+            if !aborting() {
                 nvim_excmds_error_msg(ERR_E482, itmp);
             }
             goto_filterend(
@@ -1287,7 +1287,7 @@ pub unsafe extern "C" fn rs_do_filter(
     if do_out {
         if !otmp.is_null() {
             if nvim_excmds_readfile_filter(otmp, line2, eap) == 0 {
-                if aborting() == 0 {
+                if !aborting() {
                     msg_putchar(b'\n' as c_int);
                     nvim_excmds_error_msg(ERR_E_NOTREAD, otmp);
                 }

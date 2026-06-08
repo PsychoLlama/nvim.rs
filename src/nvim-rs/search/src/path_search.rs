@@ -96,13 +96,13 @@ extern "C" {
 
     // Charset
     fn skipwhite(p: *const c_char) -> *const c_char;
-    fn vim_iswordc(c: u8) -> c_int;
-    fn vim_iswordp(p: *const c_char) -> c_int;
-    fn vim_isfilec(c: u8) -> c_int;
+    fn vim_iswordc(c: u8) -> bool;
+    fn vim_iswordp(p: *const c_char) -> bool;
+    fn vim_isfilec(c: u8) -> bool;
 
     // File I/O
     fn os_fopen(path: *const c_char, mode: *const c_char) -> FilePtr;
-    fn vim_fgets(buf: *mut c_char, size: c_int, fp: FilePtr) -> c_int;
+    fn vim_fgets(buf: *mut c_char, size: c_int, fp: FilePtr) -> bool;
     fn fclose(fp: FilePtr) -> c_int;
 
     // Memory
@@ -429,7 +429,7 @@ unsafe fn show_pat_in_path(
             break;
         }
         if !fp.is_null() {
-            if vim_fgets(line, LSIZE, fp) != 0 {
+            if vim_fgets(line, LSIZE, fp) {
                 break;
             }
             linelen = strlen(line);
@@ -572,7 +572,7 @@ pub unsafe extern "C" fn rs_find_pattern_in_path(
                 let mut define_matched = false;
                 if !def_regmatch.regprog().is_null() && def_regmatch.regexec(line, 0) {
                     let mut p = def_regmatch.endp(0);
-                    while *p != 0 && vim_iswordc(*p as u8) == 0 {
+                    while *p != 0 && !vim_iswordc(*p as u8) {
                         p = p.add(1);
                     }
                     search_line_p = p;
@@ -591,10 +591,7 @@ pub unsafe extern "C" fn rs_find_pattern_in_path(
                         } else {
                             strncmp(startp, ptr, len) == 0
                         };
-                        if matched
-                            && define_matched
-                            && whole
-                            && vim_iswordc(*startp.add(len) as u8) != 0
+                        if matched && define_matched && whole && vim_iswordc(*startp.add(len) as u8)
                         {
                             matched = false;
                         }
@@ -659,7 +656,7 @@ pub unsafe extern "C" fn rs_find_pattern_in_path(
                                 let compl_len = rs_ins_compl_len();
                                 if strlen(p) as c_int >= compl_len {
                                     p = p.add(compl_len as usize);
-                                    if vim_iswordp(p) != 0 {
+                                    if vim_iswordp(p) {
                                         break 'matched false; // goto exit_matched
                                     }
                                     p = rs_find_word_start(p);
@@ -682,8 +679,7 @@ pub unsafe extern "C" fn rs_find_pattern_in_path(
                                     lnum += 1;
                                     line = get_line_and_copy(lnum, file_line);
                                     false
-                                } else if vim_fgets(file_line, LSIZE, files[depth as usize].fp) != 0
-                                {
+                                } else if vim_fgets(file_line, LSIZE, files[depth as usize].fp) {
                                     break 'matched false; // goto exit_matched
                                 } else {
                                     line = file_line;
@@ -1042,11 +1038,11 @@ pub unsafe extern "C" fn rs_find_pattern_in_path(
                             (s, (e as usize - s as usize))
                         } else {
                             let mut p2 = incl_regmatch.endp(0);
-                            while *p2 != 0 && vim_isfilec(*p2 as u8) == 0 {
+                            while *p2 != 0 && !vim_isfilec(*p2 as u8) {
                                 p2 = p2.add(1);
                             }
                             let mut i2 = 0usize;
-                            while vim_isfilec(*p2.add(i2) as u8) != 0 {
+                            while vim_isfilec(*p2.add(i2) as u8) {
                                 i2 += 1;
                             }
                             if i2 == 0 {
@@ -1157,7 +1153,7 @@ pub unsafe extern "C" fn rs_find_pattern_in_path(
         }
 
         // Read next line from included file (pop stack when file exhausted)
-        while depth >= 0 && vim_fgets(file_line, LSIZE, files[depth as usize].fp) != 0 {
+        while depth >= 0 && vim_fgets(file_line, LSIZE, files[depth as usize].fp) {
             fclose(files[depth as usize].fp);
             files[depth as usize].fp = std::ptr::null_mut();
             old_files -= 1;

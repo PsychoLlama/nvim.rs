@@ -181,8 +181,8 @@ extern "C" {
     fn vim_strchr(s: *const c_char, c: c_int) -> *mut c_char;
 
     // Character classification
-    fn vim_iswordc(c: c_int) -> c_int;
-    fn vim_isIDc(c: c_int) -> c_int;
+    fn vim_iswordc(c: c_int) -> bool;
+    fn vim_isIDc(c: c_int) -> bool;
 
     // Phase 2 accessors
     fn nvim_cindent_curwin_get_cursor_lnum() -> c_int;
@@ -596,7 +596,7 @@ pub unsafe extern "C" fn rs_cin_starts_with(s: *const c_char, word: *const c_cha
     }
 
     // Check that the next character is not an ID character
-    vim_isIDc(i32::from(*s.add(len) as u8)) == 0
+    !vim_isIDc(i32::from(*s.add(len) as u8))
 }
 
 /// Check if the string starts with "if" keyword.
@@ -608,9 +608,7 @@ pub unsafe extern "C" fn rs_cin_isif(p: *const c_char) -> bool {
     if p.is_null() {
         return false;
     }
-    *p == b'i' as c_char
-        && *p.add(1) == b'f' as c_char
-        && vim_isIDc(i32::from(*p.add(2) as u8)) == 0
+    *p == b'i' as c_char && *p.add(1) == b'f' as c_char && !vim_isIDc(i32::from(*p.add(2) as u8))
 }
 
 /// Check if the string starts with "else" keyword.
@@ -632,7 +630,7 @@ pub unsafe extern "C" fn rs_cin_iselse(p: *const c_char) -> bool {
         && *ptr.add(1) == b'l' as c_char
         && *ptr.add(2) == b's' as c_char
         && *ptr.add(3) == b'e' as c_char
-        && vim_isIDc(i32::from(*ptr.add(4) as u8)) == 0
+        && !vim_isIDc(i32::from(*ptr.add(4) as u8))
 }
 
 /// Check if the string starts with "do" keyword.
@@ -644,9 +642,7 @@ pub unsafe extern "C" fn rs_cin_isdo(p: *const c_char) -> bool {
     if p.is_null() {
         return false;
     }
-    *p == b'd' as c_char
-        && *p.add(1) == b'o' as c_char
-        && vim_isIDc(i32::from(*p.add(2) as u8)) == 0
+    *p == b'd' as c_char && *p.add(1) == b'o' as c_char && !vim_isIDc(i32::from(*p.add(2) as u8))
 }
 
 /// Check if the string starts with "break" keyword.
@@ -663,7 +659,7 @@ pub unsafe extern "C" fn rs_cin_isbreak(p: *const c_char) -> bool {
         && *p.add(2) == b'e' as c_char
         && *p.add(3) == b'a' as c_char
         && *p.add(4) == b'k' as c_char
-        && vim_isIDc(i32::from(*p.add(5) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(5) as u8))
 }
 
 /// Check if the string starts with "default:" label.
@@ -780,11 +776,11 @@ pub unsafe extern "C" fn rs_cin_has_js_key(text: *const c_char) -> bool {
     }
 
     // need at least one ID character
-    if vim_isIDc(i32::from(*s as u8)) == 0 {
+    if !vim_isIDc(i32::from(*s as u8)) {
         return false;
     }
 
-    while vim_isIDc(i32::from(*s as u8)) != 0 {
+    while vim_isIDc(i32::from(*s as u8)) {
         s = s.add(1);
     }
 
@@ -828,7 +824,7 @@ pub unsafe extern "C" fn rs_cin_is_cpp_namespace(s: *const c_char) -> bool {
             && *p.add(3) == b'i' as c_char
             && *p.add(4) == b'n' as c_char
             && *p.add(5) == b'e' as c_char
-            && (is_nul(*p.add(6)) || vim_iswordc(i32::from(*p.add(6) as u8)) == 0);
+            && (is_nul(*p.add(6)) || !vim_iswordc(i32::from(*p.add(6) as u8)));
 
         let is_export = *p == b'e' as c_char
             && *p.add(1) == b'x' as c_char
@@ -836,7 +832,7 @@ pub unsafe extern "C" fn rs_cin_is_cpp_namespace(s: *const c_char) -> bool {
             && *p.add(3) == b'o' as c_char
             && *p.add(4) == b'r' as c_char
             && *p.add(5) == b't' as c_char
-            && (is_nul(*p.add(6)) || vim_iswordc(i32::from(*p.add(6) as u8)) == 0);
+            && (is_nul(*p.add(6)) || !vim_iswordc(i32::from(*p.add(6) as u8)));
 
         if is_inline || is_export {
             p = rs_cin_skipcomment(skip_whitespace(p.add(6)));
@@ -858,7 +854,7 @@ pub unsafe extern "C" fn rs_cin_is_cpp_namespace(s: *const c_char) -> bool {
     {
         return false;
     }
-    if !is_nul(*p.add(9)) && vim_iswordc(i32::from(*p.add(9) as u8)) != 0 {
+    if !is_nul(*p.add(9)) && vim_iswordc(i32::from(*p.add(9) as u8)) {
         return false;
     }
 
@@ -873,7 +869,7 @@ pub unsafe extern "C" fn rs_cin_is_cpp_namespace(s: *const c_char) -> bool {
             p = rs_cin_skipcomment(skip_whitespace(p));
         } else if *p == b'{' as c_char {
             break;
-        } else if vim_iswordc(i32::from(*p as u8)) != 0 {
+        } else if vim_iswordc(i32::from(*p as u8)) {
             has_name_start = true;
             if has_name {
                 return false; // word character after skipping past name
@@ -881,7 +877,7 @@ pub unsafe extern "C" fn rs_cin_is_cpp_namespace(s: *const c_char) -> bool {
             p = p.add(1);
         } else if *p == b':' as c_char
             && *p.add(1) == b':' as c_char
-            && vim_iswordc(i32::from(*p.add(2) as u8)) != 0
+            && vim_iswordc(i32::from(*p.add(2) as u8))
         {
             if !has_name_start || has_name {
                 return false;
@@ -1315,7 +1311,7 @@ pub unsafe extern "C" fn rs_cin_iswhile(p: *const c_char) -> bool {
         && *p.add(2) == b'i' as c_char
         && *p.add(3) == b'l' as c_char
         && *p.add(4) == b'e' as c_char
-        && vim_isIDc(i32::from(*p.add(5) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(5) as u8))
 }
 
 /// Check if line starts with "for" keyword.
@@ -1330,7 +1326,7 @@ pub unsafe extern "C" fn rs_cin_isfor(p: *const c_char) -> bool {
     *p == b'f' as c_char
         && *p.add(1) == b'o' as c_char
         && *p.add(2) == b'r' as c_char
-        && vim_isIDc(i32::from(*p.add(3) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(3) as u8))
 }
 
 /// Check if line starts with "return" keyword.
@@ -1348,7 +1344,7 @@ pub unsafe extern "C" fn rs_cin_isreturn(p: *const c_char) -> bool {
         && *p.add(3) == b'u' as c_char
         && *p.add(4) == b'r' as c_char
         && *p.add(5) == b'n' as c_char
-        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(6) as u8))
 }
 
 /// Check if line starts with "continue" keyword.
@@ -1368,7 +1364,7 @@ pub unsafe extern "C" fn rs_cin_iscontinue(p: *const c_char) -> bool {
         && *p.add(5) == b'n' as c_char
         && *p.add(6) == b'u' as c_char
         && *p.add(7) == b'e' as c_char
-        && vim_isIDc(i32::from(*p.add(8) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(8) as u8))
 }
 
 /// Check if line starts with "goto" keyword.
@@ -1384,7 +1380,7 @@ pub unsafe extern "C" fn rs_cin_isgoto(p: *const c_char) -> bool {
         && *p.add(1) == b'o' as c_char
         && *p.add(2) == b't' as c_char
         && *p.add(3) == b'o' as c_char
-        && vim_isIDc(i32::from(*p.add(4) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(4) as u8))
 }
 
 /// Check if line starts with "switch" keyword.
@@ -1402,7 +1398,7 @@ pub unsafe extern "C" fn rs_cin_isswitch(p: *const c_char) -> bool {
         && *p.add(3) == b't' as c_char
         && *p.add(4) == b'c' as c_char
         && *p.add(5) == b'h' as c_char
-        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(6) as u8))
 }
 
 /// Find an '=' character in the line, skipping strings and comments.
@@ -1541,7 +1537,7 @@ pub unsafe extern "C" fn rs_cin_istypedef(p: *const c_char) -> bool {
         && *p.add(4) == b'd' as c_char
         && *p.add(5) == b'e' as c_char
         && *p.add(6) == b'f' as c_char
-        && vim_isIDc(i32::from(*p.add(7) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(7) as u8))
 }
 
 /// Check if line starts with "static" keyword.
@@ -1559,7 +1555,7 @@ pub unsafe extern "C" fn rs_cin_isstatic(p: *const c_char) -> bool {
         && *p.add(3) == b't' as c_char
         && *p.add(4) == b'i' as c_char
         && *p.add(5) == b'c' as c_char
-        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(6) as u8))
 }
 
 /// Check if line starts with "public" keyword.
@@ -1577,7 +1573,7 @@ pub unsafe extern "C" fn rs_cin_ispublic(p: *const c_char) -> bool {
         && *p.add(3) == b'l' as c_char
         && *p.add(4) == b'i' as c_char
         && *p.add(5) == b'c' as c_char
-        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(6) as u8))
 }
 
 /// Check if line starts with "protected" keyword.
@@ -1598,7 +1594,7 @@ pub unsafe extern "C" fn rs_cin_isprotected(p: *const c_char) -> bool {
         && *p.add(6) == b't' as c_char
         && *p.add(7) == b'e' as c_char
         && *p.add(8) == b'd' as c_char
-        && vim_isIDc(i32::from(*p.add(9) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(9) as u8))
 }
 
 /// Check if line starts with "private" keyword.
@@ -1617,7 +1613,7 @@ pub unsafe extern "C" fn rs_cin_isprivate(p: *const c_char) -> bool {
         && *p.add(4) == b'a' as c_char
         && *p.add(5) == b't' as c_char
         && *p.add(6) == b'e' as c_char
-        && vim_isIDc(i32::from(*p.add(7) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(7) as u8))
 }
 
 /// Check if line starts with "enum" keyword.
@@ -1633,7 +1629,7 @@ pub unsafe extern "C" fn rs_cin_isenum(p: *const c_char) -> bool {
         && *p.add(1) == b'n' as c_char
         && *p.add(2) == b'u' as c_char
         && *p.add(3) == b'm' as c_char
-        && vim_isIDc(i32::from(*p.add(4) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(4) as u8))
 }
 
 /// Check if line starts with "struct" keyword.
@@ -1651,7 +1647,7 @@ pub unsafe extern "C" fn rs_cin_isstruct(p: *const c_char) -> bool {
         && *p.add(3) == b'u' as c_char
         && *p.add(4) == b'c' as c_char
         && *p.add(5) == b't' as c_char
-        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(6) as u8))
 }
 
 /// Check if line starts with "class" keyword.
@@ -1668,7 +1664,7 @@ pub unsafe extern "C" fn rs_cin_isclass(p: *const c_char) -> bool {
         && *p.add(2) == b'a' as c_char
         && *p.add(3) == b's' as c_char
         && *p.add(4) == b's' as c_char
-        && vim_isIDc(i32::from(*p.add(5) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(5) as u8))
 }
 
 /// Check if line starts with "union" keyword.
@@ -1685,7 +1681,7 @@ pub unsafe extern "C" fn rs_cin_isunion(p: *const c_char) -> bool {
         && *p.add(2) == b'i' as c_char
         && *p.add(3) == b'o' as c_char
         && *p.add(4) == b'n' as c_char
-        && vim_isIDc(i32::from(*p.add(5) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(5) as u8))
 }
 
 // ============================================================================
@@ -1872,7 +1868,7 @@ pub unsafe extern "C" fn rs_cin_get_label_indent(
     if rs_cin_ispublic(p_skip) || rs_cin_isprotected(p_skip) || rs_cin_isprivate(p_skip) {
         // Check for trailing colon
         let mut check = p_skip;
-        while vim_isIDc(i32::from(*check as u8)) != 0 {
+        while vim_isIDc(i32::from(*check as u8)) {
             check = check.add(1);
         }
         check = rs_cin_skipcomment(check);
@@ -1968,12 +1964,12 @@ pub unsafe extern "C" fn rs_cin_is_kr_param(s: *const c_char) -> bool {
 
     // Look for type followed by identifier and semicolon
     // This is a simplified check
-    if !vim_isIDc(i32::from(*check as u8)) == 0 {
+    if vim_isIDc(i32::from(*check as u8)) {
         return false;
     }
 
     // Skip type name
-    while vim_isIDc(i32::from(*check as u8)) != 0 {
+    while vim_isIDc(i32::from(*check as u8)) {
         check = check.add(1);
     }
     check = rs_cin_skipcomment(check);
@@ -1984,10 +1980,10 @@ pub unsafe extern "C" fn rs_cin_is_kr_param(s: *const c_char) -> bool {
     }
 
     // Skip variable name
-    if vim_isIDc(i32::from(*check as u8)) == 0 {
+    if !vim_isIDc(i32::from(*check as u8)) {
         return false;
     }
-    while vim_isIDc(i32::from(*check as u8)) != 0 {
+    while vim_isIDc(i32::from(*check as u8)) {
         check = check.add(1);
     }
     check = rs_cin_skipcomment(check);
@@ -2081,10 +2077,10 @@ pub unsafe extern "C" fn rs_cin_is_cpp_lambda(s: *const c_char) -> bool {
             }
 
             // Could also be [identifier, ...] capture
-            if vim_isIDc(i32::from(*next as u8)) != 0 {
+            if vim_isIDc(i32::from(*next as u8)) {
                 // Skip identifier
                 let mut check = next;
-                while vim_isIDc(i32::from(*check as u8)) != 0 {
+                while vim_isIDc(i32::from(*check as u8)) {
                     check = check.add(1);
                 }
                 check = rs_cin_skipcomment(check);
@@ -2128,7 +2124,7 @@ pub unsafe extern "C" fn rs_cin_is_template_decl(s: *const c_char) -> bool {
         return false;
     }
 
-    if vim_isIDc(i32::from(*p.add(8) as u8)) != 0 {
+    if vim_isIDc(i32::from(*p.add(8) as u8)) {
         return false;
     }
 
@@ -2160,7 +2156,7 @@ pub unsafe extern "C" fn rs_cin_is_extern_c(s: *const c_char) -> bool {
         return false;
     }
 
-    if vim_isIDc(i32::from(*p.add(6) as u8)) != 0 {
+    if vim_isIDc(i32::from(*p.add(6) as u8)) {
         return false;
     }
 
@@ -2352,14 +2348,12 @@ pub unsafe extern "C" fn rs_cin_is_bool_continuation(s: *const c_char) -> bool {
     if *p == b'a' as c_char
         && *p.add(1) == b'n' as c_char
         && *p.add(2) == b'd' as c_char
-        && vim_isIDc(i32::from(*p.add(3) as u8)) == 0
+        && !vim_isIDc(i32::from(*p.add(3) as u8))
     {
         return true;
     }
 
-    if *p == b'o' as c_char
-        && *p.add(1) == b'r' as c_char
-        && vim_isIDc(i32::from(*p.add(2) as u8)) == 0
+    if *p == b'o' as c_char && *p.add(1) == b'r' as c_char && !vim_isIDc(i32::from(*p.add(2) as u8))
     {
         return true;
     }
@@ -2457,12 +2451,12 @@ pub unsafe extern "C" fn rs_cin_islabel_skip(s: *const c_char, new_offset: *mut 
     let mut p = s;
 
     // Need at least one ID character
-    if vim_isIDc(i32::from(*p as u8)) == 0 {
+    if !vim_isIDc(i32::from(*p as u8)) {
         return false;
     }
 
     // Skip over identifier characters
-    while vim_isIDc(i32::from(*p as u8)) != 0 {
+    while vim_isIDc(i32::from(*p as u8)) {
         let len = utfc_ptr2len(p);
         p = p.add(len as usize);
     }
@@ -2547,7 +2541,7 @@ pub unsafe extern "C" fn rs_cin_is_if_for_while_before_offset(
         .to_bytes()
         .starts_with(b"if")
         && (check_offset == 0
-            || vim_isIDc(i32::from(*line.add((check_offset - 1) as usize) as u8)) == 0)
+            || !vim_isIDc(i32::from(*line.add((check_offset - 1) as usize) as u8)))
     {
         *poffset = check_offset;
         return true;
@@ -2560,7 +2554,7 @@ pub unsafe extern "C" fn rs_cin_is_if_for_while_before_offset(
             .to_bytes()
             .starts_with(b"for")
             && (for_offset == 0
-                || vim_isIDc(i32::from(*line.add((for_offset - 1) as usize) as u8)) == 0)
+                || !vim_isIDc(i32::from(*line.add((for_offset - 1) as usize) as u8)))
         {
             *poffset = for_offset;
             return true;
@@ -2573,7 +2567,7 @@ pub unsafe extern "C" fn rs_cin_is_if_for_while_before_offset(
                 .to_bytes()
                 .starts_with(b"while")
                 && (while_offset == 0
-                    || vim_isIDc(i32::from(*line.add((while_offset - 1) as usize) as u8)) == 0)
+                    || !vim_isIDc(i32::from(*line.add((while_offset - 1) as usize) as u8)))
             {
                 *poffset = while_offset;
                 return true;
@@ -2687,8 +2681,8 @@ pub unsafe extern "C" fn rs_cin_is_cinword(line: *const c_char) -> bool {
         let line_bytes = std::slice::from_raw_parts(line_skip as *const u8, len);
         let buf_bytes = std::slice::from_raw_parts(cinw_buf as *const u8, len);
         if line_bytes == buf_bytes
-            && (vim_iswordc(i32::from(*line_skip.add(len) as u8)) == 0
-                || vim_iswordc(i32::from(*line_skip.add(len - 1) as u8)) == 0)
+            && (!vim_iswordc(i32::from(*line_skip.add(len) as u8))
+                || !vim_iswordc(i32::from(*line_skip.add(len - 1) as u8)))
         {
             return true;
         }
@@ -2984,7 +2978,7 @@ pub unsafe extern "C" fn rs_cin_first_id_amount() -> c_int {
 
     // Find end of type keyword
     len = 0;
-    while vim_isIDc(i32::from(*p.add(len as usize) as u8)) != 0 {
+    while vim_isIDc(i32::from(*p.add(len as usize) as u8)) {
         len += 1;
     }
     if len == 0 || !ascii_iswhite(*p.add(len as usize) as u8) || rs_cin_nocode(p) {
@@ -3666,10 +3660,10 @@ pub unsafe extern "C" fn rs_cin_is_cpp_baseclass(
             }
         } else if (std::slice::from_raw_parts(s.cast::<u8>(), 5.min(c_strlen(s)))
             .starts_with(b"class")
-            && vim_isIDc(c_int::from(*s.add(5) as u8)) == 0)
+            && !vim_isIDc(c_int::from(*s.add(5) as u8)))
             || (std::slice::from_raw_parts(s.cast::<u8>(), 6.min(c_strlen(s)))
                 .starts_with(b"struct")
-                && vim_isIDc(c_int::from(*s.add(6) as u8)) == 0)
+                && !vim_isIDc(c_int::from(*s.add(6) as u8)))
         {
             class_or_struct = true;
             lookfor_ctor_init = false;
@@ -3690,7 +3684,7 @@ pub unsafe extern "C" fn rs_cin_is_cpp_baseclass(
                 // Avoid seeing '() :' after '?' as constructor init.
                 *found = 0;
                 return 0;
-            } else if vim_isIDc(c_int::from(*s as u8)) == 0 {
+            } else if !vim_isIDc(c_int::from(*s as u8)) {
                 class_or_struct = false;
                 lookfor_ctor_init = false;
             } else if *pos_col == 0 {
@@ -6098,7 +6092,7 @@ pub unsafe extern "C" fn rs_in_cinkeys(keytyped: c_int, when: c_int, line_is_emp
                         let line = nvim_cindent_get_cursor_pos_ptr();
                         // Check word boundary and content.
                         if (col == word_len
-                            || vim_iswordc(c_int::from(*line.sub(word_len + 1) as u8)) == 0)
+                            || !vim_iswordc(c_int::from(*line.sub(word_len + 1) as u8)))
                             && (if icase {
                                 mb_strnicmp(line.sub(word_len), look, word_len)
                             } else {

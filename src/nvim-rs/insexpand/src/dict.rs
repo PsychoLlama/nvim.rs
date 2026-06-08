@@ -389,7 +389,7 @@ extern "C" {
     ) -> c_int;
     fn FreeWild(count: c_int, files: *mut *mut c_char);
     fn os_fopen(path: *const c_char, mode: *const c_char) -> *mut core::ffi::c_void;
-    fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut core::ffi::c_void) -> c_int;
+    fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut core::ffi::c_void) -> bool;
     fn fclose(fp: *mut core::ffi::c_void) -> c_int;
     fn line_breakcheck();
     fn spell_dump_compl(pat: *const c_char, ic: bool, dir: *mut c_int, dumpflags: c_int);
@@ -606,7 +606,7 @@ unsafe fn ins_compl_dictionaries(dict_start: *const c_char, flags: c_int, thesau
                 }
                 while !got_int_dict
                     && crate::rs_ins_compl_interrupted() == 0
-                    && vim_fgets(buf, LSIZE_DICT as c_int, fp) == 0
+                    && !vim_fgets(buf, LSIZE_DICT as c_int, fp)
                 {
                     let mut lptr = buf;
                     if rs_cot_fuzzy() != 0 && leader_len > 0 {

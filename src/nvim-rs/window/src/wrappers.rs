@@ -369,7 +369,7 @@ extern "C" {
     fn nvim_get_curbuf() -> BufHandle;
     fn buf_is_empty(buf: BufHandle) -> bool;
     fn nvim_buf_meta_total(buf: BufHandle, kind: c_int) -> c_int;
-    fn is_aucmd_win(wp: WinHandle) -> c_int;
+    fn is_aucmd_win(wp: WinHandle) -> bool;
 }
 
 // kMTMetaInline=0, kMTMetaLines=1, kMTMetaSignHL=2, kMTMetaSignText=3 (from marktree_defs.h)
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn wrap_win_buf_meta_total_lines(wp: WinHandle) -> c_int {
 #[must_use]
 #[export_name = "nvim_is_aucmd_win"]
 pub unsafe extern "C" fn wrap_is_aucmd_win(wp: WinHandle) -> c_int {
-    c_int::from(is_aucmd_win(wp) != 0)
+    c_int::from(is_aucmd_win(wp))
 }
 
 // =============================================================================

@@ -223,7 +223,7 @@ extern "C" {
     fn ptr2cells(p: *const libc::c_char) -> c_int;
 
     /// `menu_is_separator(name)`.
-    fn menu_is_separator(name: *const libc::c_char) -> c_int;
+    fn menu_is_separator(name: *const libc::c_char) -> bool;
 
     /// `fillchar_status(group, wp)` — get fill char and group for status line.
     #[link_name = "fillchar_status"]
@@ -735,7 +735,7 @@ pub unsafe extern "C" fn rs_redraw_wildmenu(
         let s = show_match_str(matches, i, showtail);
         let xp_context = (*xp).xp_context;
         let emenu = xp_context == EXPAND_MENUS || xp_context == EXPAND_MENUNAMES;
-        if emenu && menu_is_separator(s) != 0 {
+        if emenu && menu_is_separator(s) {
             let tc = transchar(c_int::from(b'|'));
             let tc_len = libc::strlen(tc) as usize;
             std::ptr::copy_nonoverlapping(tc, buf.add(len as usize), tc_len);

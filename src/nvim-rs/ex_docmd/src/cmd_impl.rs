@@ -510,7 +510,7 @@ pub unsafe extern "C" fn rs_ex_tabs_impl(_eap: ExArgHandle) {
             });
             msg_putchar(b' ' as c_int);
             let buf = nvim_win_get_buffer(wp);
-            msg_putchar(if bufIsChanged(buf) != 0 {
+            msg_putchar(if bufIsChanged(buf) {
                 b'+' as c_int
             } else {
                 b' ' as c_int
@@ -811,9 +811,9 @@ extern "C" {
 
     // ex_win_close_impl helpers
     #[link_name = "is_aucmd_win"]
-    fn nvim_is_aucmd_win(wp: WinHandle) -> c_int;
+    fn nvim_is_aucmd_win(wp: WinHandle) -> bool;
     fn nvim_emsg_id(id: c_int);
-    fn bufIsChanged(buf: BufHandle) -> c_int;
+    fn bufIsChanged(buf: BufHandle) -> bool;
     fn nvim_get_p_confirm() -> c_int;
     fn nvim_get_cmdmod_confirm() -> c_int;
     fn nvim_get_p_write() -> c_int;
@@ -932,7 +932,7 @@ extern "C" {
     ) -> c_int;
     static mut finish_op: bool;
     #[link_name = "stuff_empty"]
-    fn nvim_docmd_stuff_empty() -> c_int;
+    fn nvim_docmd_stuff_empty() -> bool;
     #[link_name = "typebuf_typed"]
     fn nvim_docmd_typebuf_typed() -> c_int;
     fn nvim_docmd_typebuf_tb_len() -> c_int;
@@ -990,7 +990,7 @@ pub unsafe extern "C" fn nvim_docmd_dialog_changed_still_dirty(buf: BufHandle) -
     };
     set_bufref(std::ptr::addr_of_mut!(bufref).cast::<c_void>(), buf);
     dialog_changed(buf, false);
-    bufref_valid(std::ptr::addr_of!(bufref).cast::<c_void>()) && bufIsChanged(buf) != 0
+    bufref_valid(std::ptr::addr_of!(bufref).cast::<c_void>()) && bufIsChanged(buf)
 }
 
 // =============================================================================
@@ -1177,8 +1177,8 @@ pub unsafe extern "C" fn rs_exec_normal_impl(was_typed: bool, use_vpeekc: bool) 
     const CTRL_C: c_int = 3;
     loop {
         // C: (!stuff_empty() || typebuf_has_data || vpeekc_avail) && !got_int
-        // stuff_empty() returns 1=empty, 0=not-empty
-        let cont = if nvim_docmd_stuff_empty() != 0 {
+        // stuff_empty() returns true=empty, false=not-empty
+        let cont = if nvim_docmd_stuff_empty() {
             // stuff buffer IS empty; check typeahead and vpeekc
             let typed_or_not = was_typed || nvim_docmd_typebuf_typed() == 0;
             let has_typebuf = typed_or_not && nvim_docmd_typebuf_tb_len() > 0;
@@ -1290,13 +1290,13 @@ pub unsafe extern "C" fn rs_ex_win_close_impl(forceit: c_int, win: WinHandle, tp
     const EMSG_E_AUTOCMD_CLOSE: c_int = 10;
 
     // Never close the autocommand window.
-    if nvim_is_aucmd_win(win) != 0 {
+    if nvim_is_aucmd_win(win) {
         nvim_emsg_id(EMSG_E_AUTOCMD_CLOSE);
         return;
     }
 
     let buf = nvim_win_get_buffer(win);
-    let need_hide = bufIsChanged(buf) != 0 && bref_raw(buf).b_nwindows <= 1;
+    let need_hide = bufIsChanged(buf) && bref_raw(buf).b_nwindows <= 1;
     let mut need_hide = need_hide;
 
     if need_hide && !buf_hide(buf) && forceit == 0 {

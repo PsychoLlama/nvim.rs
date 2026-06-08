@@ -12,7 +12,7 @@ use nvim_window::WinHandle;
 // C accessor functions
 extern "C" {
     fn nvim_get_cursor_col() -> c_int;
-    fn pum_visible() -> c_int;
+    fn pum_visible() -> bool;
 
     // Dispatch helpers for compl_get_info
     fn rs_ctrl_x_mode_normal() -> c_int;

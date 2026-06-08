@@ -875,7 +875,7 @@ extern "C" {
     /// Display error message.
     fn emsg(msg: *const c_char);
     /// augroup_exists(name) -> int.
-    fn augroup_exists(name: *const c_char) -> c_int;
+    fn augroup_exists(name: *const c_char) -> bool;
     /// do_doautocmd(autocmds, check_after_done, ret_did_aucmd).
     fn do_doautocmd(
         autocmds: *const c_char,
@@ -994,7 +994,7 @@ pub unsafe extern "C" fn rs_set_rw_fname(fname: *mut c_char, sfname: *mut c_char
     let cur = unsafe { nvim_get_curbuf() };
     let ft = unsafe { bref_void(cur as *const c_void).b_p_ft };
     if ft.is_null() || unsafe { *ft } == 0 {
-        if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } != 0 {
+        if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
             unsafe {
                 do_doautocmd(
                     c"filetypedetect BufRead".as_ptr(),

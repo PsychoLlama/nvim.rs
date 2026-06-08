@@ -76,9 +76,9 @@ extern "C" {
     // Buffer queries
     fn nvim_bw_bt_nofilename(buf: BufHandle) -> c_int;
     #[link_name = "curbufIsChanged"]
-    fn curbufIsChanged() -> c_int;
+    fn curbufIsChanged() -> bool;
     #[link_name = "aborting"]
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     // Buffer field accessors (names match C functions exactly)
     fn nvim_bw_buf_get_ml_line_count(buf: BufHandle) -> i32;
@@ -191,12 +191,12 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             );
         }
     } else if reset_changed != 0 && whole != 0 {
-        let was_changed = unsafe { curbufIsChanged() } != 0;
+        let was_changed = unsafe { curbufIsChanged() };
 
         did_cmd =
             unsafe { apply_autocmds_exarg(EVENT_BUFWRITECMD, sfname, sfname, false, curbuf, eap) };
         if did_cmd {
-            if was_changed && unsafe { curbufIsChanged() } == 0 {
+            if was_changed && !unsafe { curbufIsChanged() } {
                 unsafe {
                     u_unchanged(curbuf);
                     u_update_save_nr(curbuf);
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             && !empty_memline)
         || did_cmd
         || nofile_err
-        || unsafe { aborting() } != 0;
+        || unsafe { aborting() };
 
     if should_return {
         if !buf.is_null() && (unsafe { nvim_bw_get_cmdmod_cmod_flags() } & CMOD_LOCKMARKS != 0) {
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             unsafe { nvim_bw_semsg_nofile_err(curbuf) };
         }
 
-        if nofile_err || unsafe { aborting() } != 0 {
+        if nofile_err || unsafe { aborting() } {
             return FAIL;
         }
         if did_cmd {
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn rs_buf_write_do_autocmds(
             }
             return OK;
         }
-        if unsafe { aborting() } == 0 {
+        if !unsafe { aborting() } {
             unsafe {
                 emsg(nvim_bw_gettext(
                     c"E203: Autocommands deleted or unloaded buffer to be written".as_ptr(),

@@ -133,7 +133,7 @@ extern "C" {
         ignore_abort: bool,
     ) -> bool;
     fn open_buffer(read_stdin: bool, eap: *mut ExArgHandle, flags: c_int) -> c_int;
-    fn should_abort(retval: c_int) -> c_int;
+    fn should_abort(retval: c_int) -> bool;
     fn check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
     fn u_savecommon(
         buf: *mut BufHandle,
@@ -246,7 +246,7 @@ extern "C" {
     // From existing accessors
     fn nvim_get_curwin() -> *mut WinHandle;
     fn nvim_get_curbuf() -> *mut BufHandle;
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     // rs_* already used elsewhere
     fn rs_reset_VIsual();
@@ -482,7 +482,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                 if !bufref_valid(bufref) || nvim_ecmd_bufref_is_curbuf(old_curbuf) == 0 {
                     break 'outer;
                 }
-                if aborting() != 0 {
+                if aborting() {
                     break 'outer;
                 }
             }
@@ -544,7 +544,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     xfree(save_au);
                     break 'outer;
                 }
-                if aborting() != 0 {
+                if aborting() {
                     xfree(new_name as *mut std::ffi::c_void);
                     new_name = std::ptr::null_mut();
                     nvim_ecmd_au_new_curbuf_restore(save_au);
@@ -586,7 +586,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     nvim_ecmd_buf_dec_locked(buf);
 
                     // Autocmds may abort script processing
-                    if aborting() != 0 && nvim_ecmd_curwin_buf_is_null() == 0 {
+                    if aborting() && nvim_ecmd_curwin_buf_is_null() == 0 {
                         xfree(new_name as *mut std::ffi::c_void);
                         new_name = std::ptr::null_mut();
                         nvim_ecmd_au_new_curbuf_restore(save_au);
@@ -670,7 +670,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
         if nvim_ecmd_buf_is_curbuf(buf) == 0 {
             break 'outer;
         }
-        if aborting() != 0 {
+        if aborting() {
             break 'outer;
         }
 
@@ -724,7 +724,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
             if nvim_ecmd_buf_is_curbuf(buf) == 0 {
                 break 'outer;
             }
-            if aborting() != 0 {
+            if aborting() {
                 break 'outer;
             }
             buf_clear_file(nvim_get_curbuf());
@@ -768,7 +768,7 @@ pub unsafe extern "C" fn rs_do_ecmd(
                     readfile_flags |= READ_NOWINENTER;
                 }
                 // open_buffer result is run through should_abort; nonzero means error
-                if should_abort(open_buffer(false, eap, readfile_flags)) != 0 {
+                if should_abort(open_buffer(false, eap, readfile_flags)) {
                     retval = FAIL;
                 }
 

@@ -1127,7 +1127,7 @@ pub unsafe extern "C" fn rs_arena_array(arena: *mut Arena, max_size: usize) -> A
     let items = if arena.is_null() {
         xmalloc(max_size * std::mem::size_of::<Object>()) as *mut Object
     } else {
-        arena_alloc(arena, max_size * std::mem::size_of::<Object>()) as *mut Object
+        arena_alloc(arena, max_size * std::mem::size_of::<Object>(), true) as *mut Object
     };
     Array {
         size: 0,
@@ -1146,7 +1146,8 @@ pub unsafe extern "C" fn rs_arena_dict(arena: *mut Arena, max_size: usize) -> Di
     let items = if arena.is_null() {
         xmalloc(max_size * std::mem::size_of::<KeyValuePair>()) as *mut KeyValuePair
     } else {
-        arena_alloc(arena, max_size * std::mem::size_of::<KeyValuePair>()) as *mut KeyValuePair
+        arena_alloc(arena, max_size * std::mem::size_of::<KeyValuePair>(), true)
+            as *mut KeyValuePair
     };
     Dict {
         size: 0,
@@ -1156,7 +1157,7 @@ pub unsafe extern "C" fn rs_arena_dict(arena: *mut Arena, max_size: usize) -> Di
 }
 
 extern "C" {
-    fn arena_alloc(arena: *mut Arena, size: usize) -> *mut c_char;
+    fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut std::ffi::c_void;
 }
 
 // =============================================================================

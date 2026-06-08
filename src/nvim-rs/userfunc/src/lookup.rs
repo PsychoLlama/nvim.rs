@@ -75,7 +75,7 @@ extern "C" {
     static did_emsg: c_int;
 
     // error checking
-    fn aborted_in_try() -> c_int;
+    fn aborted_in_try() -> bool;
 }
 
 // FC_ABORT flag (matches userfunc.h)
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn rs_func_has_ended(cookie: *mut c_void) -> c_int {
     let flags = unsafe { nvim_ufunc_get_flags(fp) };
     let fc_returned = unsafe { nvim_fc_get_returned(cookie) };
     let aborted =
-        (flags & FC_ABORT != 0) && unsafe { did_emsg } != 0 && unsafe { aborted_in_try() } == 0;
+        (flags & FC_ABORT != 0) && unsafe { did_emsg } != 0 && !unsafe { aborted_in_try() };
     c_int::from(aborted || fc_returned != 0)
 }
 

@@ -209,7 +209,7 @@ extern "C" {
 
 extern "C" {
     #[link_name = "rem_backslash"]
-    pub fn nvim_al_rem_backslash(p: *const c_char) -> c_int;
+    pub fn nvim_al_rem_backslash(p: *const c_char) -> bool;
     #[link_name = "rs_ascii_isspace"]
     pub fn nvim_al_ascii_isspace(c: c_int) -> c_int;
     #[link_name = "skipwhite"]
@@ -308,11 +308,11 @@ extern "C" {
     pub fn nvim_al_win_split(size: c_int, flags: c_int) -> c_int;
     pub fn nvim_al_reset_binding(wp: WinPtr);
     #[link_name = "rs_buf_hide"]
-    pub fn nvim_al_buf_hide(buf: BufPtr) -> c_int;
+    pub fn nvim_al_buf_hide(buf: BufPtr) -> bool;
     #[link_name = "fix_fname"]
     pub fn nvim_al_fix_fname(fname: *const c_char) -> *mut c_char;
     #[link_name = "rs_otherfile"]
-    pub fn nvim_al_otherfile(fname: *const c_char) -> c_int;
+    pub fn nvim_al_otherfile(fname: *const c_char) -> bool;
     #[link_name = "check_changed"]
     pub fn nvim_al_check_changed(buf: BufPtr, flags: c_int) -> c_int;
     #[link_name = "do_ecmd"]
@@ -348,7 +348,7 @@ extern "C" {
     #[link_name = "maketitle"]
     pub fn nvim_al_maketitle();
     #[link_name = "rs_curbuf_reusable"]
-    pub fn nvim_al_curbuf_reusable() -> c_int;
+    pub fn nvim_al_curbuf_reusable() -> bool;
     pub fn nvim_al_curbuf_ml_empty() -> c_int;
     pub fn nvim_al_emsg_invarg();
     pub fn nvim_al_emsg_invrange();
@@ -387,7 +387,7 @@ extern "C" {
     pub fn nvim_al_get_Columns() -> c_int;
     pub fn nvim_al_buf_get_nwindows(buf: BufPtr) -> c_int;
     #[link_name = "bufIsChanged"]
-    pub fn nvim_al_bufIsChanged(buf: BufPtr) -> c_int;
+    pub fn nvim_al_bufIsChanged(buf: BufPtr) -> bool;
     #[link_name = "rs_buf_is_empty"]
     pub fn nvim_al_buf_is_empty(buf: BufPtr) -> c_int;
     #[link_name = "autowrite"]
@@ -399,7 +399,7 @@ extern "C" {
     pub fn nvim_al_set_bufref(br: BufrefPtr, buf: BufPtr);
     pub fn nvim_al_ONE_WINDOW() -> c_int;
     #[link_name = "is_aucmd_win"]
-    pub fn nvim_al_is_aucmd_win(wp: WinPtr) -> c_int;
+    pub fn nvim_al_is_aucmd_win(wp: WinPtr) -> bool;
     #[link_name = "rs_reset_VIsual_and_resel"]
     pub fn nvim_al_reset_VIsual_and_resel();
     pub fn nvim_al_xcalloc(count: usize, size: usize) -> *mut c_void;

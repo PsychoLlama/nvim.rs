@@ -212,7 +212,7 @@ extern "C" {
     fn ends_excmd(c: c_char) -> c_int;
 
     // Error handling
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     // Memory
     fn xfree(ptr: *mut c_void);
@@ -860,7 +860,7 @@ unsafe fn get_lval_impl(
             // Report an invalid expression in braces, unless the expression
             // evaluation has been cancelled due to an aborting error,
             // an interrupt, or an exception.
-            if aborting() == 0 && !quiet {
+            if !aborting() && !quiet {
                 emsg_severe = (1) != 0;
                 nvim_semsg_invarg2(name);
                 return std::ptr::null_mut();

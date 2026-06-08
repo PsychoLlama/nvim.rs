@@ -152,7 +152,7 @@ extern "C" {
 
     // Function type checks
     fn nvim_is_builtin_function(name: *const c_char, len: c_int) -> c_int;
-    fn rs_is_luafunc(partial: PartialHandle) -> c_int;
+    fn rs_is_luafunc(partial: PartialHandle) -> bool;
 
     // Typval operations
     fn tv_clear(tv: TypevalHandle);
@@ -190,12 +190,12 @@ extern "C" {
     );
 
     // Error handling
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn user_func_error(error: c_int, name: *const c_char, found_var: c_int);
     fn update_force_abort();
 
     // Script autoload
-    fn script_autoload(name: *const c_char, name_len: usize, reload: c_int) -> c_int;
+    fn script_autoload(name: *const c_char, name_len: usize, reload: c_int) -> bool;
 
     // Autocmd
     fn apply_autocmds_for_funcundefined(name: *const c_char) -> c_int;
@@ -266,7 +266,7 @@ pub unsafe fn lookup_function(
     partial: PartialHandle,
 ) -> FuncLookupResult {
     // Check for Lua function via partial
-    if !partial.is_null() && rs_is_luafunc(partial) != 0 {
+    if !partial.is_null() && rs_is_luafunc(partial) {
         return FuncLookupResult::Lua;
     }
 
@@ -287,7 +287,7 @@ pub unsafe fn lookup_function(
         fp = find_func(name);
 
         // Try FuncUndefined autocmd
-        if fp.is_null() && apply_autocmds_for_funcundefined(name) != 0 && aborting() == 0 {
+        if fp.is_null() && apply_autocmds_for_funcundefined(name) != 0 && !aborting() {
             fp = find_func(name);
         }
 
@@ -305,7 +305,7 @@ pub unsafe fn lookup_function(
                 }
                 l
             };
-            if script_autoload(name, len, 1) != 0 && aborting() == 0 {
+            if script_autoload(name, len, 1) && !aborting() {
                 fp = find_func(name);
             }
         }

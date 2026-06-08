@@ -296,7 +296,7 @@ extern "C" {
         buf: *const c_void,
         fname: *const c_char,
     );
-    fn msg_add_fileformat(eol_type: c_int) -> c_int;
+    fn msg_add_fileformat(eol_type: c_int) -> bool;
     fn msg_add_lines(insert_space: c_int, lnum: i32, nchars: i64);
 }
 
@@ -2103,7 +2103,7 @@ pub unsafe extern "C" fn rs_readfile(
                 nvim_fileio_xstrlcat(iobuff, msg_ptr!(MSG_READ_ERRORS), iosize);
                 c_bool = true;
             }
-            if msg_add_fileformat(fileformat) != 0 {
+            if msg_add_fileformat(fileformat) {
                 c_bool = true;
             }
 

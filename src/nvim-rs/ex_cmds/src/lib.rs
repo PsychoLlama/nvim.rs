@@ -467,7 +467,7 @@ extern "C" {
     /// Save undo information for lines [top+1, bot-1]
     pub fn u_save(top: c_int, bot: c_int) -> c_int;
     /// Set line indentation
-    pub fn set_indent(size: c_int, flags: c_int) -> c_int;
+    pub fn set_indent(size: c_int, flags: c_int) -> bool;
     /// Get current line indent
     pub fn get_indent() -> c_int;
     /// Get pointer to current cursor line
@@ -502,9 +502,9 @@ extern "C" {
     /// last_search_pat: return last search pattern
     pub fn last_search_pat() -> *const c_char;
     /// messaging: returns true if in messaging mode
-    pub fn messaging() -> c_int;
+    pub fn messaging() -> bool;
     /// aborting: returns true if aborting
-    pub fn aborting() -> c_int;
+    pub fn aborting() -> bool;
     /// line_breakcheck: check for line break
     pub fn line_breakcheck();
     /// ml_firstmarked: return first marked line
@@ -516,7 +516,7 @@ extern "C" {
     /// changed_line_abv_curs: notify of line change above cursor
     pub fn changed_line_abv_curs();
     /// text_locked: returns true if text is locked
-    pub fn text_locked() -> c_int;
+    pub fn text_locked() -> bool;
     /// autowrite_all: write all changed buffers
     pub fn autowrite_all();
     /// do_autochdir: change to buffer's directory if autochdir is set
@@ -532,15 +532,15 @@ extern "C" {
     /// buf_ensure_loaded: ensure buffer is loaded
     pub fn buf_ensure_loaded(buf: *mut BufHandle);
     /// bufIsChanged: check if buffer is changed
-    pub fn bufIsChanged(buf: *mut BufHandle) -> c_int;
+    pub fn bufIsChanged(buf: *mut BufHandle) -> bool;
     /// rs_bt_dontwrite: check if buffer type doesn't write (Rust impl)
     pub fn rs_bt_dontwrite(buf: *mut BufHandle) -> bool;
     /// rs_bt_nofilename: check if buffer type has no filename (Rust impl)
     pub fn rs_bt_nofilename(buf: *mut BufHandle) -> bool;
     /// os_path_exists: check if path exists
-    pub fn os_path_exists(fname: *const c_char) -> c_int;
+    pub fn os_path_exists(fname: *const c_char) -> bool;
     /// os_isdir: check if path is a directory
-    pub fn os_isdir(fname: *const c_char) -> c_int;
+    pub fn os_isdir(fname: *const c_char) -> bool;
     /// os_nodetype: get node type of path
     pub fn os_nodetype(fname: *const c_char) -> c_int;
     /// os_file_mkdir: create directory (mode 0755)
@@ -548,7 +548,7 @@ extern "C" {
     /// fix_fname: expand and fix a filename
     pub fn fix_fname(fname: *const c_char) -> *mut c_char;
     /// otherfile: check if fname is different from current file
-    pub fn otherfile(fname: *const c_char) -> c_int;
+    pub fn otherfile(fname: *const c_char) -> bool;
     /// check_fname: check if current buffer has a filename
     pub fn check_fname() -> c_int;
     /// do_argfile: edit a file from the argument list
@@ -600,7 +600,7 @@ extern "C" {
     /// open_buffer: open a buffer in the current window
     pub fn open_buffer(read_stdin: bool, eap: *mut ExArgHandle, flags: c_int) -> c_int;
     /// should_abort: check if we should abort after an operation
-    pub fn should_abort(retval: c_int) -> c_int;
+    pub fn should_abort(retval: c_int) -> bool;
     /// check_changed: check if buffer was changed and show message
     pub fn check_changed(buf: *mut BufHandle, flags: c_int) -> bool;
     /// u_savecommon: save common undo information
@@ -765,7 +765,7 @@ extern "C" {
     /// Check if character is a composing character (first in sequence)
     pub fn utf_iscomposing_first(c: c_int) -> c_int;
     /// Check if character is printable
-    pub fn vim_isprintc(c: c_int) -> c_int;
+    pub fn vim_isprintc(c: c_int) -> bool;
     /// Get printable representation of character
     pub fn transchar(c: c_int) -> *const c_char;
     /// Get non-printable character representation into buffer (curbuf)

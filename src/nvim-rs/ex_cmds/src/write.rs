@@ -421,7 +421,7 @@ const ERR_E143: c_int = 14; // E143 autocommands deleted new buffer + clear au_n
 
 extern "C" {
     fn check_can_set_curbuf_forceit(forceit: c_int) -> bool;
-    fn text_locked() -> c_int;
+    fn text_locked() -> bool;
     fn curbuf_locked() -> bool;
     fn rs_fname_expand(buf: *mut BufHandle, ffname: *mut *mut c_char, sfname: *mut *mut c_char);
     fn nvim_get_curbuf() -> *mut BufHandle;
@@ -458,7 +458,7 @@ pub unsafe extern "C" fn rs_getfile(
     if !check_can_set_curbuf_forceit(forceit) {
         return GETFILE_ERROR_VAL;
     }
-    if text_locked() != 0 {
+    if text_locked() {
         return GETFILE_ERROR_VAL;
     }
     if curbuf_locked() {
@@ -479,11 +479,7 @@ pub unsafe extern "C" fn rs_getfile(
         };
         (out_ffname, out_sfname, free_me, other)
     } else {
-        let other = if fnum != nvim_excmds_curbuf_get_b_fnum() {
-            1
-        } else {
-            0
-        };
+        let other = fnum != nvim_excmds_curbuf_get_b_fnum();
         (
             ffname_arg,
             sfname_arg,
@@ -492,13 +488,13 @@ pub unsafe extern "C" fn rs_getfile(
         )
     };
 
-    if other != 0 {
+    if other {
         crate::no_wait_return += 1;
     }
 
     let retval;
 
-    if other != 0
+    if other
         && forceit == 0
         && nvim_excmds_curbuf_get_b_nwindows() == 1
         && !rs_buf_hide(crate::nvim_get_curbuf())
@@ -516,14 +512,14 @@ pub unsafe extern "C" fn rs_getfile(
         }
     }
 
-    if other != 0 {
+    if other {
         crate::no_wait_return -= 1;
     }
     if setpm != 0 {
         setpcmark();
     }
 
-    if other == 0 {
+    if !other {
         if lnum != 0 {
             nvim_curwin_set_cursor_lnum(lnum);
         }
@@ -616,7 +612,7 @@ extern "C" {
     // moved to Phase 3 inline Rust
     fn nvim_excmds_buf_has_running_job(buf: *const BufHandle) -> c_int;
     fn no_write_message_nobang(buf: *mut BufHandle);
-    fn bufIsChanged(buf: *mut BufHandle) -> c_int;
+    fn bufIsChanged(buf: *mut BufHandle) -> bool;
     fn rs_bt_dontwrite(buf: *mut BufHandle) -> bool;
     fn nvim_excmds_semsg_e141(fnum: i64);
     fn nvim_excmds_check_readonly_buf(
@@ -660,7 +656,7 @@ pub unsafe extern "C" fn rs_do_wqall(eap: *mut ExArgHandle) {
         if exiting && nvim_excmds_buf_has_running_job(buf) != 0 {
             no_write_message_nobang(buf);
             error += 1;
-        } else if bufIsChanged(buf) == 0 || rs_bt_dontwrite(buf) {
+        } else if !bufIsChanged(buf) || rs_bt_dontwrite(buf) {
             buf = nvim_excmds_buf_get_next(buf);
             continue;
         } else {
@@ -726,8 +722,8 @@ extern "C" {
     fn rs_bt_nofilename(buf: *mut BufHandle) -> bool;
     // nvim_excmds_buf_get_b_flags moved to Phase 3 inline Rust
     fn nvim_excmds_cpo_no_overnew() -> c_int;
-    fn os_path_exists(ffname: *const c_char) -> c_int;
-    fn os_isdir(ffname: *const c_char) -> c_int;
+    fn os_path_exists(ffname: *const c_char) -> bool;
+    fn os_isdir(ffname: *const c_char) -> bool;
     fn nvim_excmds_dialog_overwrite(eap: *mut ExArgHandle, fname: *const c_char) -> c_int;
     fn nvim_excmds_get_first_dir() -> *mut c_char;
     fn nvim_excmds_makeswapname(
@@ -764,7 +760,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
                 || ((b_flags & BF_NEW_VAL) != 0 && nvim_excmds_cpo_no_overnew() != 0)
                 || (b_flags & BF_READERR_VAL) != 0));
 
-    if !needs_check || crate::p_wa != 0 || os_path_exists(ffname) == 0 {
+    if !needs_check || crate::p_wa != 0 || !os_path_exists(ffname) {
         return 1; // OK
     }
 
@@ -775,7 +771,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
         // Check if target is a directory (Unix only)
         #[cfg(unix)]
         {
-            if os_isdir(ffname) != 0 {
+            if os_isdir(ffname) {
                 nvim_excmds_error_msg(ERR_ISADIR2, ffname);
                 return 0; // FAIL
             }
@@ -798,7 +794,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
         let swapname = nvim_excmds_makeswapname(fname, ffname, dir);
         xfree(dir.cast());
 
-        if os_path_exists(swapname) != 0 {
+        if os_path_exists(swapname) {
             if nvim_excmds_p_confirm_or_cmod_confirm() != 0 {
                 if nvim_excmds_dialog_swapfile(eap, swapname) == 0 {
                     xfree(swapname.cast());
@@ -823,7 +819,7 @@ pub unsafe extern "C" fn rs_check_overwrite(
 
 extern "C" {
     fn fix_fname(ffname: *const c_char) -> *mut c_char;
-    fn otherfile(ffname: *const c_char) -> c_int;
+    fn otherfile(ffname: *const c_char) -> bool;
     fn nvim_excmds_vim_strchr_cpo_altwrite() -> c_int;
     fn nvim_excmds_setaltfname(
         ffname: *const c_char,
@@ -859,7 +855,7 @@ extern "C" {
         force: bool,
         buf: *mut c_void,
     ) -> bool;
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn nvim_excmds_buf_swap_filenames(alt_buf: *mut BufHandle);
     fn nvim_excmds_buf_name_changed_curbuf();
     // nvim_excmds_buf_get_b_p_bl, nvim_excmds_buf_set_b_p_bl_true, nvim_excmds_buf_ft_is_empty
@@ -897,7 +893,7 @@ unsafe fn rs_do_saveas_swap(alt_buf: *mut BufHandle, out_sfname: *mut *const c_c
         false,
         alt_buf.cast::<c_void>(),
     );
-    if (nvim_get_curbuf() as usize) != was_curbuf || aborting() != 0 {
+    if (nvim_get_curbuf() as usize) != was_curbuf || aborting() {
         return 0;
     }
 
@@ -931,7 +927,7 @@ unsafe fn rs_do_saveas_swap(alt_buf: *mut BufHandle, out_sfname: *mut *const c_c
         );
     }
 
-    if (nvim_get_curbuf() as usize) != was_curbuf || aborting() != 0 {
+    if (nvim_get_curbuf() as usize) != was_curbuf || aborting() {
         return 0;
     }
 
@@ -980,7 +976,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
                 std::ptr::null_mut::<c_char>(),
                 std::ptr::null_mut::<c_char>(),
                 std::ptr::null_mut::<c_char>(),
-                0,
+                false,
             )
         } else {
             // Has argument
@@ -999,7 +995,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
     let mut alt_buf: *mut BufHandle = std::ptr::null_mut();
 
     // If we have a new file, put its name in the list of alternate file names.
-    if other != 0 {
+    if other {
         if nvim_excmds_vim_strchr_cpo_altwrite() != 0 || nvim_exarg_cmdidx_is_saveas(eap) != 0 {
             alt_buf = nvim_excmds_setaltfname(ffname, fname, 1);
         } else {
@@ -1013,7 +1009,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
     }
 
     // Writing to the current file checks
-    if other == 0 {
+    if !other {
         let curbuf = nvim_get_curbuf();
         if rs_bt_dontwrite_msg(curbuf)
             || check_fname() == 0
@@ -1025,7 +1021,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
         }
     }
 
-    if other == 0 {
+    if !other {
         // Writing to current file; use curbuf's names
         ffname = nvim_excmds_curbuf_get_ffname() as *mut c_char;
         fname = nvim_excmds_curbuf_get_fname() as *mut c_char;
@@ -1054,7 +1050,7 @@ pub unsafe extern "C" fn rs_do_write(eap: *mut ExArgHandle) -> c_int {
     }
 
     let curbuf = nvim_get_curbuf();
-    if rs_check_overwrite(eap, curbuf, fname, ffname, other) != 0 {
+    if rs_check_overwrite(eap, curbuf, fname, ffname, c_int::from(other)) != 0 {
         // check_overwrite returned OK
         let is_saveas = nvim_exarg_cmdidx_is_saveas(eap) != 0;
 

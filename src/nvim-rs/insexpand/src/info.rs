@@ -92,7 +92,7 @@ extern "C" {
 
     // Pum / preview
     #[link_name = "pum_visible"]
-    fn nvim_pum_visible() -> c_int;
+    fn nvim_pum_visible() -> bool;
     fn nvim_win_float_find_preview() -> *mut c_void;
     fn nvim_ci_win_get_handle(wp: *mut c_void) -> c_int;
     fn nvim_ci_win_get_buf_handle(wp: *mut c_void) -> c_int;

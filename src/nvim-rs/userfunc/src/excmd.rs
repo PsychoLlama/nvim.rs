@@ -161,8 +161,8 @@ extern "C" {
     fn rs_list_functions_matching_pat(eap: *mut c_void) -> *mut c_char;
     fn rs_list_one_function(eap: *mut c_void, name: *const c_char, p: *mut c_char) -> *mut c_void;
     // function name checks (Rust, eval crate)
-    fn rs_eval_isnamec(c: c_int) -> c_int;
-    fn rs_eval_isnamec1(c: c_int) -> c_int;
+    fn rs_eval_isnamec(c: c_int) -> bool;
+    fn rs_eval_isnamec1(c: c_int) -> bool;
     // garray helpers (C)
     fn ga_init(gap: *mut GarrayT, itemsize: c_int, growsize: c_int);
     fn ga_clear_strings(gap: *mut c_void);
@@ -572,9 +572,9 @@ unsafe fn ex_function_body(
                     break;
                 }
                 let ok = if i == 0 {
-                    unsafe { rs_eval_isnamec1(c_int::from(c as u8)) != 0 }
+                    unsafe { rs_eval_isnamec1(c_int::from(c as u8)) }
                 } else {
-                    unsafe { rs_eval_isnamec(c_int::from(c as u8)) != 0 }
+                    unsafe { rs_eval_isnamec(c_int::from(c as u8)) }
                 };
                 if !ok {
                     break;

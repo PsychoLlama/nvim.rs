@@ -307,7 +307,7 @@ extern "C" {
     // Autocmd functions (from nvim-autocmd crate)
     /// Check if window is an aucmd_win.
     #[link_name = "is_aucmd_win"]
-    fn rs_is_aucmd_win(win: WinHandle) -> c_int;
+    fn rs_is_aucmd_win(win: WinHandle) -> bool;
 }
 
 /// Check if a window is locked (`w_locked` field).
@@ -496,7 +496,7 @@ fn only_one_window_impl() -> bool {
                 let is_floating = win_ref(wp).w_floating;
                 let is_pvw = win_ref(wp).w_p_pvw() != 0;
                 let is_curwin = wp == curwin;
-                let is_aucmd = rs_is_aucmd_win(wp) != 0;
+                let is_aucmd = rs_is_aucmd_win(wp);
 
                 // Count if:
                 // - Not a help window (unless curbuf is also help) AND not floating AND not preview

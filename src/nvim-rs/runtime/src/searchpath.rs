@@ -125,7 +125,7 @@ extern "C" {
     fn os_file_is_readable(path: *const c_char) -> bool;
 
     // Arena allocation
-    fn arena_alloc(arena: *mut Arena, size: usize) -> *mut c_void;
+    fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_void;
     fn arena_memdupz(arena: *mut Arena, data: *const c_char, len: usize) -> *mut c_char;
     fn xmalloc(size: usize) -> *mut c_void;
 
@@ -144,7 +144,7 @@ unsafe fn arena_array_alloc(arena: *mut Arena, max_size: usize) -> Array {
     let raw = if arena.is_null() {
         xmalloc(max_size * item_size)
     } else {
-        arena_alloc(arena, max_size * item_size)
+        arena_alloc(arena, max_size * item_size, true)
     };
     Array {
         size: 0,

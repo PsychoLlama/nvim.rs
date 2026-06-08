@@ -67,7 +67,7 @@ extern "C" {
 
     // Generic autocmd dispatcher
     fn nvim_apply_autocmds_event(event: c_int);
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     // u_sync
     fn nvim_u_sync(force: bool);
@@ -178,7 +178,7 @@ fn win_enter_ext_impl(wp: WinHandle, flags: c_int) {
                 return;
             }
             // autocmds may abort script processing
-            if aborting() != 0 {
+            if aborting() {
                 return;
             }
         }

@@ -28,13 +28,13 @@ extern "C" {
     fn vim_ispathsep(c: c_int) -> c_int;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn path_fnamecmp(a: *const c_char, b: *const c_char) -> c_int;
-    fn os_fileinfo(fname: *const c_char, info: *mut crate::FileInfoHandle) -> c_int;
+    fn os_fileinfo(fname: *const c_char, info: *mut crate::FileInfoHandle) -> bool;
     fn os_fileinfo_id_equal(
         a: *const crate::FileInfoHandle,
         b: *const crate::FileInfoHandle,
-    ) -> c_int;
-    fn os_fileinfo_link(fname: *const c_char, info: *mut crate::FileInfoHandle) -> c_int;
-    fn os_path_exists(path: *const c_char) -> c_int;
+    ) -> bool;
+    fn os_fileinfo_link(fname: *const c_char, info: *mut crate::FileInfoHandle) -> bool;
+    fn os_path_exists(path: *const c_char) -> bool;
     fn os_rename(from: *const c_char, to: *const c_char) -> c_int;
     fn os_remove(path: *const c_char) -> c_int;
     fn os_get_acl(fname: *const c_char) -> *mut c_void;
@@ -216,7 +216,7 @@ unsafe fn rename_with_tmp_impl(from: *const c_char, to: *const c_char) -> c_int 
         tail_buf[..n_bytes.len()].copy_from_slice(n_bytes);
 
         let tempname_ptr = tempname.as_ptr() as *const c_char;
-        if unsafe { os_path_exists(tempname_ptr) } == 0 {
+        if !unsafe { os_path_exists(tempname_ptr) } {
             // temp name doesn't exist, try renaming
             if unsafe { os_rename(from, tempname_ptr) } == OK {
                 if unsafe { os_rename(tempname_ptr, to) } == OK {
@@ -276,19 +276,19 @@ pub unsafe extern "C" fn rs_vim_rename(from: *const c_char, to: *const c_char) -
 
     // Fail if the "from" file doesn't exist.
     let mut from_info = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-    if unsafe { os_fileinfo(from, from_info.as_mut_ptr() as *mut crate::FileInfoHandle) } == 0 {
+    if !unsafe { os_fileinfo(from, from_info.as_mut_ptr() as *mut crate::FileInfoHandle) } {
         return -1;
     }
 
     // Check if source and destination are the same inode.
     let mut to_info = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-    if unsafe { os_fileinfo(to, to_info.as_mut_ptr() as *mut crate::FileInfoHandle) } != 0
+    if unsafe { os_fileinfo(to, to_info.as_mut_ptr() as *mut crate::FileInfoHandle) }
         && unsafe {
             os_fileinfo_id_equal(
                 from_info.as_ptr() as *const crate::FileInfoHandle,
                 to_info.as_ptr() as *const crate::FileInfoHandle,
             )
-        } != 0
+        }
     {
         use_tmp_file = true;
     }
@@ -312,7 +312,7 @@ pub unsafe extern "C" fn rs_vim_rename(from: *const c_char, to: *const c_char) -
 
     // Copy succeeded, remove the source.
     let mut from_info2 = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-    if unsafe { os_fileinfo(from, from_info2.as_mut_ptr() as *mut crate::FileInfoHandle) } != 0 {
+    if unsafe { os_fileinfo(from, from_info2.as_mut_ptr() as *mut crate::FileInfoHandle) } {
         unsafe { os_remove(from) };
     }
 
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn rs_vim_copyfile(from: *const c_char, to: *const c_char)
         let mut from_info = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let has_info =
             unsafe { os_fileinfo_link(from, from_info.as_mut_ptr() as *mut crate::FileInfoHandle) };
-        if has_info != 0 {
+        if has_info {
             // Check if it's a symlink by checking S_ISLNK
             // We use readlink: if it returns > 0, it's a symlink
             let mut linkbuf = [0u8; MAXPATHL + 1];

@@ -450,7 +450,7 @@ pub unsafe extern "C" fn rs_do_ascii(_eap: *mut ExArgHandle) {
         // Build the extra representation for non-ASCII printable chars
         let mut buf1 = [0u8; 20];
         let buf1_len;
-        if vim_isprintc(c) != 0 && !(0x20..=0x7e).contains(&c) {
+        if vim_isprintc(c) && !(0x20..=0x7e).contains(&c) {
             let mut buf3 = [0i8; 7];
             nvim_transchar_nonprint_curbuf(buf3.as_mut_ptr(), c);
             let repr = CStr::from_ptr(buf3.as_ptr()).to_bytes();

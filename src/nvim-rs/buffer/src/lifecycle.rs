@@ -1377,7 +1377,7 @@ extern "C" {
     fn enter_buffer(buf: BufHandle);
     fn check_colorcolumn(cc: *const c_char, win: *mut c_void) -> *const c_char;
     fn nvim_buf_terminal_check_size(buf: BufHandle) -> c_int;
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn rs_win_valid(win: *mut c_void) -> c_int;
     fn rs_get_last_winid() -> c_int;
     fn nvim_set_curwin(win: *mut c_void);
@@ -1439,9 +1439,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         std::ptr::null(),
         false,
         curbuf,
-    ) || (bufref_valid(&raw mut prevbufref)
-        && bufref_valid(&raw mut newbufref)
-        && aborting() == 0)
+    ) || (bufref_valid(&raw mut prevbufref) && bufref_valid(&raw mut newbufref) && !aborting())
     {
         if win_ref_raw(nvim_get_curwin()).w_buffer == prevbuf.0 {
             reset_synblock(nvim_get_curwin());
@@ -1452,7 +1450,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
         if unload || (new_lastwinid != last_winid && (bh == b'w' || bh == b'd' || bh == b'u')) {
             close_windows(prevbuf, 0);
         }
-        if bufref_valid(&raw mut prevbufref) && aborting() == 0 {
+        if bufref_valid(&raw mut prevbufref) && !aborting() {
             let previouswin = nvim_get_curwin();
 
             // Do not sync when in Insert mode and buffer is open in another window.
@@ -1482,7 +1480,7 @@ pub unsafe extern "C" fn rs_set_curbuf(buf: BufHandle, action: c_int, update_jum
     }
 
     let valid = crate::rs_buf_valid(buf) != 0;
-    if (valid && buf != nvim_get_curbuf() && aborting() == 0)
+    if (valid && buf != nvim_get_curbuf() && !aborting())
         || win_ref_raw(nvim_get_curwin()).w_buffer.is_null()
     {
         let cur = nvim_get_curbuf();
@@ -1519,7 +1517,7 @@ extern "C" {
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_reset_binding_curwin();
     fn swbuf_goto_win_with_buf(buf: BufHandle) -> *mut c_void;
-    fn is_aucmd_win(wp: *mut c_void) -> c_int;
+    fn is_aucmd_win(wp: *mut c_void) -> bool;
     fn rs_win_locked(wp: *mut c_void) -> c_int;
     fn rs_last_window(win: *mut c_void) -> c_int;
     fn nvim_buf_terminal_running(buf: BufHandle) -> c_int;
@@ -1637,7 +1635,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
         while buf == nvim_get_curbuf()
             && rs_win_locked(curwin) == 0
             && buf_ref(nvim_get_curbuf()).b_locked == 0
-            && (is_aucmd_win(nvim_get_lastwin()) != 0 || rs_last_window(curwin) == 0)
+            && (is_aucmd_win(nvim_get_lastwin()) || rs_last_window(curwin) == 0)
         {
             if win_close(curwin, false, false) == FAIL {
                 break;
@@ -1715,7 +1713,7 @@ pub unsafe extern "C" fn rs_do_buffer_ext(
         nvim_reset_binding_curwin();
     }
 
-    if aborting() != 0 {
+    if aborting() {
         return FAIL;
     }
 
@@ -1743,7 +1741,7 @@ extern "C" {
     fn open_buffer(read_stdin: bool, eap: *mut ExArg, flags: c_int) -> c_int;
     static msg_silent: c_int;
     fn buf_check_timestamp(buf: BufHandle);
-    fn inindent(extra: c_int) -> c_int;
+    fn inindent(extra: c_int) -> bool;
     fn maketitle();
     fn scroll_cursor_halfway(win: *mut c_void, atend: bool, prefer_above: bool);
     fn nvim_ecmd_curbuf_set_last_used();
@@ -1898,7 +1896,7 @@ pub unsafe extern "C" fn rs_enter_buffer(buf: BufHandle) {
     // and possibly cursor col.
     let curwin = nvim_get_curwin(); // re-acquire after autocommands
     let curbuf = nvim_get_curbuf();
-    if win_ref_raw(curwin).w_cursor.lnum == 1 && inindent(0) != 0 {
+    if win_ref_raw(curwin).w_cursor.lnum == 1 && inindent(0) {
         buflist_getfpos();
     }
 
@@ -2204,7 +2202,7 @@ pub unsafe extern "C" fn rs_ex_buffer_all(eap: *mut ExArg) {
             break;
         }
         // Autocommands deleted buffer or aborted script processing.
-        if aborting() != 0 {
+        if aborting() {
             break;
         }
         // When ":tab" was used, open new tab for each new window repeatedly.
@@ -2550,7 +2548,7 @@ pub unsafe extern "C" fn rs_open_buffer(
         let fail_val: c_int = 0;
         if (ex_buffer_got_int && !vim_strchr(p_cpo, CPO_INTMOD).is_null())
             || buf_ref(curbuf).b_modified_was_set != 0
-            || (aborting() != 0 && !vim_strchr(p_cpo, CPO_INTMOD).is_null())
+            || (aborting() && !vim_strchr(p_cpo, CPO_INTMOD).is_null())
         {
             changed(curbuf);
         } else if retval != fail_val && !read_stdin && read_fifo == 0 {
@@ -2561,7 +2559,7 @@ pub unsafe extern "C" fn rs_open_buffer(
         buf_mut(curbuf).b_last_changedtick = tick;
         buf_mut(curbuf).b_last_changedtick_i = tick;
         buf_mut(curbuf).b_last_changedtick_pum = tick;
-        if aborting() != 0 {
+        if aborting() {
             buf_mut(curbuf).b_flags |= buf_flags::BF_READERR;
         }
     }

@@ -123,11 +123,11 @@ extern "C" {
 
     // List operations
     fn nvim_tv_get_list(tv: TypevalHandle) -> *mut c_void;
-    fn tv_list_equal(l1: *mut c_void, l2: *mut c_void, ic: c_int) -> bool;
+    fn tv_list_equal(l1: *mut c_void, l2: *mut c_void, ic: bool) -> bool;
 
     // Dict operations
     fn nvim_tv_get_dict(tv: TypevalHandle) -> *mut c_void;
-    fn tv_dict_equal(d1: *mut c_void, d2: *mut c_void, ic: c_int) -> bool;
+    fn tv_dict_equal(d1: *mut c_void, d2: *mut c_void, ic: bool) -> bool;
 
     // Blob operations
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
@@ -137,7 +137,7 @@ extern "C" {
     fn mb_strcmp_ic(ic: c_int, s1: *const c_char, s2: *const c_char) -> c_int;
 
     // Pattern matching
-    fn pattern_match(pat: *const c_char, text: *const c_char, ic: c_int) -> c_int;
+    fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -> c_int;
 
     // General equality
     fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: bool) -> bool;
@@ -303,7 +303,7 @@ pub unsafe fn typval_compare_impl(
             tv_clear(typ1);
             return FAIL;
         } else {
-            let eq = tv_list_equal(nvim_tv_get_list(typ1), nvim_tv_get_list(typ2), ic);
+            let eq = tv_list_equal(nvim_tv_get_list(typ1), nvim_tv_get_list(typ2), ic != 0);
             result = if (expr_type == EXPR_NEQUAL) != eq {
                 1
             } else {
@@ -329,7 +329,7 @@ pub unsafe fn typval_compare_impl(
             tv_clear(typ1);
             return FAIL;
         } else {
-            let eq = tv_dict_equal(nvim_tv_get_dict(typ1), nvim_tv_get_dict(typ2), ic);
+            let eq = tv_dict_equal(nvim_tv_get_dict(typ1), nvim_tv_get_dict(typ2), ic != 0);
             result = if (expr_type == EXPR_NEQUAL) != eq {
                 1
             } else {
@@ -429,7 +429,7 @@ pub unsafe fn typval_compare_impl(
 
         if expr_type == EXPR_MATCH || expr_type == EXPR_NOMATCH {
             // Pattern matching
-            let matched = pattern_match(s2, s1, ic) != 0;
+            let matched = pattern_match(s2, s1, ic != 0) != 0;
             result = if (expr_type == EXPR_NOMATCH) != matched {
                 1
             } else {

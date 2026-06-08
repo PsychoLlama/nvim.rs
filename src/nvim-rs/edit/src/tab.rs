@@ -48,7 +48,7 @@ extern "C" {
     fn echeck_abbr(c: c_int) -> c_int;
 
     // Indent check
-    fn inindent(extra: c_int) -> c_int;
+    fn inindent(extra: c_int) -> bool;
 
     // can_cindent
     fn nvim_set_can_cindent(val: c_int);
@@ -346,7 +346,7 @@ unsafe fn ins_tab_impl() -> bool {
         return false;
     }
 
-    let ind = inindent(0) != 0;
+    let ind = inindent(0);
     if ind {
         nvim_set_can_cindent(0);
     }

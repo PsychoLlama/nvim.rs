@@ -105,7 +105,7 @@ extern "C" {
     fn nvim_block_autocmds();
     #[link_name = "unblock_autocmds"]
     fn nvim_unblock_autocmds();
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     fn rs_diff_buf_delete(buf: BufHandle);
     fn rs_diffopt_hiddenoff() -> c_int;
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn rs_buf_freeall(buf: BufHandle, flags: c_int) {
     }
 
     // autocmds may abort script processing
-    if (flags & BFA_IGNORE_ABORT) == 0 && aborting() != 0 {
+    if (flags & BFA_IGNORE_ABORT) == 0 && aborting() {
         return;
     }
 
@@ -370,7 +370,7 @@ pub unsafe extern "C" fn rs_close_buffer(
             }
         }
         // autocmds may abort script processing
-        if !ignore_abort && aborting() != 0 {
+        if !ignore_abort && aborting() {
             return false;
         }
     }
@@ -426,7 +426,7 @@ pub unsafe extern "C" fn rs_close_buffer(
         return false;
     }
     // autocmds may abort script processing.
-    if !ignore_abort && aborting() != 0 {
+    if !ignore_abort && aborting() {
         return false;
     }
 

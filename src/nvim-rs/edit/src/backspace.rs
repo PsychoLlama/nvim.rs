@@ -76,7 +76,7 @@ extern "C" {
     fn nvim_u_save(lnum1: c_int, lnum2: c_int) -> c_int;
 
     // Indent
-    fn inindent(extra: c_int) -> c_int;
+    fn inindent(extra: c_int) -> bool;
     fn nvim_set_can_cindent(val: c_int);
     fn nvim_curbuf_get_b_p_ai() -> c_int;
     fn cindent_on() -> bool;
@@ -342,7 +342,7 @@ unsafe fn ins_bs_impl(c: c_int, mode: c_int, inserted_space_p: *mut c_int) -> bo
         return false;
     }
 
-    let in_indent = inindent(0) != 0;
+    let in_indent = inindent(0);
     if in_indent {
         nvim_set_can_cindent(0);
     }

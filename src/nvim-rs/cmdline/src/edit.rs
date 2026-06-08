@@ -64,7 +64,7 @@ extern "C" {
     // Abbreviation support
     fn nvim_get_p_paste() -> c_int;
     fn nvim_get_no_abbr() -> c_int;
-    fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> c_int;
+    fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> bool;
 
     // Paste support
     fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int;
@@ -1150,7 +1150,7 @@ pub unsafe extern "C" fn rs_ccheck_abbr(c: c_int) -> c_int {
         spos = 0;
     }
 
-    check_abbr(c, cmdbuff, cmdpos, spos)
+    c_int::from(check_abbr(c, cmdbuff, cmdpos, spos))
 }
 
 // =============================================================================

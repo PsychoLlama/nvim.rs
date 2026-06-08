@@ -6293,7 +6293,7 @@ pub unsafe extern "C" fn rs_hlattrs2dict(
 
 extern "C" {
     // nvim_get_hlf_name already declared in main extern block
-    fn arena_alloc(arena: *mut Arena, size: usize) -> *mut c_char;
+    fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_void;
 }
 
 /// Static key strings for hl_inspect (zero-copy)
@@ -6340,8 +6340,11 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
     match e.kind {
         HlKind::Syntax => {
             // Create dict with 3 items: kind, hi_name, id
-            let dict_items = arena_alloc(arena, 3 * std::mem::size_of::<nvim_api::KeyValuePair>())
-                as *mut nvim_api::KeyValuePair;
+            let dict_items = arena_alloc(
+                arena,
+                3 * std::mem::size_of::<nvim_api::KeyValuePair>(),
+                true,
+            ) as *mut nvim_api::KeyValuePair;
             let mut item = Dict {
                 size: 0,
                 capacity: 3,
@@ -6376,8 +6379,11 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
 
         HlKind::UI => {
             // Create dict with 4 items: kind, ui_name, hi_name, id
-            let dict_items = arena_alloc(arena, 4 * std::mem::size_of::<nvim_api::KeyValuePair>())
-                as *mut nvim_api::KeyValuePair;
+            let dict_items = arena_alloc(
+                arena,
+                4 * std::mem::size_of::<nvim_api::KeyValuePair>(),
+                true,
+            ) as *mut nvim_api::KeyValuePair;
             let mut item = Dict {
                 size: 0,
                 capacity: 4,
@@ -6430,8 +6436,11 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
 
         HlKind::Terminal => {
             // Create dict with 2 items: kind, id
-            let dict_items = arena_alloc(arena, 2 * std::mem::size_of::<nvim_api::KeyValuePair>())
-                as *mut nvim_api::KeyValuePair;
+            let dict_items = arena_alloc(
+                arena,
+                2 * std::mem::size_of::<nvim_api::KeyValuePair>(),
+                true,
+            ) as *mut nvim_api::KeyValuePair;
             let mut item = Dict {
                 size: 0,
                 capacity: 2,
@@ -6488,7 +6497,7 @@ pub unsafe extern "C" fn rs_hl_inspect(attr: c_int, arena: *mut Arena) -> Array 
     }
 
     // Allocate array using arena
-    let items = arena_alloc(arena, size * std::mem::size_of::<Object>()) as *mut Object;
+    let items = arena_alloc(arena, size * std::mem::size_of::<Object>(), true) as *mut Object;
     let mut ret = Array {
         size: 0,
         capacity: size,
@@ -6632,6 +6641,7 @@ pub unsafe extern "C" fn rs_hl_get_attr_by_id(
     let items = arena_alloc(
         arena,
         HLATTRS_DICT_SIZE * std::mem::size_of::<nvim_api::KeyValuePair>(),
+        true,
     ) as *mut nvim_api::KeyValuePair;
     let mut retval = Dict {
         size: 0,

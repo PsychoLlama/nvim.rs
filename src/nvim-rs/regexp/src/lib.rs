@@ -1569,7 +1569,7 @@ pub unsafe extern "C" fn rs_reg_nextline() {
 
 extern "C" {
     fn fast_breakcheck();
-    fn vim_iswordc_buf(c: c_int, buf: *const c_void) -> c_int;
+    fn vim_iswordc_buf(c: c_int, buf: *const c_void) -> bool;
 }
 
 /// If `rex.reg_nobreak` is not set, call `fast_breakcheck()`.
@@ -1583,7 +1583,7 @@ pub unsafe extern "C" fn rs_reg_breakcheck() {
 /// Return true if character `c` is included in 'iskeyword' for `rex.reg_buf`.
 #[no_mangle]
 pub unsafe extern "C" fn rs_reg_iswordc(c: c_int) -> c_int {
-    vim_iswordc_buf(c, REX.reg_buf)
+    c_int::from(vim_iswordc_buf(c, REX.reg_buf))
 }
 
 // --- reg_match_visual ---
@@ -3307,9 +3307,9 @@ extern "C" {
     // Character / multibyte helpers
     fn utf_iscomposing_legacy(c: c_int) -> c_int;
     fn utf_composinglike(p1: *const c_char, p2: *const c_char, state: *mut i32) -> c_int;
-    fn vim_isIDc(c: c_int) -> c_int;
-    fn vim_isfilec(c: c_int) -> c_int;
-    fn vim_isprintc(c: c_int) -> c_int;
+    fn vim_isIDc(c: c_int) -> bool;
+    fn vim_isfilec(c: c_int) -> bool;
+    fn vim_isprintc(c: c_int) -> bool;
     fn mb_islower(c: c_int) -> bool;
     fn mb_isupper(c: c_int) -> bool;
 
@@ -3456,7 +3456,7 @@ unsafe fn emit_posix_class(c_class: c_int, regparse_ptr: *mut *mut c_char) {
         }
         x if x == CLASS_PRINT => {
             for cu in 1..=255 {
-                if vim_isprintc(cu) != 0 {
+                if vim_isprintc(cu) {
                     rs_regmbc(cu);
                 }
             }
@@ -3494,7 +3494,7 @@ unsafe fn emit_posix_class(c_class: c_int, regparse_ptr: *mut *mut c_char) {
         x if x == CLASS_ESCAPE => rs_regc(ESC_CH),
         x if x == CLASS_IDENT => {
             for cu in 1..=255 {
-                if vim_isIDc(cu) != 0 {
+                if vim_isIDc(cu) {
                     rs_regmbc(cu);
                 }
             }
@@ -3508,7 +3508,7 @@ unsafe fn emit_posix_class(c_class: c_int, regparse_ptr: *mut *mut c_char) {
         }
         x if x == CLASS_FNAME => {
             for cu in 1..=255 {
-                if vim_isfilec(cu) != 0 {
+                if vim_isfilec(cu) {
                     rs_regmbc(cu);
                 }
             }
@@ -5107,7 +5107,7 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
             x if x == IDENT || x == IDENT + ADD_NL || x == SIDENT || x == SIDENT + ADD_NL => {
                 let tv = opcode == IDENT || opcode == IDENT + ADD_NL;
                 while count < maxcount {
-                    if vim_isIDc(utf_ptr2char(scan.cast::<c_char>())) != 0
+                    if vim_isIDc(utf_ptr2char(scan.cast::<c_char>()))
                         && (tv || !ascii_isdigit(*scan))
                     {
                         scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
@@ -5155,7 +5155,7 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
             x if x == FNAME || x == FNAME + ADD_NL || x == SFNAME || x == SFNAME + ADD_NL => {
                 let tv = opcode == FNAME || opcode == FNAME + ADD_NL;
                 while count < maxcount {
-                    if vim_isfilec(utf_ptr2char(scan.cast::<c_char>())) != 0
+                    if vim_isfilec(utf_ptr2char(scan.cast::<c_char>()))
                         && (tv || !ascii_isdigit(*scan))
                     {
                         scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
@@ -5191,7 +5191,7 @@ pub unsafe extern "C" fn rs_regrepeat(p: *mut u8, maxcount: i64) -> c_int {
                         if !advanced {
                             break;
                         }
-                    } else if vim_isprintc(utf_ptr2char(scan.cast::<c_char>())) == 1
+                    } else if vim_isprintc(utf_ptr2char(scan.cast::<c_char>()))
                         && (tv || !ascii_isdigit(*scan))
                     {
                         scan = scan.add(utfc_ptr2len(scan.cast::<c_char>()) as usize);
@@ -5809,14 +5809,14 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
 
                     // --- Phase 3: Character classes ---
                     IDENT => {
-                        if vim_isIDc(c) == 0 {
-                            status = RA_NOMATCH;
-                        } else {
+                        if vim_isIDc(c) {
                             advance_reginput();
+                        } else {
+                            status = RA_NOMATCH;
                         }
                     }
                     SIDENT => {
-                        if ascii_isdigit(*REX.input) || vim_isIDc(c) == 0 {
+                        if ascii_isdigit(*REX.input) || !vim_isIDc(c) {
                             status = RA_NOMATCH;
                         } else {
                             advance_reginput();
@@ -5839,29 +5839,29 @@ unsafe fn rs_regmatch_impl(scan_arg: *mut u8, tm: *const c_void, timed_out: *mut
                         }
                     }
                     FNAME => {
-                        if vim_isfilec(c) == 0 {
-                            status = RA_NOMATCH;
-                        } else {
+                        if vim_isfilec(c) {
                             advance_reginput();
+                        } else {
+                            status = RA_NOMATCH;
                         }
                     }
                     SFNAME => {
-                        if ascii_isdigit(*REX.input) || vim_isfilec(c) == 0 {
+                        if ascii_isdigit(*REX.input) || !vim_isfilec(c) {
                             status = RA_NOMATCH;
                         } else {
                             advance_reginput();
                         }
                     }
                     PRINT => {
-                        if vim_isprintc(utf_ptr2char(REX.input.cast::<c_char>())) == 0 {
-                            status = RA_NOMATCH;
-                        } else {
+                        if vim_isprintc(utf_ptr2char(REX.input.cast::<c_char>())) {
                             advance_reginput();
+                        } else {
+                            status = RA_NOMATCH;
                         }
                     }
                     SPRINT => {
                         if ascii_isdigit(*REX.input)
-                            || vim_isprintc(utf_ptr2char(REX.input.cast::<c_char>())) == 0
+                            || !vim_isprintc(utf_ptr2char(REX.input.cast::<c_char>()))
                         {
                             status = RA_NOMATCH;
                         } else {
@@ -10885,7 +10885,7 @@ pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
             }
         }
         NFA_CLASS_PRINT => {
-            if vim_isprintc(c) != 0 {
+            if vim_isprintc(c) {
                 return OK;
             }
         }
@@ -10932,7 +10932,7 @@ pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
             }
         }
         NFA_CLASS_IDENT => {
-            if vim_isIDc(c) != 0 {
+            if vim_isIDc(c) {
                 return OK;
             }
         }
@@ -10942,7 +10942,7 @@ pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
             }
         }
         NFA_CLASS_FNAME => {
-            if vim_isfilec(c) != 0 {
+            if vim_isfilec(c) {
                 return OK;
             }
         }
@@ -13505,7 +13505,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_IDENT => {
-                    result = vim_isIDc(curc);
+                    result = c_int::from(vim_isIDc(curc));
                     if result != 0 {
                         add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
                             .state)
@@ -13516,7 +13516,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_SIDENT => {
-                    result = if ascii_isdigit_i(curc) == 0 && vim_isIDc(curc) != 0 {
+                    result = if ascii_isdigit_i(curc) == 0 && vim_isIDc(curc) {
                         1
                     } else {
                         0
@@ -13559,7 +13559,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_FNAME => {
-                    result = vim_isfilec(curc);
+                    result = c_int::from(vim_isfilec(curc));
                     if result != 0 {
                         add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
                             .state)
@@ -13570,7 +13570,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_SFNAME => {
-                    result = if ascii_isdigit_i(curc) == 0 && vim_isfilec(curc) != 0 {
+                    result = if ascii_isdigit_i(curc) == 0 && vim_isfilec(curc) {
                         1
                     } else {
                         0
@@ -13585,7 +13585,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
                 }
 
                 x if x == NFA_PRINT => {
-                    result = vim_isprintc(utf_ptr2char(REX.input as *const c_char));
+                    result = c_int::from(vim_isprintc(utf_ptr2char(REX.input as *const c_char)));
                     if result != 0 {
                         add_state = (*(*(*thislist.cast::<NfaListT>()).t.add(listidx as usize))
                             .state)
@@ -13597,7 +13597,7 @@ pub unsafe extern "C" fn rs_nfa_regmatch(
 
                 x if x == NFA_SPRINT => {
                     result = if ascii_isdigit_i(curc) == 0
-                        && vim_isprintc(utf_ptr2char(REX.input as *const c_char)) != 0
+                        && vim_isprintc(utf_ptr2char(REX.input as *const c_char))
                     {
                         1
                     } else {

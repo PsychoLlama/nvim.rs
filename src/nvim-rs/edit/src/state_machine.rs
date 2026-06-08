@@ -166,7 +166,7 @@ extern "C" {
     fn cindent_on() -> bool;
     fn in_cinkeys(c: c_int, ty: std::ffi::c_char, line_is_white: bool) -> bool;
     fn do_c_expr_indent();
-    fn inindent(n: c_int) -> c_int;
+    fn inindent(n: c_int) -> bool;
     fn ins_start_select(c: c_int) -> c_int;
     fn nvim_search_get_curwin_w_p_rl() -> c_int;
 
@@ -502,7 +502,7 @@ pub unsafe extern "C" fn rs_insert_execute(state: *mut VimState, key: c_int) -> 
 
     // Cindent key handling
     if unsafe { cindent_on() } && unsafe { rs_ctrl_x_mode_none() } != 0 {
-        unsafe { (*s).line_is_white = inindent(0) != 0 };
+        unsafe { (*s).line_is_white = inindent(0) };
         let line_is_white = unsafe { (*s).line_is_white };
         let c = unsafe { (*s).c };
         // '!' prefix: not to be inserted

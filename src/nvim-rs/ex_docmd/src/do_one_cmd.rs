@@ -147,7 +147,7 @@ extern "C" {
     fn nvim_curbuf_is_terminal() -> c_int;
     static cmdwin_type: c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
-    fn curbuf_locked() -> c_int;
+    fn curbuf_locked() -> bool;
 
     // Range validation
     fn nvim_docmd_ask_yesno_backwards() -> c_char;
@@ -669,7 +669,7 @@ pub unsafe extern "C" fn do_one_cmd(
             && (*eap).cmdidx != crate::cmd_idx::CMD_edit
             && (*eap).cmdidx != crate::cmd_idx::CMD_file
             && (*eap).cmdidx >= 0
-            && curbuf_locked() != 0
+            && curbuf_locked()
         {
             do_one_cmd_doend(
                 eap,
@@ -810,7 +810,7 @@ pub unsafe extern "C" fn do_one_cmd(
     };
     (*eap).arg = arg;
     // ":file" cannot be run with an argument when curbuf_locked.
-    if (*eap).cmdidx == crate::cmd_idx::CMD_file && *(*eap).arg != 0 && curbuf_locked() != 0 {
+    if (*eap).cmdidx == crate::cmd_idx::CMD_file && *(*eap).arg != 0 && curbuf_locked() {
         do_one_cmd_doend(
             eap,
             cstack,

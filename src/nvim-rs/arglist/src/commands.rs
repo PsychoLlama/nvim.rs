@@ -68,8 +68,8 @@ unsafe fn do_argfile(eap: ExargPtr, argn: c_int) {
         // if 'hidden' set, only check for changed file when re-editing
         // the same buffer
         let curbuf = ffi::nvim_al_get_curbuf();
-        let mut other = 1;
-        if ffi::nvim_al_buf_hide(curbuf) != 0 {
+        let mut other = true;
+        if ffi::nvim_al_buf_hide(curbuf) {
             let al = ffi::nvim_al_ALIST_curwin();
             let ae = ffi::nvim_al_AARGLIST(al, argn);
             let ae_name = crate::query::alist_name(ae);
@@ -79,11 +79,11 @@ unsafe fn do_argfile(eap: ExargPtr, argn: c_int) {
         }
         let curbuf = ffi::nvim_al_get_curbuf();
         let forceit = ffi::nvim_al_eap_get_forceit(eap);
-        if (ffi::nvim_al_buf_hide(curbuf) == 0 || other == 0)
+        if (!ffi::nvim_al_buf_hide(curbuf) || !other)
             && ffi::nvim_al_check_changed(
                 curbuf,
                 CCGD_AW
-                    | (if other != 0 { 0 } else { CCGD_MULTWIN })
+                    | (if other { 0 } else { CCGD_MULTWIN })
                     | (if forceit != 0 { CCGD_FORCEIT } else { 0 })
                     | CCGD_EXCMD,
             ) != 0
@@ -108,7 +108,7 @@ unsafe fn do_argfile(eap: ExargPtr, argn: c_int) {
     let ae_name = crate::query::alist_name(ae);
     let win_buf = ffi::nvim_al_win_get_buffer(curwin);
     let forceit = ffi::nvim_al_eap_get_forceit(eap);
-    let flags = (if ffi::nvim_al_buf_hide(win_buf) != 0 {
+    let flags = (if ffi::nvim_al_buf_hide(win_buf) {
         ECMD_HIDE
     } else {
         0
@@ -206,7 +206,7 @@ pub extern "C" fn rs_ex_next(eap: ExargPtr) {
         let cmdidx = ffi::nvim_al_eap_get_cmdidx(eap);
 
         // check for changed buffer now, if this fails the argument list is not redefined.
-        if ffi::nvim_al_buf_hide(curbuf) != 0
+        if ffi::nvim_al_buf_hide(curbuf)
             || cmdidx == CMD_SNEXT
             || ffi::nvim_al_check_changed(
                 curbuf,
@@ -403,7 +403,7 @@ pub extern "C" fn rs_ex_argedit(eap: ExargPtr) {
             ffi::nvim_al_win_get_arg_idx(curwin) + 1
         };
         // Whether curbuf will be reused, curbuf->b_ffname will be set.
-        let curbuf_is_reusable = ffi::nvim_al_curbuf_reusable() != 0;
+        let curbuf_is_reusable = ffi::nvim_al_curbuf_reusable();
 
         let arg = ffi::nvim_al_eap_get_arg(eap);
         if crate::manipulation::rs_do_arglist(arg, AL_ADD, i, 1) == FAIL {

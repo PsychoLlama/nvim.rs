@@ -130,7 +130,7 @@ extern "C" {
     // (eap accessors inlined via ExArg field access)
 
     // Error globals
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     static did_emsg: c_int;
     static called_emsg: c_int;
 
@@ -590,7 +590,7 @@ pub unsafe extern "C" fn rs_eval1_emsg(
 
     let ret = eval1(arg, rettv, evalarg);
     if ret == FAIL
-        && aborting() == 0
+        && !aborting()
         && did_emsg == did_emsg_before
         && called_emsg == called_emsg_before
     {

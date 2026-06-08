@@ -96,7 +96,7 @@ extern "C" {
     fn api_new_luaref(original_ref: c_int) -> c_int;
 
     // arena_alloc: allocate bytes from an arena
-    fn arena_alloc(arena: *mut CArena, size: usize, align: bool) -> *mut c_char;
+    fn arena_alloc(arena: *mut CArena, size: usize, align: bool) -> *mut c_void;
 
     // arena_finish/arena_mem_free: finish and free arena memory
     fn arena_finish(arena: *mut CArena) -> *mut c_void;
@@ -305,7 +305,7 @@ pub unsafe extern "C" fn rs_mapblock_fill_dict(
     let mut dict = make_arena_dict(arena, 19);
 
     let lhs = str2special_arena((*mp).m_keys, compatible, !compatible, arena);
-    let mapmode_buf = arena_alloc(arena, 7, false);
+    let mapmode_buf = arena_alloc(arena, 7, false).cast::<c_char>();
     map_mode_to_chars((*mp).m_mode, mapmode_buf);
 
     let noremap_value: i64 = if compatible {

@@ -370,7 +370,7 @@ extern "C" {
     ) -> bool;
     // nvim_excmds_curbuf_is, _get_ffname/sfname/fname, _set_ffname/sfname, _clear_filenames
     // moved to Phase 2 inline Rust
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn setfname(
         buf: *mut crate::BufHandle,
         ffname: *const c_char,
@@ -423,7 +423,7 @@ pub unsafe extern "C" fn rs_rename_buffer(new_fname: *const c_char) -> c_int {
         return FAIL;
     }
 
-    if aborting() != 0 {
+    if aborting() {
         return FAIL;
     }
 

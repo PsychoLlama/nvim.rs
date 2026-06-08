@@ -171,7 +171,7 @@ pub unsafe extern "C" fn rs_compl_match_curr_select(selected: c_int) -> c_int {
 
 // Additional C accessors for Phase 2
 extern "C" {
-    fn pum_visible() -> c_int;
+    fn pum_visible() -> bool;
 }
 
 // Accessors for rs_ins_compl_show_pum

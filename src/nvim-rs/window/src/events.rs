@@ -69,7 +69,7 @@ extern "C" {
     fn nvim_win_get_w_width_outer(wp: WinHandle) -> c_int;
 
     // WinConfig field accessors
-    fn nvim_win_get_config_external(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_external(wp: WinHandle) -> bool;
     fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_relative(wp: WinHandle) -> c_int;
     fn nvim_win_get_config_window(wp: WinHandle) -> c_int;
@@ -510,10 +510,10 @@ pub unsafe extern "C" fn rs_ui_ext_win_position(wp: WinHandle, validate: bool) {
         return;
     }
 
-    if nvim_win_get_config_external(wp) == 0 {
-        handle_internal_float(wp, validate);
-    } else {
+    if nvim_win_get_config_external(wp) {
         handle_external(wp);
+    } else {
+        handle_internal_float(wp, validate);
     }
 }
 

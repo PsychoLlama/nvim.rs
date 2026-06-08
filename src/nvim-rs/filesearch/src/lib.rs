@@ -92,8 +92,8 @@ extern "C" {
 
     // OS functions
     fn os_dirname(buf: *mut c_char, len: usize) -> c_int;
-    fn os_isdir(name: *const c_char) -> c_int;
-    fn os_path_exists(name: *const c_char) -> c_int;
+    fn os_isdir(name: *const c_char) -> bool;
+    fn os_path_exists(name: *const c_char) -> bool;
     fn os_fileid(path: *const c_char, file_id: *mut FileID) -> bool;
     fn os_fileid_equal(id1: *const FileID, id2: *const FileID) -> bool;
     fn os_breakcheck();
@@ -170,7 +170,7 @@ extern "C" {
     fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
     fn getdigits_long(pp: *mut *mut c_char, strict: bool, def: i64) -> i64;
     fn skipwhite(q: *const c_char) -> *mut c_char;
-    fn vim_isfilec(c: c_int) -> c_int;
+    fn vim_isfilec(c: c_int) -> bool;
     fn path_is_url(p: *const c_char) -> c_int;
     fn path_has_drive_letter(p: *const c_char, len: usize) -> c_int;
     fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
@@ -991,7 +991,7 @@ pub unsafe extern "C" fn rs_vim_findfile_init(
         (*search_ctx).fix_path.data,
     );
 
-    if os_isdir(buf) != 0 {
+    if os_isdir(buf) {
         if (*search_ctx).fix_path.size > 0 {
             let fix_end = (*search_ctx).fix_path.data.add((*search_ctx).fix_path.size);
             let add_sep2 = after_pathsep((*search_ctx).fix_path.data, fix_end) == 0;
@@ -1336,7 +1336,7 @@ pub unsafe extern "C" fn rs_vim_findfile(search_ctx_arg: *mut libc::c_void) -> *
                     let mut i = (*stackp).filearray_cur;
                     while i < (*stackp).filearray_size {
                         let filearray_entry = *(*stackp).filearray.add(i as usize);
-                        if path_with_url(filearray_entry) == 0 && os_isdir(filearray_entry) == 0 {
+                        if path_with_url(filearray_entry) == 0 && !os_isdir(filearray_entry) {
                             i += 1;
                             continue;
                         }
@@ -1376,10 +1376,10 @@ pub unsafe extern "C" fn rs_vim_findfile(search_ctx_arg: *mut libc::c_void) -> *
                         loop {
                             // Check if file exists and we didn't already find it
                             let exists = path_with_url(file_path) != 0
-                                || (os_path_exists(file_path) != 0
+                                || (os_path_exists(file_path)
                                     && ((*search_ctx).find_what == FINDFILE_BOTH
                                         || (((*search_ctx).find_what == FINDFILE_DIR)
-                                            == (os_isdir(file_path) != 0))));
+                                            == (os_isdir(file_path)))));
 
                             if exists
                                 && ff_check_visited(
@@ -1440,7 +1440,7 @@ pub unsafe extern "C" fn rs_vim_findfile(search_ctx_arg: *mut libc::c_void) -> *
                     let mut i = (*stackp).filearray_cur;
                     while i < (*stackp).filearray_size {
                         let filearray_entry = *(*stackp).filearray.add(i as usize);
-                        if os_isdir(filearray_entry) == 0 {
+                        if !os_isdir(filearray_entry) {
                             i += 1;
                             continue;
                         }
@@ -1472,7 +1472,7 @@ pub unsafe extern "C" fn rs_vim_findfile(search_ctx_arg: *mut libc::c_void) -> *
                         i += 1;
                         continue; // Don't repush same directory
                     }
-                    if os_isdir(filearray_entry) == 0 {
+                    if !os_isdir(filearray_entry) {
                         i += 1;
                         continue;
                     }
@@ -1706,7 +1706,7 @@ pub unsafe extern "C" fn rs_is_directory(path: *const c_char) -> c_int {
     if path.is_null() {
         return 0;
     }
-    os_isdir(path)
+    c_int::from(os_isdir(path))
 }
 
 /// Check if a path exists.
@@ -1715,7 +1715,7 @@ pub unsafe extern "C" fn rs_path_exists(path: *const c_char) -> c_int {
     if path.is_null() {
         return 0;
     }
-    os_path_exists(path)
+    c_int::from(os_path_exists(path))
 }
 
 // ============================================================================
@@ -2100,9 +2100,9 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
                 let mut suffix = suffixes;
                 loop {
                     // Check if file exists
-                    let exists = os_path_exists(namebuff) != 0
+                    let exists = os_path_exists(namebuff)
                         && (find_what == FINDFILE_BOTH
-                            || (find_what == FINDFILE_DIR) == (os_isdir(namebuff) != 0));
+                            || (find_what == FINDFILE_DIR) == (os_isdir(namebuff)));
 
                     if exists {
                         file_name = xmemdupz(namebuff.cast(), namebuff_len);
@@ -2286,7 +2286,7 @@ pub unsafe extern "C" fn rs_file_name_in_line(
 ) -> *mut c_char {
     // Search forward for what could be the start of a file name
     let mut ptr = line.add(col as usize);
-    while *ptr != 0 && vim_isfilec(*ptr as c_int) == 0 {
+    while *ptr != 0 && !vim_isfilec(*ptr as c_int) {
         // MB_PTR_ADV equivalent
         ptr = ptr.add(utfc_ptr2len(ptr.cast()) as usize);
     }
@@ -2308,7 +2308,7 @@ pub unsafe extern "C" fn rs_file_name_in_line(
         let head_off = utf_head_off(line.cast(), ptr.sub(1).cast());
         if head_off > 0 {
             ptr = ptr.sub(head_off + 1);
-        } else if vim_isfilec(*ptr.sub(1) as c_int) != 0
+        } else if vim_isfilec(*ptr.sub(1) as c_int)
             || ((options & FNAME_HYP) != 0 && path_is_url(ptr.sub(1)) != 0)
         {
             ptr = ptr.sub(1);
@@ -2321,7 +2321,7 @@ pub unsafe extern "C" fn rs_file_name_in_line(
     let has_drive = path_has_drive_letter(ptr, libc::strlen(ptr));
     len = if has_drive != 0 { 2 } else { 0 };
 
-    while vim_isfilec(*ptr.add(len) as c_int) != 0
+    while vim_isfilec(*ptr.add(len) as c_int)
         || (*ptr.add(len) == b'\\' as c_char && *ptr.add(len + 1) == b' ' as c_char)
         || ((options & FNAME_HYP) != 0 && path_is_url(ptr.add(len)) != 0)
         || (is_url && !vim_strchr(c":?&=".as_ptr(), *ptr.add(len) as c_int).is_null())

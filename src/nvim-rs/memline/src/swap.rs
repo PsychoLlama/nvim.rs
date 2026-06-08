@@ -2160,7 +2160,7 @@ extern "C" {
 
     /// Check if memfile has blocks needing block number translation
     #[link_name = "mf_need_trans"]
-    fn nvim_mf_need_trans(mfp: *mut c_void) -> c_int;
+    fn nvim_mf_need_trans(mfp: *mut c_void) -> bool;
 
     /// Check if memfile has dirty blocks (mf_dirty == MF_DIRTY_YES)
     fn nvim_mf_is_dirty(mfp: *mut c_void) -> c_int;
@@ -2227,7 +2227,7 @@ pub unsafe extern "C" fn rs_ml_sync_one(
 
     if nvim_buf_is_changed(buf) != 0
         && check_file != 0
-        && nvim_mf_need_trans(mfp) != 0
+        && nvim_mf_need_trans(mfp)
         && !(*buf.cast::<BufStruct>()).b_ffname.is_null()
         && nvim_buf_file_unchanged(buf) != 0
     {
@@ -2287,9 +2287,9 @@ pub unsafe extern "C" fn rs_ml_preserve(buf: *mut BufHandle, message: bool, do_f
     // In that case the pointer blocks need to be updated.
     // ml_find_line() does the work by translating negative block numbers when
     // getting the first line of each data block.
-    if nvim_mf_need_trans(mfp) != 0 && !unsafe { got_int } {
+    if nvim_mf_need_trans(mfp) && !unsafe { got_int } {
         let mut lnum: LineNr = 1;
-        while nvim_mf_need_trans(mfp) != 0
+        while nvim_mf_need_trans(mfp)
             && lnum <= (LineNr::from((*buf.cast::<BufStruct>()).ml_line_count))
         {
             let hp = rs_ml_find_line(buf, lnum, ML_FIND);

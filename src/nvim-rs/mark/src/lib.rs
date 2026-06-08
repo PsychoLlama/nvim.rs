@@ -68,7 +68,7 @@ extern "C" {
     fn ml_get_buf_len(buf: BufHandle, lnum: LinenrT) -> ColnrT;
     fn utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
     fn utf_ptr2char(p: *const c_char) -> c_int;
-    fn vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
     fn ptr2cells(p: *const c_char) -> c_int;
     fn qf_mark_adjust(
         buf: BufHandle,
@@ -77,7 +77,7 @@ extern "C" {
         line2: LinenrT,
         amount: LinenrT,
         amount_after: LinenrT,
-    ) -> c_int;
+    ) -> bool;
     fn setpcmark();
 }
 
@@ -2739,7 +2739,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
 
         // quickfix marks
         let qf_result = qf_mark_adjust(buf, WinHandle::null(), line1, line2, amount, amount_after);
-        if qf_result == 0 {
+        if !qf_result {
             let has_qf = nvim_mark_buf_get_has_qf_entry(buf);
             nvim_mark_buf_set_has_qf_entry(buf, has_qf & !BUF_HAS_QF_ENTRY);
         }
@@ -2751,7 +2751,7 @@ pub unsafe extern "C" fn rs_mark_adjust_buf(
             let mut win = nvim_mark_tabpage_firstwin(tp);
             while !win.is_null() {
                 let result = qf_mark_adjust(buf, win, line1, line2, amount, amount_after);
-                found_one |= result != 0;
+                found_one |= result;
                 win = nvim_mark_win_get_next(win);
             }
             tp = nvim_mark_tabpage_next(tp);
@@ -3244,7 +3244,7 @@ pub unsafe extern "C" fn rs_mark_mb_adjustpos(buf: BufHandle, lp: *mut PosT) {
         // double-wide character.
         if (*lp).coladd == 1
             && *line.offset((*lp).col as isize) != TAB_CHAR as c_char
-            && vim_isprintc(utf_ptr2char(line.offset((*lp).col as isize))) != 0
+            && vim_isprintc(utf_ptr2char(line.offset((*lp).col as isize)))
             && ptr2cells(line.offset((*lp).col as isize)) > 1
         {
             (*lp).coladd = 0;

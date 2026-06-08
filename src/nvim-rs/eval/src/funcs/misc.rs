@@ -2114,7 +2114,7 @@ extern "C" {
     fn nvim_eval_printf(argvars: *const c_void, rettv: *mut c_void);
     // eval() inlining helpers
     fn eval1(arg: *mut *const c_char, rettv: *mut c_void, evalarg: *mut c_void) -> c_int;
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     static mut need_clr_eos: bool;
     static mut EVALARG_EVALUATE: c_void;
     // nvim_eval_sha256: inlined into rs_f_sha256 below
@@ -2126,7 +2126,7 @@ extern "C" {
     fn function_exists(name: *const c_char, no_deref: c_int) -> c_int;
     fn nlua_func_exists(funcname: *const c_char) -> c_int;
     fn cmd_exists(name: *const c_char) -> c_int;
-    fn autocmd_supported(event: *const c_char) -> c_int;
+    fn autocmd_supported(event: *const c_char) -> bool;
     fn au_exists(arg: *const c_char) -> bool;
     fn var_exists(var: *const c_char) -> c_int;
     fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool;
@@ -2193,7 +2193,7 @@ pub unsafe extern "C" fn rs_f_eval(argvars: *const c_void, rettv: *mut c_void, _
             std::ptr::addr_of_mut!(EVALARG_EVALUATE),
         ) == FAIL
     {
-        if !expr_start.is_null() && aborting() == 0 {
+        if !expr_start.is_null() && !aborting() {
             semsg(c"E15: Invalid expression: \"%s\"".as_ptr(), expr_start);
         }
         need_clr_eos = false;
@@ -2253,7 +2253,7 @@ pub unsafe extern "C" fn rs_f_exists(
     } else if first == b'#' {
         let p2 = *p.add(1);
         n = if p2 == b'#' {
-            autocmd_supported(p_raw.add(2))
+            i32::from(autocmd_supported(p_raw.add(2)))
         } else {
             i32::from(au_exists(p_raw.add(1)))
         };

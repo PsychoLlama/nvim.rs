@@ -784,7 +784,7 @@ extern "C" {
 
     // Popup menu visibility
     #[link_name = "pum_visible"]
-    fn nvim_pum_visible() -> c_int;
+    fn nvim_pum_visible() -> bool;
 
     // Window options for cursorline/cursorcolumn
 
@@ -881,7 +881,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorline(wp: WinHandle) {
     let valid = win_ref(wp).w_valid;
     let crow_valid = (valid & VALID_CROW) != 0;
 
-    if crow_valid || nvim_pum_visible() != 0 {
+    if crow_valid || nvim_pum_visible() {
         return;
     }
 
@@ -917,7 +917,7 @@ pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
     }
 
     let valid = win_ref(wp).w_valid;
-    if (valid & VALID_VIRTCOL) != 0 || nvim_pum_visible() != 0 {
+    if (valid & VALID_VIRTCOL) != 0 || nvim_pum_visible() {
         return;
     }
 

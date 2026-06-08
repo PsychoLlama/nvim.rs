@@ -290,7 +290,7 @@ extern "C" {
     // Error handling
     static did_emsg: c_int;
     static called_emsg: c_int;
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
     fn semsg(fmt: *const c_char, ...) -> c_int;
     fn emsg(s: *const c_char) -> c_int;
 
@@ -301,7 +301,7 @@ extern "C" {
     fn tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
     fn tv_check_str(tv: TypevalHandle) -> bool;
     fn tv_check_num(tv: TypevalHandle) -> bool;
-    fn tv2bool(tv: TypevalHandle) -> c_int;
+    fn tv2bool(tv: TypevalHandle) -> bool;
     fn tv_copy(from: TypevalHandle, to: TypevalHandle);
     fn tv_list_concat(l1: *mut c_void, l2: *mut c_void, ret: TypevalHandle) -> c_int;
 
@@ -455,7 +455,7 @@ pub unsafe fn eval0_impl(
         // Report the invalid expression unless the expression evaluation has
         // been cancelled due to an aborting error, an interrupt, or an
         // exception, or we already gave a more specific error.
-        if aborting() == 0 && did_emsg == did_emsg_before && called_emsg == called_emsg_before {
+        if !aborting() && did_emsg == did_emsg_before && called_emsg == called_emsg_before {
             if end_error {
                 semsg(E_TRAILING_ARG.as_ptr() as *const c_char, p);
             } else {
@@ -535,7 +535,7 @@ pub unsafe fn eval1_impl(
             let mut error: bool = false;
 
             if op_falsy {
-                result = tv2bool(rettv) != 0;
+                result = tv2bool(rettv);
             } else if tv_get_number_chk(rettv, &mut error) != 0 {
                 result = true;
             }
@@ -1631,7 +1631,7 @@ unsafe fn eval_func_impl(
     }
 
     // Stop evaluation when immediately aborting on error, interrupt, or exception.
-    if evaluate && aborting() != 0 {
+    if evaluate && aborting() {
         if ret == OK {
             tv_clear(rettv);
         }
@@ -3373,7 +3373,7 @@ pub unsafe fn handle_subscript_impl(
                 lua_funcname,
             );
             // Stop on aborting (interrupt, exception, etc.)
-            if aborting() != 0 {
+            if aborting() {
                 if ret == OK {
                     tv_clear(rettv);
                 }

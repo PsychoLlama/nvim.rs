@@ -277,7 +277,7 @@ pub unsafe extern "C" fn rs_terminfo_is_bsd_console(term: *const c_char) -> bool
                 // Check if XTERM_VERSION env var exists
                 // FreeBSD console sets TERM=xterm but doesn't support xterm features
                 extern "C" {
-                    fn os_env_exists(name: *const c_char, use_strequal: c_int) -> c_int;
+                    fn os_env_exists(name: *const c_char, use_strequal: c_int) -> bool;
                 }
                 let name = c"XTERM_VERSION";
                 if unsafe { os_env_exists(name.as_ptr(), 1) } != 0 {

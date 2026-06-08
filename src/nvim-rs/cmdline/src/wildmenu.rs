@@ -165,8 +165,8 @@ extern "C" {
     static wild_menu_showing: c_int;
 
     // String operations
-    fn rem_backslash(s: *const c_char) -> c_int;
-    fn menu_is_separator(s: *const c_char) -> c_int;
+    fn rem_backslash(s: *const c_char) -> bool;
+    fn menu_is_separator(s: *const c_char) -> bool;
     fn ptr2cells(s: *const c_char) -> c_int;
     fn rs_csh_like_shell() -> c_int;
 }
@@ -359,7 +359,7 @@ pub unsafe extern "C" fn rs_skip_wildmenu_char(xp: *const (), s: *const c_char) 
         }
     };
 
-    let is_backslash_escape = rem_backslash(s) != 0;
+    let is_backslash_escape = rem_backslash(s);
     let is_shell = xp_ref(xp).xp_shell;
     let is_csh_like = rs_csh_like_shell() != 0;
 
@@ -408,7 +408,7 @@ pub unsafe extern "C" fn rs_wildmenu_match_len(xp: *const (), s: *const c_char) 
     let is_menu = is_menu_context(context);
 
     // Check for menu separator - return 1 for '|' display
-    if is_menu && menu_is_separator(s) != 0 {
+    if is_menu && menu_is_separator(s) {
         return 1;
     }
 

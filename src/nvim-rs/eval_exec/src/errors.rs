@@ -467,7 +467,7 @@ extern "C" {
     static did_emsg: c_int;
 
     /// Check if we're aborting due to error.
-    fn aborting() -> c_int;
+    fn aborting() -> bool;
 
     /// Update force_abort flag.
     fn update_force_abort();
@@ -492,7 +492,7 @@ pub fn has_emsg() -> bool {
 
 /// Check if we should abort execution due to an error.
 pub fn is_aborting() -> bool {
-    unsafe { aborting() != 0 }
+    unsafe { aborting() }
 }
 
 /// Report a simple error message.

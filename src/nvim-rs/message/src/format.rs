@@ -437,7 +437,7 @@ extern "C" {
     fn utf_ptr2cells(p: *const c_char) -> c_int;
     fn utf_ptr2char(p: *const c_char) -> c_int;
     fn utfc_ptr2len_len(p: *const c_char, maxlen: c_int) -> c_int;
-    fn vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
     fn char2cells(c: c_int) -> c_int;
     // transchar_buf(NULL, c) returns a static buffer
     fn transchar_buf(buf: *const std::ffi::c_void, c: c_int) -> *mut c_char;
@@ -732,7 +732,7 @@ pub unsafe extern "C" fn rs_msg_outtrans_len(
         let mb_l = utfc_ptr2len_len(str, remaining + 1);
         if mb_l > 1 {
             let c = utf_ptr2char(str);
-            if vim_isprintc(c) != 0 {
+            if vim_isprintc(c) {
                 // Printable multi-byte char: count the cells.
                 retval += utf_ptr2cells(str);
             } else {

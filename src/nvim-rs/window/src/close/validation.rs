@@ -57,14 +57,14 @@ extern "C" {
     fn nvim_buf_get_nwindows(buf: BufHandle) -> c_int;
 
     /// Check if buffer has changes.
-    fn bufIsChanged(buf: BufHandle) -> c_int;
+    fn bufIsChanged(buf: BufHandle) -> bool;
 
     /// Check if buffer can be hidden.
-    fn buf_hide(buf: BufHandle) -> c_int;
+    fn buf_hide(buf: BufHandle) -> bool;
 
     /// Check if window is an aucmd_win.
     #[link_name = "is_aucmd_win"]
-    fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
+    fn rs_is_aucmd_win(wp: WinHandle) -> bool;
 
     /// Check cmdwin_type global.
     static cmdwin_type: c_int;
@@ -128,14 +128,14 @@ fn can_close_floating_windows_impl() -> bool {
         while !wp.is_null() && win_ref(wp).w_floating {
             let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
-                let is_changed = bufIsChanged(buf) != 0;
+                let is_changed = bufIsChanged(buf);
                 let nwindows = nvim_buf_get_nwindows(buf);
 
                 // Buffer needs hiding if changed and this is the only window
                 let need_hide = is_changed && nwindows <= 1;
 
                 // If buffer needs hiding but can't be hidden, we can't close
-                if need_hide && buf_hide(buf) == 0 {
+                if need_hide && !buf_hide(buf) {
                     return false;
                 }
             }
@@ -275,7 +275,7 @@ fn can_close_window_impl(wp: WinHandle, force: bool) -> c_int {
         }
 
         // Check aucmd window
-        if rs_is_aucmd_win(wp) != 0 {
+        if rs_is_aucmd_win(wp) {
             return 4;
         }
 
@@ -287,7 +287,7 @@ fn can_close_window_impl(wp: WinHandle, force: bool) -> c_int {
         // If would leave only floating and not forced, check if floating can close
         if !force && would_leave_only_floating_impl(wp) {
             let lastwin = nvim_get_lastwin();
-            if rs_is_aucmd_win(lastwin) != 0 || !can_close_floating_windows_impl() {
+            if rs_is_aucmd_win(lastwin) || !can_close_floating_windows_impl() {
                 return 1; // Treat as "can't close last window"
             }
         }
@@ -344,10 +344,10 @@ fn can_close_floating_windows_tp_impl(tp: TabpageHandle) -> bool {
         while !wp.is_null() && win_ref(wp).w_floating {
             let buf = BufHandle(win_ref(wp).w_buffer);
             if !buf.is_null() {
-                let is_changed = bufIsChanged(buf) != 0;
+                let is_changed = bufIsChanged(buf);
                 let nwindows = nvim_buf_get_nwindows(buf);
                 let need_hide = is_changed && nwindows <= 1;
-                if need_hide && buf_hide(buf) == 0 {
+                if need_hide && !buf_hide(buf) {
                     return false;
                 }
             }
@@ -430,7 +430,7 @@ pub extern "C" fn rs_close_is_closable(wp: WinHandle) -> c_int {
         if win_ref(wp).w_locked {
             return 0;
         }
-        if rs_is_aucmd_win(wp) != 0 {
+        if rs_is_aucmd_win(wp) {
             return 0;
         }
         1

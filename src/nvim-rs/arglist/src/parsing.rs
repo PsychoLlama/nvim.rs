@@ -26,7 +26,7 @@ unsafe fn do_one_arg(str_ptr: *mut c_char) -> *mut c_char {
     let mut inbacktick = false;
 
     while *str != NUL_CHAR {
-        if ffi::nvim_al_rem_backslash(str) != 0 {
+        if ffi::nvim_al_rem_backslash(str) {
             *p = *str;
             p = p.add(1);
             str = str.add(1);

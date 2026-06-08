@@ -33,7 +33,7 @@ extern "C" {
 
     // --- Existing Rust FFI helpers ---
     #[link_name = "is_aucmd_win"]
-    fn rs_is_aucmd_win(wp: WinHandle) -> c_int;
+    fn rs_is_aucmd_win(wp: WinHandle) -> bool;
     fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int;
     fn rs_win_valid_any_tab(win: WinHandle) -> c_int;
     fn rs_tabpage_index(ftp: TabpageHandle) -> c_int;
@@ -259,7 +259,7 @@ pub extern "C" fn rs_close_othertab_validate(
         }
 
         // Check aucmd_win.
-        if rs_is_aucmd_win(win) != 0 {
+        if rs_is_aucmd_win(win) {
             nvim_emsg_id(EMSG_E_AUTOCMD_CLOSE);
             return 1;
         }

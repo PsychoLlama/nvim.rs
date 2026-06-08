@@ -3,7 +3,7 @@
 //! Provides constants and helpers for displaying special key sequences
 //! in messages and mappings.
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // Key sequence constants
 // These match the values in keycodes.h
@@ -168,7 +168,7 @@ extern "C" {
     /// Copy memory (memcpy)
     fn memcpy(dst: *mut c_char, src: *const c_char, n: usize) -> *mut c_char;
     /// Allocate memory from an arena
-    fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_char;
+    fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c_void;
 }
 
 /// Opaque C Arena type
@@ -380,7 +380,7 @@ pub unsafe extern "C" fn rs_str2special_arena(
     }
 
     // Allocate from arena and fill.
-    let buf = arena_alloc(arena, total + 1, false);
+    let buf = arena_alloc(arena, total + 1, false).cast::<c_char>();
     let mut out = buf;
     p = str;
     while *p != 0 {

@@ -150,7 +150,7 @@ extern "C" {
     fn rs_ctrl_x_mode_cmdline() -> c_int;
 
     // Phase 3 state accessors
-    fn pum_visible() -> c_int;
+    fn pum_visible() -> bool;
     // (nvim_get_compl_curr_match_str_data: inlined in match_list.rs)
     fn nvim_get_compl_shown_match_str_dup() -> *mut c_char;
     // nvim_clear_compl_best_matches: inlined in vars.rs (Phase 24)
@@ -496,7 +496,7 @@ pub unsafe extern "C" fn rs_ins_compl_stop(c: c_int, prev_mode: c_int, retval: c
     if (c == CTRL_Y
         || (crate::vars::nvim_get_compl_enter_selects() != 0
             && (c == CAR || c == K_KENTER || c == NL)))
-        && pum_visible() != 0
+        && pum_visible()
     {
         word = nvim_get_compl_shown_match_str_dup().cast::<u8>();
         retval = true;

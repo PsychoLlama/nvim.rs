@@ -91,7 +91,7 @@ extern "C" {
     fn nvim_redraw_all_later(redraw_type: c_int);
 
     /// Check if window is an autocmd window.
-    fn is_aucmd_win(wp: WinHandle) -> c_int;
+    fn is_aucmd_win(wp: WinHandle) -> bool;
 
     /// Get the tabline height.
     #[link_name = "rs_tabline_height"]
@@ -445,7 +445,7 @@ fn win_equal_impl(next_curwin: WinHandle, current: bool, mut dir: c_int) {
             (*topframe).fr_height,
         );
 
-        if is_aucmd_win(next_curwin) == 0 {
+        if !is_aucmd_win(next_curwin) {
             win_fix_scroll(1);
         }
     }

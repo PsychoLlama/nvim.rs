@@ -44,7 +44,7 @@ extern "C" {
     // Character functions
     fn utf_ptr2char(p: *const c_char) -> c_int;
     fn utfc_ptr2len(p: *mut c_char) -> c_int;
-    fn vim_isprintc(c: c_int) -> c_int;
+    fn vim_isprintc(c: c_int) -> bool;
 
     // Syntax functions
     fn rs_syn_check_cluster(pp: *mut c_char, len: c_int) -> c_int;
@@ -346,7 +346,7 @@ pub unsafe fn get_syn_options_impl(
             *conceal_char = utf_ptr2char(arg.add(6));
             let char_len = utfc_ptr2len(arg.add(6));
             arg = arg.add(char_len as usize - 1);
-            if vim_isprintc(*conceal_char) == 0 {
+            if !vim_isprintc(*conceal_char) {
                 emsg(c"E844: invalid cchar value".as_ptr());
                 return std::ptr::null_mut();
             }
