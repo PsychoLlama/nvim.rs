@@ -321,8 +321,9 @@ pub unsafe extern "C" fn rs_convert_to_json_string(
     buf: *const c_char,
     len: usize,
 ) -> c_int {
-    const OK: c_int = 0;
-    const FAIL: c_int = -1;
+    // Neovim OK/FAIL convention: OK=1, FAIL=0 (vim_defs.h).
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
 
     let null_terminated_null_msg =
         b"E474: String \"%.*s\" contains byte that does not start any UTF-8 character\0";

@@ -123,15 +123,15 @@ extern "C" {
 
     // List operations
     fn nvim_tv_get_list(tv: TypevalHandle) -> *mut c_void;
-    fn tv_list_equal(l1: *mut c_void, l2: *mut c_void, ic: c_int) -> c_int;
+    fn tv_list_equal(l1: *mut c_void, l2: *mut c_void, ic: c_int) -> bool;
 
     // Dict operations
     fn nvim_tv_get_dict(tv: TypevalHandle) -> *mut c_void;
-    fn tv_dict_equal(d1: *mut c_void, d2: *mut c_void, ic: c_int) -> c_int;
+    fn tv_dict_equal(d1: *mut c_void, d2: *mut c_void, ic: c_int) -> bool;
 
     // Blob operations
     fn nvim_tv_get_blob(tv: TypevalHandle) -> *mut c_void;
-    fn tv_blob_equal(b1: *mut c_void, b2: *mut c_void) -> c_int;
+    fn tv_blob_equal(b1: *mut c_void, b2: *mut c_void) -> bool;
 
     // String comparison
     fn mb_strcmp_ic(ic: c_int, s1: *const c_char, s2: *const c_char) -> c_int;
@@ -277,7 +277,7 @@ pub unsafe fn typval_compare_impl(
             tv_clear(typ1);
             return FAIL;
         } else {
-            let eq = tv_blob_equal(nvim_tv_get_blob(typ1), nvim_tv_get_blob(typ2)) != 0;
+            let eq = tv_blob_equal(nvim_tv_get_blob(typ1), nvim_tv_get_blob(typ2));
             result = if (expr_type == EXPR_NEQUAL) != eq {
                 1
             } else {
@@ -303,7 +303,7 @@ pub unsafe fn typval_compare_impl(
             tv_clear(typ1);
             return FAIL;
         } else {
-            let eq = tv_list_equal(nvim_tv_get_list(typ1), nvim_tv_get_list(typ2), ic) != 0;
+            let eq = tv_list_equal(nvim_tv_get_list(typ1), nvim_tv_get_list(typ2), ic);
             result = if (expr_type == EXPR_NEQUAL) != eq {
                 1
             } else {
@@ -329,7 +329,7 @@ pub unsafe fn typval_compare_impl(
             tv_clear(typ1);
             return FAIL;
         } else {
-            let eq = tv_dict_equal(nvim_tv_get_dict(typ1), nvim_tv_get_dict(typ2), ic) != 0;
+            let eq = tv_dict_equal(nvim_tv_get_dict(typ1), nvim_tv_get_dict(typ2), ic);
             result = if (expr_type == EXPR_NEQUAL) != eq {
                 1
             } else {

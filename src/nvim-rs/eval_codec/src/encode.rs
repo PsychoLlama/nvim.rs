@@ -134,7 +134,8 @@ extern "C" {
     fn nvim_hashitem_to_dictitem(hi: HashItemHandle) -> *mut c_void; // dictitem_T*
     fn nvim_dictitem_get_key(di: *mut c_void) -> *const c_char;
     fn nvim_dictitem_di_tv(di: *mut c_void) -> TypevalHandle;
-    fn tv_dict_find(d: DictHandle, key: *const c_char, len: c_int) -> *mut c_void; // dictitem_T*
+    /// `len` is `ptrdiff_t`/`isize`, NOT `c_int` — same as decode.rs declaration.
+    fn tv_dict_find(d: DictHandle, key: *const c_char, len: isize) -> *mut c_void; // dictitem_T*
 
     // Blob
     fn nvim_blob_get_len(b: BlobHandle) -> c_int;
@@ -1064,6 +1065,11 @@ unsafe fn encode_vim_to<E: Encoder>(
                 list_tv: TypevalHandle,
                 is_first: bool,
                 kv_pair: ListHandle,
+                /// The list item (of the outer `_VAL` list) that this pair came from.
+                /// Used to temporarily restore the stack's `li` to the C-equivalent
+                /// pre-advance position while processing the key, so that error paths
+                /// (conv_recurse → conv_error) produce the correct "index N" message.
+                cur_li: ListItemHandle,
                 key_tv: TypevalHandle,
                 val_tv: TypevalHandle,
             },
@@ -1165,6 +1171,7 @@ unsafe fn encode_vim_to<E: Encoder>(
                             list_tv: top.tv,
                             is_first,
                             kv_pair,
+                            cur_li,
                             key_tv,
                             val_tv,
                         }
@@ -1268,6 +1275,7 @@ unsafe fn encode_vim_to<E: Encoder>(
                 list_tv,
                 is_first,
                 kv_pair: _,
+                cur_li,
                 key_tv,
                 val_tv,
             } => {
@@ -1277,8 +1285,28 @@ unsafe fn encode_vim_to<E: Encoder>(
                 if !enc.special_dict_key_check(key_tv) {
                     return FAIL;
                 }
+                // Temporarily restore `li` to the pre-advance state (cur_li)
+                // while the key is being processed.  This mirrors C's state
+                // machine, which advances cur_mpsv->data.l.li AFTER the entire
+                // pair (both key and value).  If conv_recurse fires during key
+                // processing, conv_error computes prev(cur_li) — which is NULL
+                // for the first pair — and correctly emits "index N" rather than
+                // "key K at index N from special map".
+                //
+                // We record the Pairs entry index here (before any nested pushes)
+                // so we can reliably find it again after convert_one_value returns.
+                let pairs_stack_idx = mpstack.len() - 1;
+                if let StackData::Pairs { li, .. } = &mut mpstack[pairs_stack_idx].data {
+                    *li = cur_li;
+                }
                 if convert_one_value(enc, &mut mpstack, key_tv, copyid, objname) == FAIL {
                     return FAIL;
+                }
+                // Advance li past cur_li now that the key has been processed.
+                // Use the saved index — it is still valid because the Pairs entry
+                // is never popped inside convert_one_value (only PairsEnd pops it).
+                if let StackData::Pairs { li, .. } = &mut mpstack[pairs_stack_idx].data {
+                    *li = nvim_listitem_get_next(cur_li);
                 }
                 enc.conv_dict_after_key(list_tv, std::ptr::null_mut());
                 cur_tv = val_tv;
@@ -1903,11 +1931,13 @@ impl Encoder for JsonEncoder {
     unsafe fn conv_ext_string(
         &mut self,
         _tv: TypevalHandle,
-        buf: *const c_char,
+        _buf: *const c_char,
         _len: usize,
         _ty: i64,
     ) -> c_int {
-        xfree(buf as *mut c_void);
+        // Do NOT free buf here. In the original C, the macro did `xfree(buf);
+        // return FAIL;` (exiting the function, so the outer xfree was skipped).
+        // In Rust, handle_special_dict is the sole owner and always frees buf.
         emsg(b"E474: Unable to convert EXT string to JSON\0".as_ptr() as *const c_char);
         FAIL
     }
@@ -2002,7 +2032,11 @@ impl Encoder for JsonEncoder {
     }
 
     unsafe fn special_dict_key_check(&mut self, key_tv: TypevalHandle) -> bool {
-        rs_encode_check_json_key(key_tv)
+        let ok = rs_encode_check_json_key(key_tv);
+        if !ok {
+            emsg(b"E474: Invalid key in special dictionary\0".as_ptr() as *const c_char);
+        }
+        ok
     }
 
     fn allow_specials(&self) -> bool {
@@ -2371,6 +2405,12 @@ pub unsafe extern "C" fn rs_encode_vim_list_to_buf(
     ret_buf: *mut *mut c_char,
 ) -> bool {
     let mut len: usize = 0;
+    // Mirror C's TV_LIST_ITER_CONST: skip the loop entirely for a NULL list.
+    if list.is_null() {
+        *ret_len = 0;
+        *ret_buf = std::ptr::null_mut();
+        return true;
+    }
     let mut li = nvim_list_get_first(list);
     while !li.is_null() {
         let tv = nvim_listitem_get_tv(li);

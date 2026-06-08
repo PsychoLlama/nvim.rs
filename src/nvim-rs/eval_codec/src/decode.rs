@@ -76,8 +76,8 @@ const SURROGATE_LO_START: u32 = 0xDC00;
 const SURROGATE_LO_END: u32 = 0xDFFF;
 const SURROGATE_FIRST_CHAR: u32 = 0x10000;
 
-const STR2NR_HEX: c_int = 0x08;
-const STR2NR_FORCE: c_int = 0x80;
+const STR2NR_HEX: c_int = 0x04; // charset.h: 1 << 2
+const STR2NR_FORCE: c_int = 0x80; // charset.h: 1 << 7
 
 // mpack token types
 const MPACK_TOKEN_NIL: c_int = 1;
@@ -149,7 +149,12 @@ extern "C" {
     fn tv_dict_item_alloc_len(key: *const c_char, len: usize) -> DictItemHandle;
     fn tv_dict_item_alloc(key: *const c_char) -> DictItemHandle;
     fn tv_dict_add(d: DictHandle, item: DictItemHandle) -> c_int;
-    fn tv_dict_find(d: DictHandle, key: *const c_char, keylen: c_int) -> DictItemHandle;
+    /// `keylen` must match `ptrdiff_t` / `isize` — NOT c_int. Passing c_int
+    /// causes the upper 32 bits of the register to be undefined (zero-extended
+    /// on x86-64), so `-1i32` arrives as `4294967295isize` (positive), which
+    /// directs `nvim_dict_find` to call `hash_find_len` with a ~4 GB length
+    /// and immediately segfaults.
+    fn tv_dict_find(d: DictHandle, key: *const c_char, keylen: isize) -> DictItemHandle;
     fn nvim_dictitem_di_tv(di: DictItemHandle) -> TypevalHandle;
     fn nvim_dict_inc_refcount(d: DictHandle);
     fn nvim_dict_get_ht_used(d: DictHandle) -> usize;
@@ -977,6 +982,15 @@ pub unsafe extern "C" fn rs_json_decode_string(
     let mut succeeded = false;
 
     'outer: loop {
+        // Mirror the C `for (; p < e; p++)` guard: exit loop when end of
+        // input is reached.  The after-cycle code below emits
+        // "Unexpected end of input" when the container stack is non-empty
+        // (same as C's json_decode_string_after_cycle path).
+        if p >= e {
+            succeeded = true;
+            break 'outer;
+        }
+
         debug_assert!(*p == b'{' as c_char || !next_map_special);
 
         let needs_advance: bool = match *p as u8 {
@@ -1201,8 +1215,10 @@ pub unsafe extern "C" fn rs_json_decode_string(
                     break 'outer;
                 }
                 if next_map_special {
-                    didcomma = false;
-                    didcolon = false;
+                    // json_decoder_pop already set didcomma/didcolon correctly
+                    // via the restart mechanism. Do NOT reset them here — this
+                    // mirrors C's `goto json_decode_string_cycle_start` which
+                    // does not touch didcomma/didcolon.
                     continue 'outer;
                 }
                 true
@@ -1241,8 +1257,10 @@ pub unsafe extern "C" fn rs_json_decode_string(
                     break 'outer;
                 }
                 if next_map_special {
-                    didcomma = false;
-                    didcolon = false;
+                    // json_decoder_pop already set didcomma/didcolon correctly
+                    // via the restart mechanism. Do NOT reset them here — this
+                    // mirrors C's `goto json_decode_string_cycle_start` which
+                    // does not touch didcomma/didcolon.
                     continue 'outer;
                 }
                 true
@@ -1282,8 +1300,10 @@ pub unsafe extern "C" fn rs_json_decode_string(
                     break 'outer;
                 }
                 if next_map_special {
-                    didcomma = false;
-                    didcolon = false;
+                    // json_decoder_pop already set didcomma/didcolon correctly
+                    // via the restart mechanism. Do NOT reset them here — this
+                    // mirrors C's `goto json_decode_string_cycle_start` which
+                    // does not touch didcomma/didcolon.
                     continue 'outer;
                 }
                 true
@@ -1304,11 +1324,15 @@ pub unsafe extern "C" fn rs_json_decode_string(
                     break 'outer;
                 }
                 if next_map_special {
-                    didcomma = false;
-                    didcolon = false;
+                    // json_decoder_pop already set didcomma/didcolon correctly
+                    // via the restart mechanism. Do NOT reset them here — this
+                    // mirrors C's `goto json_decode_string_cycle_start` which
+                    // does not touch didcomma/didcolon.
                     continue 'outer;
                 }
-                false
+                // parse_json_string leaves *pp pointing at the closing '"'.
+                // The outer loop must advance past it (mirrors the C for loop's p++).
+                true
             }
             b'-' | b'0'..=b'9' => {
                 if parse_json_number(
@@ -1326,8 +1350,10 @@ pub unsafe extern "C" fn rs_json_decode_string(
                     break 'outer;
                 }
                 if next_map_special {
-                    didcomma = false;
-                    didcolon = false;
+                    // json_decoder_pop already set didcomma/didcolon correctly
+                    // via the restart mechanism. Do NOT reset them here — this
+                    // mirrors C's `goto json_decode_string_cycle_start` which
+                    // does not touch didcomma/didcolon.
                     continue 'outer;
                 }
                 true
@@ -1617,6 +1643,11 @@ unsafe extern "C" fn typval_parse_exit(_parser: *mut MpackParser, node: *mut Mpa
                 nvim_tv_set_dict(result, dict);
 
                 let mut had_dup = false;
+                // Track added dict items so we can neutralize their values before
+                // tv_clear() if we hit a duplicate key.  Mirrors C's TV_DICT_ITER
+                // loop that sets d->di_tv = VAR_SPECIAL/kSpecialVarNull before
+                // tv_clear(result) to prevent double-free of values in items_ptr.
+                let mut added_dis: Vec<DictItemHandle> = Vec::with_capacity(n);
                 for i in 0..n {
                     let key_tv: &[u8; TV_SIZE] =
                         &*(items_ptr.add(i * 2 * TV_SIZE) as *const [u8; TV_SIZE]);
@@ -1626,6 +1657,15 @@ unsafe extern "C" fn typval_parse_exit(_parser: *mut MpackParser, node: *mut Mpa
                     let di_tv = nvim_dictitem_di_tv(di);
                     nvim_tv_set_type(di_tv, VAR_UNKNOWN);
                     if tv_dict_add(dict, di) == FAIL {
+                        // Duplicate key: neutralize all already-added items' di_tv
+                        // values so tv_clear() below does not free them; they are
+                        // still referenced by items_ptr and will be consumed by the
+                        // generic map fallback below.
+                        for &prev_di in &added_dis {
+                            let prev_di_tv = nvim_dictitem_di_tv(prev_di);
+                            nvim_tv_set_type(prev_di_tv, VAR_SPECIAL);
+                            nvim_tv_set_special(prev_di_tv, K_SPECIAL_VAR_NULL);
+                        }
                         nvim_dict_item_free(di);
                         tv_clear(result);
                         had_dup = true;
@@ -1633,6 +1673,7 @@ unsafe extern "C" fn typval_parse_exit(_parser: *mut MpackParser, node: *mut Mpa
                     }
                     let val_ptr = items_ptr.add((i * 2 + 1) * TV_SIZE);
                     ptr::copy_nonoverlapping(val_ptr, di_tv as *mut u8, TV_SIZE);
+                    added_dis.push(di);
                 }
 
                 if !had_dup {
