@@ -326,8 +326,16 @@ fn ascii_iswhite(c: c_int) -> bool {
 
 /// Returns true if `c` is a special (non-printable command) key.
 /// Matches the C macro `ISSPECIAL(c)` which is `(c) < 0`.
+/// Returns true if `c` should stop the bulk-insert fast path in `insertchar`.
+///
+/// Mirrors the local `ISSPECIAL` macro from the original C `edit.c`:
+///   `(c) < ' ' || (c) >= DEL || (c) == '0' || (c) == '^'`
+///
+/// '0' and '^' are special because they can be followed by CTRL-D (which
+/// changes indentation). All control characters (< 0x20) are special,
+/// including ESC (0x1b), so the loop breaks before consuming them as text.
 const fn is_special(c: c_int) -> bool {
-    c < 0
+    c < 0x20 || c >= 0x7f || c == 0x30 /* '0' */ || c == 0x5e /* '^' */
 }
 
 /// Returns true if `has_format_option(FO_INS_LONG)` (format option `'l'`).
@@ -353,10 +361,37 @@ mod tests {
 
     #[test]
     fn test_is_special() {
+        // Negative values (multi-byte / special key codes): special
         assert!(is_special(-1));
         assert!(is_special(-256));
-        assert!(!is_special(0));
-        assert!(!is_special(127));
+        // Control characters (< 0x20): special
+        assert!(is_special(0x00)); // NUL
+        assert!(is_special(0x01)); // SOH
+        assert!(is_special(0x03)); // CTRL-C
+        assert!(is_special(0x1b)); // ESC — must be special to stop bulk-insert loop
+        assert!(is_special(0x1f)); // US
+
+        // Space (0x20) and above: not special (up to '/')
+        assert!(!is_special(0x20)); // space
+        assert!(!is_special(c_int::from(b'a')));
+        assert!(!is_special(0x2f)); // '/'
+
+        // '0' (0x30) is special (can precede CTRL-D for indent removal)
+        assert!(is_special(0x30)); // '0'
+
+        // '1'..'9' are not special
+        assert!(!is_special(c_int::from(b'1')));
+        assert!(!is_special(c_int::from(b'9')));
+        // '^' (0x5e) is special
+        assert!(is_special(0x5e)); // '^'
+
+        // Normal ASCII letters: not special
+        assert!(!is_special(c_int::from(b'z')));
+        assert!(!is_special(0x7e)); // '~' (last non-special ASCII)
+
+        // DEL (0x7f) and above: special
+        assert!(is_special(0x7f)); // DEL
+        assert!(is_special(0x80)); // high byte
     }
 
     #[test]

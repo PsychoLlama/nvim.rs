@@ -948,7 +948,6 @@ pub unsafe extern "C" fn rs_vgetorpeek(advance: bool) -> c_int {
     let mut timedout = false;
     let mut mapdepth: c_int = 0;
     let mut mode_deleted = false;
-
     // Outer do-while loop: repeats if c < 0 or (advance && c == NUL)
     loop {
         // get a character: 1. from the stuffbuffer / typeahead_char

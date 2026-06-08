@@ -27,10 +27,11 @@ type LinenrT = i32;
 // ============================================================================
 
 /// Opaque VimState: only carries function pointers, never accessed from Rust.
+/// Field order must match C `state_defs.h`: check first, execute second.
 #[repr(C)]
 pub struct VimState {
-    pub execute: Option<unsafe extern "C" fn(*mut VimState, c_int) -> c_int>,
     pub check: Option<unsafe extern "C" fn(*mut VimState) -> c_int>,
+    pub execute: Option<unsafe extern "C" fn(*mut VimState, c_int) -> c_int>,
 }
 
 /// Insert-mode state (must match C `InsertState` layout exactly).
@@ -673,7 +674,8 @@ unsafe fn handle_key_switch(s: *mut InsertState) -> SwitchAction {
     match (*s).c {
         // ESC / Ctrl-C: end input mode
         ESC => {
-            if echeck_abbr(ESC + ABBR_OFF) != 0 {
+            let abbr_result = echeck_abbr(ESC + ABBR_OFF);
+            if abbr_result != 0 {
                 return SwitchAction::Continue;
             }
             // FALLTHROUGH to Ctrl-C
