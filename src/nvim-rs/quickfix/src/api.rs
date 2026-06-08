@@ -1998,8 +1998,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
 
     let action_arg = nvim_tv_advance(list_arg);
     if !nvim_tv_is_unknown(action_arg) {
-        if nvim_qf_tv_get_type(action_arg) != 5 {
-            // 5 = VAR_STRING
+        if nvim_qf_tv_get_type(action_arg) != VAR_STRING {
             emsg(c"E928: String required".as_ptr());
             return;
         }
@@ -2023,8 +2022,7 @@ pub unsafe extern "C" fn rs_set_qf_ll_list(
 
         let what_arg = nvim_tv_advance(action_arg);
         if !nvim_tv_is_unknown(what_arg) {
-            if nvim_qf_tv_get_type(what_arg) == 5 {
-                // VAR_STRING
+            if nvim_qf_tv_get_type(what_arg) == VAR_STRING {
                 title = tv_get_string_chk(what_arg);
                 if title.is_null() {
                     return;

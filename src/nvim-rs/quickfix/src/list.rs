@@ -1110,16 +1110,18 @@ pub unsafe extern "C" fn rs_qf_add_entries(
     let mut retval: c_int = OK;
     let mut valid_entry = false;
 
-    // Remember current entry's position for 'u' action
-    let (prev_fnum, prev_line, prev_col): (c_int, c_int, c_int) = if (*qfl).qf_ptr.is_null() {
-        (0, 0, 0)
-    } else {
-        (
-            (*(*qfl).qf_ptr).qf_fnum,
-            (*(*qfl).qf_ptr).qf_lnum,
-            (*(*qfl).qf_ptr).qf_col,
-        )
-    };
+    // Remember current entry's position for 'u' action.
+    // qfl may be NULL when the quickfix stack is empty (no lists allocated yet).
+    let (prev_fnum, prev_line, prev_col): (c_int, c_int, c_int) =
+        if qfl.is_null() || (*qfl).qf_ptr.is_null() {
+            (0, 0, 0)
+        } else {
+            (
+                (*(*qfl).qf_ptr).qf_fnum,
+                (*(*qfl).qf_ptr).qf_lnum,
+                (*(*qfl).qf_ptr).qf_col,
+            )
+        };
 
     let mut select_first_entry = false;
     let mut select_nearest_entry = false;
