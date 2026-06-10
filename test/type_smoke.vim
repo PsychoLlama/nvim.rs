@@ -200,7 +200,33 @@ else
 endif
 
 " ============================================================================
-" Test 7: charclass() — Rust port of f_charclass (Phase 1 migration)
+" Test 7: getcellwidths() round-trip — Rust port of f_getcellwidths (Phase 2)
+" Guards that the Rust impl reads cw_table correctly (inverse of setcellwidths).
+" ============================================================================
+
+" Empty table returns empty list
+call setcellwidths([])
+let s:cw_empty = getcellwidths()
+if s:cw_empty ==# []
+  call s:ok('getcellwidths-empty')
+else
+  call s:fail('getcellwidths-empty', 'got=' .. string(s:cw_empty))
+endif
+
+" Single-entry round-trip: 0x2103 = 8451
+call setcellwidths([[0x2103, 0x2103, 2]])
+let s:cw_one = getcellwidths()
+if s:cw_one ==# [[8451, 8451, 2]]
+  call s:ok('getcellwidths-roundtrip')
+else
+  call s:fail('getcellwidths-roundtrip', 'got=' .. string(s:cw_one))
+endif
+
+" Restore to empty
+call setcellwidths([])
+
+" ============================================================================
+" Test 9: charclass() — Rust port of f_charclass (Phase 1 migration)
 " Guards the mb_get_class dispatch and non-String fallback (returns 0).
 " ============================================================================
 

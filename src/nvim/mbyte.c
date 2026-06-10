@@ -483,20 +483,7 @@ void nvim_mbyte_redraw_all_later(void) { redraw_all_later(UPD_NOT_VALID); }
 
 // f_setcellwidths and tv_nr_compare are now implemented in Rust.
 
-/// "getcellwidths()" function
-void f_getcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  tv_list_alloc_ret(rettv, (ptrdiff_t)cw_table_size);
-
-  for (size_t i = 0; i < cw_table_size; i++) {
-    list_T *entry = tv_list_alloc(3);
-    tv_list_append_number(entry, (varnumber_T)cw_table[i].first);
-    tv_list_append_number(entry, (varnumber_T)cw_table[i].last);
-    tv_list_append_number(entry, (varnumber_T)cw_table[i].width);
-
-    tv_list_append_list(rettv->vval.v_list, entry);
-  }
-}
+// f_getcellwidths is implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
 // f_charclass is implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 

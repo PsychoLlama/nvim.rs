@@ -5718,6 +5718,14 @@ extern "C" {
     fn nvim_tv_get_string_ptr(tv: *const c_void) -> *const c_char;
     /// Set rettv->v_type = VAR_NUMBER and rettv->vval.v_number = n.
     fn nvim_tv_set_number(tv: *mut c_void, n: i64);
+    /// Initialise rettv as a VAR_LIST and return a pointer to its list_T.
+    fn tv_list_alloc_ret(rettv: *mut c_void, len: isize) -> *mut c_void;
+    /// Allocate a new list_T with a capacity hint (-1 = unknown).
+    fn tv_list_alloc(len: isize) -> *mut c_void;
+    /// Append a Number value to a list.
+    fn tv_list_append_number(list: *mut c_void, nr: i64);
+    /// Append a sub-list as an item of list.
+    fn tv_list_append_list(list: *mut c_void, itemlist: *mut c_void);
 }
 
 /// FAIL constant (C OK=1, FAIL=0).
@@ -5747,4 +5755,31 @@ pub unsafe extern "C" fn rs_f_charclass(
     // rs_mb_get_class is in this crate (exported as "mb_get_class").
     let cls = rs_mb_get_class(s) as i64;
     nvim_tv_set_number(rettv, cls);
+}
+
+/// "getcellwidths()" function — VimL builtin.
+///
+/// Returns a List of [first, last, width] triples from the global cw_table
+/// set by setcellwidths().
+///
+/// # Safety
+/// `rettv` must be a valid typval_T pointer.
+#[unsafe(export_name = "f_getcellwidths")]
+pub unsafe extern "C" fn rs_f_getcellwidths(
+    _argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    // SAFETY: cw_table and cw_table_size are managed by C; Rust only reads them.
+    let table = cw_table;
+    let size = cw_table_size;
+    let outer = tv_list_alloc_ret(rettv, size as isize);
+    for i in 0..size {
+        let cw = &*table.add(i);
+        let entry = tv_list_alloc(3);
+        tv_list_append_number(entry, cw.first);
+        tv_list_append_number(entry, cw.last);
+        tv_list_append_number(entry, i64::from(cw.width));
+        tv_list_append_list(outer, entry);
+    }
 }
