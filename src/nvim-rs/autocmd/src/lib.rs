@@ -1419,6 +1419,22 @@ unsafe fn strnicmp_prefix_8(s: *const c_char, prefix: &[u8; 8]) -> bool {
     *s.add(8) == 0
 }
 
+/// Internal helper: get an allocated handler string for autocmd at (event, idx).
+///
+/// Calls `nvim_ac_handler_cmd_dup`; if NULL (non-cmd handler), falls back to
+/// `nvim_ac_callback_to_string`.
+///
+/// # Safety
+/// `event` and `idx` must be valid.
+#[inline]
+unsafe fn rs_autocmd_get_handler_str_verbose(event: c_int, idx: usize) -> *mut c_char {
+    let s = nvim_ac_handler_cmd_dup(event, idx);
+    if !s.is_null() {
+        return s;
+    }
+    nvim_ac_callback_to_string(event, idx)
+}
+
 /// Get an allocated string representation of the handler for autocmd at (event, idx).
 ///
 /// # Safety
@@ -1426,6 +1442,21 @@ unsafe fn strnicmp_prefix_8(s: *const c_char, prefix: &[u8; 8]) -> bool {
 #[no_mangle] // keep rs_ name since it's internal
 pub unsafe extern "C" fn rs_aucmd_handler_to_string(event: c_int, idx: usize) -> *mut c_char {
     nvim_autocmd_get_handler_info(event, idx).handler_str
+}
+
+/// Get verbose handler string for autocmd at (event, idx).
+/// Returns NULL if idx is out of bounds.
+///
+/// Exported as `nvim_autocmd_get_handler_str_verbose` — replaces the C implementation.
+///
+/// # Safety
+/// `event` and `idx` must be valid.
+#[unsafe(export_name = "nvim_autocmd_get_handler_str_verbose")]
+pub unsafe extern "C" fn rs_nvim_autocmd_get_handler_str_verbose(
+    event: c_int,
+    idx: usize,
+) -> *mut c_char {
+    rs_autocmd_get_handler_str_verbose(event, idx)
 }
 
 // =============================================================================
@@ -2426,8 +2457,10 @@ extern "C" {
     // Get xstrdup of ac->handler_cmd, or NULL if handler is function
     fn nvim_autocmd_get_ac_handler_cmd(event: c_int, idx: usize) -> *mut c_char;
 
-    // Get verbose handler string (allocated, caller frees)
-    fn nvim_autocmd_get_handler_str_verbose(event: c_int, idx: usize) -> *mut c_char;
+    // Get handler string: xstrdup of handler_cmd if Ex command, else NULL.
+    fn nvim_ac_handler_cmd_dup(event: c_int, idx: usize) -> *mut c_char;
+    // Get callback_to_string for handler_fn (allocated, caller frees).
+    fn nvim_ac_callback_to_string(event: c_int, idx: usize) -> *mut c_char;
 
     // Verbose enter/leave with scroll
     fn verbose_enter_scroll();
@@ -2514,7 +2547,7 @@ pub unsafe extern "C" fn rs_getnextac(
     // Verbose: log autocommand being executed
     if p_verbose >= 9 {
         verbose_enter_scroll();
-        let handler_str = nvim_autocmd_get_handler_str_verbose(event, idx);
+        let handler_str = rs_autocmd_get_handler_str_verbose(event, idx);
         autocmd_smsg(0, c"autocommand %s".as_ptr(), handler_str);
         nvim_autocmd_msg_puts(c"\n".as_ptr());
         nvim_autocmd_xfree(handler_str);

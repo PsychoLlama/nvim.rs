@@ -425,14 +425,27 @@ static bool au_callback(const AutoCmd *ac, const AutoPatCmd *apc)
 // getnextac is implemented in Rust (rs_getnextac in autocmd/src/lib.rs)
 // and exported directly under the name "getnextac" via #[unsafe(export_name)].
 
-/// Gets an (allocated) string representation of an autocmd command/callback.
-static char *aucmd_handler_to_string(AutoCmd *ac)
-  FUNC_ATTR_PURE
+/// Returns xstrdup of ac->handler_cmd if handler is an Ex command, else NULL.
+/// Used by Rust FFI instead of the former static aucmd_handler_to_string.
+char *nvim_ac_handler_cmd_dup(int event, size_t idx)
 {
-  if (ac->handler_cmd) {
-    return xstrdup(ac->handler_cmd);
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return NULL;
   }
-  return callback_to_string(&ac->handler_fn, NULL);
+  AutoCmd *const ac = &kv_A(*acs, idx);
+  return ac->handler_cmd ? xstrdup(ac->handler_cmd) : NULL;
+}
+
+/// Returns callback_to_string for ac->handler_fn.
+/// Used by Rust FFI instead of the former static aucmd_handler_to_string.
+char *nvim_ac_callback_to_string(int event, size_t idx)
+{
+  AutoCmdVec *const acs = &autocmds[event];
+  if (idx >= kv_size(*acs)) {
+    return NULL;
+  }
+  return callback_to_string(&kv_A(*acs, idx).handler_fn, NULL);
 }
 
 // do_filetype_autocmd is implemented in Rust (rs_do_filetype_autocmd in autocmd/src/lib.rs)
@@ -534,8 +547,10 @@ AutoHandlerInfo nvim_autocmd_get_handler_info(int event, size_t idx)
     return (AutoHandlerInfo){ 0 };
   }
   AutoCmd *const ac = &kv_A(*acs, idx);
+  char *handler_str = ac->handler_cmd ? xstrdup(ac->handler_cmd)
+                                      : callback_to_string(&ac->handler_fn, NULL);
   return (AutoHandlerInfo){
-    .handler_str = aucmd_handler_to_string(ac),
+    .handler_str = handler_str,
     .desc = ac->desc,
     .has_handler_cmd = ac->handler_cmd != NULL ? 1 : 0,
   };
@@ -719,16 +734,8 @@ char *nvim_autocmd_get_ac_handler_cmd(int event, size_t idx)
   return xstrdup(kv_A(*acs, idx).handler_cmd);
 }
 
-/// Get the verbose handler string for a autocmd at (event, idx) for verbose output.
-/// Returns an allocated string (caller frees).
-char *nvim_autocmd_get_handler_str_verbose(int event, size_t idx)
-{
-  AutoCmdVec *const acs = &autocmds[event];
-  if (idx >= kv_size(*acs)) {
-    return NULL;
-  }
-  return aucmd_handler_to_string(&kv_A(*acs, idx));
-}
+// nvim_autocmd_get_handler_str_verbose is implemented in Rust (autocmd crate)
+// and exported directly under the name "nvim_autocmd_get_handler_str_verbose" via export_name.
 
 /// Execute the autocmd callback from an AutoCmd/AutoPatCmd copy.
 /// Called from Rust (getnextac) for safe oneshot handling.
