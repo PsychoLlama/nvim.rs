@@ -156,6 +156,21 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
     leaves the pre-signal frames visible), then `coredumpctl info <pid>` for the stack, or
     `coredumpctl dump <pid> --output=/tmp/x.core && nix shell nixpkgs#gdb --command gdb build/bin/nvim
     /tmp/x.core -batch -ex 'thread apply all bt'` for all-thread + source lines.
+- **SECOND HANG — insert-mode completion busy-loop (99.7% CPU, distinct from inchar deadlock).**
+  Exposed once the inchar deadlock was fixed. Real stack: ins_complete -> rs_ins_compl_next ->
+  rs_ins_compl_get_exp -> rs_ins_compl_next_buf (src/nvim-rs/insexpand/src/buffer.rs). NOT a 0%
+  deadlock — a CPU-bound infinite loop in the completion buffer/window scan. Hangs
+  editor/completion_spec.lua (~3.5s per-test timeouts). Fix executor abed7269 in flight.
+  - **REFUTED theory** (a diagnostic agent's wrong guess — do NOT act on it): "WinPtr=*mut u8 vs
+    WinHandle type mismatch corrupts the NEXT_BUF_WP==curwin comparison." False: nvim_get_curwin/
+    firstwin (globals.rs:140/201) return WinHandle wrapping the raw global pointer; nvim_win_get_w_next
+    (insexpand_shim.c:384) returns raw win_T*; WinHandle is repr(transparent) over the pointer — all
+    ABI-identical bits, comparison is valid. nvim_win_get_focusable (insexpand_shim.c:385) returns 0/1
+    correctly. Changing those types is cosmetic.
+  - **CONFIRMED divergence:** buffer.rs:168 breaks on `NEXT_BUF_WP==curwin || (!scanned && focusable)`;
+    upstream ins_compl_next_buf breaks on `wp==curwin || !wp->w_buffer->b_scanned` (NO focusable term).
+    The added `&& focusable` is a port error. Likely additional cause: a b_scanned read/write or
+    BufStruct-offset issue so the outer ins_compl_get_exp loop never reaches the done state.
 - **NEW BUGS found in passing via the cores (separate from the deadlock, NOT yet fixed):**
   1. **Exit-path heap corruption:** SIGABRT during shutdown shows `preserve_exit -> ml_close_all ->
      free -> munmap_chunk/malloc_printerr (abort)` — a double-free / bad-free in memline close on exit.
