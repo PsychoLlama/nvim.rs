@@ -180,11 +180,15 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
 - **NEW BUGS found in passing via the cores (separate from the deadlock, NOT yet fixed):**
   1. **Exit-path heap corruption:** SIGABRT during shutdown shows `preserve_exit -> ml_close_all ->
      free -> munmap_chunk/malloc_printerr (abort)` — a double-free / bad-free in memline close on exit.
-  2. **jobstart/terminal NULL deref:** SIGSEGV in `f_jobstart -> channel_job_start -> xstrdup ->
-     __strlen_avx2` (strlen of NULL/garbage) when `:terminal`/jobstart runs. Real crash. **This is
-     now the PRIMARY remaining blocker for the autocmd directory** (autocmd/termxx_spec.lua — ALL
-     tests crash "EOF from Nvim"). Fix executor ae05f6281 in flight (find which xstrdup arg in
-     channel_job_start is NULL).
+  2. **jobstart/terminal NULL deref — FIXED (commit 79426aa484).** `nvim_proc_get_exepath`
+     (event/proc.c, C accessor for Rust) was a bare `return proc->exepath`, dropping the upstream
+     `argv[0]` fallback; in the normal jobstart/:terminal path exepath is NULL → xstrdup(NULL) →
+     SIGSEGV. Fixed to `proc->exepath ? proc->exepath : proc->argv[0]`. Verified: termxx no longer
+     instant-crashes, channels_spec 14/14, just check 4339/4339.
+- **THIRD HANG (NEXT TARGET) — TermClose deadlock.** Revealed after the jobstart fix:
+  `autocmd TermClose * bdelete!` then `terminal` HANGS (termxx_spec T1 ran 516s before EOF timeout).
+  Reentrancy/textlock issue: deleting a buffer from within its own TermClose autocmd. Distinct from
+  the inchar deadlock and the jobstart crash. Use the coredumpctl+SIGABRT method to capture the stack.
 - **RE-BASELINE (2026-06-10, after both hang fixes):** big leverage confirmed — ~400-600 tests
   that previously hung now execute (autocmd ~158+, editor ~57+, ui ~338+). Regression spot-check
   green (buf_functions 30/30, json 77/77). The 3 dirs still don't fully COMPLETE within 560s:
