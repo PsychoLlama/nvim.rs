@@ -134,8 +134,34 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   execute handler — always returned "continue", spinning at 100% CPU in insert mode and never
   consuming ESC → hang. One-line field-order swap. Unblocks every spec using `insert()` in setup.
   setpos_spec now completes (5 tests, was a 200s hang). Guard: test/insert_smoke.vim.
-- **Cluster D — STILL OPEN, cmdwin/textlock sub-theme** (separate deadlock, persists after the
-  VimState fix). **LOCALIZED (2026-06-10):** reproduces deterministically as
+- **Cluster D — ROOT-CAUSED + FIX IN FLIGHT (2026-06-10).** CONFIRMED via a real core-dump
+  backtrace of the hung process (method below): the migrated `inchar`
+  (src/nvim-rs/getchar/src/typebuf.rs, fn @1848) passes `std::ptr::null_mut()` as the `events`
+  (MultiQueue*) arg to `input_get` at BOTH call sites (~:1902 got_int drain, ~:1916 main read);
+  UPSTREAM getchar.c `inchar` passes `main_loop.events`. With events=NULL, `inbuf_poll`
+  (os/input.c:487) does `LOOP_PROCESS_EVENTS_UNTIL(&main_loop, NULL, -1, os_input_ready(events)|...)`
+  — `os_input_ready(NULL)` ignores the event queue and `loop_poll_events` drains only `fast_events`,
+  so a deferred RPC request on `main_loop.events` is read off the socket but NEVER executed, and
+  `vgetc` never returns K_EVENT to dispatch it → 0% CPU deadlock in ANY modal vgetc wait
+  (command-line `:`, cmdwin `q:`, complete(), getchar()). The top-level normal loop survives via a
+  separate event path (input.rs:823), which is why only modal waits hang. THIS ONE OMISSION likely
+  explains a broad swath of Cluster D hangs. Captured stack: epoll_pwait <- uv_run <-
+  loop_poll_events <- inbuf_poll(events=0x0) <- input_get(events=0x0) <- inchar <- vgetc <-
+  safe_vgetc <- state_enter <- rs_command_line_enter <- do_cmdline <- rs_nv_colon. Fix (executor
+  ad030dca, in flight): pass main_loop.events (rs_loop_get_events(main_loop)) at both sites.
+  - **REAL-STACK METHOD (this finally worked — record for reuse):** gdb is NOT installed; live
+    attach is blocked by yama ptrace_scope=1 ANYWAY. BUT `coredumpctl` extracts symbolized stacks
+    with no ptrace. Repro the hang in isolation (TEST_FILTER to the one test), find the stable 0%-CPU
+    repo build/bin/nvim child (WCHAN=do_epoll_wait), `kill -ABRT <pid>` (nvim's signal handler still
+    leaves the pre-signal frames visible), then `coredumpctl info <pid>` for the stack, or
+    `coredumpctl dump <pid> --output=/tmp/x.core && nix shell nixpkgs#gdb --command gdb build/bin/nvim
+    /tmp/x.core -batch -ex 'thread apply all bt'` for all-thread + source lines.
+- **NEW BUGS found in passing via the cores (separate from the deadlock, NOT yet fixed):**
+  1. **Exit-path heap corruption:** SIGABRT during shutdown shows `preserve_exit -> ml_close_all ->
+     free -> munmap_chunk/malloc_printerr (abort)` — a double-free / bad-free in memline close on exit.
+  2. **jobstart/terminal NULL deref:** SIGSEGV in `f_jobstart -> channel_job_start -> xstrdup ->
+     __strlen_avx2` (strlen of NULL/garbage) when `:terminal`/jobstart runs via RPC. Real crash.
+- **(historical localization note)** Cluster D reproduces deterministically as
   `test/functional/autocmd/tabnewentered_spec.lua` **T57** ("cmdline-win prevents tab switch via
   g<Tab>"): `feed('q:')` enters the command-line window, then an RPC `eval('win_getid()')` NEVER
   returns. The nvim child sits at **0% CPU, state S** (blocked in the libuv event loop, eventpoll
