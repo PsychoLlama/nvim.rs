@@ -226,7 +226,35 @@ endif
 call setcellwidths([])
 
 " ============================================================================
-" Test 9: charclass() — Rust port of f_charclass (Phase 1 migration)
+" Test 9: cindent() — Rust port of f_cindent (Phase 3 migration)
+" Guards that cindent() returns -1 for out-of-range lnum and a non-negative
+" value for a valid lnum in a C buffer.
+" ============================================================================
+
+" cindent(0) must return -1 (lnum < 1 is invalid)
+if cindent(0) == -1
+  call s:ok('cindent-lnum-0-returns-minus1')
+else
+  call s:fail('cindent-lnum-0-returns-minus1', 'got=' .. cindent(0))
+endif
+
+" cindent(9999) must return -1 (lnum beyond ml_line_count)
+if cindent(9999) == -1
+  call s:ok('cindent-lnum-beyond-range-returns-minus1')
+else
+  call s:fail('cindent-lnum-beyond-range-returns-minus1', 'got=' .. cindent(9999))
+endif
+
+" cindent(1) on current (empty) buffer must return a number >= -1
+let s:ci1 = cindent(1)
+if type(s:ci1) == v:t_number
+  call s:ok('cindent-lnum-1-returns-number')
+else
+  call s:fail('cindent-lnum-1-returns-number', 'got type=' .. type(s:ci1))
+endif
+
+" ============================================================================
+" Test 11: charclass() — Rust port of f_charclass (Phase 1 migration)
 " Guards the mb_get_class dispatch and non-String fallback (returns 0).
 " ============================================================================
 

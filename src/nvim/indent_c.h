@@ -66,3 +66,4 @@ bool cindent_on(void);
 bool in_cinkeys(int keytyped, int when, bool line_is_empty);
 void parse_cino(buf_T *buf);
 int get_c_indent(void);
+void f_cindent(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);

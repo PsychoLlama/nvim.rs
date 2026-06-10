@@ -23,7 +23,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(dead_code)] // Some items are for future phases
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 // Re-export handle types from dependencies
 pub use nvim_buffer::BufHandle;
@@ -247,6 +247,14 @@ extern "C" {
     fn nvim_cindent_curbuf_get_ind_opts(opts: *mut CindentOptions);
     fn nvim_cindent_buf_get_p_cino(buf: *mut std::ffi::c_void) -> *const c_char;
     fn nvim_cindent_buf_get_sw_value(buf: *mut std::ffi::c_void) -> c_int;
+
+    // f_cindent accessors
+    fn nvim_cindent_curwin_get_cursor_coladd() -> c_int;
+    fn nvim_cindent_curwin_set_cursor_coladd(v: c_int);
+    /// Wrapper for `tv_get_lnum(argvars)` — returns lnum as i32.
+    fn nvim_eval_tv_get_lnum(argvars: *const c_void) -> c_int;
+    /// Set `rettv->v_type = VAR_NUMBER` and `rettv->vval.v_number = n`.
+    fn nvim_tv_set_number(tv: *mut c_void, n: i64);
 }
 
 /// Check if a character is whitespace (space or tab).
@@ -6173,6 +6181,45 @@ pub unsafe extern "C" fn rs_get_c_indent_wrapper() -> c_int {
     let mut opts = CindentOptions::default();
     nvim_cindent_curbuf_get_ind_opts(&raw mut opts);
     rs_get_c_indent(&raw const opts)
+}
+
+// ============================================================================
+// f_cindent — VimL builtin (Phase 3 migration)
+// ============================================================================
+
+/// `cindent(lnum)` function — `VimL` builtin.
+///
+/// Returns the C-indent value for the given line number.
+/// Returns -1 if lnum is out of range.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid `typval_T` pointers.
+#[unsafe(export_name = "f_cindent")]
+pub unsafe extern "C" fn rs_f_cindent(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    // Save cursor position (lnum + col + coladd).
+    let save_lnum = nvim_cindent_curwin_get_cursor_lnum();
+    let save_col = nvim_cindent_curwin_get_cursor_col();
+    let save_coladd = nvim_cindent_curwin_get_cursor_coladd();
+
+    let lnum = nvim_eval_tv_get_lnum(argvars);
+    let ml_line_count = nvim_cindent_curbuf_get_ml_line_count();
+
+    let result = if lnum >= 1 && lnum <= ml_line_count {
+        // Move cursor to requested line, compute indent, restore.
+        nvim_cindent_curwin_set_cursor(lnum, save_col);
+        let indent = rs_get_c_indent_wrapper();
+        nvim_cindent_curwin_set_cursor(save_lnum, save_col);
+        nvim_cindent_curwin_set_cursor_coladd(save_coladd);
+        i64::from(indent)
+    } else {
+        -1i64
+    };
+
+    nvim_tv_set_number(rettv, result);
 }
 
 // ============================================================================

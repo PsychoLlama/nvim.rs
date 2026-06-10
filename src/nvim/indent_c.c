@@ -236,6 +236,12 @@ int nvim_cindent_getvcol(int lnum, int col)
 /// C accessor for curwin->w_cursor.col.
 int nvim_cindent_curwin_get_cursor_col(void) { return curwin->w_cursor.col; }
 
+/// C accessor for curwin->w_cursor.coladd (read).
+int nvim_cindent_curwin_get_cursor_coladd(void) { return curwin->w_cursor.coladd; }
+
+/// C accessor to set curwin->w_cursor.coladd.
+void nvim_cindent_curwin_set_cursor_coladd(int v) { curwin->w_cursor.coladd = v; }
+
 /// C accessor to set curwin->w_cursor.
 void nvim_cindent_curwin_set_cursor(int lnum, int col)
 {
@@ -299,16 +305,4 @@ void do_c_expr_indent(void)
   }
 }
 
-/// "cindent(lnum)" function
-void f_cindent(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  pos_T pos = curwin->w_cursor;
-  linenr_T lnum = tv_get_lnum(argvars);
-  if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count) {
-    curwin->w_cursor.lnum = lnum;
-    rettv->vval.v_number = get_c_indent();
-    curwin->w_cursor = pos;
-  } else {
-    rettv->vval.v_number = -1;
-  }
-}
+// f_cindent is implemented in Rust (src/nvim-rs/indent_c/src/lib.rs).
