@@ -900,19 +900,95 @@ pub enum VTermSelectionMask {
 // =============================================================================
 
 /// Glyph information for rendering
+///
+/// Mirrors the C `VTermGlyphInfo` layout exactly:
+/// ```c
+/// typedef struct {
+///   schar_T schar;         // offset 0, 4 bytes
+///   int width;             // offset 4, 4 bytes
+///   unsigned protected_cell:1;  // }
+///   unsigned dwl:1;             // } packed into a single `unsigned` (4 bytes) at offset 8
+///   unsigned dhl:2;             // }
+/// } VTermGlyphInfo;
+/// ```
+///
+/// The three bitfields occupy a single `unsigned` word at offset 8.
+/// We mirror this as a single `flags: u32` field with accessor methods.
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct VTermGlyphInfo {
     /// The character
     pub schar: SChar,
     /// Display width
     pub width: c_int,
-    /// Protected cell flag (DECSCA)
-    pub protected_cell: u8,
-    /// Double-width line
-    pub dwl: u8,
-    /// Double-height line (0=none, 1=top, 2=bottom)
-    pub dhl: u8,
+    /// Packed bitfield word matching C's three `unsigned` bitfields:
+    /// - bit 0: `protected_cell` (DECSCA-protected against DECSEL/DECSED)
+    /// - bit 1: `dwl` (DECDWL or DECDHL double-width line)
+    /// - bits 2-3: `dhl` (DECDHL double-height line: 1=top, 2=bottom)
+    pub flags: u32,
+}
+
+// Compile-time layout guards: must match sizeof/offsetof of C VTermGlyphInfo.
+// C: sizeof(VTermGlyphInfo)==12, offsetof(flags word)==8.
+const _: () = assert!(
+    core::mem::size_of::<VTermGlyphInfo>() == 12,
+    "VTermGlyphInfo size mismatch — layout must match C struct"
+);
+const _: () = assert!(
+    core::mem::offset_of!(VTermGlyphInfo, flags) == 8,
+    "VTermGlyphInfo flags field offset mismatch — must be at byte 8 to match C bitfield word"
+);
+
+impl VTermGlyphInfo {
+    const PROTECTED_CELL_BIT: u32 = 0;
+    const DWL_BIT: u32 = 1;
+    const DHL_SHIFT: u32 = 2;
+    const DHL_MASK: u32 = 0x3;
+
+    /// Get the `protected_cell` flag (DECSCA-protected against DECSEL/DECSED)
+    #[inline]
+    pub const fn protected_cell(&self) -> bool {
+        (self.flags >> Self::PROTECTED_CELL_BIT) & 1 != 0
+    }
+
+    /// Set the `protected_cell` flag
+    #[inline]
+    pub fn set_protected_cell(&mut self, v: bool) {
+        if v {
+            self.flags |= 1 << Self::PROTECTED_CELL_BIT;
+        } else {
+            self.flags &= !(1 << Self::PROTECTED_CELL_BIT);
+        }
+    }
+
+    /// Get the `dwl` flag (DECDWL or DECDHL double-width line)
+    #[inline]
+    pub const fn dwl(&self) -> bool {
+        (self.flags >> Self::DWL_BIT) & 1 != 0
+    }
+
+    /// Set the `dwl` flag
+    #[inline]
+    pub fn set_dwl(&mut self, v: bool) {
+        if v {
+            self.flags |= 1 << Self::DWL_BIT;
+        } else {
+            self.flags &= !(1 << Self::DWL_BIT);
+        }
+    }
+
+    /// Get the `dhl` value (0=none, 1=top, 2=bottom)
+    #[inline]
+    pub const fn dhl(&self) -> u8 {
+        ((self.flags >> Self::DHL_SHIFT) & Self::DHL_MASK) as u8
+    }
+
+    /// Set the `dhl` value
+    #[inline]
+    pub fn set_dhl(&mut self, v: u8) {
+        self.flags &= !(Self::DHL_MASK << Self::DHL_SHIFT);
+        self.flags |= (u32::from(v) & Self::DHL_MASK) << Self::DHL_SHIFT;
+    }
 }
 
 /// Line information
@@ -1206,6 +1282,17 @@ impl VTermKeyEncodingStack {
     }
 }
 
+// Compile-time layout guards for key-encoding structs.
+// C: sizeof(VTermKeyEncodingFlags)==1, sizeof(VTermKeyEncodingStack)==17.
+const _: () = assert!(
+    core::mem::size_of::<VTermKeyEncodingFlags>() == 1,
+    "VTermKeyEncodingFlags size mismatch — bits field must be u8 (= 1 bool bitfield byte in C)"
+);
+const _: () = assert!(
+    core::mem::size_of::<VTermKeyEncodingStack>() == 17,
+    "VTermKeyEncodingStack size mismatch — must match C struct VTermKeyEncodingStack"
+);
+
 // =============================================================================
 // C1 Control Characters
 // =============================================================================
@@ -1401,6 +1488,13 @@ pub struct VTermStateFields {
     /// Line info arrays (primary and altscreen)
     pub lineinfos: [*mut VTermLineInfo; 2],
 }
+
+// Compile-time layout guard for VTermStateFields.
+// C: sizeof(VTermStateFields)==24 (pos=8, lineinfos=2*8=16 on 64-bit).
+const _: () = assert!(
+    core::mem::size_of::<VTermStateFields>() == 24,
+    "VTermStateFields size mismatch — must match C struct VTermStateFields"
+);
 
 // =============================================================================
 // FFI Functions

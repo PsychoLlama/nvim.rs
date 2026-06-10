@@ -67,6 +67,10 @@ struct VTermKeyEncodingStack {
   uint8_t size;  ///< Number of items in the stack. This is at least 1 and at
                  ///< most the length of the "items" array.
 };
+_Static_assert(sizeof(VTermKeyEncodingFlags) == 1,
+               "VTermKeyEncodingFlags layout changed — update Rust VTermKeyEncodingFlags and its layout guard");
+_Static_assert(sizeof(struct VTermKeyEncodingStack) == 17,
+               "VTermKeyEncodingStack layout changed — update Rust VTermKeyEncodingStack and its layout guard");
 
 struct VTermState {
   VTerm *vt;

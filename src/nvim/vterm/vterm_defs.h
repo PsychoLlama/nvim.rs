@@ -219,6 +219,8 @@ typedef struct {
   unsigned dwl:1;             // DECDWL or DECDHL double-width line
   unsigned dhl:2;             // DECDHL double-height line (1=top 2=bottom)
 } VTermGlyphInfo;
+_Static_assert(sizeof(VTermGlyphInfo) == 12,
+               "VTermGlyphInfo layout changed — update Rust VTermGlyphInfo and its layout guards");
 
 typedef struct {
   unsigned doublewidth:1;     // DECDWL or DECDHL line
@@ -233,6 +235,8 @@ typedef struct {
   VTermPos pos;                // current cursor position
   VTermLineInfo *lineinfos[2];  // [1] may be NULL
 } VTermStateFields;
+_Static_assert(sizeof(VTermStateFields) == 24,
+               "VTermStateFields layout changed — update Rust VTermStateFields and its layout guard");
 
 typedef struct {
   // libvterm relies on this memory to be zeroed out before it is returned by the allocator.
@@ -317,8 +321,13 @@ typedef struct {
   unsigned dhl            : 2;  // on a DECDHL line (1=top 2=bottom)
 } ScreenPen;
 
+_Static_assert(sizeof(ScreenPen) == 16,
+               "ScreenPen layout changed — update Rust ScreenPen and its layout guard");
+
 // Internal representation of a screen cell
 typedef struct {
   schar_T schar;
   ScreenPen pen;
 } ScreenCell;
+_Static_assert(sizeof(ScreenCell) == 20,
+               "ScreenCell layout changed — update Rust ScreenCell and its layout guard");

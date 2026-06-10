@@ -329,6 +329,19 @@ impl ScreenCell {
     }
 }
 
+// Compile-time layout guards for screen buffer structs shared with C.
+// C (vterm_defs.h):
+//   sizeof(ScreenPen)  == 16  (fg=4, bg=4, uri=4, bitfields=4)
+//   sizeof(ScreenCell) == 20  (schar=4, pen=16)
+const _: () = assert!(
+    core::mem::size_of::<ScreenPen>() == 16,
+    "ScreenPen size mismatch — must match C ScreenPen (fg+bg+uri+bitfields = 16 bytes)"
+);
+const _: () = assert!(
+    core::mem::size_of::<ScreenCell>() == 20,
+    "ScreenCell size mismatch — must match C ScreenCell (schar=4 + pen=16 = 20 bytes)"
+);
+
 // =============================================================================
 // Screen Callbacks
 // =============================================================================
