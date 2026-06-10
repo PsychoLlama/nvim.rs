@@ -63,6 +63,9 @@ extern const uint8_t utf8len_tab[256];
 // Functions implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 // Declared here so C callers (including auto-generated function tables) don't need changes.
 void f_setcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_charclass(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_getcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
+void f_iconv(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void show_utf8(void);
 void utf_find_illegal(void);
 void mb_check_adjust_col(void *win_);

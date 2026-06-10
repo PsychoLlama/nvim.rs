@@ -200,6 +200,39 @@ else
 endif
 
 " ============================================================================
+" Test 7: charclass() — Rust port of f_charclass (Phase 1 migration)
+" Guards the mb_get_class dispatch and non-String fallback (returns 0).
+" ============================================================================
+
+" charclass('  ') — space → class 0
+if charclass(' ') == 0
+  call s:ok('charclass-space-is-0')
+else
+  call s:fail('charclass-space-is-0', 'got=' .. charclass(' '))
+endif
+
+" charclass(',') — punctuation → class 1
+if charclass(',') == 1
+  call s:ok('charclass-comma-is-1')
+else
+  call s:fail('charclass-comma-is-1', 'got=' .. charclass(','))
+endif
+
+" charclass('a') — word char → class 2
+if charclass('a') == 2
+  call s:ok('charclass-alpha-is-2')
+else
+  call s:fail('charclass-alpha-is-2', 'got=' .. charclass('a'))
+endif
+
+" charclass(123) — non-String arg → returns 0 (no crash)
+if charclass(123) == 0
+  call s:ok('charclass-nonstring-is-0')
+else
+  call s:fail('charclass-nonstring-is-0', 'got=' .. charclass(123))
+endif
+
+" ============================================================================
 " Report results
 " ============================================================================
 

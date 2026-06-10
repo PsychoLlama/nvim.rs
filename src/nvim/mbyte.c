@@ -498,14 +498,7 @@ void f_getcellwidths(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
-void f_charclass(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
-{
-  if (tv_check_for_string_arg(argvars, 0) == FAIL
-      || argvars[0].vval.v_string == NULL) {
-    return;
-  }
-  rettv->vval.v_number = mb_get_class(argvars[0].vval.v_string);
-}
+// f_charclass is implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 
 // get_encoding_name is implemented in Rust (src/nvim-rs/mbyte/src/lib.rs).
 

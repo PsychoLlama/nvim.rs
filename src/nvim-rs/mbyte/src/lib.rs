@@ -5706,3 +5706,45 @@ pub unsafe extern "C" fn rs_mb_check_adjust_col(win_: *mut c_void) {
         nvim_mbyte_win_set_cursor_coladd(win_, 0);
     }
 }
+
+// =============================================================================
+// VimL builtin functions: f_charclass / f_getcellwidths / f_iconv (Phase batch)
+// =============================================================================
+
+extern "C" {
+    /// Check argvars[idx] is a String arg; returns FAIL (0) on type mismatch.
+    fn tv_check_for_string_arg(argvars: *const c_void, idx: c_int) -> c_int;
+    /// Get argvars[0].vval.v_string (pointer, may be NULL).
+    fn nvim_tv_get_string_ptr(tv: *const c_void) -> *const c_char;
+    /// Set rettv->v_type = VAR_NUMBER and rettv->vval.v_number = n.
+    fn nvim_tv_set_number(tv: *mut c_void, n: i64);
+}
+
+/// FAIL constant (C OK=1, FAIL=0).
+const MBYTE_FAIL: c_int = 0;
+
+/// "charclass(string)" function — VimL builtin.
+///
+/// Returns the character class of the first character in {string}:
+/// 0 = space/punctuation, 1 = word, 2 = non-ASCII.
+/// Returns 0 for non-String input (matches C behaviour).
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid typval_T pointers.
+#[unsafe(export_name = "f_charclass")]
+pub unsafe extern "C" fn rs_f_charclass(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    if tv_check_for_string_arg(argvars, 0) == MBYTE_FAIL {
+        return;
+    }
+    let s = nvim_tv_get_string_ptr(argvars);
+    if s.is_null() {
+        return;
+    }
+    // rs_mb_get_class is in this crate (exported as "mb_get_class").
+    let cls = rs_mb_get_class(s) as i64;
+    nvim_tv_set_number(rettv, cls);
+}
