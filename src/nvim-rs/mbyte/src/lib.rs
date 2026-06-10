@@ -5716,16 +5716,24 @@ extern "C" {
     fn tv_check_for_string_arg(argvars: *const c_void, idx: c_int) -> c_int;
     /// Get argvars[0].vval.v_string (pointer, may be NULL).
     fn nvim_tv_get_string_ptr(tv: *const c_void) -> *const c_char;
-    /// Set rettv->v_type = VAR_NUMBER and rettv->vval.v_number = n.
+    /// Set `rettv->v_type = VAR_NUMBER` and `rettv->vval.v_number = n`.
     fn nvim_tv_set_number(tv: *mut c_void, n: i64);
-    /// Initialise rettv as a VAR_LIST and return a pointer to its list_T.
+    /// Initialise rettv as a `VAR_LIST` and return a pointer to its `list_T`.
     fn tv_list_alloc_ret(rettv: *mut c_void, len: isize) -> *mut c_void;
-    /// Allocate a new list_T with a capacity hint (-1 = unknown).
+    /// Allocate a new `list_T` with a capacity hint (-1 = unknown).
     fn tv_list_alloc(len: isize) -> *mut c_void;
     /// Append a Number value to a list.
     fn tv_list_append_number(list: *mut c_void, nr: i64);
     /// Append a sub-list as an item of list.
     fn tv_list_append_list(list: *mut c_void, itemlist: *mut c_void);
+    /// Return `argvars[0]` as a C string (never NULL, may be empty).
+    fn tv_get_string(tv: *const c_void) -> *const c_char;
+    /// Like `tv_get_string` but writes into a scratch buffer of `NUMBUFLEN` bytes.
+    fn tv_get_string_buf(tv: *const c_void, buf: *mut c_char) -> *const c_char;
+    /// Return a pointer to `&argvars[i]`.
+    fn nvim_eval_tv_idx(argvars: *const c_void, i: c_int) -> *const c_void;
+    /// Set `rettv->v_type = VAR_STRING` and `rettv->vval.v_string = s` (takes ownership).
+    fn nvim_tv_set_string(tv: *mut c_void, s: *mut c_char);
 }
 
 /// FAIL constant (C OK=1, FAIL=0).
@@ -5782,4 +5790,64 @@ pub unsafe extern "C" fn rs_f_getcellwidths(
         tv_list_append_number(entry, i64::from(cw.width));
         tv_list_append_list(outer, entry);
     }
+}
+
+/// `NUMBUFLEN` — scratch buffer size for `tv_get_string_buf`.
+const ICONV_NUMBUFLEN: usize = 65;
+
+/// `iconv(string, from, to)` function — `VimL` builtin.
+///
+/// Convert {string} from encoding {from} to {to}.
+/// Returns the converted string, or `''` on conversion failure.
+///
+/// # Safety
+/// `argvars` and `rettv` must be valid `typval_T` pointers.
+#[unsafe(export_name = "f_iconv")]
+pub unsafe extern "C" fn rs_f_iconv(
+    argvars: *const c_void,
+    rettv: *mut c_void,
+    _fptr: *mut c_void,
+) {
+    // Initialise return value as VAR_STRING with NULL (= '').
+    nvim_tv_set_string(rettv, std::ptr::null_mut());
+
+    // argvars[0] = string to convert (tv_get_string never returns NULL)
+    let str_ptr = tv_get_string(argvars);
+
+    // argvars[1] = from encoding; argvars[2] = to encoding
+    let arg1 = nvim_eval_tv_idx(argvars, 1);
+    let arg2 = nvim_eval_tv_idx(argvars, 2);
+
+    let mut buf1 = [0i8; ICONV_NUMBUFLEN];
+    let mut buf2 = [0i8; ICONV_NUMBUFLEN];
+    let from_raw = tv_get_string_buf(arg1, buf1.as_mut_ptr());
+    let to_raw = tv_get_string_buf(arg2, buf2.as_mut_ptr());
+
+    // enc_skip + enc_canonize produce an owned xmalloc'd string each.
+    let from = rs_enc_canonize(rs_enc_skip(from_raw.cast_mut()));
+    let to = rs_enc_canonize(rs_enc_skip(to_raw.cast_mut()));
+
+    let mut vimconv = VimConv {
+        vc_type: CONV_NONE,
+        vc_factor: 1,
+        vc_fd: std::ptr::null_mut(),
+        vc_fail: false,
+    };
+    rs_convert_setup(&raw mut vimconv, from, to);
+
+    let result = if vimconv.vc_type == CONV_NONE {
+        // Encodings are identical — duplicate as-is.
+        xstrdup(str_ptr)
+    } else {
+        rs_string_convert(&raw const vimconv, str_ptr.cast_mut(), std::ptr::null_mut())
+    };
+
+    // Tear down converter (frees iconv descriptor if CONV_ICONV).
+    rs_convert_setup(&raw mut vimconv, std::ptr::null_mut(), std::ptr::null_mut());
+
+    xfree(from as *mut c_char);
+    xfree(to as *mut c_char);
+
+    // Hand the owned result string to rettv (may be NULL → '').
+    nvim_tv_set_string(rettv, result);
 }

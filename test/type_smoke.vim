@@ -254,7 +254,28 @@ else
 endif
 
 " ============================================================================
-" Test 11: charclass() — Rust port of f_charclass (Phase 1 migration)
+" Test 11: iconv() — Rust port of f_iconv (Phase 4 migration)
+" Guards the CONV_NONE fast path and that the result is a String.
+" ============================================================================
+
+" iconv with identical encodings uses CONV_NONE path → returns string unchanged
+let s:ic1 = iconv('hello', 'utf-8', 'utf-8')
+if type(s:ic1) == v:t_string && s:ic1 ==# 'hello'
+  call s:ok('iconv-same-encoding-identity')
+else
+  call s:fail('iconv-same-encoding-identity', 'got=' .. string(s:ic1))
+endif
+
+" iconv with invalid target encoding → returns '' (empty string)
+let s:ic2 = iconv('test', 'utf-8', 'no-such-encoding-xyz')
+if type(s:ic2) == v:t_string
+  call s:ok('iconv-invalid-encoding-returns-string')
+else
+  call s:fail('iconv-invalid-encoding-returns-string', 'got type=' .. type(s:ic2))
+endif
+
+" ============================================================================
+" Test 13: charclass() — Rust port of f_charclass (Phase 1 migration)
 " Guards the mb_get_class dispatch and non-String fallback (returns 0).
 " ============================================================================
 
