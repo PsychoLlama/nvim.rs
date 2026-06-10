@@ -156,11 +156,17 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
     leaves the pre-signal frames visible), then `coredumpctl info <pid>` for the stack, or
     `coredumpctl dump <pid> --output=/tmp/x.core && nix shell nixpkgs#gdb --command gdb build/bin/nvim
     /tmp/x.core -batch -ex 'thread apply all bt'` for all-thread + source lines.
-- **SECOND HANG — insert-mode completion busy-loop (99.7% CPU, distinct from inchar deadlock).**
-  Exposed once the inchar deadlock was fixed. Real stack: ins_complete -> rs_ins_compl_next ->
-  rs_ins_compl_get_exp -> rs_ins_compl_next_buf (src/nvim-rs/insexpand/src/buffer.rs). NOT a 0%
-  deadlock — a CPU-bound infinite loop in the completion buffer/window scan. Hangs
-  editor/completion_spec.lua (~3.5s per-test timeouts). Fix executor abed7269 in flight.
+- **SECOND HANG — insert-mode completion busy-loop — FIXED (commit c0516d97b3).** Real root
+  cause: edit/dispatch.rs passed the WRONG pointer to the completion window check
+  (nvim_curwin_get_cursor_ptr instead of nvim_get_curwin), so the window-walk in
+  rs_ins_compl_next_buf compared NEXT_BUF_WP against a garbage curwin -> == curwin never matched
+  -> infinite 99.7%-CPU spin. Fixed alongside a cluster of WRONG HLF highlight constants (verified
+  vs highlight_defs.h: HLF_MSG 5->63, HLF_8 8->1, HLF_M 6->10, HLF_R_DICT 6->18) + menuone flag
+  + redraw_mode bool. VERIFIED: just check 4339/4339, completion_spec.lua now COMPLETES in 97s
+  (was hanging) with 32 fails / 3 errors remaining (ordinary functional bugs, NOT hangs — backlog).
+  The "WinPtr vs WinHandle type mismatch" theory was REFUTED (ABI-identical pointers). LATENT
+  (low priority, untouched): buffer.rs:168 still has a '&& focusable' term not in upstream's break
+  condition (missed scans in multi-window completion; not a hang).
   - **REFUTED theory** (a diagnostic agent's wrong guess — do NOT act on it): "WinPtr=*mut u8 vs
     WinHandle type mismatch corrupts the NEXT_BUF_WP==curwin comparison." False: nvim_get_curwin/
     firstwin (globals.rs:140/201) return WinHandle wrapping the raw global pointer; nvim_win_get_w_next
