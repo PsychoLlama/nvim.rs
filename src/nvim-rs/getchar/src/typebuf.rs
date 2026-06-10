@@ -1603,6 +1603,10 @@ extern "C" {
         tb_change_cnt: c_int,
         events: *mut c_void,
     ) -> c_int;
+    /// Get a pointer to the main loop (Loop*).
+    fn nvim_get_main_loop() -> *mut c_void;
+    /// Get the events MultiQueue* from a Loop*.
+    fn rs_loop_get_events(lp: *mut c_void) -> *mut c_void;
     /// Translate special bytes
     fn fix_input_buffer(buf: *mut u8, len: c_int) -> c_int;
     /// `uv_strerror(int err)` -- libuv error string (os_strerror is a macro for this)
@@ -1893,14 +1897,9 @@ pub unsafe extern "C" fn inchar(buf: *mut u8, maxlen: c_int, wait_time: i64) -> 
             // Skip all previously typed characters, return true if quit reading script.
             const DUM_LEN: usize = MAXMAPLEN_VAL * 3 + 3;
             let mut dum = [0u8; DUM_LEN + 1];
+            let main_loop_events = rs_loop_get_events(nvim_get_main_loop());
             loop {
-                len = input_get(
-                    dum.as_mut_ptr(),
-                    DUM_LEN as c_int,
-                    0,
-                    0,
-                    std::ptr::null_mut(),
-                );
+                len = input_get(dum.as_mut_ptr(), DUM_LEN as c_int, 0, 0, main_loop_events);
                 if len == 0 || (len == 1 && dum[0] == CTRL_C) {
                     break;
                 }
@@ -1913,12 +1912,16 @@ pub unsafe extern "C" fn inchar(buf: *mut u8, maxlen: c_int, wait_time: i64) -> 
         }
 
         // Fill up to a third of the buffer (each char may be tripled below).
+        // Pass main_loop.events (matching upstream getchar.c) so that deferred
+        // RPC requests sitting on the event queue are serviced instead of being
+        // silently ignored while inbuf_poll blocks waiting for input.
+        let main_loop_events = rs_loop_get_events(nvim_get_main_loop());
         len = input_get(
             buf,
             maxlen / 3,
             wait_time as c_int,
             tb_change_cnt,
-            std::ptr::null_mut(),
+            main_loop_events,
         );
     }
 
