@@ -135,10 +135,27 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   consuming ESC → hang. One-line field-order swap. Unblocks every spec using `insert()` in setup.
   setpos_spec now completes (5 tests, was a 200s hang). Guard: test/insert_smoke.vim.
 - **Cluster D — STILL OPEN, cmdwin/textlock sub-theme** (separate deadlock, persists after the
-  VimState fix): window (set_buf in cmdwin), tabpage (set_win when textlocked), errorlist T9
-  (setloclist window-closed), null T58 (complete() w/ NULL list), map_functions T13 (mapset
-  replace_keycodes). Need their own backtrace/root-cause. Re-run whole dirs (editor/lua/ui/etc.)
-  now that the insert-spin is gone — many may have been hanging only on the insert() spin.
+  VimState fix). **LOCALIZED (2026-06-10):** reproduces deterministically as
+  `test/functional/autocmd/tabnewentered_spec.lua` **T57** ("cmdline-win prevents tab switch via
+  g<Tab>"): `feed('q:')` enters the command-line window, then an RPC `eval('win_getid()')` NEVER
+  returns. The nvim child sits at **0% CPU, state S** (blocked in the libuv event loop, eventpoll
+  + io_uring fds open) — a BLOCK, not a busy-spin. The cmdwin's nested input loop is not
+  pumping/servicing the multiqueue, so the blocking client API request is never executed →
+  both sides wait forever. This single hang takes down the whole autocmd/editor/ui DIRECTORY runs.
+  - **RULED OUT:** `stuff_empty` FFI mismatch — all decls are already `-> bool` (the prior FFI
+    sweep fixed it). NOT the cause.
+  - **Suspect area (unconfirmed):** the cmdwin nested loop's event pumping (`open_cmdwin` and the
+    normal-mode state loop it runs) — does it drain the multiqueue between keystrokes? Compare the
+    migrated path against upstream `ex_getln.c` open_cmdwin + input_get/inbuf_poll/loop_poll_events.
+  - **To get a real stack next time:** live gdb-attach is blocked (`yama ptrace_scope=1`, the test
+    nvim is a sibling, not a descendant of gdb). Options: (a) launch the child nvim UNDER gdb via a
+    minimal standalone RPC repro (start nvim --embed as gdb's child, send nvim_input("q:") then
+    nvim_eval), or (b) force a core with a signal nvim does NOT catch (SIGTRAP/SIGXCPU — SIGABRT/
+    SIGQUIT/SIGSEGV are handled) and retrieve via `coredumpctl gdb <pid>` (core_pattern pipes to
+    systemd-coredump). Then `thread apply all bt`.
+  - Other specs in this cluster to re-check once fixed: window (set_buf in cmdwin), tabpage
+    (set_win when textlocked), null T58 (complete() w/ NULL list), map_functions T13 (mapset
+    replace_keycodes). Note: errorlist T9 (setloclist window-closed) is NOW GREEN (9/9) — unblocked.
 - **Cluster H — partially open**: let_spec FIXED; ctx_functions still 5 FAIL (register/jumplist/
   buflist round-trip), match_functions 1 FAIL (matchaddpos zero-length) + setmatches was CRASH
   (recheck), editor/ctrl_c/fold, api/autocmd lambda.
