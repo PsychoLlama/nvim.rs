@@ -313,16 +313,19 @@ impl ScreenCell {
     }
 
     /// Check if this is a continuation cell (part of a wide character)
+    ///
+    /// Matches C sentinel `(uint32_t)-1` used in screen.c.
     #[inline]
-    #[allow(clippy::cast_possible_wrap)]
     pub const fn is_continuation(&self) -> bool {
-        self.schar == u64::MAX
+        self.schar == u32::MAX
     }
 
     /// Mark this cell as a continuation cell
+    ///
+    /// Matches C sentinel `(uint32_t)-1` used in screen.c.
     #[inline]
     pub fn mark_continuation(&mut self) {
-        self.schar = u64::MAX;
+        self.schar = u32::MAX;
     }
 }
 

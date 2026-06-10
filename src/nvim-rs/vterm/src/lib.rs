@@ -591,8 +591,8 @@ impl VTermScreenCellAttrs {
     }
 }
 
-/// Type alias for screen character (opaque handle to C `schar_T`)
-pub type SChar = u64;
+/// Type alias for screen character (mirrors C `schar_T = uint32_t` from `types_defs.h`)
+pub type SChar = u32;
 
 /// A screen cell containing character, width, attributes, and colors
 #[repr(C)]
@@ -624,6 +624,14 @@ impl Default for VTermScreenCell {
         }
     }
 }
+
+// Compile-time layout guard: VTermScreenCell must be 24 bytes to match the C struct
+// (schar_T=uint32_t=4, char=1, 3 padding, attrs=4, fg=4, bg=4, uri=4).
+// The C side has a matching _Static_assert in vterm_defs.h.
+const _: () = assert!(
+    core::mem::size_of::<VTermScreenCell>() == 24,
+    "VTermScreenCell size mismatch — schar field must be u32 (= schar_T = uint32_t)"
+);
 
 // =============================================================================
 // Terminal Properties

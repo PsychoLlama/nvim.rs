@@ -74,6 +74,8 @@ typedef struct {
   VTermColor fg, bg;
   int uri;
 } VTermScreenCell;
+// Guard against layout changes (schar_T=uint32_t so size must be 24 bytes)
+_Static_assert(sizeof(VTermScreenCell) == 24, "VTermScreenCell layout changed — update Rust mirror VTermScreenCell and VTERMSCREENCELL_SIZE");
 
 typedef enum {
   // VTERM_PROP_NONE = 0
