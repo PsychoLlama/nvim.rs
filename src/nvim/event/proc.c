@@ -633,8 +633,12 @@ char **nvim_proc_get_argv(Proc *proc) { return proc->argv; }
 /// Set the argv field of a Proc (accessor for Rust).
 void nvim_proc_set_argv(Proc *proc, char **argv) { proc->argv = argv; }
 
-/// Get the exepath field from a Proc (accessor for Rust).
-const char *nvim_proc_get_exepath(Proc *proc) { return proc->exepath; }
+/// Get the executable path for a Proc (accessor for Rust).
+/// Falls back to argv[0] when exepath is NULL, matching proc_get_exepath() in proc.h.
+const char *nvim_proc_get_exepath(Proc *proc)
+{
+  return proc->exepath != NULL ? proc->exepath : proc->argv[0];
+}
 
 /// Set the exepath field of a Proc (accessor for Rust).
 void nvim_proc_set_exepath(Proc *proc, const char *exepath) { proc->exepath = exepath; }
