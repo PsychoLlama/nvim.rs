@@ -264,6 +264,9 @@ int nvim_cindent_get_indent(void) { return get_indent(); }
 /// C accessor for get_cursor_line_ptr().
 const char *nvim_cindent_get_cursor_line_ptr(void) { return get_cursor_line_ptr(); }
 
+/// C accessor: nonzero if curbuf->b_p_inde is non-empty.
+int nvim_cindent_inde_is_set(void) { return *curbuf->b_p_inde != NUL; }
+
 extern FindMatchResult rs_find_start_comment(int ind_maxcomment);
 extern bool cin_isscopedecl(const char *p);
 extern bool cin_islabel(void);
@@ -295,14 +298,6 @@ pos_T *find_start_comment(int ind_maxcomment)  // XXX
 // in_cinkeys is implemented in Rust (src/nvim-rs/indent_c/src/lib.rs) via
 // #[unsafe(export_name = "in_cinkeys")]. The C body has been removed.
 
-// Do C or expression indenting on the current line.
-void do_c_expr_indent(void)
-{
-  if (*curbuf->b_p_inde != NUL) {
-    fixthisline(get_expr_indent);
-  } else {
-    fixthisline(get_c_indent);
-  }
-}
+// do_c_expr_indent is implemented in Rust (src/nvim-rs/indent_c/src/lib.rs).
 
 // f_cindent is implemented in Rust (src/nvim-rs/indent_c/src/lib.rs).

@@ -255,6 +255,14 @@ extern "C" {
     fn nvim_eval_tv_get_lnum(argvars: *const c_void) -> c_int;
     /// Set `rettv->v_type = VAR_NUMBER` and `rettv->vval.v_number = n`.
     fn nvim_tv_set_number(tv: *mut c_void, n: i64);
+
+    // do_c_expr_indent accessors
+    /// Nonzero if `curbuf->b_p_inde` is non-empty.
+    fn nvim_cindent_inde_is_set() -> c_int;
+    /// Call `fixthisline(get_the_indent)`.
+    fn fixthisline(f: unsafe extern "C" fn() -> c_int);
+    /// C `get_expr_indent()` function.
+    fn get_expr_indent() -> c_int;
 }
 
 /// Check if a character is whitespace (space or tab).
@@ -6181,6 +6189,26 @@ pub unsafe extern "C" fn rs_get_c_indent_wrapper() -> c_int {
     let mut opts = CindentOptions::default();
     nvim_cindent_curbuf_get_ind_opts(&raw mut opts);
     rs_get_c_indent(&raw const opts)
+}
+
+// ============================================================================
+// do_c_expr_indent — internal entry point (Phase 5 migration)
+// ============================================================================
+
+/// Apply C or expression indenting to the current line.
+///
+/// Uses `get_expr_indent` if `'indentexpr'` is set, otherwise `get_c_indent`.
+/// Drop-in replacement for the C `do_c_expr_indent()` function.
+///
+/// # Safety
+/// Must be called from a valid Neovim context with `curbuf`/`curwin` set.
+#[unsafe(export_name = "do_c_expr_indent")]
+pub unsafe extern "C" fn rs_do_c_expr_indent() {
+    if nvim_cindent_inde_is_set() != 0 {
+        fixthisline(get_expr_indent);
+    } else {
+        fixthisline(rs_get_c_indent_wrapper);
+    }
 }
 
 // ============================================================================
