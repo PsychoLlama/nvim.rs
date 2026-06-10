@@ -755,3 +755,21 @@ void nvim_error_free(Error *err) { if (err) { api_clear_error(err); xfree(err); 
 // nvim_wconfig_get_window_handle
 int nvim_wconfig_get_window_val(WinConfig *cfg) { return cfg ? (int)cfg->window : 0; }
 
+// Phase 2: aucmd_prepbuf/restbuf accessor helpers for Rust FFI.
+void nvim_win_set_w_buffer(win_T *wp, buf_T *buf) { wp->w_buffer = buf; }
+void nvim_win_set_w_s_from_buf(win_T *wp, buf_T *buf) { wp->w_s = &buf->b_s; }
+void nvim_win_clear_w_localdir(win_T *wp) { XFREE_CLEAR(wp->w_localdir); }
+// nvim_win_config_float_self is an alias for nvim_win_config_float (already at line 71)
+void nvim_window_handles_put(int handle, win_T *wp) { pmap_put(int)(&window_handles, handle, wp); }
+void nvim_window_handles_del(int handle) { pmap_del(int)(&window_handles, handle, NULL); }
+win_T *nvim_tab_first_win(tabpage_T *tp) { return tp ? tp->tp_firstwin : NULL; }
+tabpage_T *nvim_tabpage_next_tp(tabpage_T *tp) { return tp ? tp->tp_next : NULL; }
+tabpage_T *nvim_get_first_tabpage_ptr(void) { return first_tabpage; }
+char *nvim_curtab_get_tp_localdir(void) { return curtab ? curtab->tp_localdir : NULL; }
+void nvim_curtab_set_tp_localdir(char *v) { if (curtab) { curtab->tp_localdir = v; } }
+void nvim_curtab_xfree_tp_localdir(void) { if (curtab) { xfree(curtab->tp_localdir); } }
+char *nvim_globaldir_take(void) { char *d = globaldir; globaldir = NULL; return d; }
+void nvim_globaldir_xfree_and_set(char *v) { xfree(globaldir); globaldir = v; }
+int nvim_win_get_w_localdir_notnull(win_T *wp) { return (wp && wp->w_localdir != NULL) ? 1 : 0; }
+void nvim_win_vars_clear_and_init(win_T *wp) { vars_clear(&wp->w_vars->dv_hashtab); hash_init(&wp->w_vars->dv_hashtab); }
+int nvim_win_get_w_s_is_curbuf_s(win_T *wp, buf_T *buf) { return (wp && buf && wp->w_s == &buf->b_s) ? 1 : 0; }

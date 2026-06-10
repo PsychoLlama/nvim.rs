@@ -135,245 +135,11 @@ AutoCmdVec *au_get_autocmds_for_event(event_T event)
 // exported directly under the name "autocmd_register" via #[unsafe(export_name)].
 // The C declaration in autocmd.h still covers external callers.
 
-// aucmd_prepbuf is now implemented in Rust (rs_aucmd_prepbuf in lib.rs),
+// aucmd_prepbuf is now fully implemented in Rust (rs_aucmd_prepbuf in lib.rs),
 // exported under the name "aucmd_prepbuf" via #[unsafe(export_name)].
-// The full implementation is in nvim_aucmd_prepbuf_impl below; Rust calls it.
 
-// aucmd_restbuf is now implemented in Rust (rs_aucmd_restbuf in lib.rs),
+// aucmd_restbuf is now fully implemented in Rust (rs_aucmd_restbuf in lib.rs),
 // exported under the name "aucmd_restbuf" via #[unsafe(export_name)].
-// The full implementation is in nvim_aucmd_restbuf_impl below; Rust calls it.
-
-// =============================================================================
-// Phase 5: aucmd_prepbuf / aucmd_restbuf implementations (called from Rust)
-// =============================================================================
-
-/// Implementation of aucmd_prepbuf, called from Rust rs_aucmd_prepbuf.
-void nvim_aucmd_prepbuf_impl(aco_save_T *aco, buf_T *buf)
-{
-  win_T *win;
-  bool need_append = true;  // Append `aucmd_win` to the window list.
-  const bool same_buffer = buf == curbuf;
-
-  // Find a window that is for the new buffer
-  if (same_buffer) {  // be quick when buf is curbuf
-    win = curwin;
-  } else {
-    win = NULL;
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_buffer == buf) {
-        win = wp;
-        break;
-      }
-    }
-  }
-
-  // Allocate a window when needed.
-  win_T *auc_win = NULL;
-  int auc_idx = AUCMD_WIN_COUNT;
-  if (win == NULL) {
-    for (auc_idx = 0; auc_idx < AUCMD_WIN_COUNT; auc_idx++) {
-      if (!aucmd_win[auc_idx].auc_win_used) {
-        break;
-      }
-    }
-
-    if (auc_idx == AUCMD_WIN_COUNT) {
-      kv_push(aucmd_win_vec, ((aucmdwin_T){
-        .auc_win = NULL,
-        .auc_win_used = false,
-      }));
-    }
-
-    if (aucmd_win[auc_idx].auc_win == NULL) {
-      win_alloc_aucmd_win(auc_idx);
-      need_append = false;
-    }
-    auc_win = aucmd_win[auc_idx].auc_win;
-    aucmd_win[auc_idx].auc_win_used = true;
-  }
-
-  aco->save_curwin_handle = curwin->handle;
-  aco->save_prevwin_handle = prevwin == NULL ? 0 : prevwin->handle;
-  aco->save_State = State;
-  if (bt_prompt(curbuf)) {
-    aco->save_prompt_insert = curbuf->b_prompt_insert;
-  }
-
-  if (win != NULL) {
-    // There is a window for "buf" in the current tab page, make it the
-    // curwin.  This is preferred, it has the least side effects (esp. if
-    // "buf" is curbuf).
-    aco->use_aucmd_win_idx = -1;
-    curwin = win;
-  } else {
-    // There is no window for "buf", use "auc_win".  To minimize the side
-    // effects, insert it in the current tab page.
-    // Anything related to a window (e.g., setting folds) may have
-    // unexpected results.
-    aco->use_aucmd_win_idx = auc_idx;
-    auc_win->w_buffer = buf;
-    auc_win->w_s = &buf->b_s;
-    buf->b_nwindows++;
-    win_init_empty(auc_win);  // set cursor and topline to safe values
-
-    // Make sure w_localdir, tp_localdir and globaldir are NULL to avoid a
-    // chdir() in win_enter_ext().
-    XFREE_CLEAR(auc_win->w_localdir);
-    aco->tp_localdir = curtab->tp_localdir;
-    curtab->tp_localdir = NULL;
-    aco->globaldir = globaldir;
-    globaldir = NULL;
-
-    block_autocmds();  // We don't want BufEnter/WinEnter autocommands.
-    if (need_append) {
-      rs_win_append(lastwin, auc_win, NULL);
-      pmap_put(int)(&window_handles, auc_win->handle, auc_win);
-      win_config_float(auc_win, auc_win->w_config);
-    }
-    // Prevent chdir() call in win_enter_ext(), through do_autochdir()
-    const int save_acd = p_acd;
-    p_acd = false;
-    // no redrawing and don't set the window title
-    RedrawingDisabled++;
-    win_enter(auc_win, false);
-    RedrawingDisabled--;
-    p_acd = save_acd;
-    unblock_autocmds();
-    curwin = auc_win;
-  }
-  curbuf = buf;
-  aco->new_curwin_handle = curwin->handle;
-  set_bufref(&aco->new_curbuf, curbuf);
-
-  aco->save_VIsual_active = VIsual_active;
-  if (!same_buffer) {
-    // disable the Visual area, position may be invalid in another buffer
-    VIsual_active = false;
-  }
-}
-
-/// Implementation of aucmd_restbuf, called from Rust rs_aucmd_restbuf.
-void nvim_aucmd_restbuf_impl(aco_save_T *aco)
-{
-  if (aco->use_aucmd_win_idx >= 0) {
-    win_T *awp = aucmd_win[aco->use_aucmd_win_idx].auc_win;
-
-    // Find "awp", it can't be closed, but it may be in another tab page.
-    // Do not trigger autocommands here.
-    block_autocmds();
-    if (curwin != awp) {
-      FOR_ALL_TAB_WINDOWS(tp, wp) {
-        if (wp == awp) {
-          if (tp != curtab) {
-            goto_tabpage_tp(tp, true, true);
-          }
-          win_goto(awp);
-          goto win_found;
-        }
-      }
-    }
-win_found:
-    curbuf->b_nwindows--;
-    const bool save_stop_insert_mode = stop_insert_mode;
-    // May need to stop Insert mode if we were in a prompt buffer.
-    leaving_window(curwin);
-    // Do not stop Insert mode when already in Insert mode before.
-    if (aco->save_State & MODE_INSERT) {
-      stop_insert_mode = save_stop_insert_mode;
-    }
-    // Remove the window.
-    rs_win_remove(curwin, NULL);
-    pmap_del(int)(&window_handles, curwin->handle, NULL);
-    if (curwin->w_grid_alloc.chars != NULL) {
-      ui_comp_remove_grid(&curwin->w_grid_alloc);
-      ui_call_win_hide(curwin->w_grid_alloc.handle);
-      grid_free(&curwin->w_grid_alloc);
-    }
-
-    // The window is marked as not used, but it is not freed, it can be
-    // used again.
-    aucmd_win[aco->use_aucmd_win_idx].auc_win_used = false;
-
-    if (!rs_valid_tabpage_win(curtab)) {
-      // no valid window in current tabpage
-      close_tabpage(curtab);
-    }
-
-    unblock_autocmds();
-
-    win_T *const save_curwin = rs_win_find_by_handle(aco->save_curwin_handle);
-    if (save_curwin != NULL) {
-      curwin = save_curwin;
-    } else {
-      // Hmm, original window disappeared.  Just use the first one.
-      curwin = firstwin;
-    }
-    curbuf = curwin->w_buffer;
-    // May need to restore insert mode for a prompt buffer.
-    entering_window(curwin);
-    if (bt_prompt(curbuf)) {
-      curbuf->b_prompt_insert = aco->save_prompt_insert;
-    }
-
-    prevwin = rs_win_find_by_handle(aco->save_prevwin_handle);
-    vars_clear(&awp->w_vars->dv_hashtab);         // free all w: variables
-    hash_init(&awp->w_vars->dv_hashtab);          // re-use the hashtab
-
-    // If :lcd has been used in the autocommand window, correct current
-    // directory before restoring tp_localdir and globaldir.
-    if (awp->w_localdir != NULL) {
-      win_fix_current_dir();
-    }
-    xfree(curtab->tp_localdir);
-    curtab->tp_localdir = aco->tp_localdir;
-    xfree(globaldir);
-    globaldir = aco->globaldir;
-
-    // the buffer contents may have changed
-    VIsual_active = aco->save_VIsual_active;
-    check_cursor(curwin);
-    if (curwin->w_topline > curbuf->b_ml.ml_line_count) {
-      curwin->w_topline = curbuf->b_ml.ml_line_count;
-      curwin->w_topfill = 0;
-    }
-  } else {
-    // Restore curwin.  Use the window ID, a window may have been closed
-    // and the memory re-used for another one.
-    win_T *const save_curwin = rs_win_find_by_handle(aco->save_curwin_handle);
-    if (save_curwin != NULL) {
-      // Restore the buffer which was previously edited by curwin, if it was
-      // changed, we are still the same window and the buffer is valid.
-      if (curwin->handle == aco->new_curwin_handle
-          && curbuf != aco->new_curbuf.br_buf
-          && bufref_valid(&aco->new_curbuf)
-          && aco->new_curbuf.br_buf->b_ml.ml_mfp != NULL) {
-        if (curwin->w_s == &curbuf->b_s) {
-          curwin->w_s = &aco->new_curbuf.br_buf->b_s;
-        }
-        curbuf->b_nwindows--;
-        curbuf = aco->new_curbuf.br_buf;
-        curwin->w_buffer = curbuf;
-        curbuf->b_nwindows++;
-      }
-
-      curwin = save_curwin;
-      curbuf = curwin->w_buffer;
-      prevwin = rs_win_find_by_handle(aco->save_prevwin_handle);
-
-      // In case the autocommand moves the cursor to a position that does not
-      // exist in curbuf
-      VIsual_active = aco->save_VIsual_active;
-      check_cursor(curwin);
-    }
-  }
-
-  VIsual_active = aco->save_VIsual_active;
-  check_cursor(curwin);  // just in case lines got deleted
-  if (VIsual_active) {
-    check_pos(curbuf, &VIsual);
-  }
-}
-
 
 // apply_autocmds_group is implemented in Rust (rs_apply_autocmds_group in autocmd/src/lib.rs)
 // and exported directly under the name "apply_autocmds_group" via #[unsafe(export_name)].
@@ -471,6 +237,42 @@ win_T *nvim_aucmd_win_get_win(int idx)
   }
   return aucmd_win[idx].auc_win;
 }
+
+/// Push a new empty aucmdwin_T slot onto aucmd_win_vec.
+void nvim_aucmd_win_push_empty(void)
+{
+  kv_push(aucmd_win_vec, ((aucmdwin_T){ .auc_win = NULL, .auc_win_used = false }));
+}
+
+/// Set auc_win_used on aucmd_win[idx].
+void nvim_aucmd_win_set_used(int idx, int used)
+{
+  if (idx >= 0 && idx < AUCMD_WIN_COUNT) {
+    aucmd_win[idx].auc_win_used = (used != 0);
+  }
+}
+
+// aco_save_T field accessors for Rust FFI (Phase 2):
+int nvim_aco_get_use_aucmd_win_idx(aco_save_T *aco) { return aco->use_aucmd_win_idx; }
+void nvim_aco_set_use_aucmd_win_idx(aco_save_T *aco, int v) { aco->use_aucmd_win_idx = v; }
+int nvim_aco_get_save_curwin_handle(aco_save_T *aco) { return (int)aco->save_curwin_handle; }
+void nvim_aco_set_save_curwin_handle(aco_save_T *aco, int v) { aco->save_curwin_handle = (handle_T)v; }
+int nvim_aco_get_new_curwin_handle(aco_save_T *aco) { return (int)aco->new_curwin_handle; }
+void nvim_aco_set_new_curwin_handle(aco_save_T *aco, int v) { aco->new_curwin_handle = (handle_T)v; }
+int nvim_aco_get_save_prevwin_handle(aco_save_T *aco) { return (int)aco->save_prevwin_handle; }
+void nvim_aco_set_save_prevwin_handle(aco_save_T *aco, int v) { aco->save_prevwin_handle = (handle_T)v; }
+int nvim_aco_get_save_State(aco_save_T *aco) { return aco->save_State; }
+void nvim_aco_set_save_State(aco_save_T *aco, int v) { aco->save_State = v; }
+int nvim_aco_get_save_prompt_insert(aco_save_T *aco) { return aco->save_prompt_insert; }
+void nvim_aco_set_save_prompt_insert(aco_save_T *aco, int v) { aco->save_prompt_insert = v; }
+int nvim_aco_get_save_VIsual_active(aco_save_T *aco) { return aco->save_VIsual_active ? 1 : 0; }
+void nvim_aco_set_save_VIsual_active(aco_save_T *aco, int v) { aco->save_VIsual_active = (v != 0); }
+char *nvim_aco_get_tp_localdir(aco_save_T *aco) { return aco->tp_localdir; }
+void nvim_aco_set_tp_localdir(aco_save_T *aco, char *v) { aco->tp_localdir = v; }
+char *nvim_aco_get_globaldir(aco_save_T *aco) { return aco->globaldir; }
+void nvim_aco_set_globaldir(aco_save_T *aco, char *v) { aco->globaldir = v; }
+bufref_T *nvim_aco_new_curbuf_ptr(aco_save_T *aco) { return &aco->new_curbuf; }
+buf_T *nvim_aco_get_new_curbuf_buf(aco_save_T *aco) { return aco->new_curbuf.br_buf; }
 
 // nvim_get_did_cursorhold removed: autocmd crate accesses did_cursorhold directly.
 // The following are kept because other Rust crates or the autocmd crate still call them:

@@ -320,9 +320,135 @@ extern "C" {
     #[link_name = "nvim_tag_set_secure"]
     fn nvim_set_secure(val: c_int);
 
-    // Phase 5: aucmd_prepbuf / aucmd_restbuf implementations (body stays in C)
-    fn nvim_aucmd_prepbuf_impl(aco: *mut c_void, buf: *mut c_void);
-    fn nvim_aucmd_restbuf_impl(aco: *mut c_void);
+    // Phase 2: aucmd_prepbuf / aucmd_restbuf implementation accessors
+
+    // aucmd_win vector accessors
+    fn nvim_aucmd_win_push_empty();
+    fn nvim_aucmd_win_set_used(idx: c_int, used: c_int);
+
+    // aco_save_T field accessors
+    fn nvim_aco_get_use_aucmd_win_idx(aco: *mut c_void) -> c_int;
+    fn nvim_aco_set_use_aucmd_win_idx(aco: *mut c_void, v: c_int);
+    fn nvim_aco_get_save_curwin_handle(aco: *mut c_void) -> c_int;
+    fn nvim_aco_set_save_curwin_handle(aco: *mut c_void, v: c_int);
+    fn nvim_aco_get_new_curwin_handle(aco: *mut c_void) -> c_int;
+    fn nvim_aco_set_new_curwin_handle(aco: *mut c_void, v: c_int);
+    fn nvim_aco_get_save_prevwin_handle(aco: *mut c_void) -> c_int;
+    fn nvim_aco_set_save_prevwin_handle(aco: *mut c_void, v: c_int);
+    fn nvim_aco_get_save_State(aco: *mut c_void) -> c_int;
+    fn nvim_aco_set_save_State(aco: *mut c_void, v: c_int);
+    fn nvim_aco_get_save_prompt_insert(aco: *mut c_void) -> c_int;
+    fn nvim_aco_set_save_prompt_insert(aco: *mut c_void, v: c_int);
+    fn nvim_aco_get_save_VIsual_active(aco: *mut c_void) -> c_int;
+    fn nvim_aco_set_save_VIsual_active(aco: *mut c_void, v: c_int);
+    fn nvim_aco_get_tp_localdir(aco: *mut c_void) -> *mut c_char;
+    fn nvim_aco_set_tp_localdir(aco: *mut c_void, v: *mut c_char);
+    fn nvim_aco_get_globaldir(aco: *mut c_void) -> *mut c_char;
+    fn nvim_aco_set_globaldir(aco: *mut c_void, v: *mut c_char);
+    fn nvim_aco_new_curbuf_ptr(aco: *mut c_void) -> *mut c_void; // -> *mut bufref_T
+    fn nvim_aco_get_new_curbuf_buf(aco: *mut c_void) -> *mut c_void; // -> *mut buf_T
+
+    // Window/buffer field setters for aucmd windows
+    fn nvim_win_set_w_buffer(wp: *mut c_void, buf: *mut c_void);
+    fn nvim_win_set_w_s_from_buf(wp: *mut c_void, buf: *mut c_void);
+    fn nvim_win_clear_w_localdir(wp: *mut c_void);
+    #[link_name = "nvim_win_config_float"]
+    fn nvim_win_config_float_self(wp: *mut c_void);
+    fn nvim_window_handles_put(handle: c_int, wp: *mut c_void);
+    fn nvim_window_handles_del(handle: c_int);
+
+    // Tab/win iteration for aucmd window search
+    fn nvim_tab_first_win(tp: *mut c_void) -> *mut c_void;
+    fn nvim_tabpage_next_tp(tp: *mut c_void) -> *mut c_void;
+    fn nvim_get_first_tabpage_ptr() -> *mut c_void;
+
+    // tp_localdir and globaldir management
+    fn nvim_curtab_get_tp_localdir() -> *mut c_char;
+    fn nvim_curtab_set_tp_localdir(v: *mut c_char);
+    fn nvim_curtab_xfree_tp_localdir();
+    fn nvim_globaldir_take() -> *mut c_char;
+    fn nvim_globaldir_xfree_and_set(v: *mut c_char);
+
+    // win_localdir check
+    fn nvim_win_get_w_localdir_notnull(wp: *mut c_void) -> c_int;
+
+    // w_vars clear for aucmd window restore
+    fn nvim_win_vars_clear_and_init(wp: *mut c_void);
+
+    // Window allocation for aucmd
+    fn win_alloc_aucmd_win(idx: c_int);
+    fn win_init_empty(wp: *mut c_void);
+    fn win_enter(wp: *mut c_void, undo_sync: bool);
+    #[link_name = "rs_bt_prompt"]
+    fn bt_prompt(buf: *mut c_void) -> bool;
+
+    // Window handle accessor (returns handle_T = int)
+    fn nvim_win_get_handle(wp: *mut c_void) -> c_int;
+
+    // Window next pointer
+    #[link_name = "nvim_win_get_w_next"]
+    fn nvim_win_next(wp: *mut c_void) -> *mut c_void;
+
+    // win_goto, leaving/entering, fix_current_dir, close_tabpage, goto_tabpage_tp
+    fn win_goto(wp: *mut c_void);
+    fn leaving_window(wp: *mut c_void);
+    fn entering_window(wp: *mut c_void);
+    fn win_fix_current_dir();
+    fn close_tabpage(tp: *mut c_void);
+    fn goto_tabpage_tp(tp: *mut c_void, trigger_enter: bool, trigger_leave: bool);
+    fn check_cursor(wp: *mut c_void);
+    fn check_pos(buf: *mut c_void, pos: *mut c_void);
+
+    // Grid teardown
+    fn nvim_win_get_grid_alloc(wp: *mut c_void) -> *mut c_void;
+    fn nvim_win_get_grid_alloc_handle(wp: *mut c_void) -> c_int;
+    fn nvim_win_get_grid_chars_valid(wp: *mut c_void) -> c_int;
+    fn ui_comp_remove_grid(grid: *mut c_void);
+    fn ui_call_win_hide(grid_handle: c_int);
+    fn grid_free(grid: *mut c_void);
+
+    // buf accessors
+    fn nvim_buf_get_prompt_insert(buf: *mut c_void) -> c_int;
+    fn nvim_buf_set_prompt_insert(buf: *mut c_void, val: c_int);
+    fn nvim_win_get_w_buffer(wp: *mut c_void) -> *mut c_void;
+
+    // win_find_by_handle and valid_tabpage_win
+    fn rs_win_find_by_handle(handle: c_int) -> *mut c_void;
+    fn rs_valid_tabpage_win(tp: *mut c_void) -> c_int;
+    fn rs_win_append(after: *mut c_void, wp: *mut c_void, tp: *mut c_void);
+    fn rs_win_remove(wp: *mut c_void, tp: *mut c_void);
+
+    // Phase 2: additional accessors for prepbuf/restbuf
+    fn nvim_win_get_topline(wp: *mut c_void) -> i32; // linenr_T = i32
+    fn nvim_win_set_topline(wp: *mut c_void, val: i32);
+    fn nvim_win_set_topfill(wp: *mut c_void, val: c_int);
+    // bufref_valid (aliased to avoid conflict with existing bufref_valid in Phase 2 extern)
+    #[link_name = "bufref_valid"]
+    fn nvim_bw_bufref_valid(bufref: *mut c_void) -> bool;
+    fn nvim_buf_get_ml_mfp_is_null(buf: *mut c_void) -> c_int;
+    fn nvim_win_get_w_s_is_curbuf_s(wp: *mut c_void, buf: *mut c_void) -> c_int;
+
+    // Globals for prepbuf/restbuf (in addition to curwin/RedrawingDisabled above)
+    #[link_name = "curbuf"]
+    static mut curbuf_pb: *mut c_void;
+    #[link_name = "prevwin"]
+    static mut prevwin_pb: *mut c_void;
+    #[link_name = "firstwin"]
+    static mut firstwin_pb: *mut c_void;
+    #[link_name = "lastwin"]
+    static mut lastwin_pb: *mut c_void;
+    #[link_name = "curtab"]
+    static mut curtab_pb: *mut c_void;
+    #[link_name = "State"]
+    static mut State_pb: c_int;
+    #[link_name = "VIsual_active"]
+    static mut VIsual_active_pb: bool;
+    #[link_name = "VIsual"]
+    static mut VIsual_pb: [u8; 12]; // pos_T: lnum(i32) + col(i32) + coladd(i32)
+    #[link_name = "p_acd"]
+    static mut p_acd_pb: c_int;
+    #[link_name = "stop_insert_mode"]
+    static mut stop_insert_mode_pb: bool;
 }
 
 // Static "Unknown" string for invalid events
@@ -1712,26 +1838,258 @@ pub unsafe extern "C" fn rs_autocmd_register(
     OK
 }
 
+// =============================================================================
+// Phase 2: aucmd_prepbuf / aucmd_restbuf — real Rust implementations
+// =============================================================================
+
 /// Prepare for executing autocommands for (hidden) buffer `buf`.
-/// Delegates to C implementation `nvim_aucmd_prepbuf_impl` which handles
-/// macro-heavy logic (FOR_ALL_WINDOWS_IN_TAB, kv_push, pmap_put).
+///
+/// Port of nvim_aucmd_prepbuf_impl (autocmd.c lines 151-253).
 ///
 /// # Safety
 /// `aco` must point to a valid `aco_save_T`; `buf` must be a valid `buf_T *`.
 #[unsafe(export_name = "aucmd_prepbuf")]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_aucmd_prepbuf(aco: *mut c_void, buf: *mut c_void) {
-    nvim_aucmd_prepbuf_impl(aco, buf);
+    let mut need_append = true; // Append aucmd_win to the window list.
+    let same_buffer = curbuf_pb == buf;
+
+    // Find a window for `buf` in the current tab page.
+    let win: *mut c_void = if same_buffer {
+        curwin
+    } else {
+        // FOR_ALL_WINDOWS_IN_TAB: iterate windows in curtab
+        let mut found = std::ptr::null_mut::<c_void>();
+        let mut wp = nvim_tab_first_win(curtab_pb);
+        while !wp.is_null() {
+            if nvim_win_get_w_buffer(wp) == buf {
+                found = wp;
+                break;
+            }
+            wp = nvim_win_next(wp);
+        }
+        found
+    };
+
+    // Allocate a window when needed.
+    let mut auc_win: *mut c_void = std::ptr::null_mut();
+    let mut auc_idx = nvim_get_aucmd_win_count();
+    if win.is_null() {
+        // Search for an unused aucmd slot
+        for i in 0..nvim_get_aucmd_win_count() {
+            if nvim_aucmd_win_used(i) == 0 {
+                auc_idx = i;
+                break;
+            }
+        }
+
+        if auc_idx == nvim_get_aucmd_win_count() {
+            nvim_aucmd_win_push_empty();
+        }
+
+        if nvim_aucmd_win_get_win(auc_idx).0.is_null() {
+            win_alloc_aucmd_win(auc_idx);
+            need_append = false;
+        }
+        auc_win = nvim_aucmd_win_get_win(auc_idx).0;
+        nvim_aucmd_win_set_used(auc_idx, 1);
+    }
+
+    nvim_aco_set_save_curwin_handle(aco, nvim_win_get_handle(curwin));
+    nvim_aco_set_save_prevwin_handle(
+        aco,
+        if prevwin_pb.is_null() {
+            0
+        } else {
+            nvim_win_get_handle(prevwin_pb)
+        },
+    );
+    nvim_aco_set_save_State(aco, State_pb);
+    if bt_prompt(curbuf_pb) {
+        nvim_aco_set_save_prompt_insert(aco, nvim_buf_get_prompt_insert(curbuf_pb));
+    }
+
+    if win.is_null() {
+        // No window for "buf", use the aucmd window.
+        nvim_aco_set_use_aucmd_win_idx(aco, auc_idx);
+        nvim_win_set_w_buffer(auc_win, buf);
+        nvim_win_set_w_s_from_buf(auc_win, buf);
+        buf_mut_raw(buf).b_nwindows += 1;
+        win_init_empty(auc_win);
+
+        // Avoid chdir() in win_enter_ext().
+        nvim_win_clear_w_localdir(auc_win);
+        nvim_aco_set_tp_localdir(aco, nvim_curtab_get_tp_localdir());
+        nvim_curtab_set_tp_localdir(std::ptr::null_mut());
+        nvim_aco_set_globaldir(aco, nvim_globaldir_take());
+
+        rs_block_autocmds(); // no BufEnter/WinEnter autocommands
+        if need_append {
+            rs_win_append(lastwin_pb, auc_win, std::ptr::null_mut());
+            nvim_window_handles_put(nvim_win_get_handle(auc_win), auc_win);
+            nvim_win_config_float_self(auc_win);
+        }
+        // Prevent chdir() call via do_autochdir()
+        let save_acd = p_acd_pb;
+        p_acd_pb = 0;
+        // No redrawing and don't set the window title
+        RedrawingDisabled += 1;
+        win_enter(auc_win, false);
+        RedrawingDisabled -= 1;
+        p_acd_pb = save_acd;
+        rs_unblock_autocmds();
+        curwin = auc_win;
+    } else {
+        // There is a window for "buf" in the current tab page — use it.
+        nvim_aco_set_use_aucmd_win_idx(aco, -1);
+        curwin = win;
+    }
+    curbuf_pb = buf;
+    nvim_aco_set_new_curwin_handle(aco, nvim_win_get_handle(curwin));
+    nvim_bw_set_bufref(nvim_aco_new_curbuf_ptr(aco), curbuf_pb);
+
+    nvim_aco_set_save_VIsual_active(aco, c_int::from(VIsual_active_pb));
+    if !same_buffer {
+        // Disable Visual area; position may be invalid in another buffer.
+        VIsual_active_pb = false;
+    }
 }
 
 /// Cleanup after executing autocommands for a (hidden) buffer.
-/// Delegates to C implementation `nvim_aucmd_restbuf_impl` which handles
-/// macro-heavy logic (FOR_ALL_TAB_WINDOWS, goto labels, pmap_del).
+///
+/// Port of nvim_aucmd_restbuf_impl (autocmd.c lines 256-375).
 ///
 /// # Safety
 /// `aco` must point to a valid `aco_save_T` previously set up by `aucmd_prepbuf`.
 #[unsafe(export_name = "aucmd_restbuf")]
+#[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn rs_aucmd_restbuf(aco: *mut c_void) {
-    nvim_aucmd_restbuf_impl(aco);
+    let use_aucmd_win_idx = nvim_aco_get_use_aucmd_win_idx(aco);
+
+    if use_aucmd_win_idx >= 0 {
+        // awp: raw *mut c_void for the aucmd window
+        let awp: *mut c_void = nvim_aucmd_win_get_win(use_aucmd_win_idx).0;
+
+        // Find awp — it can't be closed, but it may be in another tab page.
+        // Do NOT trigger autocommands here.
+        rs_block_autocmds();
+        if curwin != awp {
+            // FOR_ALL_TAB_WINDOWS: iterate all tabpages and their windows
+            let mut tp = nvim_get_first_tabpage_ptr();
+            'outer: while !tp.is_null() {
+                let mut wp = nvim_tab_first_win(tp);
+                while !wp.is_null() {
+                    if wp == awp {
+                        if tp != curtab_pb {
+                            goto_tabpage_tp(tp, true, true);
+                        }
+                        win_goto(awp);
+                        break 'outer;
+                    }
+                    wp = nvim_win_next(wp);
+                }
+                tp = nvim_tabpage_next_tp(tp);
+            }
+        }
+        // win_found: (label target in C)
+        buf_mut_raw(curbuf_pb).b_nwindows -= 1;
+        let save_stop_insert_mode = stop_insert_mode_pb;
+        // May need to stop Insert mode if we were in a prompt buffer.
+        leaving_window(curwin);
+        // Do not stop Insert mode when already in Insert mode before.
+        if (nvim_aco_get_save_State(aco) & MODE_INSERT) != 0 {
+            stop_insert_mode_pb = save_stop_insert_mode;
+        }
+        // Remove the window.
+        rs_win_remove(curwin, std::ptr::null_mut());
+        nvim_window_handles_del(nvim_win_get_handle(curwin));
+        if nvim_win_get_grid_chars_valid(curwin) != 0 {
+            let grid = nvim_win_get_grid_alloc(curwin);
+            ui_comp_remove_grid(grid);
+            ui_call_win_hide(nvim_win_get_grid_alloc_handle(curwin));
+            grid_free(grid);
+        }
+
+        // The window is marked unused but not freed; can be reused.
+        nvim_aucmd_win_set_used(use_aucmd_win_idx, 0);
+
+        if rs_valid_tabpage_win(curtab_pb) == 0 {
+            // No valid window in current tabpage.
+            close_tabpage(curtab_pb);
+        }
+
+        rs_unblock_autocmds();
+
+        let save_curwin = rs_win_find_by_handle(nvim_aco_get_save_curwin_handle(aco));
+        if save_curwin.is_null() {
+            // Original window disappeared; use the first one.
+            curwin = firstwin_pb;
+        } else {
+            curwin = save_curwin;
+        }
+        curbuf_pb = nvim_win_get_w_buffer(curwin);
+        // May need to restore insert mode for a prompt buffer.
+        entering_window(curwin);
+        if bt_prompt(curbuf_pb) {
+            nvim_buf_set_prompt_insert(curbuf_pb, nvim_aco_get_save_prompt_insert(aco));
+        }
+
+        prevwin_pb = rs_win_find_by_handle(nvim_aco_get_save_prevwin_handle(aco));
+        nvim_win_vars_clear_and_init(awp); // free all w: variables, re-use hashtab
+
+        // If :lcd has been used in the autocmd window, fix current dir first.
+        if nvim_win_get_w_localdir_notnull(awp) != 0 {
+            win_fix_current_dir();
+        }
+        nvim_curtab_xfree_tp_localdir();
+        nvim_curtab_set_tp_localdir(nvim_aco_get_tp_localdir(aco));
+        nvim_globaldir_xfree_and_set(nvim_aco_get_globaldir(aco));
+
+        // The buffer contents may have changed.
+        VIsual_active_pb = nvim_aco_get_save_VIsual_active(aco) != 0;
+        check_cursor(curwin);
+        let topline = nvim_win_get_topline(curwin);
+        let ml_count = buf_mut_raw(curbuf_pb).ml_line_count();
+        if topline > ml_count {
+            nvim_win_set_topline(curwin, ml_count);
+            nvim_win_set_topfill(curwin, 0);
+        }
+    } else {
+        // Restore curwin. Use window ID since a window may have been closed.
+        let save_curwin = rs_win_find_by_handle(nvim_aco_get_save_curwin_handle(aco));
+        if !save_curwin.is_null() {
+            // Restore the buffer previously edited by curwin if it was changed,
+            // we are still the same window, and the buffer is valid.
+            if nvim_win_get_handle(curwin) == nvim_aco_get_new_curwin_handle(aco)
+                && curbuf_pb != nvim_aco_get_new_curbuf_buf(aco)
+                && nvim_bw_bufref_valid(nvim_aco_new_curbuf_ptr(aco))
+                && nvim_buf_get_ml_mfp_is_null(nvim_aco_get_new_curbuf_buf(aco)) == 0
+            {
+                let new_buf = nvim_aco_get_new_curbuf_buf(aco);
+                if nvim_win_get_w_s_is_curbuf_s(curwin, curbuf_pb) != 0 {
+                    nvim_win_set_w_s_from_buf(curwin, new_buf);
+                }
+                buf_mut_raw(curbuf_pb).b_nwindows -= 1;
+                curbuf_pb = new_buf;
+                nvim_win_set_w_buffer(curwin, curbuf_pb);
+                buf_mut_raw(curbuf_pb).b_nwindows += 1;
+            }
+
+            curwin = save_curwin;
+            curbuf_pb = nvim_win_get_w_buffer(curwin);
+            prevwin_pb = rs_win_find_by_handle(nvim_aco_get_save_prevwin_handle(aco));
+
+            // In case the autocommand moves the cursor to an invalid position
+            VIsual_active_pb = nvim_aco_get_save_VIsual_active(aco) != 0;
+            check_cursor(curwin);
+        }
+    }
+
+    VIsual_active_pb = nvim_aco_get_save_VIsual_active(aco) != 0;
+    check_cursor(curwin); // just in case lines got deleted
+    if VIsual_active_pb {
+        check_pos(curbuf_pb, std::ptr::addr_of_mut!(VIsual_pb).cast());
+    }
 }
 
 /// Define or delete an autocommand for one event.
