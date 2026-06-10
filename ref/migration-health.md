@@ -193,6 +193,15 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   (Rust assert + C _Static_assert == 24). Verified: terminal specs complete (~60s) instead of
   hanging; just check 4339/4339. 3rd LAYOUT-class bug this session (VarType sizes, HLF, now schar)
   — recurring gap is MISSING SIZE ASSERTS on repr(C) mirrors; a vterm/repr(C) assert sweep is warranted.
+- **LAYOUT-BUG CLASS — AUDITED + CLOSED in vterm (commit 025f26faf6).** Proactive read-only audit
+  of all 50+ repr(C) structs in the vterm crate found it otherwise CLEAN with ONE real mismatch:
+  VTermGlyphInfo mirrored C's packed bitfields (protected_cell:1/dwl:1/dhl:2 in one 4-byte word)
+  as 3 separate u8 fields -> dwl/dhl read as 0 (latent; putglyph doesn't read them yet). Fixed:
+  flags -> single u32 + accessors; added compile-time guards (size + offset_of) on VTermGlyphInfo
+  and C _Static_asserts on ScreenPen(16)/ScreenCell(20)/VTermStateFields(24)/VTermKeyEncodingFlags(1)/
+  VTermKeyEncodingStack(17). These guards are the systemic fix — they would have caught all 3 layout
+  bugs at compile time. FUTURE: extend the same repr(C) size/offset-assert discipline to other
+  C-filled/Rust-read structs in other crates.
 - **RE-BASELINE (2026-06-10, after both hang fixes):** big leverage confirmed — ~400-600 tests
   that previously hung now execute (autocmd ~158+, editor ~57+, ui ~338+). Regression spot-check
   green (buf_functions 30/30, json 77/77). The 3 dirs still don't fully COMPLETE within 560s:
