@@ -67,8 +67,8 @@ extern "C" {
     static mut redraw_tabline: bool;
     /// need_maketitle flag.
     static mut need_maketitle: bool;
-    /// redraw_mode flag (show mode in status line).
-    static mut redraw_mode: c_int;
+    /// redraw_mode flag (show mode in status line). Matches C bool (1 byte).
+    static mut redraw_mode: bool;
     /// p_sc (showcmd) option.
     static p_sc: c_int;
     /// p_icon (icon) option.
@@ -2064,7 +2064,7 @@ pub extern "C" fn rs_skip_showmode() -> bool {
             || !redrawing_impl()
             || (nvim_char_avail() != 0 && !KeyTyped)
         {
-            redraw_mode = 1; // show mode later
+            redraw_mode = true; // show mode later
             return true;
         }
         false
@@ -3067,7 +3067,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         }
 
         mode_displayed = true;
-        if need_clear || clear_cmdline || redraw_mode != 0 {
+        if need_clear || clear_cmdline || redraw_mode {
             msg_clr_eos();
         }
         msg_didout = false;
@@ -3078,7 +3078,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
         need_wait_return = nwr_save;
     } else if clear_cmdline && msg_silent == 0 {
         msg_clr_cmdline();
-    } else if redraw_mode != 0 {
+    } else if redraw_mode {
         msg_pos_mode();
         msg_clr_eos();
     }
@@ -3091,7 +3091,7 @@ pub unsafe extern "C" fn rs_showmode() -> c_int {
 
     redraw_ruler();
     nvim_set_redraw_cmdline(false);
-    redraw_mode = 0;
+    redraw_mode = false;
     clear_cmdline = false;
 
     length
@@ -5300,7 +5300,7 @@ pub unsafe extern "C" fn rs_update_screen() -> c_int {
         maketitle();
     }
 
-    if clear_cmdline || redraw_cmdline || redraw_mode != 0 {
+    if clear_cmdline || redraw_cmdline || redraw_mode {
         rs_showmode();
     }
 

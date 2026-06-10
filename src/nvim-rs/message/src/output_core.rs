@@ -133,8 +133,8 @@ extern "C" {
     static mut msg_hist_last: *mut crate::history::MessageHistoryEntry;
 }
 
-/// Highlight field index for message area (HLF_MSG = 5)
-const HLF_MSG: c_int = 5;
+/// Highlight field index for message area (HLF_MSG = 63, enum position 63 in hlf_T)
+const HLF_MSG: c_int = 63;
 
 /// Get HL_ATTR value for a given highlight field index.
 ///

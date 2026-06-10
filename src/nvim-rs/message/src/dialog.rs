@@ -239,8 +239,8 @@ pub const extern "C" fn rs_dialog_no() -> c_int {
 // Confirm message display (migrated from C display_confirm_msg)
 // ============================================================================
 
-/// Highlight field for MoreMsg (HLF_M = 6)
-const HLF_M: c_int = 6;
+/// Highlight field for MoreMsg (HLF_M = 10, enum position 10 in hlf_T)
+const HLF_M: c_int = 10;
 
 /// Display the current confirm message.
 ///

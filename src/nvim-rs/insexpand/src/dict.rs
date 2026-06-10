@@ -371,7 +371,7 @@ const DICT_EXACT: c_int = 2;
 const EW_FILE: c_int = 0x02;
 const EW_SILENT: c_int = 0x20;
 const SHM_COMPLETIONSCAN: c_int = b'C' as c_int;
-const HLF_R_DICT: c_int = 6; // HLF_R = 6 from highlight_defs.h
+const HLF_R_DICT: c_int = 18; // HLF_R = 18 (enum position 18 in hlf_T)
 const FUZZY_SCORE_NONE: c_int = c_int::MIN;
 const FORWARD_DICT: c_int = 1; // FORWARD = 1
 

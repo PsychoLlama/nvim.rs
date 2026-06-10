@@ -478,7 +478,7 @@ pub unsafe extern "C" fn rs_msg_puts_len(
 }
 
 /// Highlight field index constants (from highlight_defs.h)
-const HLF_MSG: c_int = 5; // Message area attribute
+const HLF_MSG: c_int = 63; // Message area attribute (HLF_MSG in highlight_defs.h)
 const HLF_AT: c_int = 4; // Attribute for '>' overflow indicator
 
 /// Mode flag for hit-return prompt (from state_defs.h)

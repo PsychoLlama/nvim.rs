@@ -667,9 +667,8 @@ extern "C" {
     static mut redraw_cmdline: bool;
 }
 
-/// Highlight field for message area (HLF_MSG)
-/// Note: value matches the constant in misc.rs
-const HLF_MSG_SB: c_int = 5;
+/// Highlight field for message area (HLF_MSG = 63, enum position 63 in hlf_T)
+const HLF_MSG_SB: c_int = 63;
 
 /// Get HL_ATTR value for a given highlight field index.
 ///

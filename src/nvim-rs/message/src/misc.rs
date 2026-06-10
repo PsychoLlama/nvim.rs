@@ -243,8 +243,8 @@ pub unsafe extern "C" fn rs_msg_make(arg: *const c_char) {
 
 // Note: rs_msg_outtrans() and rs_msg_outtrans_len() are defined in format.rs
 
-/// Highlight face for special characters (HLF_8 = 8)
-const HLF_8: c_int = 8;
+/// Highlight face for special characters (HLF_8 = 1, enum position 1 in hlf_T)
+const HLF_8: c_int = 1;
 
 /// Output a potentially long string with truncation.
 ///
@@ -762,10 +762,10 @@ pub unsafe extern "C" fn rs_msgmore(n: c_int) {
 // Phase 24: msg_moremsg migrated from C
 // ============================================================================
 
-/// Highlight field for more prompt (HLF_M = 6)
-const HLF_M: c_int = 6;
-/// Highlight field for message area (HLF_MSG = 5)
-const HLF_MSG: c_int = 5;
+/// Highlight field for more prompt (HLF_M = 10, enum position 10 in hlf_T)
+const HLF_M: c_int = 10;
+/// Highlight field for message area (HLF_MSG = 63, enum position 63 in hlf_T)
+const HLF_MSG: c_int = 63;
 
 /// Get HL_ATTR value for a given highlight field index.
 ///

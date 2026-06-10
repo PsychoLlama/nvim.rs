@@ -494,41 +494,41 @@ unsafe fn rs_process_next_cpt_value(
     } else if !skip_source
         && crate::vars::nvim_get_compl_time_slice_expired() == 0
         && matches!(e_char, b'b' | b'u' | b'w' | b'U')
-    {
-        // Buffer/window scan ('b', 'u', 'w', 'U' entries)
-        // Inline nvim_ins_compl_st_advance_buf (Phase 2)
-        let result = {
+        && {
+            // Mirror upstream C: the condition includes the result of ins_compl_next_buf.
+            // Only enter this branch when ins_compl_next_buf returns a buffer OTHER than
+            // curbuf.  When it returns curbuf (all buffers/windows exhausted), fall
+            // through to the else block so that e_cpt is advanced — matching the upstream
+            // if/else-if chain where the returned-curbuf case falls to the generic else.
             let next = rs_ins_compl_next_buf(
                 nvim_buffer::BufHandle::from_ptr(crate::vars::ins_compl_st.ins_buf),
                 c_int::from(e_char),
             );
             if next.as_ptr() == curbuf_expand {
-                0
+                // Returned curbuf: exhausted.  Fall through to else block.
+                false
             } else {
+                // Found a new buffer — update ins_buf and enter this branch.
                 crate::vars::ins_compl_st.ins_buf = next.as_ptr();
-                if nvim_buf_has_ml_mfp_void(crate::vars::ins_compl_st.ins_buf.cast_const()) {
-                    crate::vars::nvim_set_compl_started(1);
-                    crate::vars::ins_compl_st.first_match_pos.col = 0;
-                    crate::vars::ins_compl_st.last_match_pos.col = 0;
-                    crate::vars::ins_compl_st.first_match_pos.lnum =
-                        nvim_buf_ml_line_count(crate::vars::ins_compl_st.ins_buf) + 1;
-                    crate::vars::ins_compl_st.last_match_pos.lnum = 0;
-                    2
-                } else {
-                    crate::vars::ins_compl_st.found_all = true;
-                    1
-                }
+                true
             }
-        };
-        if result == 0 {
-            // No new buffer found (wrapped back to curbuf) -- skip
-            status = INS_COMPL_CPT_CONT;
-        } else if result == 2 {
+        }
+    {
+        // Buffer/window scan ('b', 'u', 'w', 'U' entries) — new buffer found.
+        // Inline nvim_ins_compl_st_advance_buf (Phase 2)
+        if nvim_buf_has_ml_mfp_void(crate::vars::ins_compl_st.ins_buf.cast_const()) {
             // Loaded buffer
+            crate::vars::nvim_set_compl_started(1);
+            crate::vars::ins_compl_st.first_match_pos.col = 0;
+            crate::vars::ins_compl_st.last_match_pos.col = 0;
+            crate::vars::ins_compl_st.first_match_pos.lnum =
+                nvim_buf_ml_line_count(crate::vars::ins_compl_st.ins_buf) + 1;
+            crate::vars::ins_compl_st.last_match_pos.lnum = 0;
             compl_type = 0;
             ins_compl_st_msg_scanning();
         } else {
-            // Unloaded buffer (result == 1): scan like dictionary
+            // Unloaded buffer: scan like dictionary
+            crate::vars::ins_compl_st.found_all = true;
             if nvim_ins_compl_st_get_ins_buf_fname().is_null() {
                 status = INS_COMPL_CPT_CONT;
             } else {

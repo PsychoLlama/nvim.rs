@@ -480,10 +480,8 @@ pub unsafe extern "C" fn rs_insert_handle_key_post(s: *mut InsertState) {
 
     // Cancel completion if window or tab page changed.
     if rs_ins_compl_active() != 0 {
-        // curwin handle: use the cursor pointer as an opaque win identifier
-        #[allow(clippy::ptr_cast_constness)]
-        let curwin_ptr = nvim_curwin_get_cursor_ptr().cast_mut();
-        if rs_ins_compl_win_active(curwin_ptr) == 0 {
+        let curwin_handle = nvim_get_curwin();
+        if rs_ins_compl_win_active(curwin_handle.as_ptr().cast::<c_void>()) == 0 {
             rs_ins_compl_cancel();
         }
     }

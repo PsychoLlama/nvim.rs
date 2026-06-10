@@ -673,8 +673,8 @@ pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
 // Output Translation Functions
 // ============================================================================
 
-/// HLF_8 = 8 (special-char highlight)
-const HLF_8: c_int = 8;
+/// HLF_8 = 1 (special-char highlight, enum position 1 in hlf_T)
+const HLF_8: c_int = 1;
 
 /// Output a string with length and unprintable character translation.
 ///

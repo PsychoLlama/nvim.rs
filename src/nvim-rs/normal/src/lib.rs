@@ -35,7 +35,7 @@ extern "C" {
     static mut msg_silent: c_int;
     static mut got_int: bool;
     static mut State: c_int;
-    static mut redraw_mode: c_int;
+    static mut redraw_mode: bool;
     static mut p_sta: c_int;
 }
 
@@ -2430,7 +2430,7 @@ pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
             }
         }
         if restart_edit != 0 {
-            redraw_mode = 1; // remove "-- (insert) --"
+            redraw_mode = true; // remove "-- (insert) --"
         }
         restart_edit = 0;
         if cmdwin_type != 0 {

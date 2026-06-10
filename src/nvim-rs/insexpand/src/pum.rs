@@ -195,8 +195,8 @@ extern "C" {
 /// Requires valid completion state; called from insert mode only.
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_show_pum() {
-    // kOptCotFlagMenuone = 0x001 (matches C constant)
-    const K_OPT_COT_FLAG_MENUONE: c_uint = 0x001;
+    // kOptCotFlagMenuone = 0x002 (bit 1 in options.lua values list)
+    const K_OPT_COT_FLAG_MENUONE: c_uint = 0x002;
 
     if crate::rs_pum_wanted() == 0
         || rs_pum_enough_matches(c_int::from(

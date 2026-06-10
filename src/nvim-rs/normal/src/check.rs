@@ -28,7 +28,7 @@ extern "C" {
     static mut got_int: bool;
     static mut State: c_int;
     static must_redraw: c_int;
-    static redraw_mode: c_int;
+    static redraw_mode: bool;
     fn time(t: *mut i64) -> i64;
 }
 
@@ -321,7 +321,7 @@ pub unsafe extern "C" fn rs_normal_redraw(_s: NormalStateHandle) {
         update_screen();
     } else {
         redraw_statuslines();
-        if redraw_cmdline || clear_cmdline || unsafe { redraw_mode } != 0 {
+        if redraw_cmdline || clear_cmdline || unsafe { redraw_mode } {
             showmode();
         }
     }
