@@ -185,10 +185,14 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
      `argv[0]` fallback; in the normal jobstart/:terminal path exepath is NULL → xstrdup(NULL) →
      SIGSEGV. Fixed to `proc->exepath ? proc->exepath : proc->argv[0]`. Verified: termxx no longer
      instant-crashes, channels_spec 14/14, just check 4339/4339.
-- **THIRD HANG (NEXT TARGET) — TermClose deadlock.** Revealed after the jobstart fix:
-  `autocmd TermClose * bdelete!` then `terminal` HANGS (termxx_spec T1 ran 516s before EOF timeout).
-  Reentrancy/textlock issue: deleting a buffer from within its own TermClose autocmd. Distinct from
-  the inchar deadlock and the jobstart crash. Use the coredumpctl+SIGABRT method to capture the stack.
+- **THIRD HANG — :terminal-open busy-loop — FIXED (commit 2889ac1a9a).** (Was mislabeled
+  "TermClose deadlock"; the real stack showed a 99.8%-CPU spin on terminal OPEN, never reaching
+  TermClose.) Root cause: Rust VTermScreenCell.schar was SChar=u64 but C schar_T=uint32_t (4B),
+  misaligning `width` (Rust offset 8 vs C offset 4) so rs_fetch_row read width=0 -> col never
+  advanced -> infinite loop. Fix: SChar u64->u32 + sentinel u64::MAX->u32::MAX + size guards
+  (Rust assert + C _Static_assert == 24). Verified: terminal specs complete (~60s) instead of
+  hanging; just check 4339/4339. 3rd LAYOUT-class bug this session (VarType sizes, HLF, now schar)
+  — recurring gap is MISSING SIZE ASSERTS on repr(C) mirrors; a vterm/repr(C) assert sweep is warranted.
 - **RE-BASELINE (2026-06-10, after both hang fixes):** big leverage confirmed — ~400-600 tests
   that previously hung now execute (autocmd ~158+, editor ~57+, ui ~338+). Regression spot-check
   green (buf_functions 30/30, json 77/77). The 3 dirs still don't fully COMPLETE within 560s:
