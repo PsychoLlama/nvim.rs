@@ -143,6 +143,30 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   buflist round-trip), match_functions 1 FAIL (matchaddpos zero-length) + setmatches was CRASH
   (recheck), editor/ctrl_c/fold, api/autocmd lambda.
 
+## FRESH BASELINE (2026-06-09, after the insert-spin fix 5e7aed2dc0)
+
+A one-time re-baseline was run now that the insert-mode 100% CPU spin is fixed. Results:
+
+**Fixed clusters held GREEN** (regression-checked individually):
+- buf_functions 30/30, changedtick 10/10, json 77/77, msgpack 71/71, let 9/9.
+- `errorlist` now 9/9 — it was a Cluster D HANG (setloclist window-close, T9) in the prior
+  triage, so the insert-spin fix (or a related change) UNBLOCKED it.
+- `setpos` runs fully (50/52; was a 200s hang). The 2 remaining failures are the pre-existing
+  setpos() return-value bug (T1/T2 inverted -1 vs 0), NOT the old hang.
+
+**Whole-directory HANGS PERSIST (distinct root cause — NOT the insert-spin):**
+- `test/functional/editor` — DIR HANGS (560s timeout)
+- `test/functional/ui` — DIR HANGS
+- `test/functional/autocmd` — DIR HANGS
+- `test/functional/options` — now COMPLETES 62/114 (failures: UI-render attr 18 in fillchars
+  statusline tests + a disk-full artifact in defaults_spec; not hangs).
+
+**Interpretation:** the insert-spin fix did NOT clear editor/ui/autocmd. These hang on a
+SEPARATE deadlock (open Cluster D cmdwin/textlock sub-theme, or an event-loop/libuv wait).
+A diagnostic bisect+gdb-backtrace pass is in flight to localize it. This blocks the autocmd
+C-deletion plan (ref/plans/e1b12171-…, Phase 2 gates on 7 autocmd specs that live in the
+hanging dir) — fix the deadlock BEFORE that port.
+
 ## Lessons for executors (anti-patterns observed)
 
 - **Relocate-not-port** (wave 66, and the get_scriptname trampoline): moving C logic
