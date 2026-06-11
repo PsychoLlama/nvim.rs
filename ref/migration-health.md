@@ -99,9 +99,20 @@ Baseline 36F/1E → now 18F/1E via two single-root fixes (2026-06-10):
 - REMAINING (18F/1E, two separate bugs, NOT yet fixed):
   (1) @304 + 4x @732 `<C-U>`: replace_termcodes/find_special_key ENCODING stores e.g. <C-U> as
       K_SPECIAL+0xEF+'U' instead of raw 0x15 / KS_MODIFIER form (lhsraw encoding bug, ~5 tests);
-  (2) lua-callback/funcref cluster @392/@959/@997(E117 <lambda>3)/@1076/@1091/@1108/@1135/
-      @1159/@1208/@1227/@1344/@1388/@1415/@1439: lua-registered mappings never fire callback
-      (GlobalCount 0 vs 1) — funcref-dispatch bug, ~13 tests, biggest remaining keymap lever.
+  (2) **lua-callback dispatch — LARGELY FIXED (commit 1c0a79a2ce):** KE_LUA was 107 vs canonical
+      103 (keycodes.h:221) → K_LUA wrong → rs_nv_colon is_lua always false → normal-mode lua
+      keymap callbacks took the Ex-command branch, never fired (GlobalCount 0 vs 1) + ran the
+      <Lua>N ref as a command (E117 <lambda>N). Fixed 3 sites (normal/lib.rs:7290,
+      insexpand/lib.rs:192, ctrl_x.rs:108) + 3 guard tests. 18F/1E -> 9F/2E (8 cleared). Broad
+      impact: ALL normal-mode lua keymap callbacks were dead.
+  STILL REMAINING in keymap_spec (9F/2E): @392/@997 VimL calling a keymap's .callback() directly
+  -> E117 (separate typval/callback-invocation bug, NOT dispatch); @1076 pum lua mapping (deeper
+  pum dispatch); @1091 lua op-pending redo; @1208/@1227 lua-callback abbr decoding; @304+4x@732
+  <C-U> replace_termcodes encoding (sub-cluster 1 above).
+- **NEW latent wrong-constant (NOT fixed, follow-up):** ops/pending.rs:54 has K_LUA = 0xd102
+  (53506) instead of -26621 — 6th wrong-constant instance this session; breaks operator-pending
+  lua mappings (untested). Cheap guarded fix. RECURRING CLASS: a workspace-wide audit of locally
+  -defined K_*/KE_*/MODE_*/HLF_* constants vs keycodes.h/state_defs.h/highlight_defs.h is warranted.
 
 ### Cluster F — cursor/pos API rejects valid [row,col] [MEDIUM, clean]
 `Argument "pos" must be a [row, col] array` on valid input. `api/buffer_spec.lua` (6E),
