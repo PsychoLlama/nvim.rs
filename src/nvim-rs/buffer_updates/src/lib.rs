@@ -341,7 +341,9 @@ pub unsafe extern "C" fn rs_buf_updates_send_splice(
     new_col: c_int,
     new_byte: isize,
 ) {
-    if !rs_buf_updates_active(buf.cast_const()) || (old_byte == 0 && new_byte == 0) {
+    let active = rs_buf_updates_active(buf.cast_const());
+    let skip = old_byte == 0 && new_byte == 0;
+    if !active || skip {
         return;
     }
 

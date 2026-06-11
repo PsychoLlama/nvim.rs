@@ -151,9 +151,9 @@ pub(crate) const CMD_TABPREVIOUS: c_int = 463;
 pub(crate) const CMD_TABNEXT_BACKWARD: c_int = 464; // CMD_tabNext
 pub(crate) const CMD_TABREWIND: c_int = 465;
 pub(crate) const CMD_EARLIER: c_int = 134;
-pub(crate) const CMD_DELETE: c_int = 110;
-pub(crate) const CMD_YANK: c_int = 546;
-pub(crate) const CMD_RSHIFT: c_int = 553;
+pub(crate) const CMD_DELETE: c_int = 109;
+pub(crate) const CMD_YANK: c_int = 545;
+pub(crate) const CMD_RSHIFT: c_int = 552;
 
 // =============================================================================
 // FFI declarations
