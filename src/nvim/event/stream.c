@@ -8,6 +8,7 @@
 #include "nvim/event/loop.h"
 #include "nvim/event/stream.h"
 #include "nvim/log.h"
+#include "nvim/macros_defs.h"
 #include "nvim/memory.h"
 #include "nvim/types_defs.h"
 #ifdef MSWIN
@@ -31,16 +32,37 @@ extern void rs_stream_set_internal_data(Stream *stream, void *data);
 #define stream_set_internal_data(s, d) rs_stream_set_internal_data(s, d)
 extern void *rs_stream_get_internal_close_cb(Stream *stream);
 extern void rs_stream_set_internal_close_cb(Stream *stream, void *cb);
-#define stream_get_internal_close_cb(s) ((stream_close_cb)rs_stream_get_internal_close_cb(s))
-#define stream_set_internal_close_cb(s, c) rs_stream_set_internal_close_cb(s, (void *)(c))
+// ISO C forbids fn-ptr<->void* conversion; static inline wraps the pragma.
+static inline stream_close_cb stream_get_internal_close_cb(Stream *s)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (stream_close_cb)rs_stream_get_internal_close_cb(s);
+  PRAGMA_DIAG_POP
+}
+static inline void stream_set_internal_close_cb(Stream *s, stream_close_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_stream_set_internal_close_cb(s, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void rs_stream_call_internal_close_cb(Stream *stream);
 #define stream_call_internal_close_cb(s) rs_stream_call_internal_close_cb(s)
 extern void *rs_stream_get_close_cb(Stream *stream);
 extern void rs_stream_set_close_cb(Stream *stream, void *cb);
 extern void *rs_stream_get_close_cb_data(Stream *stream);
 extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
-#define stream_get_close_cb(s) ((stream_close_cb)rs_stream_get_close_cb(s))
-#define stream_set_close_cb(s, c) rs_stream_set_close_cb(s, (void *)(c))
+static inline stream_close_cb stream_get_close_cb(Stream *s)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (stream_close_cb)rs_stream_get_close_cb(s);
+  PRAGMA_DIAG_POP
+}
+static inline void stream_set_close_cb(Stream *s, stream_close_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_stream_set_close_cb(s, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 #define stream_get_close_cb_data(s) rs_stream_get_close_cb_data(s)
 #define stream_set_close_cb_data(s, d) rs_stream_set_close_cb_data(s, d)
 extern void rs_stream_call_close_cb(Stream *stream);
@@ -240,10 +262,20 @@ void nvim_stream_curmem_add(Stream *stream, size_t amount) { stream->curmem += a
 void nvim_stream_curmem_sub(Stream *stream, size_t amount) { stream->curmem -= amount; }
 
 /// Get the write callback from a Stream (accessor for Rust).
-void *nvim_stream_get_write_cb(Stream *stream) { return (void *)stream->write_cb; }
+void *nvim_stream_get_write_cb(Stream *stream)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)stream->write_cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the write callback for a Stream (accessor for Rust).
-void nvim_stream_set_write_cb(Stream *stream, void *cb) { stream->write_cb = (stream_write_cb)cb; }
+void nvim_stream_set_write_cb(Stream *stream, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  stream->write_cb = (stream_write_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Call the write callback if set (accessor for Rust).
 void nvim_stream_call_write_cb(Stream *stream, void *data, int status)
@@ -269,10 +301,20 @@ void nvim_stream_set_fpos(Stream *stream, int64_t fpos) { stream->fpos = fpos; }
 void nvim_stream_fpos_add(Stream *stream, int64_t amount) { stream->fpos += amount; }
 
 /// Get the close_cb from a Stream (accessor for Rust).
-void *nvim_stream_get_close_cb(Stream *stream) { return (void *)stream->close_cb; }
+void *nvim_stream_get_close_cb(Stream *stream)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)stream->close_cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the close_cb for a Stream (accessor for Rust).
-void nvim_stream_set_close_cb(Stream *stream, void *cb) { stream->close_cb = (stream_close_cb)cb; }
+void nvim_stream_set_close_cb(Stream *stream, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  stream->close_cb = (stream_close_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Get the close_cb_data from a Stream (accessor for Rust).
 void *nvim_stream_get_close_cb_data(Stream *stream) { return stream->close_cb_data; }
@@ -287,10 +329,20 @@ void *nvim_stream_get_internal_data(Stream *stream) { return stream->internal_da
 void nvim_stream_set_internal_data(Stream *stream, void *data) { stream->internal_data = data; }
 
 /// Get the internal_close_cb from a Stream (accessor for Rust).
-void *nvim_stream_get_internal_close_cb(Stream *stream) { return (void *)stream->internal_close_cb; }
+void *nvim_stream_get_internal_close_cb(Stream *stream)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)stream->internal_close_cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the internal_close_cb for a Stream (accessor for Rust).
-void nvim_stream_set_internal_close_cb(Stream *stream, void *cb) { stream->internal_close_cb = (stream_close_cb)cb; }
+void nvim_stream_set_internal_close_cb(Stream *stream, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  stream->internal_close_cb = (stream_close_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Call the close_cb if set (accessor for Rust).
 void nvim_stream_call_close_cb(Stream *stream)

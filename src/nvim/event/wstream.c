@@ -42,8 +42,19 @@ extern void rs_stream_curmem_sub(Stream *stream, size_t amount);
 extern void *rs_stream_get_write_cb(Stream *stream);
 extern void rs_stream_set_write_cb(Stream *stream, void *cb);
 extern void rs_stream_call_write_cb(Stream *stream, void *data, int status);
-#define stream_get_write_cb(s) ((stream_write_cb)rs_stream_get_write_cb(s))
-#define stream_set_write_cb(s, c) rs_stream_set_write_cb(s, (void *)(c))
+// ISO C forbids fn-ptr<->void* conversion; static inline wraps the pragma.
+static inline stream_write_cb stream_get_write_cb(Stream *s)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (stream_write_cb)rs_stream_get_write_cb(s);
+  PRAGMA_DIAG_POP
+}
+static inline void stream_set_write_cb(Stream *s, stream_write_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_stream_set_write_cb(s, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 #define stream_call_write_cb(s, d, st) rs_stream_call_write_cb(s, d, st)
 extern void *rs_stream_get_cb_data(Stream *stream);
 extern void rs_stream_set_cb_data(Stream *stream, void *data);
@@ -216,7 +227,12 @@ size_t nvim_wbuffer_get_refcount(WBuffer *buffer) { return buffer->refcount; }
 char *nvim_wbuffer_get_data(WBuffer *buffer) { return buffer->data; }
 
 /// Get the callback from a WBuffer (accessor for Rust).
-void *nvim_wbuffer_get_cb(WBuffer *buffer) { return (void *)buffer->cb; }
+void *nvim_wbuffer_get_cb(WBuffer *buffer)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)buffer->cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the size for a WBuffer (accessor for Rust).
 void nvim_wbuffer_set_size(WBuffer *buffer, size_t size) { buffer->size = size; }

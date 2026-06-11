@@ -18,6 +18,7 @@
 #include "nvim/memory.h"
 #include "nvim/os/fs.h"
 #include "nvim/os/os_defs.h"
+#include "nvim/macros_defs.h"
 #include "nvim/path.h"
 #include "nvim/types_defs.h"
 
@@ -34,12 +35,33 @@ extern void rs_socket_watcher_set_events(SocketWatcher *watcher, MultiQueue *eve
 #define socket_watcher_set_events(w, e) rs_socket_watcher_set_events(w, e)
 extern void *rs_socket_watcher_get_cb(SocketWatcher *watcher);
 extern void rs_socket_watcher_set_cb(SocketWatcher *watcher, void *cb);
-#define socket_watcher_get_cb(w) ((socket_cb)rs_socket_watcher_get_cb(w))
-#define socket_watcher_set_cb(w, c) rs_socket_watcher_set_cb(w, (void *)(c))
+// ISO C forbids fn-ptr<->void* conversion; static inline wraps the pragma.
+static inline socket_cb socket_watcher_get_cb(SocketWatcher *w)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (socket_cb)rs_socket_watcher_get_cb(w);
+  PRAGMA_DIAG_POP
+}
+static inline void socket_watcher_set_cb(SocketWatcher *w, socket_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_socket_watcher_set_cb(w, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void *rs_socket_watcher_get_close_cb(SocketWatcher *watcher);
 extern void rs_socket_watcher_set_close_cb(SocketWatcher *watcher, void *cb);
-#define socket_watcher_get_close_cb(w) ((socket_close_cb)rs_socket_watcher_get_close_cb(w))
-#define socket_watcher_set_close_cb(w, c) rs_socket_watcher_set_close_cb(w, (void *)(c))
+static inline socket_close_cb socket_watcher_get_close_cb(SocketWatcher *w)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (socket_close_cb)rs_socket_watcher_get_close_cb(w);
+  PRAGMA_DIAG_POP
+}
+static inline void socket_watcher_set_close_cb(SocketWatcher *w, socket_close_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_socket_watcher_set_close_cb(w, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void rs_socket_watcher_call_cb(SocketWatcher *watcher, int status);
 extern void rs_socket_watcher_call_close_cb(SocketWatcher *watcher);
 #define socket_watcher_call_cb(w, s) rs_socket_watcher_call_cb(w, s)
@@ -318,16 +340,36 @@ void nvim_socket_watcher_set_data(SocketWatcher *watcher, void *data) { watcher-
 void nvim_socket_watcher_set_events(SocketWatcher *watcher, MultiQueue *events) { watcher->events = events; }
 
 /// Get the cb from a SocketWatcher (accessor for Rust).
-void *nvim_socket_watcher_get_cb(SocketWatcher *watcher) { return (void *)watcher->cb; }
+void *nvim_socket_watcher_get_cb(SocketWatcher *watcher)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)watcher->cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the cb for a SocketWatcher (accessor for Rust).
-void nvim_socket_watcher_set_cb(SocketWatcher *watcher, void *cb) { watcher->cb = (socket_cb)cb; }
+void nvim_socket_watcher_set_cb(SocketWatcher *watcher, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  watcher->cb = (socket_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Get the close_cb from a SocketWatcher (accessor for Rust).
-void *nvim_socket_watcher_get_close_cb(SocketWatcher *watcher) { return (void *)watcher->close_cb; }
+void *nvim_socket_watcher_get_close_cb(SocketWatcher *watcher)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)watcher->close_cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the close_cb for a SocketWatcher (accessor for Rust).
-void nvim_socket_watcher_set_close_cb(SocketWatcher *watcher, void *cb) { watcher->close_cb = (socket_close_cb)cb; }
+void nvim_socket_watcher_set_close_cb(SocketWatcher *watcher, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  watcher->close_cb = (socket_close_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Call the socket callback if set (accessor for Rust).
 void nvim_socket_watcher_call_cb(SocketWatcher *watcher, int status)

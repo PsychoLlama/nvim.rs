@@ -6,6 +6,7 @@
 #include "nvim/event/loop.h"
 #include "nvim/event/multiqueue.h"
 #include "nvim/event/time.h"
+#include "nvim/macros_defs.h"
 #include "nvim/types_defs.h"
 
 #include "event/time.c.generated.h"
@@ -27,12 +28,33 @@ extern void rs_timewatcher_set_blockable(TimeWatcher *tw, int blockable);
 #define timewatcher_set_blockable(tw, b) rs_timewatcher_set_blockable(tw, b)
 extern void *rs_timewatcher_get_cb(TimeWatcher *tw);
 extern void rs_timewatcher_set_cb(TimeWatcher *tw, void *cb);
-#define timewatcher_get_cb(tw) ((time_cb)rs_timewatcher_get_cb(tw))
-#define timewatcher_set_cb(tw, c) rs_timewatcher_set_cb(tw, (void *)(c))
+// ISO C forbids fn-ptr<->void* conversion; static inline wraps the pragma.
+static inline time_cb timewatcher_get_cb(TimeWatcher *tw)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (time_cb)rs_timewatcher_get_cb(tw);
+  PRAGMA_DIAG_POP
+}
+static inline void timewatcher_set_cb(TimeWatcher *tw, time_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_timewatcher_set_cb(tw, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void *rs_timewatcher_get_close_cb(TimeWatcher *tw);
 extern void rs_timewatcher_set_close_cb(TimeWatcher *tw, void *cb);
-#define timewatcher_get_close_cb(tw) ((time_cb)rs_timewatcher_get_close_cb(tw))
-#define timewatcher_set_close_cb(tw, c) rs_timewatcher_set_close_cb(tw, (void *)(c))
+static inline time_cb timewatcher_get_close_cb(TimeWatcher *tw)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (time_cb)rs_timewatcher_get_close_cb(tw);
+  PRAGMA_DIAG_POP
+}
+static inline void timewatcher_set_close_cb(TimeWatcher *tw, time_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_timewatcher_set_close_cb(tw, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void rs_timewatcher_call_cb(TimeWatcher *tw);
 extern void rs_timewatcher_call_close_cb(TimeWatcher *tw);
 #define timewatcher_call_cb(tw) rs_timewatcher_call_cb(tw)
@@ -124,16 +146,36 @@ void nvim_timewatcher_set_events(TimeWatcher *tw, MultiQueue *events) { tw->even
 void nvim_timewatcher_set_blockable(TimeWatcher *tw, int blockable) { tw->blockable = blockable != 0; }
 
 /// Get the cb from a TimeWatcher (accessor for Rust).
-void *nvim_timewatcher_get_cb(TimeWatcher *tw) { return (void *)tw->cb; }
+void *nvim_timewatcher_get_cb(TimeWatcher *tw)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)tw->cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the cb for a TimeWatcher (accessor for Rust).
-void nvim_timewatcher_set_cb(TimeWatcher *tw, void *cb) { tw->cb = (time_cb)cb; }
+void nvim_timewatcher_set_cb(TimeWatcher *tw, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  tw->cb = (time_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Get the close_cb from a TimeWatcher (accessor for Rust).
-void *nvim_timewatcher_get_close_cb(TimeWatcher *tw) { return (void *)tw->close_cb; }
+void *nvim_timewatcher_get_close_cb(TimeWatcher *tw)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)tw->close_cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the close_cb for a TimeWatcher (accessor for Rust).
-void nvim_timewatcher_set_close_cb(TimeWatcher *tw, void *cb) { tw->close_cb = (time_cb)cb; }
+void nvim_timewatcher_set_close_cb(TimeWatcher *tw, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  tw->close_cb = (time_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Call the cb if set (accessor for Rust).
 void nvim_timewatcher_call_cb(TimeWatcher *tw)

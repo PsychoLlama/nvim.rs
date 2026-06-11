@@ -15,6 +15,7 @@
 #include "nvim/event/wstream.h"
 #include "nvim/globals.h"
 #include "nvim/log.h"
+#include "nvim/macros_defs.h"
 #include "nvim/main.h"
 #include "nvim/memory_defs.h"
 #include "nvim/os/proc.h"
@@ -99,16 +100,42 @@ extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
 // Callback accessors - use void* for FFI compatibility
 extern void *rs_proc_get_cb(Proc *proc);
 extern void rs_proc_set_cb(Proc *proc, void *cb);
-#define proc_get_cb(p) ((proc_exit_cb)rs_proc_get_cb(p))
+// ISO C forbids fn-ptr<->void* conversion; static inline wraps the pragma.
+static inline proc_exit_cb proc_get_cb(Proc *p)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (proc_exit_cb)rs_proc_get_cb(p);
+  PRAGMA_DIAG_POP
+}
 #define proc_set_cb(p, c) rs_proc_set_cb(p, (void *)(c))
 extern void *rs_proc_get_internal_exit_cb(Proc *proc);
 extern void rs_proc_set_internal_exit_cb(Proc *proc, void *cb);
-#define proc_get_internal_exit_cb(p) ((internal_proc_cb)rs_proc_get_internal_exit_cb(p))
-#define proc_set_internal_exit_cb(p, c) rs_proc_set_internal_exit_cb(p, (void *)(c))
+static inline internal_proc_cb proc_get_internal_exit_cb(Proc *p)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (internal_proc_cb)rs_proc_get_internal_exit_cb(p);
+  PRAGMA_DIAG_POP
+}
+static inline void proc_set_internal_exit_cb(Proc *p, internal_proc_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_proc_set_internal_exit_cb(p, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void *rs_proc_get_internal_close_cb(Proc *proc);
 extern void rs_proc_set_internal_close_cb(Proc *proc, void *cb);
-#define proc_get_internal_close_cb(p) ((internal_proc_cb)rs_proc_get_internal_close_cb(p))
-#define proc_set_internal_close_cb(p, c) rs_proc_set_internal_close_cb(p, (void *)(c))
+static inline internal_proc_cb proc_get_internal_close_cb(Proc *p)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (internal_proc_cb)rs_proc_get_internal_close_cb(p);
+  PRAGMA_DIAG_POP
+}
+static inline void proc_set_internal_close_cb(Proc *p, internal_proc_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_proc_set_internal_close_cb(p, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void rs_proc_call_cb(Proc *proc, int status, void *data);
 #define proc_call_cb(p, s, d) rs_proc_call_cb(p, s, d)
 extern void rs_proc_call_internal_exit_cb(Proc *proc);
@@ -124,7 +151,12 @@ extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
 extern void rs_stream_set_internal_data(Stream *stream, void *data);
 #define stream_set_internal_data(s, d) rs_stream_set_internal_data(s, d)
 extern void rs_stream_set_internal_close_cb(Stream *stream, void *cb);
-#define stream_set_internal_close_cb(s, c) rs_stream_set_internal_close_cb(s, (void *)(c))
+static inline void stream_set_internal_close_cb(Stream *s, stream_close_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_stream_set_internal_close_cb(s, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void rs_stream_set_closed(Stream *stream, int closed);
 #define stream_set_closed(s, c) rs_stream_set_closed(s, c)
 extern MultiQueue *rs_stream_get_events(Stream *stream);

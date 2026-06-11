@@ -723,7 +723,12 @@ size_t nvim_unpacker_get_method_name_len(Unpacker *p) { return p->method_name_le
 int nvim_unpacker_has_grid_line_event(Unpacker *p) { return p->has_grid_line_event ? 1 : 0; }
 
 /// Get handler function pointer from Unpacker
-void *nvim_unpacker_get_handler_fn(Unpacker *p) { return (void *)p->handler.fn; }
+void *nvim_unpacker_get_handler_fn(Unpacker *p)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)p->handler.fn;
+  PRAGMA_DIAG_POP
+}
 
 const char *nvim_unpacker_get_handler_name(Unpacker *p) { return p->handler.name; }
 

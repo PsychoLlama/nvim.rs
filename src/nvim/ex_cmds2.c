@@ -278,7 +278,12 @@ _Static_assert(DOBUF_FIRST == 1, "DOBUF_FIRST mismatch");
 
 int nvim_ex2_eap_get_cmdidx(exarg_T *eap) { return (int)eap->cmdidx; }
 
-void *nvim_ex2_eap_get_ea_getline(exarg_T *eap) { return (void *)eap->ea_getline; }
+void *nvim_ex2_eap_get_ea_getline(exarg_T *eap)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)eap->ea_getline;
+  PRAGMA_DIAG_POP
+}
 
 void *nvim_ex2_eap_get_cookie(exarg_T *eap) { return eap->cookie; }
 

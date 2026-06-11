@@ -5,6 +5,7 @@
 #include "nvim/event/loop.h"
 #include "nvim/event/multiqueue.h"
 #include "nvim/event/signal.h"
+#include "nvim/macros_defs.h"
 #include "nvim/types_defs.h"
 
 #include "event/signal.c.generated.h"
@@ -20,12 +21,33 @@ extern void rs_signal_watcher_set_events(SignalWatcher *watcher, MultiQueue *eve
 #define signal_watcher_set_events(w, e) rs_signal_watcher_set_events(w, e)
 extern void *rs_signal_watcher_get_cb(SignalWatcher *watcher);
 extern void rs_signal_watcher_set_cb(SignalWatcher *watcher, void *cb);
-#define signal_watcher_get_cb(w) ((signal_cb)rs_signal_watcher_get_cb(w))
-#define signal_watcher_set_cb(w, c) rs_signal_watcher_set_cb(w, (void *)(c))
+// ISO C forbids fn-ptr<->void* conversion; static inline wraps the pragma.
+static inline signal_cb signal_watcher_get_cb(SignalWatcher *w)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (signal_cb)rs_signal_watcher_get_cb(w);
+  PRAGMA_DIAG_POP
+}
+static inline void signal_watcher_set_cb(SignalWatcher *w, signal_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_signal_watcher_set_cb(w, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void *rs_signal_watcher_get_close_cb(SignalWatcher *watcher);
 extern void rs_signal_watcher_set_close_cb(SignalWatcher *watcher, void *cb);
-#define signal_watcher_get_close_cb(w) ((signal_close_cb)rs_signal_watcher_get_close_cb(w))
-#define signal_watcher_set_close_cb(w, c) rs_signal_watcher_set_close_cb(w, (void *)(c))
+static inline signal_close_cb signal_watcher_get_close_cb(SignalWatcher *w)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (signal_close_cb)rs_signal_watcher_get_close_cb(w);
+  PRAGMA_DIAG_POP
+}
+static inline void signal_watcher_set_close_cb(SignalWatcher *w, signal_close_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_signal_watcher_set_close_cb(w, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 extern void rs_signal_watcher_call_cb(SignalWatcher *watcher);
 extern void rs_signal_watcher_call_close_cb(SignalWatcher *watcher);
 #define signal_watcher_call_cb(w) rs_signal_watcher_call_cb(w)
@@ -100,16 +122,36 @@ void nvim_signal_watcher_set_data(SignalWatcher *watcher, void *data) { watcher-
 void nvim_signal_watcher_set_events(SignalWatcher *watcher, MultiQueue *events) { watcher->events = events; }
 
 /// Get the cb from a SignalWatcher (accessor for Rust).
-void *nvim_signal_watcher_get_cb(SignalWatcher *watcher) { return (void *)watcher->cb; }
+void *nvim_signal_watcher_get_cb(SignalWatcher *watcher)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)watcher->cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the cb for a SignalWatcher (accessor for Rust).
-void nvim_signal_watcher_set_cb(SignalWatcher *watcher, void *cb) { watcher->cb = (signal_cb)cb; }
+void nvim_signal_watcher_set_cb(SignalWatcher *watcher, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  watcher->cb = (signal_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Get the close_cb from a SignalWatcher (accessor for Rust).
-void *nvim_signal_watcher_get_close_cb(SignalWatcher *watcher) { return (void *)watcher->close_cb; }
+void *nvim_signal_watcher_get_close_cb(SignalWatcher *watcher)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (void *)watcher->close_cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Set the close_cb for a SignalWatcher (accessor for Rust).
-void nvim_signal_watcher_set_close_cb(SignalWatcher *watcher, void *cb) { watcher->close_cb = (signal_close_cb)cb; }
+void nvim_signal_watcher_set_close_cb(SignalWatcher *watcher, void *cb)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  watcher->close_cb = (signal_close_cb)cb;
+  PRAGMA_DIAG_POP
+}
 
 /// Call the signal callback if set (accessor for Rust).
 void nvim_signal_watcher_call_cb(SignalWatcher *watcher)

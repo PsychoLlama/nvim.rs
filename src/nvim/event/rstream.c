@@ -36,8 +36,19 @@ extern void *rs_stream_get_close_cb(Stream *stream);
 extern void rs_stream_set_close_cb(Stream *stream, void *cb);
 extern void *rs_stream_get_close_cb_data(Stream *stream);
 extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
-#define stream_get_close_cb(s) ((stream_close_cb)rs_stream_get_close_cb(s))
-#define stream_set_close_cb(s, c) rs_stream_set_close_cb(s, (void *)(c))
+// ISO C forbids fn-ptr<->void* conversion; static inline wraps the pragma.
+static inline stream_close_cb stream_get_close_cb(Stream *s)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  return (stream_close_cb)rs_stream_get_close_cb(s);
+  PRAGMA_DIAG_POP
+}
+static inline void stream_set_close_cb(Stream *s, stream_close_cb c)
+{
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
+  rs_stream_set_close_cb(s, (void *)(c));
+  PRAGMA_DIAG_POP
+}
 #define stream_get_close_cb_data(s) rs_stream_get_close_cb_data(s)
 #define stream_set_close_cb_data(s, d) rs_stream_set_close_cb_data(s, d)
 extern MultiQueue *rs_stream_get_events(Stream *stream);
