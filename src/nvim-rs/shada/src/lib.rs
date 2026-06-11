@@ -6075,6 +6075,10 @@ unsafe fn rs_shada_apply_local_or_change(
         let name = read_union_field!(entry, filemark, name);
         if !mark_set_local(name, buf, fm, !force) {
             rs_shada_free_entry_contents(entry);
+            // Mirrors C `break` after shada_free_shada_entry on mark_set_local failure:
+            // rs_shada_free_entry_contents already freed fname; skip the
+            // nvim_shada_fm_xfree_fname call at the end to avoid a double-free.
+            return;
         }
         // mark_set_local uses fnum=0, does not own fname.
     } else {
@@ -7469,6 +7473,12 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
             let fname = read_union_field!(entry, filemark, fname);
             if !fname.is_null() {
                 nvim_xfree(fname.cast());
+                // Null out after free (defense-in-depth against double-free).
+                // This makes nvim_shada_fm_xfree_fname idempotent if called again.
+                let fname_ptr = std::ptr::addr_of_mut!(
+                    (*(*std::ptr::addr_of_mut!((*entry).data.filemark))).fname
+                );
+                std::ptr::write(fname_ptr, std::ptr::null_mut());
             }
         }
         ShadaEntryType::BufferList => {
