@@ -289,6 +289,7 @@ bhdr_T *nvim_mf_get_block(memfile_T *mfp, int64_t bnum, unsigned page_count) { r
 
 void nvim_bhdr_set_bh_data(bhdr_T *hp, void *data) { hp->bh_data = data; }
 void nvim_curbuf_set_b_flags_recovered(void) { curbuf->b_flags |= BF_RECOVERED; }
+void nvim_getout_one(void) __attribute__((noreturn));
 void nvim_getout_one(void) { getout(1); }
 int nvim_ml_open_curbuf(void) { return ml_open(curbuf); }
 void nvim_ml_close_curbuf_true(void) { ml_close(curbuf, true); }

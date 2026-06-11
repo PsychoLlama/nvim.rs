@@ -183,7 +183,7 @@ void nvim_set_errorfile_opt(const char *val) { set_option_direct(kOptErrorfile, 
 
 // Rust implementations (Phase 1: lifecycle)
 extern uint64_t rs_server_connect(char *server_addr, const char **errmsg);
-extern void rs_os_exit(int r) FUNC_ATTR_NORETURN;
+extern void rs_os_exit(int r) __attribute__((noreturn));
 
 // Rust implementations (Phase 2: stdin)
 extern void rs_read_stdin(void);

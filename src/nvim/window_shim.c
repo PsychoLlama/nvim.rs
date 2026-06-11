@@ -324,6 +324,7 @@ int nvim_win_buf_has_terminal_safe(win_T *win) { return (win && win->w_buffer &&
 // nvim_win_is_cmdline_win: exported from Rust (window crate, globals.rs)
 void nvim_apply_autocmds_bufenter_if_changed(buf_T *old_curbuf) { if (old_curbuf != curbuf) { apply_autocmds(EVENT_BUFENTER, NULL, NULL, false, curbuf); } }
 int nvim_win_close_force(win_T *wp, int free_buf) { return win_close(wp, free_buf != 0, true); }
+void nvim_getout_zero(void) __attribute__((noreturn));
 void nvim_getout_zero(void) { getout(0); }
 void nvim_do_cmdline_cmd_diffoff(void) { do_cmdline_cmd("diffoff!"); }
 void nvim_apply_autocmds_tabclosed(const char *idx_str, buf_T *buf) { apply_autocmds(EVENT_TABCLOSED, (char *)idx_str, (char *)idx_str, false, buf); }

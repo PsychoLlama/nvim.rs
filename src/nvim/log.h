@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "auto/config.h"
 #include "nvim/macros_defs.h"

@@ -348,6 +348,7 @@ int nvim_docmd_cmdnames_prefix_match(int idx, const char *cmd, int len)
 int nvim_docmd_cmdnames_name_complete(int idx, int len) { return cmdnames[idx].cmd_name[len] == NUL; }
 char *nvim_docmd_cmdnames_name(int idx) { return cmdnames[idx].cmd_name; }
 /// Report E943 and exit (command table mismatch).
+void nvim_docmd_e943_abort(void) __attribute__((noreturn));
 void nvim_docmd_e943_abort(void)
 {
   iemsg(_("E943: Command table needs to be updated, run 'make'"));
