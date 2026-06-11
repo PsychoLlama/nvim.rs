@@ -198,8 +198,10 @@ pub unsafe extern "C" fn rs_var_wrong_func_name(name: *const c_char, new_var: bo
     // Allow w:, b:, s:, t: prefixes
     let has_scope_prefix = matches!(first, b'w' | b'b' | b's' | b't') && second == b':';
 
-    // The char to check for uppercase: skip over the "x:" prefix if present
-    let check_char: u8 = if has_scope_prefix {
+    // The char to check for uppercase: skip over ANY "x:" scope prefix
+    // (name[1] == ':'), not only w/b/s/t — matches C:
+    //   (name[0] != NUL && name[1] == ':') ? name[2] : name[0]
+    let check_char: u8 = if first != 0 && second == b':' {
         *name.add(2) as u8
     } else {
         first
