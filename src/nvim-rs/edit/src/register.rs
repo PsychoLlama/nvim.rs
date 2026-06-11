@@ -22,8 +22,8 @@ const CTRL_P: c_int = 16; // ^P
 const EQ_CHAR: c_int = b'=' as c_int; // '='
 
 const BACKWARD: c_int = 0;
-const PUT_CURSEND: c_int = 0x04;
-const PUT_FIXINDENT: c_int = 0x08;
+const PUT_CURSEND: c_int = 2; // leave cursor after end of new text (register_defs.h)
+const PUT_FIXINDENT: c_int = 1; // make indent look nice (register_defs.h)
 
 const FAIL: c_int = 0;
 

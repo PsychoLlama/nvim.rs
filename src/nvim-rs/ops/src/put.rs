@@ -370,13 +370,14 @@ pub extern "C" fn rs_calc_block_padding(cur_col: c_int, line_len: c_int) -> c_in
 // Phase O2: Additional Put Operation Helpers
 // =============================================================================
 
-/// Put flag constants (must match register.h)
-pub const PUT_FIXINDENT: c_int = 1;
-pub const PUT_CURSEND: c_int = 2;
-pub const PUT_LINE: c_int = 4;
-pub const PUT_LINE_SPLIT: c_int = 8;
-pub const PUT_LINE_FORWARD: c_int = 16;
-pub const PUT_BLOCK_INNER: c_int = 32;
+/// Put flag constants (must match register_defs.h)
+pub const PUT_FIXINDENT: c_int = 1; // make indent look nice
+pub const PUT_CURSEND: c_int = 2; // leave cursor after end of new text
+                                  // PUT_CURSLINE = 4 (not used here)
+pub const PUT_LINE: c_int = 8; // put register as lines
+pub const PUT_LINE_SPLIT: c_int = 16; // split line for linewise register
+pub const PUT_LINE_FORWARD: c_int = 32; // put linewise register below Visual sel.
+pub const PUT_BLOCK_INNER: c_int = 64; // in block mode, do not add trailing spaces
 
 /// Forward direction constant
 pub const FORWARD: c_int = 1;

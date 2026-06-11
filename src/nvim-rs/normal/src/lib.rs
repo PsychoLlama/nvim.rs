@@ -1986,19 +1986,19 @@ pub unsafe extern "C" fn rs_nv_put(cap: CapHandle) {
     nv_put_opt_impl(cap, false);
 }
 
-// PUT_* flag constants for do_put()
-const PUT_FIXINDENT: c_int = 1;
-const PUT_CURSEND: c_int = 2;
-const PUT_BLOCK_INNER: c_int = 64;
+// PUT_* flag constants for do_put() — must match register_defs.h
+const PUT_FIXINDENT: c_int = 1; // make indent look nice
+const PUT_CURSEND: c_int = 2; // leave cursor after end of new text
+#[allow(dead_code)]
+const PUT_CURSLINE: c_int = 4; // leave cursor on last line of new text
+const PUT_LINE: c_int = 8; // put register as lines
+const PUT_LINE_SPLIT: c_int = 16; // split line for linewise register
+const PUT_LINE_FORWARD: c_int = 32; // put linewise register below Visual sel.
+const PUT_BLOCK_INNER: c_int = 64; // in block mode, do not add trailing spaces
 
 // Clipboard flag constants
 const CB_FLAG_UNNAMED: c_uint = 0x01;
 const CB_FLAG_UNNAMEDPLUS: c_uint = 0x02;
-
-// PUT_LINE_* flag constants for do_put() visual mode
-const PUT_LINE: c_int = 4;
-const PUT_LINE_SPLIT: c_int = 8;
-const PUT_LINE_FORWARD: c_int = 16;
 
 /// Implementation of nv_put_opt - paste with optional indent fixing.
 /// Inlines helpers: nvim_put_check_op_type, nvim_put_check_prompt,
