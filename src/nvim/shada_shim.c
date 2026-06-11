@@ -398,8 +398,16 @@ void nvim_shada_tv_get_refcheck_info(const void *tv, int *out_vtype, void **out_
 { const typval_T *t = (const typval_T *)tv;
   if (!t) { *out_vtype = 0; *out_container = NULL; *out_copy_id = 0; return; }
   *out_vtype = t->v_type; *out_container = NULL; *out_copy_id = 0;
-  if (t->v_type == VAR_DICT && t->vval.v_dict) { *out_container = &t->vval.v_dict->dv_hashtab; *out_copy_id = t->vval.v_dict->dv_copyID; }
+  // For VAR_DICT: out_container = dict_T* (caller uses nvim_shada_dict_get_ht for rs_set_ref_in_ht).
+  // For VAR_LIST: out_container = list_T* (passed directly to rs_set_ref_in_list_items).
+  if (t->v_type == VAR_DICT && t->vval.v_dict) { *out_container = t->vval.v_dict; *out_copy_id = t->vval.v_dict->dv_copyID; }
   else if (t->v_type == VAR_LIST && t->vval.v_list) { *out_container = t->vval.v_list; *out_copy_id = t->vval.v_list->lv_copyID; } }
+/// Get &dict->dv_hashtab for passing to rs_set_ref_in_ht.
+void *nvim_shada_dict_get_ht(void *dict) { return dict ? &((dict_T *)dict)->dv_hashtab : NULL; }
+/// Read dict->dv_copyID after rs_set_ref_in_ht has been called.
+int nvim_shada_dict_copyid(void *dict) { return dict ? ((dict_T *)dict)->dv_copyID : 0; }
+/// Read list->lv_copyID after rs_set_ref_in_list_items has been called.
+int nvim_shada_list_copyid(void *list) { return list ? ((list_T *)list)->lv_copyID : 0; }
 uint64_t nvim_shada_op_reg_get_timestamp(char name) { const yankreg_T *const reg = op_reg_get(name); return reg ? (uint64_t)reg->timestamp : 0; }
 void nvim_shada_var_set_global_from_entry(ShadaEntry *entry) { var_set_global(entry->data.global_var.name, &entry->data.global_var.value); entry->data.global_var.value.v_type = VAR_UNKNOWN; }
 int nvim_shada_jumplist_len(void) { return curwin->w_jumplistlen; }

@@ -810,12 +810,20 @@ extern "C" {
 
 extern "C" {
     /// Get refcheck info from a typval (vtype, container ptr, copy_id) in one call.
+    /// For VAR_DICT: container = dict_T* (use nvim_shada_dict_get_ht for rs_set_ref_in_ht).
+    /// For VAR_LIST: container = list_T* (pass directly to rs_set_ref_in_list_items).
     fn nvim_shada_tv_get_refcheck_info(
         tv: *const c_void,
         out_vtype: *mut c_int,
         out_container: *mut *mut c_void,
         out_copy_id: *mut c_int,
     );
+    /// Get &dict->dv_hashtab from a dict_T* for rs_set_ref_in_ht.
+    fn nvim_shada_dict_get_ht(dict: *mut c_void) -> *mut c_void;
+    /// Read dict->dv_copyID after rs_set_ref_in_ht has been called.
+    fn nvim_shada_dict_copyid(dict: *mut c_void) -> c_int;
+    /// Read list->lv_copyID after rs_set_ref_in_list_items has been called.
+    fn nvim_shada_list_copyid(list: *mut c_void) -> c_int;
     /// Mark all items in hashtab with copyID (from eval crate, opaque hashtab_T*).
     fn rs_set_ref_in_ht(ht: *mut c_void, copy_id: c_int, list_stack: *mut *mut c_void) -> bool;
     /// Mark all items in list with copyID (from eval crate, opaque list_T*).
@@ -6842,14 +6850,20 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
         }
 
         // Circular reference detection for dict and list.
+        // Mirrors upstream C: call set_ref, then re-read the container's copyID
+        // (which set_ref may have updated) to detect cycles.
         if vtype == VAR_DICT {
+            // container = dict_T*; get hashtab for rs_set_ref_in_ht.
+            let ht = nvim_shada_dict_get_ht(container);
             let copy_id = rs_get_copyID();
-            let set_result = if container.is_null() {
+            let set_result = if ht.is_null() {
                 false
             } else {
-                rs_set_ref_in_ht(container, copy_id, std::ptr::null_mut())
+                rs_set_ref_in_ht(ht, copy_id, std::ptr::null_mut())
             };
-            if !set_result && copy_id == tv_copy_id {
+            // Re-read dv_copyID after traversal (may have been set to copy_id).
+            let post_copy_id = nvim_shada_dict_copyid(container);
+            if !set_result && copy_id == post_copy_id {
                 tv_clear(tv.cast());
                 nvim_xfree(tv);
                 if var_iter.is_null() {
@@ -6858,13 +6872,16 @@ pub unsafe extern "C" fn rs_shada_pack_all_gvars(
                 continue;
             }
         } else if vtype == VAR_LIST {
+            // container = list_T*; pass directly to rs_set_ref_in_list_items.
             let copy_id = rs_get_copyID();
             let set_result = if container.is_null() {
                 false
             } else {
                 rs_set_ref_in_list_items(container, copy_id, std::ptr::null_mut())
             };
-            if !set_result && copy_id == tv_copy_id {
+            // Re-read lv_copyID after traversal (may have been set to copy_id).
+            let post_copy_id = nvim_shada_list_copyid(container);
+            if !set_result && copy_id == post_copy_id {
                 tv_clear(tv.cast());
                 nvim_xfree(tv);
                 if var_iter.is_null() {
@@ -8252,8 +8269,11 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             // Encode the typval_T
             let tv_ptr = nvim_shada_entry_var_value_ptr(entry.cast_mut());
             let encode_ret = encode_vim_to_msgpack(sbuf, tv_ptr, vardesc.as_ptr().cast::<c_char>());
-            if encode_ret != 0 {
-                // encode_vim_to_msgpack returns FAIL for non-serializable values
+            // encode_vim_to_msgpack uses Vim convention: OK=1, FAIL=0.
+            // FAIL (== 0) means non-serializable; discard the entry.
+            const ENCODE_FAIL: c_int = 0;
+            if encode_ret == ENCODE_FAIL {
+                // Value is not serializable (e.g. Funcref): skip silently.
                 let sbuf_str = nvim_shada_packer_take_string(sbuf);
                 nvim_xfree(sbuf_str.data.cast::<c_void>());
                 return SD_WRITE_IGN_ERROR;
