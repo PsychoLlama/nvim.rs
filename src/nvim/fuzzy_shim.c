@@ -413,4 +413,5 @@ void nvim_fuzzy_xfree(void *p)
   xfree(p);
 }
 
+#include "nvim/fuzzy_shim.h"
 #include "fuzzy_shim.c.generated.h"

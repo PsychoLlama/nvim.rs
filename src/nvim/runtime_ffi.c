@@ -54,6 +54,7 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/runtime_ffi.h"
 #include "runtime_ffi.c.generated.h"
 
 extern int rs_get_copyID(void);

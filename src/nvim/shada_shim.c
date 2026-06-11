@@ -28,6 +28,9 @@
 #include "nvim/register.h"
 #include "nvim/search.h"
 
+#include "nvim/shada.h"
+#include "shada_shim.c.generated.h"
+
 extern int rs_marklist_insert(void *jumps_arr, size_t jump_size, int jl_len, int i);
 extern int rs_compare_file_marks(const void *a, const void *b);
 extern var_flavour_T rs_var_flavour(const char *varname);

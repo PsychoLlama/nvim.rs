@@ -41,6 +41,7 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/indent_ffi.h"
 #include "indent_ffi.c.generated.h"
 
 // Static assertions for constants used in Rust code

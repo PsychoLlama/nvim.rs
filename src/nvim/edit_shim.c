@@ -43,6 +43,7 @@
 #include "nvim/highlight.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/ui.h"
+#include "nvim/edit_shim.h"
 #include "edit_shim.c.generated.h"
 extern int ins_apply_autocmds(event_T event);
 extern void replace_join(int off);

@@ -40,6 +40,7 @@
 #include "nvim/window.h"
 #include "nvim/cmdwin.h"
 
+#include "nvim/cmdwin_shim.h"
 #include "cmdwin_shim.c.generated.h"
 
 // Rust helpers used by this shim

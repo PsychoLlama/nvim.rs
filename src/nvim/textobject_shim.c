@@ -26,6 +26,9 @@
 #include "nvim/textobject.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/textobject_shim.h"
+#include "textobject_shim.c.generated.h"
+
 // Rust function declarations
 extern bool rs_unadjust_for_sel(void);
 

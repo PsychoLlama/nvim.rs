@@ -28,6 +28,7 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/drawline_ffi.h"
 #include "drawline_ffi.c.generated.h"
 
 /// Wrapper for cursor_is_block_during_visual, callable from Rust.
@@ -179,17 +180,7 @@ int nvim_win_lcs_leadmultispace_len(win_T *wp)
 /// Return true if wp->w_p_stc != NUL.
 bool nvim_win_get_w_p_stc_is_set(win_T *wp) { return *wp->w_p_stc != NUL; }
 
-/// Result struct for advance_to_start_vcol: carries outputs from the
-/// charsize iteration loop back to Rust.
-typedef struct {
-  int ptr_offset;       ///< byte offset of ptr into the line buffer
-  int vcol;             ///< updated vcol after advancing
-  bool in_multispace;   ///< whether current char is in multispace run
-  int multispace_pos;   ///< current position in multispace sequence
-  int skip_cells;       ///< number of cells to skip (start_vcol - vcol - head)
-  int fromcol;          ///< updated wlv->fromcol
-  bool need_showbreak;  ///< whether showbreak is needed
-} AdvanceToStartVcolResult;
+// AdvanceToStartVcolResult typedef is defined in drawline_ffi.h (shared with Rust).
 
 /// Advance ptr through the line until vcol >= start_vcol, tracking multispace
 /// state. This wraps the charsize-iteration loop (original C lines 462-530)
