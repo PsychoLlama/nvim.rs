@@ -57,8 +57,8 @@ struct TypvalT {
 // VarType constants (must match C enum in typval_defs.h)
 const VAR_LIST: c_int = 4;
 
-// C State mode bits
-const MODE_INSERT: c_int = 0x80;
+// C State mode bits (state_defs.h: MODE_INSERT = 0x10; 0x80 is MODE_TERMINAL)
+const MODE_INSERT: c_int = 0x10;
 
 // =============================================================================
 // Phase 1: VimL Completion Function Expansion
@@ -520,9 +520,17 @@ pub unsafe extern "C" fn rs_get_callback_if_cpt_func(p: *const c_char, idx: c_in
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_phase_constants() {
         // Ensure module compiles
         assert_eq!(1, 1);
+    }
+
+    #[test]
+    fn mode_insert_constant_matches_state_defs() {
+        // state_defs.h: MODE_INSERT = 0x10 (0x80 is MODE_TERMINAL)
+        assert_eq!(MODE_INSERT, 0x10);
     }
 }
