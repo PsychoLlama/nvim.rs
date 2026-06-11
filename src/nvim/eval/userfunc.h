@@ -179,3 +179,6 @@ extern char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fd
 extern void ex_function(exarg_T *eap);
 
 #include "eval/userfunc.h.generated.h"
+
+// Hand-written prototype for function with function-pointer parameter.
+void nvim_func_ht_foreach(void (*cb)(ufunc_T *fp, void *ctx), void *ctx);

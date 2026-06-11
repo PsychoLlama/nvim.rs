@@ -9,6 +9,11 @@
 
 #include "arglist.h.generated.h"
 
+// Hand-written prototypes for functions with function-pointer parameters
+// (the grammar cannot auto-generate these).
+void nvim_al_foreach_tab_window(int (*callback)(win_T *wp, void *ud), void *ud);
+void nvim_al_foreach_windows_in_tab(int (*callback)(win_T *wp, void *ud), tabpage_T *tp, void *ud);
+
 // Declarations for functions implemented in Rust via #[export_name].
 // These were previously declared as forward declarations in arglist.c.
 // arglist management
