@@ -1358,8 +1358,8 @@ pub unsafe extern "C" fn rs_f_setcharsearch(
 ) {
     // nvim_eval_setcharsearch: inlined — set_last_csearch/direction/until delegation
     const FAIL: c_int = 0;
-    const FORWARD: c_int = 1; // FORWARD direction
-    const BACKWARD: c_int = 0; // BACKWARD direction
+    const FORWARD: c_int = 1; // FORWARD direction (vim_defs.h)
+    const BACKWARD: c_int = -1; // BACKWARD direction (vim_defs.h)
     if tv_check_for_dict_arg(argvars, 0) == FAIL {
         return;
     }
