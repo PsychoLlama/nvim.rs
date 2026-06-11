@@ -431,8 +431,8 @@ pub const BORDER_CHAR_COUNT: usize = 8;
 
 /// Get number of border characters
 #[no_mangle]
-pub extern "C" fn rs_border_char_count() -> c_int {
-    BORDER_CHAR_COUNT as c_int
+pub extern "C" fn rs_border_char_count() -> usize {
+    BORDER_CHAR_COUNT
 }
 
 // =============================================================================

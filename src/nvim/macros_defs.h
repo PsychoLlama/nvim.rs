@@ -159,6 +159,9 @@ extern int rs_ascii_isalnum(int c);
 #  define PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH \
   _Pragma("clang diagnostic push")
 # endif
+# define PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC \
+  _Pragma("clang diagnostic push") \
+  _Pragma("clang diagnostic ignored \"-Wpedantic\"")
 # define PRAGMA_DIAG_POP \
   _Pragma("clang diagnostic pop")
 #elif defined(__GNUC__)
@@ -173,11 +176,15 @@ extern int rs_ascii_isalnum(int c);
 #  define PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH \
   _Pragma("GCC diagnostic push")
 # endif
+# define PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC \
+  _Pragma("GCC diagnostic push") \
+  _Pragma("GCC diagnostic ignored \"-Wpedantic\"")
 # define PRAGMA_DIAG_POP \
   _Pragma("GCC diagnostic pop")
 #else
 # define PRAGMA_DIAG_PUSH_IGNORE_MISSING_PROTOTYPES
 # define PRAGMA_DIAG_PUSH_IGNORE_IMPLICIT_FALLTHROUGH
+# define PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
 # define PRAGMA_DIAG_POP
 #endif
 

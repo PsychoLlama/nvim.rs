@@ -20,7 +20,7 @@ extern bool rs_border_size_valid(size_t size);
 extern size_t rs_border_double_size(size_t size);
 extern bool rs_border_tuple_valid(size_t size);
 extern bool rs_is_single_cell(int cells);
-extern int rs_border_char_count(void);  // defined in winfloat crate
+extern size_t rs_border_char_count(void);  // defined in winfloat crate
 extern bool rs_dimension_valid(int64_t dim);
 extern bool rs_zindex_valid(int64_t zindex);
 extern bool rs_external_needs_multigrid(bool external, bool has_multigrid);
@@ -706,7 +706,7 @@ static void config_put_bordertext(Dict(win_config) *config, WinConfig *fconfig,
 
   Array bordertext = virt_text_to_array(vt, true, arena);
 
-  char *pos;
+  char *pos = "left";
   switch (align) {
   case kAlignLeft:
     pos = "left";

@@ -586,7 +586,11 @@ Proc *nvim_chan_get_proc_ptr(Channel *chan)
 /// Set the proc exit callback to channel_proc_exit_cb.
 void nvim_chan_proc_set_exit_cb(Channel *chan)
 {
+  // ISO C forbids function-pointer → void* conversion; this is an irreducible
+  // FFI boundary (rs_proc_set_cb stores the callback as void* in Rust).
+  PRAGMA_DIAG_PUSH_IGNORE_PEDANTIC
   rs_proc_set_cb(&chan->stream.proc, (void *)channel_proc_exit_cb);
+  PRAGMA_DIAG_POP
 }
 
 /// wstream_init for proc->in (stdin pipe).

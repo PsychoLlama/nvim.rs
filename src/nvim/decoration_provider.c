@@ -345,25 +345,25 @@ void nvim_decor_cb_conceal_line(int provider_idx, LuaRef ref, int win_handle, in
   nvim_decor_provider_invoke_c(provider_idx, "conceal_line", ref, args, true, NULL);
 }
 
-void nvim_decor_cb_buf(int provider_idx, LuaRef ref, int buf_handle, uint64_t display_tick)
+void nvim_decor_cb_buf(int provider_idx, LuaRef ref, int buf_handle, uint64_t dtick)
 {
   MAXSIZE_TEMP_ARRAY(args, 2);
   ADD_C(args, BUFFER_OBJ(buf_handle));
-  ADD_C(args, INTEGER_OBJ((int64_t)display_tick));
+  ADD_C(args, INTEGER_OBJ((int64_t)dtick));
   nvim_decor_provider_invoke_c(provider_idx, "buf", ref, args, true, NULL);
 }
 
-void nvim_decor_cb_end(int provider_idx, LuaRef ref, uint64_t display_tick)
+void nvim_decor_cb_end(int provider_idx, LuaRef ref, uint64_t dtick)
 {
   MAXSIZE_TEMP_ARRAY(args, 1);
-  ADD_C(args, INTEGER_OBJ((int)display_tick));
+  ADD_C(args, INTEGER_OBJ((int)dtick));
   nvim_decor_provider_invoke_c(provider_idx, "end", ref, args, true, NULL);
 }
 
-bool nvim_decor_cb_start(int provider_idx, LuaRef ref, uint64_t display_tick)
+bool nvim_decor_cb_start(int provider_idx, LuaRef ref, uint64_t dtick)
 {
   MAXSIZE_TEMP_ARRAY(args, 2);
-  ADD_C(args, INTEGER_OBJ((int)display_tick));
+  ADD_C(args, INTEGER_OBJ((int)dtick));
   return nvim_decor_provider_invoke_c(provider_idx, "start", ref, args, true, NULL);
 }
 
