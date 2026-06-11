@@ -95,8 +95,13 @@ const UPD_VALID: c_int = 10;
 /// Meta type for virtual lines.
 const KMT_META_LINES: c_int = 1;
 
-/// Extmark no-op operation type.
-const KEXTMARK_NOOP: c_int = 2;
+/// Extmark no-op operation type (kExtmarkNOOP=0 per extmark_defs.h).
+const KEXTMARK_NOOP: c_int = 0;
+// Guard: must match kExtmarkNOOP in src/nvim/extmark_defs.h
+const _: () = assert!(
+    KEXTMARK_NOOP == 0,
+    "KEXTMARK_NOOP must equal kExtmarkNOOP (0) per extmark_defs.h"
+);
 
 /// MAXLNUM constant (maximum line number).
 const MAXLNUM: LinenrT = 0x7FFF_FFFF;

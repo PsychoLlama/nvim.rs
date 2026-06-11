@@ -51,10 +51,20 @@ const COM_MAX_LEN: usize = 256;
 // Extmark Constants
 // =============================================================================
 
-/// Extmark undo operation type.
-const KEXTMARK_UNDO: c_int = 0;
-/// Extmark no-op type.
-const KEXTMARK_NOOP: c_int = 1;
+/// Extmark undo operation type (kExtmarkUndo=1 per extmark_defs.h).
+const KEXTMARK_UNDO: c_int = 1;
+// Guard: must match kExtmarkUndo in src/nvim/extmark_defs.h
+const _: () = assert!(
+    KEXTMARK_UNDO == 1,
+    "KEXTMARK_UNDO must equal kExtmarkUndo (1) per extmark_defs.h"
+);
+/// Extmark no-op type (kExtmarkNOOP=0 per extmark_defs.h).
+const KEXTMARK_NOOP: c_int = 0;
+// Guard: must match kExtmarkNOOP in src/nvim/extmark_defs.h
+const _: () = assert!(
+    KEXTMARK_NOOP == 0,
+    "KEXTMARK_NOOP must equal kExtmarkNOOP (0) per extmark_defs.h"
+);
 
 // =============================================================================
 // Position Type

@@ -43,6 +43,12 @@
 
 #include "extmark.c.generated.h"
 
+// Compile-time ABI guards: Rust change crate constants must match these values.
+// If these fail, update KEXTMARK_UNDO / KEXTMARK_NOOP in src/nvim-rs/change/.
+_Static_assert(kExtmarkNOOP == 0, "ExtmarkOp ABI: kExtmarkNOOP must be 0");
+_Static_assert(kExtmarkUndo == 1, "ExtmarkOp ABI: kExtmarkUndo must be 1");
+_Static_assert(kExtmarkNoUndo == 2, "ExtmarkOp ABI: kExtmarkNoUndo must be 2");
+
 // Extmark Namespace Map Accessor Functions (for Rust FFI)
 
 /// Get the size of the extmark namespace map.

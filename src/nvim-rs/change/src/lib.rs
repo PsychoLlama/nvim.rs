@@ -168,8 +168,13 @@ pub const BF_NEVERLOADED: c_int = 0x04;
 /// Buffer flag: new buffer.
 pub const BF_NEW: c_int = 0x10;
 
-/// Extmark undo operation type.
-pub const KEXTMARK_UNDO: c_int = 0;
+/// Extmark undo operation type (kExtmarkUndo=1 per extmark_defs.h).
+pub const KEXTMARK_UNDO: c_int = 1;
+// Guard: must match kExtmarkUndo in src/nvim/extmark_defs.h
+const _: () = assert!(
+    KEXTMARK_UNDO == 1,
+    "KEXTMARK_UNDO must equal kExtmarkUndo (1) per extmark_defs.h"
+);
 
 /// Meta type for inline virtual text.
 pub const KMT_META_INLINE: c_int = 0;
