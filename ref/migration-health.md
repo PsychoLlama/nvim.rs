@@ -86,9 +86,22 @@ editor/`completion`(v:completed_item), editor/`count`(v:count in cmdwin). Whole 
 hang on an early spec: editor, options, lua, ui, autocmd, ex_cmds, shada, treesitter,
 plugin, terminal, legacy, provider. **Fixing the cmdwin/textlock deadlock likely clears several at once.**
 
-### Cluster E — keymap dict serialization round-trip mismatch [MEDIUM, single root]
-`nvim_get_keymap`/`nvim_set_keymap` round-trip returns a structurally different dict
-(~23 "Expected objects to be the same" in `api/keymap_spec.lua`). One fix → ~20 tests.
+### Cluster E — keymap dict serialization round-trip mismatch [LARGELY FIXED]
+`nvim_get_keymap`/`nvim_set_keymap` round-trip returned a structurally different dict.
+Baseline 36F/1E → now 18F/1E via two single-root fixes (2026-06-10):
+- **c395713bd3** rs_buf_do_map (mapping/do_map.rs ~447) omitted upstream's keyround-2
+  `if (!did_simplify) break;` → non-simplifiable maps inserted a phantom empty-lhs mapblock
+  → get_keymap returned 2 entries + poisoned dispatch. +8 lines. (36F→27F)
+- **0665960e18** to_special (message/keys.rs:201) computed TERMCAP2KEY as `(-1-a)*256-b`
+  instead of upstream `-(a+(b<<8))` (+ missing KS_SPECIAL/KS_ZERO cases) → special keys like
+  <F12> serialized as `<t_xx>` garbage. Shared str2special helper → also fixes special-key
+  display elsewhere. (27F→18F; cleared @298 + 8 of 12 @732 cases)
+- REMAINING (18F/1E, two separate bugs, NOT yet fixed):
+  (1) @304 + 4x @732 `<C-U>`: replace_termcodes/find_special_key ENCODING stores e.g. <C-U> as
+      K_SPECIAL+0xEF+'U' instead of raw 0x15 / KS_MODIFIER form (lhsraw encoding bug, ~5 tests);
+  (2) lua-callback/funcref cluster @392/@959/@997(E117 <lambda>3)/@1076/@1091/@1108/@1135/
+      @1159/@1208/@1227/@1344/@1388/@1415/@1439: lua-registered mappings never fire callback
+      (GlobalCount 0 vs 1) — funcref-dispatch bug, ~13 tests, biggest remaining keymap lever.
 
 ### Cluster F — cursor/pos API rejects valid [row,col] [MEDIUM, clean]
 `Argument "pos" must be a [row, col] array` on valid input. `api/buffer_spec.lua` (6E),
