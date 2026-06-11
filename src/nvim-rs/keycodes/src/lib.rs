@@ -193,8 +193,9 @@ const STR2NR_HEX: c_int = 0x04;
 const STR2NR_OOCT: c_int = 0x40;
 const STR2NR_ALL: c_int = STR2NR_BIN | STR2NR_OCT | STR2NR_HEX | STR2NR_OOCT;
 
-// KE_KDEL constant
-const KE_KDEL: c_int = 79;
+// KE_KDEL constant (keycodes.h:193; KE_KINS=79, KE_KDEL=80)
+const KE_KDEL: c_int = 80;
+const _: () = assert!(KE_KDEL == 80 && KE_KINS == 79, "keycodes.h KE_KDEL/KE_KINS");
 
 /// Convert termcap codes to internal key representation
 /// TERMCAP2KEY(a, b) = -((a) + ((int)(b) << 8))

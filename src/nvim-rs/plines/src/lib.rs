@@ -165,7 +165,8 @@ extern "C" {
 const MODE_VISUAL: c_int = 0x02;
 const MODE_INSERT: c_int = 0x10;
 const MODE_NORMAL: c_int = 0x01;
-const MODE_CMDLINE: c_int = 0x04;
+const MODE_CMDLINE: c_int = 0x08; // state_defs.h:24
+const _: () = assert!(MODE_CMDLINE == 0x08, "state_defs.h MODE_CMDLINE");
 const MODE_TERMINAL: c_int = 0x80; // state_defs.h MODE_TERMINAL
 
 // Statusline constants (matching Neovim's window.h)
@@ -3045,7 +3046,7 @@ mod tests {
         assert_eq!(MODE_VISUAL, 0x02);
         assert_eq!(MODE_INSERT, 0x10);
         assert_eq!(MODE_NORMAL, 0x01);
-        assert_eq!(MODE_CMDLINE, 0x04);
+        assert_eq!(MODE_CMDLINE, 0x08); // state_defs.h:24 (canonical)
         assert_eq!(MODE_TERMINAL, 0x80); // state_defs.h MODE_TERMINAL (was wrong 0x1000)
     }
 

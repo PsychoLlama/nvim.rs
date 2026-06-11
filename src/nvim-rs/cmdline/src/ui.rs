@@ -605,10 +605,14 @@ mod phase2 {
 
     // kUICmdline enum value from ui_defs.h
     const K_UI_CMDLINE: c_int = 24;
-    // kObjectTypeInteger = 1, kObjectTypeString = 3, kObjectTypeArray = 5
-    const K_OBJECT_TYPE_INTEGER: c_int = 1;
-    const K_OBJECT_TYPE_STRING: c_int = 3;
+    // kObjectTypeInteger = 2, kObjectTypeString = 4, kObjectTypeArray = 5 (api/private/defs.h:103-107)
+    const K_OBJECT_TYPE_INTEGER: c_int = 2;
+    const K_OBJECT_TYPE_STRING: c_int = 4;
     const K_OBJECT_TYPE_ARRAY: c_int = 5;
+    const _: () = assert!(
+        K_OBJECT_TYPE_INTEGER == 2 && K_OBJECT_TYPE_STRING == 4 && K_OBJECT_TYPE_ARRAY == 5,
+        "api/private/defs.h ObjectType"
+    );
     // CmdRedraw enum values
     const K_CMD_REDRAW_POS: c_int = 1;
     const K_CMD_REDRAW_ALL: c_int = 2;

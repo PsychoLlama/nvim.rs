@@ -169,8 +169,9 @@ unsafe extern "C" {
     fn getcmdline(firstc: c_int, count: c_int, indent: c_int, do_concat: bool) -> *mut c_char;
 }
 
-// MODE_CMDLINE constant
-const MODE_CMDLINE: c_int = 0x0010;
+// MODE_CMDLINE constant (state_defs.h:24)
+const MODE_CMDLINE: c_int = 0x08;
+const _: () = assert!(MODE_CMDLINE == 0x08, "state_defs.h MODE_CMDLINE");
 
 // Aligned storage for CmdlineInfo C struct.
 // CmdlineInfo contains pointer fields (alignment 8) and a Callback union.

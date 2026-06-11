@@ -33,6 +33,37 @@ Wired into `just smoke-test` (so `just check` now covers them):
 - `test/throw_smoke.vim` — exception throw from inside functions (4 cases) [Wave 70]
 - `test/type_smoke.vim` — VarType-constant-sensitive builtins (22 cases) [Wave 71]
 
+## Fixed regressions (Wave N+1 — wrong-constant batch, 2026-06-11)
+
+**[Wave N+1] 4 live wrong-valued constants fixed + guards (commit pending):**
+
+1. `cmdline/src/entry_impl.rs:173` — `MODE_CMDLINE 0x0010 → 0x08` (state_defs.h:24).
+   `rs_command_line_enter` (called by `getcmdline()`) was setting `State = MODE_INSERT`
+   for the entire cmdline session. Added compile-time guard.
+2. `plines/src/lib.rs:168` — `MODE_CMDLINE 0x04 → 0x08` (was matching OP_PENDING).
+   `conceal_cursor_line_impl` — `concealcursor=c` flag was never matching real cmdline.
+   Also corrected the WRONG self-validating assert at :3048 (`0x04 → 0x08`).
+   Added compile-time guard.
+3. `keycodes/src/lib.rs:197` — `KE_KDEL 79 → 80` (keycodes.h:193; 79 collided with KE_KINS).
+   `<kDel>` was mapping to the kInsert keycode. Added guard asserting both KE_KDEL==80
+   and KE_KINS==79.
+4. `cmdline/src/ui.rs:609-610` — `K_OBJECT_TYPE_INTEGER 1→2, K_OBJECT_TYPE_STRING 3→4`
+   (api/private/defs.h:103/105). ext_cmdline UI Object type tags were wrong
+   (Integer→Boolean, String→Float). Fixed stale comment at :608. Added compile-time guard.
+
+`just check`: 4345/4345. C build warnings: 0.
+Functional spec results (after fix):
+- `ui/cmdline_spec.lua`: 26 PASSED, 35 FAILED, 5 ERRORS (pre-existing failures; spec list not
+  previously baselined for this branch — failures are in ext_cmdline rendering and
+  _handle_cmdline_special_char, not directly related to MODE_CMDLINE value).
+- `vimscript/map_functions_spec.lua`: 15 PASSED, 1 ERROR (pre-existing mapset lua-callback hang).
+- `ui/decorations_spec.lua`: 91 PASSED, 76 FAILED, 6 ERRORS (pre-existing rendering failures).
+
+Dead/latent copies NOT touched (per plan): `cmdline/src/entry.rs:244,247` (MODE_CMDLINE=0x0010;
+no live caller), `edit/src/mode.rs:20-22` (MODE_REPLACE/VREPLACE/LANGMAP; no live callers).
+
+---
+
 ## Fixed regressions
 
 - **[Wave 70] P0 SIGSEGV: throw from inside a function.** 3-way infinite recursion
