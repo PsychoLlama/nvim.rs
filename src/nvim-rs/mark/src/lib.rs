@@ -20,6 +20,22 @@ impl TabHandle {
 }
 
 // =============================================================================
+// Canonical Vim return-value convention (src/nvim/vim_defs.h: OK=1, FAIL=0).
+// Keep these module-scoped so the compile-time guard below can assert on them.
+// =============================================================================
+/// Canonical success value: mirrors `#define OK 1` in vim_defs.h.
+const MARK_OK: c_int = 1;
+/// Canonical failure value: mirrors `#define FAIL 0` in vim_defs.h.
+const MARK_FAIL: c_int = 0;
+
+// Compile-time guard: if either constant is ever accidentally re-inverted the
+// build will fail with an informative message.
+const _: () = assert!(
+    MARK_OK == 1 && MARK_FAIL == 0,
+    "MARK_OK/MARK_FAIL do not match canonical vim_defs.h values (OK=1, FAIL=0)"
+);
+
+// =============================================================================
 // C global variables accessed directly from Rust
 // =============================================================================
 extern "C" {
@@ -5003,7 +5019,7 @@ pub unsafe extern "C" fn rs_fmarks_check_names(buf: BufHandle) {
 /// Set named mark "c" to position "pos".
 ///
 /// When "c" is upper case use file "fnum".
-/// Returns OK (0) on success, FAIL (1) if bad name given.
+/// Returns OK (1) on success, FAIL (0) if bad name given.
 ///
 /// This is the Rust implementation of the C `setmark_pos` function.
 ///
@@ -5018,8 +5034,8 @@ pub unsafe extern "C" fn rs_setmark_pos(
     fnum: c_int,
     view_pt: *const FmarkvT,
 ) -> c_int {
-    const OK: c_int = 0;
-    const FAIL: c_int = 1;
+    const OK: c_int = MARK_OK;
+    const FAIL: c_int = MARK_FAIL;
     const NUL: c_int = 0;
 
     // Dereference the view or use the default (MAXLNUM = no view).
@@ -6164,8 +6180,8 @@ unsafe fn rs_add_mark(
     bufnr: c_int,
     fname: *const c_char,
 ) -> c_int {
-    const OK: c_int = 0;
-    const FAIL: c_int = 1;
+    const OK: c_int = MARK_OK;
+    const FAIL: c_int = MARK_FAIL;
     const MAXCOL_VAL: i32 = 0x7fff_ffff;
 
     if (*pos).lnum <= 0 {
