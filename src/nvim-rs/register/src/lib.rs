@@ -4787,8 +4787,8 @@ unsafe fn region_resolve(
     let mut fnum2: c_int = -1;
     let arg0 = nvim_typval_array_get(argvars, 0);
     let arg1 = nvim_typval_array_get(argvars, 1);
-    if list2fpos(arg0, p1, &raw mut fnum1, std::ptr::null_mut(), false) != 0
-        || list2fpos(arg1, p2, &raw mut fnum2, std::ptr::null_mut(), false) != 0
+    if list2fpos(arg0, p1, &raw mut fnum1, std::ptr::null_mut(), false) != OK
+        || list2fpos(arg1, p2, &raw mut fnum2, std::ptr::null_mut(), false) != OK
         || fnum1 != fnum2
     {
         return false;
@@ -4814,8 +4814,10 @@ unsafe fn region_resolve(
     }
 
     // Parse the type string.
+    // NOTE: the null fallback must include a NUL terminator so that
+    //       type_bytes[1] == 0 checks below are in-bounds.
     let type_bytes: &[u8] = if type_str.is_null() {
-        b"v"
+        b"v\0"
     } else {
         let len = libc::strlen(type_str);
         std::slice::from_raw_parts(type_str as *const u8, len + 1)
@@ -5267,5 +5269,14 @@ mod tests {
         assert_eq!(rs_op_reg_index(c_int::from(b'@')), -1);
         assert_eq!(rs_op_reg_index(-1), -1);
         assert_eq!(rs_op_reg_index(256), -1);
+    }
+
+    #[test]
+    fn test_ok_fail_constants() {
+        // Guard against OK/FAIL inversion: matches vim_defs.h #define OK 1, FAIL 0.
+        // list2fpos (and other C helpers) return OK on success; region_resolve
+        // tests `!= OK` for failure. Changing these silently breaks getregion/getregionpos.
+        assert_eq!(OK, 1); // vim_defs.h: #define OK 1
+        assert_eq!(FAIL, 0); // vim_defs.h: #define FAIL 0
     }
 }
