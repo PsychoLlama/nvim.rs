@@ -342,17 +342,17 @@ const FO_NO_OPEN_COMS: c_int = 'o' as c_int;
 // SIN (set indent) flags
 // =============================================================================
 
-/// SIN_INSERT - insert whitespace chars
-const SIN_INSERT: c_int = 1;
-/// SIN_NOMARK - don't adjust marks
+/// SIN_INSERT - insert indent before existing text (from indent.h)
+const SIN_INSERT: c_int = 2;
+/// SIN_NOMARK - don't adjust extmarks (from indent.h)
 const SIN_NOMARK: c_int = 8;
 
 // =============================================================================
 // CMOD flags
 // =============================================================================
 
-/// CMOD_LOCKMARKS - :lockmarks modifier
-const CMOD_LOCKMARKS: c_int = 0x80;
+/// CMOD_LOCKMARKS - :lockmarks modifier (from ex_cmds_defs.h)
+const CMOD_LOCKMARKS: c_int = 0x0800;
 
 // =============================================================================
 // Comment Flags
