@@ -122,9 +122,9 @@ type c_long = i64;
 // ============================================================================
 
 /// `REPLACE_FLAG` from `state_defs.h`
-const REPLACE_FLAG: c_int = 0x10;
+const REPLACE_FLAG: c_int = 0x100;
 /// `VREPLACE_FLAG` from `state_defs.h`
-const VREPLACE_FLAG: c_int = 0x20;
+const VREPLACE_FLAG: c_int = 0x200;
 
 /// `INSCHAR_FORMAT` from `edit.h`
 const INSCHAR_FORMAT: c_int = 1;

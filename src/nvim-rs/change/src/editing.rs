@@ -100,8 +100,8 @@ extern "C" {
 
 /// State mode flags.
 const MODE_INSERT: c_int = 0x10;
-const REPLACE_FLAG: c_int = 0x40;
-const VREPLACE_FLAG: c_int = 0x80;
+const REPLACE_FLAG: c_int = 0x100;
+const VREPLACE_FLAG: c_int = 0x200;
 
 /// Maximum bytes for a multibyte character.
 const MB_MAXCHAR: usize = 6;
@@ -508,8 +508,8 @@ mod tests {
     #[test]
     fn test_constants() {
         assert_eq!(MODE_INSERT, 0x10);
-        assert_eq!(REPLACE_FLAG, 0x40);
-        assert_eq!(VREPLACE_FLAG, 0x80);
+        assert_eq!(REPLACE_FLAG, 0x100);
+        assert_eq!(VREPLACE_FLAG, 0x200);
         assert_eq!(MB_MAXCHAR, 6);
     }
 }
