@@ -572,7 +572,11 @@ extern "C" {
     fn nvim_tv_set_float(tv: TypevalHandle, f: f64);
     fn nvim_tv_set_bool(tv: TypevalHandle, val: c_int);
     fn nvim_tv_set_special(tv: TypevalHandle, val: c_int);
-    fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
+    /// Sets vval.v_string only; does NOT touch v_type. Use when v_type has
+    /// already been set to VAR_FUNC or VAR_PARTIAL and must not be clobbered.
+    /// (nvim_tv_set_string unconditionally resets v_type to VAR_STRING — do not
+    /// use it after setting a non-string type.)
+    fn nvim_tv_set_string_val(tv: TypevalHandle, s: *mut c_char);
     fn nvim_tv_set_list(tv: TypevalHandle, l: ListHandle);
     fn nvim_tv_set_dict(tv: TypevalHandle, d: DictHandle);
     fn nvim_tv_get_list(tv: TypevalHandle) -> ListHandle;
@@ -959,7 +963,9 @@ pub unsafe extern "C" fn rs_nlua_pop_typval(lstate: *mut LuaState, ret_tv: Typev
                     #[allow(clippy::cast_possible_truncation)]
                     let name = register_luafunc(func as c_int);
                     nvim_tv_set_type(cur.tv, VAR_FUNC);
-                    nvim_tv_set_string(cur.tv, xstrdup(name));
+                    // Use the field-only setter so the VAR_FUNC tag set above
+                    // is not clobbered to VAR_STRING (nvim_tv_set_string resets v_type).
+                    nvim_tv_set_string_val(cur.tv, xstrdup(name));
                 }
                 t if t == LUA_TUSERDATA_PH10 => {
                     let nil_ref = get_nil_ref(lstate);

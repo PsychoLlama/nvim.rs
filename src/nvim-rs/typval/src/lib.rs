@@ -1231,6 +1231,9 @@ extern "C" {
     fn nvim_dict_set_lock(d: DictHandle, lock: c_int);
     fn nvim_dict_remove_key(d: DictHandle, key: *const c_char);
     fn nvim_tv_set_string(tv: TypevalHandle, s: *mut c_char);
+    /// Sets vval.v_string only; does NOT touch v_type. Use when v_type has
+    /// already been set to VAR_FUNC or VAR_PARTIAL and must not be clobbered.
+    fn nvim_tv_set_string_val(tv: TypevalHandle, s: *mut c_char);
     fn nvim_dictitem_get_key(di: DictItemHandle) -> *const c_char;
 
     // Phase 5: list item alloc/append infrastructure
@@ -3305,7 +3308,9 @@ pub unsafe extern "C" fn rs_tv_dict_add_func(
     let item = unsafe { nvim_dict_item_alloc_len(key, key_len) };
     let tv = unsafe { nvim_dictitem_di_tv(item) };
     unsafe { nvim_tv_set_type(tv, VAR_FUNC) };
-    unsafe { nvim_tv_set_string(tv, s) };
+    // Use the field-only setter so the VAR_FUNC tag set above is not
+    // clobbered to VAR_STRING (nvim_tv_set_string unconditionally resets v_type).
+    unsafe { nvim_tv_set_string_val(tv, s) };
     if unsafe { nvim_dict_add_item(d, item) } == 0 {
         unsafe { nvim_dict_item_free(item) };
         return 0; // FAIL
