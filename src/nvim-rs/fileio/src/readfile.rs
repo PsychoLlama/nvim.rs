@@ -1305,10 +1305,11 @@ pub unsafe extern "C" fn rs_readfile(
                     break 'read_loop;
                 }
                 if linerest != 0 && !buffer.is_null() {
-                    // Copy unprocessed bytes from end of previous buffer
+                    // Copy unprocessed bytes from the incomplete last line.
                     // In C: memmove(new_buffer, ptr - linerest, linerest)
-                    // where ptr = buffer + linerest, so ptr - linerest = buffer
-                    std::ptr::copy(buffer, new_buffer, linerest as usize);
+                    // where ptr advanced past all processed bytes, so
+                    // ptr - linerest = line_start (start of incomplete line).
+                    std::ptr::copy(line_start, new_buffer, linerest as usize);
                 }
                 nvim_fileio_xfree(buffer as *mut c_void);
                 buffer = new_buffer;
@@ -1944,14 +1945,13 @@ pub unsafe extern "C" fn rs_readfile(
                 curbuf_mut().b_p_eol = 0;
             };
         }
-        *buffer.add(linerest as usize) = NUL;
+        *line_start.add(linerest as usize) = NUL;
         len = linerest as i32 + 1;
-        let line_start_ptr = buffer;
-        if nvim_fileio_ml_append(lnum, line_start_ptr as *const c_char, len, newfile) == FAIL {
+        if nvim_fileio_ml_append(lnum, line_start as *const c_char, len, newfile) == FAIL {
             error = true;
         } else {
             if read_undo_file {
-                nvim_fileio_sha256_update(sha_ctx, line_start_ptr, len as usize);
+                nvim_fileio_sha256_update(sha_ctx, line_start, len as usize);
             }
             lnum += 1;
             read_no_eol_lnum = lnum;

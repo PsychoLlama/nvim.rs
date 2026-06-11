@@ -125,7 +125,7 @@ extern "C" {
 
 // Read flags (from fileio.h)
 const READ_NEW: c_int = 0x01;
-const READ_KEEP_UNDO: c_int = 0x08;
+const READ_KEEP_UNDO: c_int = 0x20;
 
 // Buffer list flags (from buffer.h)
 const BLN_DUMMY: c_int = 4;

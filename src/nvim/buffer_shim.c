@@ -517,6 +517,8 @@ int nvim_ml_append_curbuf(linenr_T lnum, const char *line) {
   return ml_append(lnum, (char *)line, 0, false);
 }
 // Note: nvim_buf_get_b_ml_line_count is defined in undo.c
+_Static_assert(READ_NEW == 0x01, "READ_NEW mismatch - update Rust constant in reload.rs");
+_Static_assert(READ_KEEP_UNDO == 0x20, "READ_KEEP_UNDO mismatch - update Rust constant in reload.rs");
 int nvim_readfile_reload(buf_T *buf, exarg_T *ea, int flags, int silent) {
   return readfile(buf->b_ffname, buf->b_fname, 0, 0, (linenr_T)MAXLNUM, ea, flags, silent != 0);
 }
