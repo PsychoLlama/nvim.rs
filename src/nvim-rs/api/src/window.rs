@@ -66,12 +66,16 @@ pub extern "C" fn rs_win_cursor_col_valid(col: i64) -> bool {
     col >= 0 && col <= MAXCOL as i64
 }
 
+// Guard: kObjectTypeInteger must stay 2, matching the C ObjectType enum
+// in src/nvim/api/private/defs.h.
+const _: () = assert!(crate::ObjectType::Integer as i32 == 2);
+
 /// Check if position array has correct format (size 2, integers)
 #[no_mangle]
 pub extern "C" fn rs_pos_array_valid(size: usize, type0: c_int, type1: c_int) -> bool {
-    // kObjectTypeInteger = 1
-    const OBJECT_TYPE_INTEGER: c_int = 1;
-    size == 2 && type0 == OBJECT_TYPE_INTEGER && type1 == OBJECT_TYPE_INTEGER
+    // kObjectTypeInteger == 2 (src/nvim/api/private/defs.h ObjectType enum)
+    let integer = crate::ObjectType::Integer as c_int;
+    size == 2 && type0 == integer && type1 == integer
 }
 
 /// Check if namespace id is valid (-1 or higher allowed)
