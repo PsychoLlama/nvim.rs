@@ -381,8 +381,8 @@ pub const PUT_BLOCK_INNER: c_int = 64; // in block mode, do not add trailing spa
 
 /// Forward direction constant
 pub const FORWARD: c_int = 1;
-/// Backward direction constant
-pub const BACKWARD: c_int = 0;
+/// Backward direction constant matching C `BACKWARD = -1` from `vim_defs.h`.
+pub const BACKWARD: c_int = -1;
 
 /// Check if put operation uses the '.' register (insert register).
 ///
