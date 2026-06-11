@@ -250,7 +250,7 @@ _Static_assert(UPD_NOT_VALID == 40, "UPD_NOT_VALID must be 40");
 bool nvim_eap_get_forceit(const exarg_T *eap) { return eap->forceit; }
 
 
-colnr_T nvim_indent_win_chartabsize(const char *ptr, colnr_T vcol) { return win_chartabsize(curwin, ptr, vcol); }
+colnr_T nvim_indent_win_chartabsize(const char *ptr, colnr_T vcol) { return win_chartabsize(curwin, (char *)ptr, vcol); }  // read-only; no mutation
 
 colnr_T nvim_curwin_get_w_curswant(void) { return (colnr_T)curwin->w_curswant; }
 

@@ -356,13 +356,13 @@ int nvim_dp_get_b_visual_vi_end_lnum(void) { return (int)curbuf->b_visual.vi_end
 /// Call init_charsize_arg for do_put blockwise.
 bool nvim_dp_init_charsize_arg(void *csarg, int lnum, const char *line)
 {
-  return init_charsize_arg((CharsizeArg *)csarg, curwin, (linenr_T)lnum, line);
+  return init_charsize_arg((CharsizeArg *)csarg, curwin, (linenr_T)lnum, (char *)line);  // stores in struct; callee does not mutate
 }
 
 /// Return init_charsize_arg for y_array line (lnum=0 for block line charsize).
 bool nvim_dp_init_charsize_arg_lnum0(void *csarg, const char *line)
 {
-  return init_charsize_arg((CharsizeArg *)csarg, curwin, 0, line);
+  return init_charsize_arg((CharsizeArg *)csarg, curwin, 0, (char *)line);  // stores in struct; callee does not mutate
 }
 
 

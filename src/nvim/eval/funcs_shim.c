@@ -4119,7 +4119,7 @@ int nvim_os_dirname(char *buf, size_t len)
 /// Wrapper for find_win_by_nr: takes number typval and tabpage, returns win_T*.
 win_T *nvim_find_win_by_nr(const typval_T *tv, tabpage_T *tp)
 {
-  return find_win_by_nr(tv, tp);
+  return find_win_by_nr((typval_T *)tv, tp);  // read-only; no mutation
 }
 
 /// Wrapper for os_mkdir_recurse with created tracking (used by f_mkdir).

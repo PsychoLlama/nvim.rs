@@ -179,7 +179,7 @@ void nvim_fuzzy_list_append_item_tv(void *dst, const void *item_li)
   if (dst == NULL || item_li == NULL) {
     return;
   }
-  tv_list_append_tv((list_T *)dst, TV_LIST_ITEM_TV((const listitem_T *)item_li));
+  tv_list_append_tv((list_T *)dst, (typval_T *)TV_LIST_ITEM_TV((const listitem_T *)item_li));  // appends a copy; no mutation of item_li
 }
 
 /// Append a sublist to list dst (tv_list_append_list).

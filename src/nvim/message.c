@@ -144,7 +144,7 @@ void nvim_apply_autocmds_progress_c(Object msg_id, const char **text_ptrs,
     PUT_C(data, "status", STRING_OBJ(((String){ .data = (char *)status_data, .size = status_size })));
     PUT_C(data, "title", STRING_OBJ(((String){ .data = (char *)title_data, .size = title_size })));
   }
-  apply_autocmds_group(EVENT_PROGRESS, pat ? pat : "", NULL, true,
+  apply_autocmds_group(EVENT_PROGRESS, (char *)(pat ? pat : ""), NULL, true,  // callee copies; no mutation
                        AUGROUP_ALL, NULL, NULL, &DICT_OBJ(data));
   kv_destroy(messages);
 }

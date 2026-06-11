@@ -430,7 +430,7 @@ void nvim_syn_iskeyword_set(synblock_T *block, const char *arg)
 }
 
 void nvim_syn_msg_outtrans(const char *s) { msg_outtrans(s, 0, false); }
-void nvim_syn_apply_autocmds_syntax(const char *arg) { apply_autocmds(EVENT_SYNTAX, arg, curbuf->b_fname, true, curbuf); }
+void nvim_syn_apply_autocmds_syntax(const char *arg) { apply_autocmds(EVENT_SYNTAX, (char *)arg, curbuf->b_fname, true, curbuf); }  // callee re-casts to const; no mutation
 void nvim_syn_do_unlet_b_current_syntax(void) { do_unlet(S_LEN("b:current_syntax"), true); }
 void nvim_win_release_synblock(win_T *wp) { if (wp->w_s != &wp->w_buffer->b_s) { syntax_clear(wp->w_s); xfree(wp->w_s); wp->w_s = &wp->w_buffer->b_s; } }
 void nvim_synblock_ga_init_patterns(void) { curwin->w_s->b_syn_patterns.ga_itemsize = sizeof(synpat_T); ga_set_growsize(&curwin->w_s->b_syn_patterns, 10); }

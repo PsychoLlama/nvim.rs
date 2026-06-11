@@ -517,8 +517,8 @@ void nvim_set_global_prevdir(char *pdir) { xfree(prev_dir); prev_dir = pdir; }
 int nvim_os_dirname_namebuff(void) { return (int)os_dirname(NameBuff, MAXPATHL); }
 void nvim_expand_env_home_namebuff(void) { expand_env("$HOME", NameBuff, MAXPATHL); }
 int nvim_get_p_cdh(void) { return p_cdh ? 1 : 0; }
-int nvim_vim_chdir(const char *dir) { return vim_chdir(dir); }
-void nvim_do_autocmd_dirchanged_manual_pre(const char *new_dir, int scope) { do_autocmd_dirchanged(new_dir, (CdScope)scope, kCdCauseManual, true); }
+int nvim_vim_chdir(const char *dir) { return vim_chdir((char *)dir); }  // read-only; no mutation
+void nvim_do_autocmd_dirchanged_manual_pre(const char *new_dir, int scope) { do_autocmd_dirchanged((char *)new_dir, (CdScope)scope, kCdCauseManual, true); }  // callee copies into local buffer; no mutation
 void nvim_post_chdir(int scope, bool dir_differs) { nvim_docmd_post_chdir_impl((CdScope)scope, dir_differs); }
 // nvim_docmd_get_do_ecmd_cmd_dollar is now in Rust (state.rs)
 
@@ -529,7 +529,7 @@ void nvim_backslash_halve(char *p) { backslash_halve(p); }
 void nvim_expand_env_esc_namebuff_notilde(const char *str) { expand_env_esc(str, NameBuff, MAXPATHL, false, true, NULL); }
 size_t nvim_ExpandT_size(void) { return sizeof(expand_T); }
 void nvim_ExpandInit(expand_T *xpc) { ExpandInit(xpc); }
-char *nvim_ExpandOne_files(expand_T *xpc, const char *str, int wildflags, bool icase) { return ExpandOne(xpc, str, NULL, icase ? wildflags + WILD_ICASE : wildflags, WILD_EXPAND_FREE); }
+char *nvim_ExpandOne_files(expand_T *xpc, const char *str, int wildflags, bool icase) { return ExpandOne(xpc, (char *)str, NULL, icase ? wildflags + WILD_ICASE : wildflags, WILD_EXPAND_FREE); }  // read-only; no mutation
 bool nvim_repl_has_exclaim(const char *repl) { return strpbrk(repl, "!") != NULL; }
 
 // vim_strsave_escaped with escape_chars (ESCAPE_CHARS on Linux = escape_chars)
@@ -629,7 +629,7 @@ void nvim_docmd_curtab_set_localdir(const char *cwd) { curtab->tp_localdir = xst
 void nvim_docmd_curwin_set_localdir(const char *cwd) { curwin->w_localdir = xstrdup(cwd); }
 void nvim_docmd_set_last_chdir_reason_null(void) { last_chdir_reason = NULL; }
 void nvim_docmd_shorten_fnames_nosymlinks(void) { shorten_fnames(vim_strchr(p_cpo, CPO_NOSYMLINKS) == NULL); }
-void nvim_docmd_do_autocmd_dirchanged_manual_post(const char *cwd, int scope) { do_autocmd_dirchanged(cwd, (CdScope)scope, kCdCauseManual, false); }
+void nvim_docmd_do_autocmd_dirchanged_manual_post(const char *cwd, int scope) { do_autocmd_dirchanged((char *)cwd, (CdScope)scope, kCdCauseManual, false); }  // callee copies into local buffer; no mutation
 void ex_may_print(exarg_T *eap) { nvim_docmd_ex_may_print_impl(eap); }
 int nvim_get_restart_edit(void) { return restart_edit; }
 void nvim_set_restart_edit(int val) { restart_edit = val; }

@@ -145,7 +145,7 @@ void nvim_search_add_to_history(const char *pat, size_t patlen) { add_to_history
 int nvim_get_cmdmod_keeppatterns(void) { return (cmdmod.cmod_flags & CMOD_KEEPPATTERNS) != 0; }
 int nvim_search_regcomp_compile(const char *pat, int magic, regmmatch_T *regmatch)
 {
-  regmatch->rmm_ic = ignorecase(pat); regmatch->rmm_maxcol = 0;
+  regmatch->rmm_ic = ignorecase((char *)pat); regmatch->rmm_maxcol = 0;  // read-only; no mutation
   regmatch->regprog = vim_regcomp(pat, magic ? RE_MAGIC : 0);
   return regmatch->regprog != NULL ? 1 : 0;
 }

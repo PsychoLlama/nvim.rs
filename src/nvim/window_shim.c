@@ -217,9 +217,9 @@ int nvim_win_buf_locked_split(win_T *wp) { return wp->w_buffer->b_locked_split ?
 int nvim_get_cmdmod_split(void) { return cmdmod.cmod_split; }
 buf_T *nvim_buflist_findname_exp(const char *ptr) { return buflist_findname_exp((char *)ptr); }
 void nvim_reset_binding_curwin(void) { RESET_BINDING(curwin); }
-int nvim_do_ecmd_lastl_hide(const char *ptr) { return do_ecmd(0, ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL); }
+int nvim_do_ecmd_lastl_hide(const char *ptr) { return do_ecmd(0, (char *)ptr, NULL, NULL, ECMD_LASTL, ECMD_HIDE, NULL); }  // read-only; no mutation
 void nvim_find_pattern_in_path_split(const char *ptr, size_t len, int type, int prenum1, int whole)
-{ find_pattern_in_path(ptr, 0, len, true, whole != 0, type, prenum1, ACTION_SPLIT, 1, MAXLNUM, false, false); }
+{ find_pattern_in_path((char *)ptr, 0, len, true, whole != 0, type, prenum1, ACTION_SPLIT, 1, MAXLNUM, false, false); }  // read-only; no mutation
 size_t nvim_find_ident_under_cursor(char **pp) { return rs_find_ident_under_cursor(pp, FIND_IDENT); }
 void nvim_set_cmdmod_tab_to_curtab_idx(void) { cmdmod.cmod_tab = rs_tabpage_index(curtab) + 1; }
 int nvim_win_new_float_external(void)
@@ -250,7 +250,7 @@ const char *nvim_get_globaldir(void) { return globaldir; }
 void nvim_set_globaldir_from_str(const char *s) { globaldir = xstrdup(s); }
 void nvim_clear_globaldir(void) { XFREE_CLEAR(globaldir); }
 int nvim_os_dirname_maxpathl(char *buf) { return (int)os_dirname(buf, MAXPATHL); }
-void nvim_do_autocmd_dirchanged_win(const char *new_dir, int localdir, int pre) { do_autocmd_dirchanged(new_dir, localdir ? kCdScopeWindow : kCdScopeTabpage, kCdCauseWindow, pre != 0); }
+void nvim_do_autocmd_dirchanged_win(const char *new_dir, int localdir, int pre) { do_autocmd_dirchanged((char *)new_dir, localdir ? kCdScopeWindow : kCdScopeTabpage, kCdCauseWindow, pre != 0); }  // callee copies into local buffer; no mutation
 void nvim_do_autocmd_dirchanged_global(char *new_dir, int pre) { do_autocmd_dirchanged(new_dir, kCdScopeGlobal, kCdCauseWindow, pre != 0); }
 int nvim_swb_has_useopen(void) { return (swb_flags & kOptSwbFlagUseopen) ? 1 : 0; }
 int nvim_swb_has_usetab(void) { return (swb_flags & kOptSwbFlagUsetab) ? 1 : 0; }

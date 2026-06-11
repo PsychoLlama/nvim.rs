@@ -933,7 +933,7 @@ int nvim_dict_is_watched(const dict_T *d) { return tv_dict_is_watched(d); }
 /// tv_dict_item_copy wrapper (creates a copy of a dict item, accessor for Rust).
 dictitem_T *nvim_dict_item_copy_impl(const dictitem_T *di)
 {
-  return tv_dict_item_copy(di);
+  return tv_dict_item_copy((dictitem_T *)di);  // read-only; copies the item
 }
 
 /// Allocate a dict item with given key (accessor for Rust, avoids circular call).
