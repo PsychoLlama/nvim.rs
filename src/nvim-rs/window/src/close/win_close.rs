@@ -147,7 +147,7 @@ pub struct WinCloseStructResult {
 /// This function absorbs the entire `win_close` body (validation, autocmd
 /// sections, structural close, post-layout, post-close autocmds).
 ///
-/// Returns OK (0) on success, FAIL (1) on failure.
+/// Returns OK (1) on success, FAIL (0) on failure (vim convention).
 ///
 /// # Safety
 ///
@@ -156,6 +156,11 @@ pub struct WinCloseStructResult {
 #[allow(clippy::too_many_lines)]
 #[export_name = "win_close"]
 pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_int) -> c_int {
+    // Vim convention: OK = 1, FAIL = 0.
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
+    // Compile-time guard.
+    const _: () = assert!(OK == 1 && FAIL == 0);
     let prev_curtab = nvim_get_curtab();
     let win_floating = win_ref(win).w_floating;
     let win_frame: *mut Frame = if win_floating {
@@ -184,7 +189,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
             }
             // else: locked window -- no error message (silent FAIL)
         }
-        return 1; // FAIL
+        return FAIL;
     }
     if vrc == 2 {
         // Floating-only: recursive close loop.
@@ -194,22 +199,22 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
                 if c_int::from(win_ref(lastwin).w_floating) == 0 {
                     break;
                 }
-                if nvim_win_close_force(lastwin, free_buf) != 0 {
-                    return 1; // FAIL
+                if nvim_win_close_force(lastwin, free_buf) == FAIL {
+                    return FAIL;
                 }
             }
             if rs_win_valid_any_tab(win) == 0 {
-                return 1; // FAIL
+                return FAIL;
             }
         } else {
             nvim_emsg_id(EMSG_E_FLOATONLY);
-            return 1; // FAIL
+            return FAIL;
         }
     }
 
     // close_last_window_tabpage.
     if crate::close::helpers::rs_close_last_window_tabpage(win, free_buf, prev_curtab) != 0 {
-        return 1; // FAIL
+        return FAIL;
     }
 
     // --- Autocmd-heavy section ---
@@ -239,36 +244,36 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
             other_buffer = true;
 
             if nvim_win_valid_wrapper(win) == 0 {
-                return 1; // FAIL
+                return FAIL;
             }
             win_mut(win).w_locked = true;
             nvim_apply_autocmds_event(EVENT_BUFLEAVE);
             if nvim_win_valid_wrapper(win) == 0 {
-                return 1; // FAIL
+                return FAIL;
             }
             win_mut(win).w_locked = false;
             if rs_last_window(win) != 0 {
-                return 1; // FAIL
+                return FAIL;
             }
         }
 
         win_mut(win).w_locked = true;
         nvim_apply_autocmds_event(EVENT_WINLEAVE);
         if nvim_win_valid_wrapper(win) == 0 {
-            return 1; // FAIL
+            return FAIL;
         }
         win_mut(win).w_locked = false;
         if rs_last_window(win) != 0 {
-            return 1; // FAIL
+            return FAIL;
         }
         if aborting() {
-            return 1; // FAIL
+            return FAIL;
         }
     }
 
     rs_do_autocmd_winclosed(win);
     if rs_win_valid_any_tab(win) == 0 {
-        return 0; // OK (window already gone)
+        return OK; // window already gone — upstream returns OK here
     }
 
     crate::close::helpers::rs_win_close_buffer(
@@ -297,7 +302,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         && BufHandle(win_ref(win).w_buffer).is_null()
     {
         rs_win_close_othertab(win, 0, prev_curtab, force);
-        return 1; // FAIL
+        return FAIL;
     }
 
     // Post-autocmd re-validation.
@@ -305,7 +310,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         || (c_int::from(win_ref(win).w_floating) == 0 && rs_last_window(win) != 0)
         || crate::close::helpers::rs_close_last_window_tabpage(win, free_buf, prev_curtab) != 0
     {
-        return 1; // FAIL
+        return FAIL;
     }
 
     // --- Phase 2: Structural close ---
@@ -354,7 +359,7 @@ pub unsafe extern "C" fn rs_win_close(win: WinHandle, free_buf: c_int, force: c_
         nvim_redraw_all_later(UPD_NOT_VALID);
     }
 
-    0 // OK
+    OK
 }
 
 /// Helper: get curbuf (needed inline without re-exporting).

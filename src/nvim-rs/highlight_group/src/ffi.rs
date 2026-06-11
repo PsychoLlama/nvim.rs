@@ -1344,7 +1344,7 @@ extern "C" {
     ) -> bool;
 
     /// Source a runtime file matching `name` with the given `flags`.
-    /// Returns OK (0) on success.
+    /// Returns OK (1) on success, FAIL (0) on failure (vim convention).
     fn source_runtime_vim_lua(name: *mut c_char, flags: c_int) -> c_int;
 
     /// Allocate memory. Panics (abort) on OOM, like xmalloc.
@@ -1359,8 +1359,10 @@ const EVENT_COLORSCHEMEPRE: c_int = 33;
 const DIP_START: c_int = 0x08;
 const DIP_OPT: c_int = 0x10;
 
-// OK return value (matches C's OK == 0)
-const OK: c_int = 0;
+// OK return value — vim convention: OK = 1, FAIL = 0.
+const OK: c_int = 1;
+// Compile-time guard.
+const _: () = assert!(OK == 1);
 
 /// Refresh the actual RGB colors for all highlight groups that use
 /// "fg" or "bg" as color values.
@@ -1400,7 +1402,7 @@ pub unsafe extern "C" fn rs_highlight_attr_set_all() {
 /// Load a color scheme file by name.
 ///
 /// Applies ColorSchemePre and ColorScheme autocommands.
-/// Returns OK (0) on success.
+/// Returns OK (1) on success, FAIL (0) on failure (vim convention).
 /// Was `int load_colors(char *name)` in C.
 #[export_name = "load_colors"]
 pub unsafe extern "C" fn rs_load_colors(name: *mut c_char) -> c_int {

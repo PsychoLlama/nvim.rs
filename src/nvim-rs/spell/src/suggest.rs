@@ -6332,7 +6332,9 @@ const SPELL_SUGGEST_SMT_ALL: c_int = 0;
 #[unsafe(export_name = "spell_suggest")]
 #[allow(clippy::similar_names)]
 pub unsafe extern "C" fn rs_spell_suggest(count: c_int) {
-    const OK: c_int = 0;
+    // Vim convention: OK = 1, FAIL = 0 — used for u_save_cursor() check.
+    const OK: c_int = 1;
+    const _: () = assert!(OK == 1);
     const ESC: c_int = 0x1b;
     const NUL: u8 = 0;
 

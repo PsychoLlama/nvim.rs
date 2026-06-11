@@ -752,8 +752,11 @@ const K_OPT_FDO_FLAG_SEARCH: u32 = 0x40;
 #[export_name = "current_search"]
 #[allow(clippy::must_use_candidate)]
 pub unsafe extern "C" fn rs_current_search(count: c_int, forward: bool) -> c_int {
-    const OK: c_int = 0;
-    const FAIL: c_int = -1;
+    // Vim convention: OK = 1, FAIL = 0.
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
+    // Compile-time guard.
+    const _: () = assert!(OK == 1 && FAIL == 0);
 
     let old_p_ws = nvim_get_p_ws();
     // Save VIsual position
