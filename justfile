@@ -63,6 +63,7 @@ smoke-test:
     @just smoke-test-funcref
     @just smoke-test-scope-func
     @just smoke-test-shada
+    @just smoke-test-keymap
 
 smoke-test-run:
     NVIM=./build/bin/nvim VIMRUNTIME=./runtime timeout -s 9 30 expect scripts/open_file.exp justfile just || { echo "FAIL: nvim startup smoke test timed out or failed (exit $?)"; exit 1; }
@@ -90,6 +91,9 @@ smoke-test-scope-func:
 
 smoke-test-shada:
     timeout -s 9 15 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/shada_smoke.vim 2>&1' || { echo "FAIL: shada smoke test timed out or failed (exit $?)"; exit 1; }
+
+smoke-test-keymap:
+    timeout -s 9 15 bash -c 'VIMRUNTIME=runtime ./build/bin/nvim --headless --clean -S test/keymap_smoke.vim 2>&1' || { echo "FAIL: keymap smoke test timed out or failed (exit $?)"; exit 1; }
 
 # Show nvim version
 version:

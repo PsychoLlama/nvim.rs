@@ -24,9 +24,9 @@ const K_OBJECT_TYPE_LUAREF: c_int = 7;
 // Error kind: none
 const K_ERROR_TYPE_NONE: c_int = -1;
 
-// FCERR_NONE and FCERR_OTHER (from eval/typval_defs.h)
-const FCERR_NONE: c_int = 0;
-const FCERR_OTHER: c_int = 10;
+// FCERR_NONE and FCERR_OTHER (from eval/userfunc.h FnameTransError enum)
+const FCERR_NONE: c_int = 5;
+const FCERR_OTHER: c_int = 6;
 
 // =============================================================================
 // C FFI declarations
