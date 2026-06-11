@@ -63,7 +63,10 @@ void nvim_marktree_get_meta_root(MarkTree *b, uint32_t *meta_out) { for (int m =
 bool nvim_meta_has(const uint32_t *meta_count, const uint32_t *meta_filter) { uint32_t count = 0; for (int m = 0; m < kMTMetaCount; m++) { count += meta_count[m] & meta_filter[m]; } return count > 0; }
 uint64_t nvim_mtnode_intersect_id(MTNode *x, size_t idx) { return idx < kv_size(x->intersect) ? kv_A(x->intersect, idx) : 0; }
 MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id) { return pmap_get(uint64_t)(b->id2node, id); }
-size_t nvim_marktree_id2node_count(MarkTree *b) { return b->id2node ? map_size(b->id2node) : 0; }
+// BEHAVIOR FIX: b->id2node is PMap(uint64_t)[1] (an array), so b->id2node decays to a
+// pointer that is never NULL; the ternary guard was dead and always took the true branch.
+// Remove the dead guard to fix -Waddress and reflect the correct semantics.
+size_t nvim_marktree_id2node_count(MarkTree *b) { return map_size(b->id2node); }
 void nvim_mtnode_set_n(MTNode *x, int n) { x->n = (int32_t)n; }
 void nvim_mtnode_set_level(MTNode *x, int level) { x->level = (int16_t)level; }
 void nvim_mtnode_set_key(MTNode *x, int idx, MTKey k) { x->key[idx] = k; }

@@ -227,7 +227,7 @@ int nvim_excmds_os_path_exists_curbuf_ffname(void) { return curbuf->b_ffname != 
 int nvim_excmds_buf_write_filter(const char *itmp, int line1, int line2, exarg_T *eap) { return buf_write(curbuf, (char *)itmp, NULL, (linenr_T)line1, (linenr_T)line2, eap, false, false, false, true) == OK ? 1 : 0; }
 int nvim_excmds_readfile_filter(const char *otmp, int line2, exarg_T *eap) { return readfile((char *)otmp, NULL, (linenr_T)line2, 0, (linenr_T)MAXLNUM, eap, READ_FILTER, false) == OK ? 1 : 0; }
 int nvim_excmds_p_cpo_no_remmark(void) { return vim_strchr(p_cpo, CPO_REMMARK) == NULL ? 1 : 0; }
-void nvim_excmds_msg_lines_filtered(int linecount) { char msg_buf[80]; vim_snprintf(msg_buf, sizeof(msg_buf), _("%" PRId64 " lines filtered"), (int64_t)linecount); if (msg(msg_buf, 0) && !msg_scroll) { set_keep_msg(msg_buf, 0); } }
+void nvim_excmds_msg_lines_filtered(int linecount) { char filt_msg[80]; vim_snprintf(filt_msg, sizeof(filt_msg), _("%" PRId64 " lines filtered"), (int64_t)linecount); if (msg(filt_msg, 0) && !msg_scroll) { set_keep_msg(filt_msg, 0); } }
 void nvim_excmds_error_msg(int error_id, const char *arg)
 {
   switch (error_id) {

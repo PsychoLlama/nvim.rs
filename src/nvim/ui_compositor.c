@@ -129,7 +129,7 @@ void nvim_layers_push(ScreenGrid *grid) { kv_push(layers, grid); }
 void nvim_layers_pop(void)
 {
   if (kv_size(layers) > 0) {
-    kv_pop(layers);
+    (void)kv_pop(layers);
   }
 }
 

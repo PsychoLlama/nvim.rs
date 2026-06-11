@@ -85,7 +85,8 @@ uint64_t ui_client_start_server(const char *exepath, size_t argc, char **argv)
 #ifdef MSWIN
     os_open_conin_fd();
 #else
-    dup(stderr_isatty ? STDERR_FILENO : STDOUT_FILENO);
+    int dupfd = dup(stderr_isatty ? STDERR_FILENO : STDOUT_FILENO);
+    (void)dupfd;   // fd 0 reopened as lowest free fd; nothing further to do
 #endif
   }
 

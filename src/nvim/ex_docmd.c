@@ -117,10 +117,6 @@ extern void rs_ex_copy(linenr_T line1, linenr_T line2, linenr_T dest);
 extern int rs_do_move(linenr_T line1, linenr_T line2, linenr_T dest);
 #define loop_get_events(l) rs_loop_get_events(l)
 
-static const char e_ambiguous_use_of_user_defined_command[]
-  = N_("E464: Ambiguous use of user-defined command");
-static const char e_not_an_editor_command[]
-  = N_("E492: Not an editor command");
 
 // quitmore and ex_pressedreturn are now owned by Rust (state.rs)
 

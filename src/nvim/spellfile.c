@@ -63,7 +63,6 @@
 // Remaining content: struct definitions (sblock_T, wordnode_S, spellinfo_S),
 // includes, and the nvim_spell_toupper macro wrapper.
 
-static const char *e_illegal_character_in_word = N_("E1280: Illegal character in word");
 
 // Arena allocator (getroom/free_blocks) and spell file I/O (spell_load_file,
 // suggest_load_files) are now exported directly from Rust with their C names.

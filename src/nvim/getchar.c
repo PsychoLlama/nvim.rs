@@ -137,7 +137,6 @@ enum {
 
 #include "getchar.c.generated.h"
 
-static const char e_recursive_mapping[] = N_("E223: Recursive mapping");
 
 // Rust replacements: rs_init_typebuf, rs_alloc_typebuf, rs_free_typebuf,
 // rs_save_typebuf, rs_close_typebuf (in nvim-getchar crate)

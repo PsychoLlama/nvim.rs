@@ -208,7 +208,7 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
   __gcov_flush();
 #endif
 
-  int status;
+  int status = 0;  // 0 = success default; set in each switch case
   switch (proc_get_type(proc)) {
   case kProcTypeUv:
     status = libuv_proc_spawn((LibuvProc *)proc);
