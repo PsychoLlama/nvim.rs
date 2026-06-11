@@ -4713,7 +4713,10 @@ pub unsafe extern "C" fn rs_f_setreg(
                 yank_type,
                 block_len,
             );
-            if ret != 0 {
+            // nvim_register_setreg_write_lst uses Vim convention: OK=1, FAIL=0.
+            // Return early only on FAIL (list contained non-string item).
+            const SETREG_FAIL: c_int = 0;
+            if ret == SETREG_FAIL {
                 // FAIL: type error in list items
                 return;
             }
