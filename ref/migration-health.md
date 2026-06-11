@@ -332,6 +332,16 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   IMPACT: `put_spec.lua` 135 failures → 73 failures (62 cleared). `buffer_updates_spec` T7 fixed.
   GUARDS: `change/src/open_line.rs` has `const _: () = assert!(BACKWARD == -1, ...)` compile-time
   guard. Other files use doc comments noting vim_defs.h source.
+- **virtual_op kNone reset — FIXED (commit 18e093a1aa, 2026-06-11):**
+  `ops/src/pending.rs:1102` `dpo_postamble` (the Rust port of `finish_op`) reset `virtual_op = 0`
+  (kFalse = "operator in progress, not virtual") instead of `virtual_op = -1` (kNone = "no
+  operator in progress"). Per `globals.h`: "kNone when no operator is being executed, kFalse
+  otherwise." With `virtual_op=0`, `rs_virtual_active` returned `false` immediately at the kNone
+  check — even when `virtualedit=all` was set — because `virtual_op != K_NONE (-1)`. This broke
+  `coladvance_force` → `coladvance2`'s addspaces branch (line 518 checks `nvim_virtual_active`),
+  preventing space-padding insertion for virtual-column cursor positions in `rs_do_put`.
+  IMPACT: `put_spec.lua` Visual put with virtualedit failures: 73 → 9 (64 cleared; the 9
+  remaining "autoindent curswant" + "dot register" tests are pre-existing unrelated failures).
 - **Cluster H — partially open**: let_spec FIXED; ctx_functions still 5 FAIL (register/jumplist/
   buflist round-trip), match_functions 1 FAIL (matchaddpos zero-length) + setmatches was CRASH
   (recheck), editor/ctrl_c/fold, api/autocmd lambda.
