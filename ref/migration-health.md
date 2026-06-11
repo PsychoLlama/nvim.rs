@@ -109,10 +109,23 @@ Baseline 36F/1E → now 18F/1E via two single-root fixes (2026-06-10):
   -> E117 (separate typval/callback-invocation bug, NOT dispatch); @1076 pum lua mapping (deeper
   pum dispatch); @1091 lua op-pending redo; @1208/@1227 lua-callback abbr decoding; @304+4x@732
   <C-U> replace_termcodes encoding (sub-cluster 1 above).
-- **NEW latent wrong-constant (NOT fixed, follow-up):** ops/pending.rs:54 has K_LUA = 0xd102
-  (53506) instead of -26621 — 6th wrong-constant instance this session; breaks operator-pending
-  lua mappings (untested). Cheap guarded fix. RECURRING CLASS: a workspace-wide audit of locally
-  -defined K_*/KE_*/MODE_*/HLF_* constants vs keycodes.h/state_defs.h/highlight_defs.h is warranted.
+- **WRONG-CONSTANT CLASS — workspace audit + batch fix (commit 4e20b334c3, 2026-06-10).** After 6
+  point-instances this session, ran a workspace audit of locally-defined K_*/KE_*/MODE_*/HLF_*/VAR_*
+  consts vs keycodes.h/state_defs.h. Then VERIFIED each candidate against ACTUAL usage (compared to
+  the real global `State`/`cmdchar`? or dead code?) before fixing — this rejected 3 FALSE POSITIVES
+  (MODE_VREPLACE/MODE_CMDLINE/MODE_LANGMAP in edit/mode.rs + cmdline/entry.rs are dead code, their
+  self-validating asserts pinned buggy-but-unused values). Fixed 6 VERIFIED-harmful: ops/pending.rs
+  K_LUA 0xd102->-26621 & K_COMMAND 0xd107->-26877; ops/replace_loops.rs MODE_REPLACE 0x14->0x110;
+  cursor/lib.rs MODE_TERMINAL 0x2000->0x80; getchar/typebuf.rs MODE_TERMINAL 0x4000->0x80;
+  plines/lib.rs MODE_TERMINAL 0x1000->0x80. All guarded. PAYOFF: correctness + guards, but cleared
+  ZERO measured functional tests (the affected behaviors aren't isolated by current specs) — a
+  diminishing-returns signal on blind constant work. LESSON: verify usage-vs-real-State BEFORE
+  fixing any flagged constant; ~half the audit hits were harmless dead code.
+  STILL-OPEN same-class (verified-harmful, follow-up): **plines/lib.rs:168 MODE_CMDLINE = 0x04**
+  (should be 0x08; 0x04 is MODE_OP_PENDING).
+- **BIG UNTRIAGED CLUSTER surfaced: `test/functional/editor/put_spec.lua` = 135 FAILURES** (measured
+  2026-06-10). Likely the single largest cluster in the suite. Untriaged — strong next target; root
+  cause unknown (register/put/`p`/`gp`/blockwise paste?). Worth a dedicated triage+fix wave.
 
 ### Cluster F — cursor/pos API rejects valid [row,col] [MEDIUM, clean]
 `Argument "pos" must be a [row, col] array` on valid input. `api/buffer_spec.lua` (6E),
