@@ -105,7 +105,7 @@ const K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, KE_MOUSEMOVE);
 
 const KE_EVENT: c_int = 102;
 const KE_COMMAND: c_int = 104;
-const KE_LUA: c_int = 107;
+const KE_LUA: c_int = 103; // canonical value from keycodes.h:221
 const K_EVENT: c_int = termcap2key(KS_EXTRA, KE_EVENT);
 const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND);
 const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA);
@@ -724,6 +724,16 @@ mod tests {
     fn test_key_code_constants() {
         // K_S_TAB = TERMCAP2KEY('k', 'B')
         assert_eq!(K_S_TAB, -(107 + (66 << 8)));
+    }
+
+    #[test]
+    fn test_k_lua_constant() {
+        // KE_LUA must be 103 (keycodes.h:221); the wrong value (107) makes
+        // the accept-key check at ctrl_x.rs:334 fail to recognize K_LUA.
+        assert_eq!(
+            K_LUA, -26621,
+            "K_LUA must equal termcap2key(KS_EXTRA=253, KE_LUA=103)"
+        );
     }
 
     #[test]

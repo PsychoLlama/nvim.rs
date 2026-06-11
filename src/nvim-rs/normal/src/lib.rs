@@ -7287,7 +7287,7 @@ pub unsafe extern "C" fn rs_nv_percent(cap: CapHandle) {
 
 // Key constants for Phase 1
 const KE_COMMAND: c_int = 104;
-const KE_LUA: c_int = 107;
+const KE_LUA: c_int = 103; // canonical value from keycodes.h:221
 const KE_CMDWIN: c_int = 84;
 
 const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND);
@@ -7923,6 +7923,17 @@ mod tests {
         assert_eq!(invert_horizontal_impl(c_int::from(b'k')), c_int::from(b'k'));
         assert_eq!(invert_horizontal_impl(K_UP), K_UP);
         assert_eq!(invert_horizontal_impl(K_DOWN), K_DOWN);
+    }
+
+    #[test]
+    fn test_k_lua_constant() {
+        // KE_LUA must be 103 (keycodes.h:221); the wrong value (107) causes
+        // is_lua to always be false and lua-callback mappings to take the
+        // Ex-command branch instead of map_execute_lua.
+        assert_eq!(
+            K_LUA, -26621,
+            "K_LUA must equal termcap2key(KS_EXTRA=253, KE_LUA=103)"
+        );
     }
 
     #[test]
