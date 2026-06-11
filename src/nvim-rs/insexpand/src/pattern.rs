@@ -160,8 +160,11 @@ pub unsafe extern "C" fn rs_get_normal_compl_info(
                     utf_head_off(line.cast_const(), line.add(startcol as usize).cast_const());
             }
             let base_class = mb_get_class(line.add(startcol as usize).cast_const());
-            while startcol > 0 {
+            loop {
                 startcol -= 1;
+                if startcol < 0 {
+                    break;
+                }
                 let head_off =
                     utf_head_off(line.cast_const(), line.add(startcol as usize).cast_const());
                 if base_class != mb_get_class(line.add((startcol - head_off) as usize).cast_const())
