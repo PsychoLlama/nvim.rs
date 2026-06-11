@@ -444,13 +444,47 @@ pub unsafe extern "C" fn rs_vpeekc() -> c_int {
 /// When no typeahead found, but there is something in the typeahead buffer,
 /// it must be an ESC that is recognized as the start of a key code.
 ///
+/// K_EVENT bytes (K_SPECIAL KS_EXTRA KE_EVENT = 0x80 0xFD 0x66) are internal
+/// event markers, not real user typeahead.  When the typebuf contains only
+/// K_EVENT sequences, treat it as empty so that callers such as
+/// `nvim_command_line_changed` can proceed with inccommand preview.
+///
 /// # Safety
 /// Calls C functions.
 #[must_use]
 #[export_name = "vpeekc_any"]
 pub unsafe extern "C" fn rs_vpeekc_any() -> c_int {
+    // KS_EXTRA = 253, KE_EVENT = 102
+    const KS_EXTRA_V: u8 = 253;
+    const KE_EVENT_V: u8 = 102;
+
     let c = rs_vpeekc();
-    if c == NUL && crate::typebuf::get_tb_len() > 0 {
+    let tb_len = crate::typebuf::get_tb_len();
+
+    // If the typebuf contains only K_EVENT sequences {0x80, 0xFD, 0x66},
+    // these are internal event markers (not real user input).  Return NUL so
+    // callers checking `vpeekc_any() == 0` can proceed normally.
+    if tb_len > 0 && tb_len % 3 == 0 {
+        let tb = crate::typebuf::typebuf_ptr();
+        let buf = (*tb).tb_buf.add((*tb).tb_off as usize);
+        let mut only_k_event = true;
+        let mut i = 0usize;
+        while i < tb_len as usize {
+            if *buf.add(i) != K_SPECIAL_BYTE as u8
+                || *buf.add(i + 1) != KS_EXTRA_V
+                || *buf.add(i + 2) != KE_EVENT_V
+            {
+                only_k_event = false;
+                break;
+            }
+            i += 3;
+        }
+        if only_k_event {
+            return NUL;
+        }
+    }
+
+    if c == NUL && tb_len > 0 {
         return ESC;
     }
     c

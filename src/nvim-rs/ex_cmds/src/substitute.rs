@@ -125,16 +125,6 @@ extern "C" {
     );
     fn update_topline(win: *mut crate::WinHandle);
     fn nvim_excmds_curbuf_ml_line_count() -> c_int;
-    fn nvim_excmds_preview_lines_size(pl: *const std::ffi::c_void) -> usize;
-    fn nvim_excmds_preview_lines_item(
-        pl: *const std::ffi::c_void,
-        idx: usize,
-        start_lnum: *mut c_int,
-        start_col: *mut c_int,
-        end_lnum: *mut c_int,
-        end_col: *mut c_int,
-        pre_match: *mut c_int,
-    );
     fn nvim_curwin_set_cursor_col(col: c_int);
     fn nvim_get_curbuf() -> *mut crate::BufHandle;
 
@@ -809,31 +799,24 @@ pub unsafe extern "C" fn rs_show_sub(
 ) -> c_int {
     use std::io::Write;
 
+    // Cast *const c_void back to the actual Rust PreviewLines struct.
+    // NOTE: Do NOT use the C shims (nvim_excmds_preview_lines_size/item) here.
+    // Those shims read Vec<DoSubResult> as a C kvec_t, which has incompatible
+    // field order: kvec_t is {size, cap, items*} but Rust Vec is {len, ptr, cap}.
+    // Accessing items via the C shim reads the capacity integer as a pointer,
+    // causing a crash. Access the struct directly since rs_show_sub is Rust.
+    let pl: &PreviewLines = &*(preview_lines as *const PreviewLines);
+
     // Save and disable file info message
     let save_shm_p = nvim_excmds_save_set_shortmess_F();
 
     let orig_buf = nvim_get_curbuf();
-    let num_results = nvim_excmds_preview_lines_size(preview_lines);
 
     // Place cursor on nearest matching line, to undo do_sub() cursor placement.
-    for i in 0..num_results {
-        let mut start_lnum: c_int = 0;
-        let mut start_col: c_int = 0;
-        let mut end_lnum: c_int = 0;
-        let mut end_col: c_int = 0;
-        let mut pre_match: c_int = 0;
-        nvim_excmds_preview_lines_item(
-            preview_lines,
-            i,
-            &mut start_lnum,
-            &mut start_col,
-            &mut end_lnum,
-            &mut end_col,
-            &mut pre_match,
-        );
-        if start_lnum >= old_cusr_lnum {
-            nvim_curwin_set_cursor_lnum(start_lnum);
-            nvim_curwin_set_cursor_col(start_col);
+    for item in &pl.subresults {
+        if item.start_lnum >= old_cusr_lnum {
+            nvim_curwin_set_cursor_lnum(item.start_lnum);
+            nvim_curwin_set_cursor_col(item.start_col);
             break;
         }
     }
@@ -855,23 +838,8 @@ pub unsafe extern "C" fn rs_show_sub(
     if preview {
         cmdpreview_buf = buflist_findnr(cmdpreview_bufnr);
         // cmdpreview_buf must be non-NULL per the C assert
-        if num_results > 0 {
-            let last_idx = num_results - 1;
-            let mut sl: c_int = 0;
-            let mut sc: c_int = 0;
-            let mut el: c_int = 0;
-            let mut ec: c_int = 0;
-            let mut pm: c_int = 0;
-            nvim_excmds_preview_lines_item(
-                preview_lines,
-                last_idx,
-                &mut sl,
-                &mut sc,
-                &mut el,
-                &mut ec,
-                &mut pm,
-            );
-            let highest_lnum = sl.max(el);
+        if let Some(last) = pl.subresults.last() {
+            let highest_lnum = last.start_lnum.max(last.end_lnum);
             if highest_lnum > 0 {
                 col_width = (highest_lnum as f64).log10() as c_int + 1 + 3;
             }
@@ -883,21 +851,12 @@ pub unsafe extern "C" fn rs_show_sub(
     let mut linenr_preview: c_int = 0;
     let mut linenr_origbuf: c_int = 0;
 
-    for matchidx in 0..num_results {
-        let mut start_lnum: c_int = 0;
-        let mut start_col: c_int = 0;
-        let mut end_lnum: c_int = 0;
-        let mut end_col: c_int = 0;
-        let mut pre_match: c_int = 0;
-        nvim_excmds_preview_lines_item(
-            preview_lines,
-            matchidx,
-            &mut start_lnum,
-            &mut start_col,
-            &mut end_lnum,
-            &mut end_col,
-            &mut pre_match,
-        );
+    for item in &pl.subresults {
+        let start_lnum = item.start_lnum;
+        let start_col = item.start_col;
+        let end_lnum = item.end_lnum;
+        let end_col = item.end_col;
+        let pre_match = item.pre_match;
 
         if !cmdpreview_buf.is_null() {
             let mut p_start_lnum: c_int = 0;
@@ -1857,6 +1816,7 @@ pub unsafe extern "C" fn rs_do_sub(
                                 &mut cur_end_lnum,
                                 &mut cur_end_col,
                                 cmdpreview_ns,
+                                cmdpreview_bufnr,
                                 eap,
                             );
                         }
@@ -1921,6 +1881,7 @@ pub unsafe extern "C" fn rs_do_sub(
                                     &mut cur_end_lnum,
                                     &mut cur_end_col,
                                     cmdpreview_ns,
+                                    cmdpreview_bufnr,
                                     eap,
                                 );
                             }
@@ -1953,6 +1914,7 @@ pub unsafe extern "C" fn rs_do_sub(
                                 &mut cur_end_lnum,
                                 &mut cur_end_col,
                                 cmdpreview_ns,
+                                cmdpreview_bufnr,
                                 eap,
                             );
                         }
@@ -2459,6 +2421,7 @@ unsafe fn goto_sub_main(
     cur_end_lnum: &mut c_int,
     cur_end_col: &mut c_int,
     cmdpreview_ns: c_int,
+    cmdpreview_bufnr: c_int,
     _eap: *mut ExArgHandle,
 ) {
     let startpos0_col = nvim_regmmatch_startpos0_col(regmatch);
@@ -2480,8 +2443,14 @@ unsafe fn goto_sub_main(
         }
     }
 
-    // Preview mode: just record the match, don't substitute
-    if cmdpreview_ns > 0 && !(*sub == b'\\' as i8 && *sub.add(1) == b'=' as i8) {
+    // In split preview mode (inccommand=split), just record the match without applying
+    // the substitution to the main buffer — changes go to the preview buffer instead.
+    // For nosplit mode (cmdpreview_bufnr == 0), we must apply the substitution so that
+    // on_bytes buffer update callbacks fire (the changes are undone by cmdpreview_restore_state).
+    if cmdpreview_ns > 0
+        && cmdpreview_bufnr > 0
+        && !(*sub == b'\\' as i8 && *sub.add(1) == b'=' as i8)
+    {
         *cur_start_col = startpos0_col;
         if *cur_end_lnum == 0 {
             *cur_end_lnum = *sub_firstlnum + *nmatch - 1;

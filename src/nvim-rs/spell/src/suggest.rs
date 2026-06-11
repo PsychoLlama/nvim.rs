@@ -6422,13 +6422,22 @@ pub unsafe extern "C" fn rs_spell_suggest(count: c_int) {
     let line = ss_xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as usize);
     nvim_ss_reset_timeout();
 
-    // Get the list of suggestions (limit to 'lines' - 2 or sps_limit)
+    // Get the list of suggestions (limit to 'lines' - 2 or sps_limit).
+    // When a count is given, ensure we request at least that many suggestions
+    // so that z=N can select item N even in small-window test environments.
     let sps_limit = nvim_ss_get_sps_limit();
     let rows = nvim_ss_get_rows();
-    let limit = if sps_limit < rows - 2 {
-        sps_limit
-    } else {
-        rows - 2
+    let limit = {
+        let base = if sps_limit < rows - 2 {
+            sps_limit
+        } else {
+            rows - 2
+        };
+        if count > 0 && count > base {
+            count
+        } else {
+            base
+        }
     };
 
     let su = nvim_suginfo_alloc();

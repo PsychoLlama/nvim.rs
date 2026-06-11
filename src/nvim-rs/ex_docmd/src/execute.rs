@@ -397,6 +397,7 @@ extern "C" {
     static mut IObuff: [c_char; 1025];
     fn parse_bang(eap: ExArgHandle, p_ptr: *mut *mut c_char) -> bool;
     fn nvim_set_eap_arg_from_p(eap: ExArgHandle, p: *mut c_char);
+    fn nvim_docmd_get_argt_for_idx(idx: c_int) -> u32;
     fn cmd_has_expr_args(cmdidx: c_int) -> bool;
     fn nvim_skip_expr_arg(arg: *mut *mut c_char);
     fn check_nextcmd(p: *const c_char) -> *mut c_char;
@@ -918,9 +919,10 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     let mut p_mut = p;
     let forceit = parse_bang(eap, &mut p_mut);
     (*eap).forceit = forceit as c_int;
-    // Parse arguments.
+    // Parse arguments: load argt from command table.
     if (*eap).cmdidx >= 0 {
-        // argt is already set by parse_cmd_address
+        let argt = nvim_docmd_get_argt_for_idx((*eap).cmdidx);
+        (*eap).argt = argt;
     }
 
     // Skip to start of argument.
@@ -953,7 +955,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     }
 
     // Fail if command doesn't support bang but is used with a bang.
-    if !((*eap).argt & 0x002u32) != 0 && (*eap).forceit != 0 {
+    if ((*eap).argt & 0x002u32) == 0 && (*eap).forceit != 0 {
         *errormsg = crate::errors::gt(crate::errors::E_NOBANG_STR.as_ptr());
         undo_cmdmod(cmdinfo.cast::<c_void>());
         crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
@@ -964,7 +966,7 @@ pub unsafe extern "C" fn rs_parse_cmdline(
     }
 
     // Fail if command doesn't support a range but is given one.
-    if !((*eap).argt & 0x001u32) != 0 && (*eap).addr_count > 0 {
+    if ((*eap).argt & 0x001u32) == 0 && (*eap).addr_count > 0 {
         *errormsg = crate::errors::E_NORANGE_STR.as_ptr();
         undo_cmdmod(cmdinfo.cast::<c_void>());
         crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
