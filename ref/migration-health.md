@@ -154,9 +154,12 @@ Baseline 36F/1E → now 18F/1E via two single-root fixes (2026-06-10):
   fixing any flagged constant; ~half the audit hits were harmless dead code.
   STILL-OPEN same-class (verified-harmful, follow-up): **plines/lib.rs:168 MODE_CMDLINE = 0x04**
   (should be 0x08; 0x04 is MODE_OP_PENDING).
-- **BIG UNTRIAGED CLUSTER surfaced: `test/functional/editor/put_spec.lua` = 135 FAILURES** (measured
-  2026-06-10). Likely the single largest cluster in the suite. Untriaged — strong next target; root
-  cause unknown (register/put/`p`/`gp`/blockwise paste?). Worth a dedicated triage+fix wave.
+- **`test/functional/editor/put_spec.lua` PARTIAL FIX (2026-06-11, 135→73 failures):** Root cause
+  for 62 tests was `BACKWARD = 0` in `change/src/open_line.rs`, `edit/src/register.rs`, and
+  `ops/src/put.rs` — should be `-1` per `vim_defs.h`. Fixed in commits 6ba73cb322/da575295ae.
+  Also fixed `BACKWARD = 0` in `eval/src/funcs/misc.rs` for `setcharsearch()` (commit 250fd60a3e).
+  REMAINING 73 failures: "Visual put with 'virtualedit' after end of line" and ". register special
+  tests" — different root cause, still untriaged. Worth a dedicated triage+fix wave.
 
 ### Cluster F — cursor/pos API rejects valid [row,col] [MEDIUM, clean]
 `Argument "pos" must be a [row, col] array` on valid input. `api/buffer_spec.lua` (6E),
@@ -193,6 +196,11 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   msgpack 71/71.
 - **Cluster B — FIXED** (commit d596ba7ba8): wrong VarType magic numbers (5 vs VAR_STRING=2)
   + NULL deref in setqflist/setloclist. All arg-validation tests green (the T9 hang is D).
+  REMAINING: `api/buffer_updates_spec.lua` T26 "when updating quickfix list" ERR (E378
+  'errorformat' contains no pattern) — separate bug in `quickfix/src/reader.rs parse_efm_option`
+  where `EfmToRegpatResult::default()` with `error_code=0` triggers the `_` arm of the match
+  that emits E378. Triggered by `cexpr ['Xa', 'Xb']` on default errorformat. Pre-existing.
+  T27 "when :terminal lines change" FAIL — terminal timing race, pre-existing flaky.
 - **FFI Class A/B/C signature mismatches — FIXED** (commit 8ac4c7fe1d, 82 files): 59 bool/c_int
   return-type symbols corrected + arena_alloc + operators.rs param. Also fixed **let_spec
   CRASH → 9/9**. See ref/ffi-audit.md. REMAINING: Class D/E param mismatches (~170 sites, MEDIUM).
@@ -312,6 +320,18 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   - Other specs in this cluster to re-check once fixed: window (set_buf in cmdwin), tabpage
     (set_win when textlocked), null T58 (complete() w/ NULL list), map_functions T13 (mapset
     replace_keycodes). Note: errorlist T9 (setloclist window-closed) is NOW GREEN (9/9) — unblocked.
+- **BACKWARD constant class — FIXED (commits 6ba73cb322/da575295ae/250fd60a3e, 2026-06-11):**
+  4 files had `const BACKWARD: c_int = 0` instead of `-1` per `vim_defs.h`:
+  1. `change/src/open_line.rs` — caused `if dir == BACKWARD` to never match, inserting new lines
+     at wrong position; fixed `api/buffer_updates_spec T7` "when you use 'o'".
+  2. `edit/src/register.rs` — passed `0` to C `do_put`/Rust `rs_do_put`; all fold-correction,
+     linewise-position and cursor-placement BACKWARD branches silently skipped for CTRL-R insert.
+  3. `ops/src/put.rs` — used only in unit tests (no C callers), benign but semantically wrong.
+  4. `eval/src/funcs/misc.rs` — `setcharsearch()` stored 0 as `lastcdir` instead of -1; all
+     backward `f`/`F`/`t`/`T` repeats computed wrong direction via `do_csearch`.
+  IMPACT: `put_spec.lua` 135 failures → 73 failures (62 cleared). `buffer_updates_spec` T7 fixed.
+  GUARDS: `change/src/open_line.rs` has `const _: () = assert!(BACKWARD == -1, ...)` compile-time
+  guard. Other files use doc comments noting vim_defs.h source.
 - **Cluster H — partially open**: let_spec FIXED; ctx_functions still 5 FAIL (register/jumplist/
   buflist round-trip), match_functions 1 FAIL (matchaddpos zero-length) + setmatches was CRASH
   (recheck), editor/ctrl_c/fold, api/autocmd lambda.
