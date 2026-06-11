@@ -238,8 +238,13 @@ pub const WERR: &str = "E574: ";
 // Mark Constants
 // =============================================================================
 
-/// Number of local marks (a-z, plus extra marks).
-pub const NLOCALMARKS: usize = 26;
+/// Number of local marks: a-z (26) plus the 3 special local marks `"`, `^`, `.`
+/// (`NMARKS + 3 = 29`, per `mark_defs.h:62` / `NLOCALMARKS` in C).
+pub const NLOCALMARKS: usize = 29;
+const _: () = assert!(
+    NLOCALMARKS == 29,
+    "NLOCALMARKS must be NMARKS + 3 = 29 (mark_defs.h:62)"
+);
 /// Size of jump list.
 pub const JUMPLISTSIZE: usize = 100;
 /// Number of named marks (A-Z).
@@ -9211,7 +9216,7 @@ mod tests {
     #[test]
     fn test_array_constants() {
         // Verify array sizes match expected values
-        assert_eq!(NLOCALMARKS, 26);
+        assert_eq!(NLOCALMARKS, 29);
         assert_eq!(JUMPLISTSIZE, 100);
         assert_eq!(NMARKS, 26);
         assert_eq!(EXTRA_MARKS, 10);

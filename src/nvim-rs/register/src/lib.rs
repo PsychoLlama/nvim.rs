@@ -2934,7 +2934,8 @@ pub unsafe extern "C" fn rs_ex_display(eap: *mut c_void) {
             _ => c_int::from(b'b'),
         };
 
-        let yb: *mut YankReg = if i == -1 {
+        // yb must be mut so get_clipboard() can replace it with a clipboard-owned register.
+        let mut yb: *mut YankReg = if i == -1 {
             if !y_previous.is_null() {
                 y_previous
             } else {
@@ -2944,8 +2945,9 @@ pub unsafe extern "C" fn rs_ex_display(eap: *mut c_void) {
             &raw mut y_regs[i as usize]
         };
 
-        // Check clipboard.
-        get_clipboard(name, &raw mut (*(yb as *mut *mut YankReg)), true);
+        // Check clipboard: get_clipboard may redirect yb to point to a clipboard-owned
+        // YankReg rather than our y_regs[] entry (matches original C `get_clipboard(name, &yb, true)`).
+        get_clipboard(name, &raw mut yb, true);
 
         // Do not list register being written to.
         if name == mb_tolower(redir_reg)
@@ -3037,11 +3039,12 @@ pub unsafe extern "C" fn rs_ex_display(eap: *mut c_void) {
     }
 
     // Display alternate file name.
+    // Note: arg filter checks '%' (same as original C: both % and # shown together).
     if (arg.is_null() || !vim_strchr(arg, c_int::from(b'%')).is_null()) && !got_int {
         let mut fname: *mut c_char = std::ptr::null_mut();
         let mut dummy: c_int = 0;
-        if rs_buflist_name_nr(0, &raw mut fname, &raw mut dummy) != FAIL && !message_filtered(fname)
-        {
+        // rs_buflist_name_nr returns 0 on success, non-zero on failure (Rust convention).
+        if rs_buflist_name_nr(0, &raw mut fname, &raw mut dummy) == 0 && !message_filtered(fname) {
             msg_puts(c"\n  c  \"#   ".as_ptr());
             dis_msg(fname, false);
         }

@@ -402,7 +402,12 @@ ptrdiff_t file_skip(FileDescriptor *const fp, const size_t size)
 ptrdiff_t nvim_file_skip(FileDescriptor *fp, size_t offset) { return file_skip(fp, offset); }
 
 /// Check if at end of file (wrapper for Rust FFI)
-int nvim_file_eof(FileDescriptor *fp) { return fp->eof ? 1 : 0; }
+///
+/// Matches the inline file_eof() semantics: true only when the underlying fd
+/// is exhausted AND the internal read buffer is also empty.  Returning true
+/// while data remains in the buffer would cause rs_shada_read_next_item to
+/// miss every entry after the first readv() fills the buffer.
+int nvim_file_eof(FileDescriptor *fp) { return file_eof(fp) ? 1 : 0; }
 
 /// Close file (wrapper for Rust FFI)
 int nvim_file_close(FileDescriptor *fp, int do_fsync) { return file_close(fp, do_fsync != 0); }
