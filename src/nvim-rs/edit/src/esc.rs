@@ -25,8 +25,8 @@ const MODE_NORMAL: c_int = 0x01;
 /// `REPLACE_FLAG` bit
 const REPLACE_FLAG: c_int = 0x100;
 
-/// `kOptVeFlagAll` (virtualedit=all) value
-const K_OPT_VE_FLAG_ALL: c_uint = 0x01;
+/// `kOptVeFlagAll` (virtualedit=all) value from `option_vars.generated.h`.
+const K_OPT_VE_FLAG_ALL: c_uint = 0x04;
 
 // ============================================================================
 // C accessors

@@ -112,8 +112,8 @@ const TAB: c_char = 9;
 /// NUL character.
 const NUL: c_char = 0;
 
-/// Virtual edit onemore flag.
-const K_OPT_VE_FLAG_ONEMORE: c_int = 0x04;
+/// Virtual edit onemore flag (`kOptVeFlagOnemore` from option_vars.generated.h).
+const K_OPT_VE_FLAG_ONEMORE: c_int = 0x08;
 
 /// Grapheme state initial value.
 const GRAPHEME_STATE_INIT: u64 = 0;
