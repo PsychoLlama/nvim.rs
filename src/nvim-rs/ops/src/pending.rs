@@ -1099,7 +1099,7 @@ unsafe fn dpo_dispatch_op_colon(oap: *mut OpargT) {
 unsafe fn dpo_postamble(cap: *mut c_void, old_col: c_int, gui_yank: bool) {
     let oap = (*cap.cast::<CmdargT>()).oap;
 
-    virtual_op = 0;
+    virtual_op = -1; // kNone: no operator in progress (see globals.h)
     if gui_yank {
         let (lnum, col, coladd) = DPO_SAVED_CURSOR;
         nvim_set_cursor_pos(lnum, col, coladd);
