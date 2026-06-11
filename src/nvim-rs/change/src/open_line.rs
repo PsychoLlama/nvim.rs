@@ -15,7 +15,17 @@ use crate::{buf_mut, buf_ref, BcountT, ColnrT, LinenrT, OpenlineFlags, NUL, OK};
 /// Direction: forward (below current line).
 pub const FORWARD: c_int = 1;
 /// Direction: backward (above current line).
-pub const BACKWARD: c_int = 0;
+/// NOTE: matches C `BACKWARD = -1` from vim_defs.h (NOT 0).
+pub const BACKWARD: c_int = -1;
+// Guard: BACKWARD must match C vim_defs.h Direction::BACKWARD
+const _: () = assert!(
+    BACKWARD == -1,
+    "BACKWARD must equal -1 (Direction enum in vim_defs.h)"
+);
+const _: () = assert!(
+    FORWARD == 1,
+    "FORWARD must equal 1 (Direction enum in vim_defs.h)"
+);
 
 // =============================================================================
 // Mode Constants
@@ -1422,7 +1432,7 @@ mod tests {
     #[test]
     fn test_direction_constants() {
         assert_eq!(FORWARD, 1);
-        assert_eq!(BACKWARD, 0);
+        assert_eq!(BACKWARD, -1);
     }
 
     #[test]
