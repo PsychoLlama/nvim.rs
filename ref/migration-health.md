@@ -167,6 +167,22 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
   The "WinPtr vs WinHandle type mismatch" theory was REFUTED (ABI-identical pointers). LATENT
   (low priority, untouched): buffer.rs:168 still has a '&& focusable' term not in upstream's break
   condition (missed scans in multi-window completion; not a hang).
+- **completion_spec off-by-one FIXED (commit d507160551, 2026-06-10).** rs_get_normal_compl_info
+  (insexpand/pattern.rs:163) used `while startcol > 0 { startcol -= 1 }` (never reaches -1) vs
+  upstream `while (--startcol >= 0)`; compl_col ended one column too high at a word in column 0.
+  REAL fix, but LOW leverage: ground-truth spec run cleared only 1 error (20->21 pass, 25 fail,
+  4->3 err) — NOT the ~24 a triage agent predicted (its "leading-space" grouping was inflated;
+  those tests already passed). LESSON: trust ground-truth spec runs over subagent failure-groupings.
+- **completion_spec E785 FIXED (commit 5cec6c06c1, 2026-06-10).** insexpand/funcexpand.rs:61
+  declared `const MODE_INSERT = 0x80` (that's MODE_TERMINAL); real value is 0x10 (state_defs.h:25).
+  The complete() insert-mode guard tested `State & 0x80` == 0 in real insert mode → every valid
+  complete() call wrongly raised "E785: complete() can only be used in Insert mode". Fix 0x80->0x10
+  + compile-time guard. VERIFIED: completion_spec 25F/4E -> 18F/3E (cleared 7F+1E; E785 gone).
+  Another recurring wrong-constant-class instance, now guarded.
+  REMAINING completion_spec backlog (18F/3E, NOT yet targeted): lua getcompletion() EOF CRASH
+  @931/@943 (severity: crash); nvim__complete_set "Key not found: err_msg" @1348; v:completed_item
+  E742-vs-E46 @73; ~15 independent completion-render snapshot diffs (diffuse, lower per-fix leverage);
+  fuzzy+autocomplete has its OWN start-column bug distinct from rs_get_normal_compl_info.
   - **REFUTED theory** (a diagnostic agent's wrong guess — do NOT act on it): "WinPtr=*mut u8 vs
     WinHandle type mismatch corrupts the NEXT_BUF_WP==curwin comparison." False: nvim_get_curwin/
     firstwin (globals.rs:140/201) return WinHandle wrapping the raw global pointer; nvim_win_get_w_next

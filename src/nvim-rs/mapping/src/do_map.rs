@@ -440,6 +440,14 @@ pub unsafe extern "C" fn rs_buf_do_map(
         let mut did_local = false;
         let keyround1_simplified = keyround == 1 && did_simplify;
 
+        // Mirror upstream do_map: if the lhs was not simplified, there is no
+        // alt_lhs to process — skip keyround 2 entirely to avoid inserting a
+        // phantom empty-lhs mapblock (alt_lhs is zero-initialized when
+        // did_simplify is false).
+        if keyround == 2 && !did_simplify {
+            break;
+        }
+
         // Determine which LHS to use for this keyround
         let (lhs, len) = get_lhs_for_keyround(args, keyround, did_simplify, do_print);
 
