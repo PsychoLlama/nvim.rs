@@ -628,9 +628,9 @@ pub unsafe extern "C" fn rs_augroup_exists(name: *const c_char) -> bool {
 /// Delete the augroup that matches name.
 ///
 /// # Safety
-/// `name` must be a valid NUL-terminated mutable C string.
+/// `name` must be a valid NUL-terminated C string.
 #[unsafe(export_name = "augroup_del")]
-pub unsafe extern "C" fn rs_augroup_del(name: *mut c_char, stupid_legacy_mode: bool) {
+pub unsafe extern "C" fn rs_augroup_del(name: *const c_char, stupid_legacy_mode: bool) {
     use crate::NUM_EVENTS;
 
     let group = rs_augroup_find(name);

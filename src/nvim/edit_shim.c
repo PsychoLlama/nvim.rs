@@ -509,16 +509,20 @@ int nvim_edit_tab_charsize_tab(colnr_T vcol)
 {
   const char *tab = "\t";
   CharsizeArg csarg;
-  CSType cstype = init_charsize_arg(&csarg, curwin, 0, tab);
-  return win_charsize(cstype, vcol, tab, (uint8_t)'\t', &csarg).width;
+  // (char *) cast: init_charsize_arg/win_charsize store the pointer in
+  // CharsizeArg.line (char *) but treat it read-only; deep const refactor deferred.
+  CSType cstype = init_charsize_arg(&csarg, curwin, 0, (char *)tab);
+  return win_charsize(cstype, vcol, (char *)tab, (uint8_t)'\t', &csarg).width;
 }
 
 /// win_charsize for ' ' (space) at vcol.
 int nvim_edit_tab_charsize_space(colnr_T vcol, const char *ptr)
 {
   CharsizeArg csarg;
-  CSType cstype = init_charsize_arg(&csarg, curwin, 0, ptr);
-  return win_charsize(cstype, vcol, ptr, (uint8_t)' ', &csarg).width;
+  // (char *) cast: init_charsize_arg/win_charsize store the pointer in
+  // CharsizeArg.line (char *) but treat it read-only; deep const refactor deferred.
+  CSType cstype = init_charsize_arg(&csarg, curwin, 0, (char *)ptr);
+  return win_charsize(cstype, vcol, (char *)ptr, (uint8_t)' ', &csarg).width;
 }
 
 /// The raw buffer rewrite for space-to-TAB in non-vreplace mode.

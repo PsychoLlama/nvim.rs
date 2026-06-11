@@ -105,7 +105,7 @@ int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int
                      bool nested, char *desc, const char *handler_cmd, Callback *handler_fn);
 void aucmd_prepbuf(aco_save_T *aco, buf_T *buf);
 void aucmd_restbuf(aco_save_T *aco);
-void augroup_del(char *name, bool stupid_legacy_mode);
+void augroup_del(const char *name, bool stupid_legacy_mode);
 void ex_doautoall(exarg_T *eap);
 void do_autocmd_uienter(uint64_t chanid, bool attached);
 void may_trigger_vim_suspend_resume(bool suspend);
@@ -144,7 +144,7 @@ int has_cursorhold(void);
 void do_autocmd_focusgained(bool gained);
 bool augroup_exists(const char *name);
 bool is_aucmd_win(win_T *win);
-bool event_ignored(event_T event, char *ei);
+bool event_ignored(event_T event, const char *ei);
 int do_autocmd_event(event_T event, const char *pat, bool once, int nested, const char *cmd,
                      bool del, int group);
 bool autocmd_supported(const char *event);

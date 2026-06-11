@@ -116,7 +116,7 @@ ArrayOf(DictAs(get_autocmds__ret)) nvim_get_autocmds(Dict(get_autocmds) *opts, A
     break;
   case kObjectTypeInteger:
     group = (int)opts->group.data.integer;
-    char *name = group == 0 ? NULL : augroup_name(group);
+    const char *name = group == 0 ? NULL : augroup_name(group);
     VALIDATE_INT(augroup_exists(name), "group", opts->group.data.integer, {
       goto cleanup;
     });
@@ -653,7 +653,7 @@ void nvim_del_augroup_by_id(Integer id, Error *err)
   FUNC_API_SINCE(9)
 {
   TRY_WRAP(err, {
-    char *name = id == 0 ? NULL : augroup_name((int)id);
+    const char *name = id == 0 ? NULL : augroup_name((int)id);
     augroup_del(name, false);
   });
 }
@@ -713,7 +713,7 @@ void nvim_exec_autocmds(Object event, Dict(exec_autocmds) *opts, Arena *arena, E
     break;
   case kObjectTypeInteger:
     au_group = (int)opts->group.data.integer;
-    char *name = au_group == 0 ? NULL : augroup_name(au_group);
+    const char *name = au_group == 0 ? NULL : augroup_name(au_group);
     VALIDATE_INT(augroup_exists(name), "group", (int64_t)au_group, {
       return;
     });
@@ -803,7 +803,7 @@ static int get_augroup_from_object(Object group, Error *err)
     return au_group;
   case kObjectTypeInteger:
     au_group = (int)group.data.integer;
-    char *name = au_group == 0 ? NULL : augroup_name(au_group);
+    const char *name = au_group == 0 ? NULL : augroup_name(au_group);
     VALIDATE_INT(augroup_exists(name), "group", (int64_t)au_group, {
       return AUGROUP_ERROR;
     });
