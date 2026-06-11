@@ -2096,10 +2096,14 @@ pub unsafe extern "C" fn rs_sd_reader_skip(
         return SD_READ_STATUS_READ_ERROR;
     }
     if (skip_bytes as usize) != offset {
-        // Not enough bytes read
+        // Not enough bytes skipped (short file).
         if nvim_file_eof(sd_reader) != 0 {
-            // EOF reached before expected
-            return SD_READ_STATUS_NOT_SHADA;
+            // EOF reached before expected: emit E576 matching upstream C sd_reader_skip.
+            // IMPORTANT: string must stay byte-identical for functional test eq() checks.
+            nvim_shada_semsg_u64(
+                c"E576: Error while reading ShaDa file: last entry specified that it occupies %llu bytes, but file ended earlier".as_ptr(),
+                offset as u64,
+            );
         }
         return SD_READ_STATUS_NOT_SHADA;
     }
@@ -2284,6 +2288,13 @@ pub unsafe extern "C" fn rs_fread_len(
     }
 
     if (bytes_read as usize) != len {
+        // Emit E576 before returning NOT_SHADA (matches upstream C fread_len).
+        // IMPORTANT: this string must stay byte-identical to the C original;
+        // functional tests do an exact eq() on the error message.
+        nvim_shada_semsg_u64(
+            c"E576: Error while reading ShaDa file: last entry specified that it occupies %llu bytes, but file ended earlier".as_ptr(),
+            len as u64,
+        );
         return SD_READ_STATUS_NOT_SHADA;
     }
 
