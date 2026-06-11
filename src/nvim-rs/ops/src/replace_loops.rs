@@ -28,7 +28,7 @@ const CR: c_int = b'\r' as c_int;
 const TAB: c_int = b'\t' as c_int;
 const MAXCOL: c_int = i32::MAX;
 const K_EXTMARK_UNDO: c_int = 1; // kExtmarkUndo
-const MODE_REPLACE: c_int = 0x14; // state_defs.h MODE_REPLACE
+const MODE_REPLACE: c_int = 0x110; // state_defs.h: REPLACE_FLAG(0x100) | MODE_INSERT(0x10)
 const K_MT_LINE_WISE: c_int = 1;
 
 // -----------------------------------------------------------------------
@@ -451,7 +451,7 @@ mod tests {
     fn test_constants() {
         assert_eq!(K_MT_LINE_WISE, 1);
         assert_eq!(K_EXTMARK_UNDO, 1);
-        assert_eq!(MODE_REPLACE, 0x14);
+        assert_eq!(MODE_REPLACE, 0x110); // state_defs.h: REPLACE_FLAG | MODE_INSERT
         assert_eq!(NUL, 0);
         assert_eq!(TAB, 9);
     }

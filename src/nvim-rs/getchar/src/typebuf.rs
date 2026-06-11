@@ -1449,8 +1449,8 @@ pub unsafe extern "C" fn rs_dec_no_reduce_keys() {
 const K_SPECIAL_VAL: u8 = 0x80;
 /// KS_MODIFIER (252)
 const KS_MODIFIER_VAL: u8 = 252;
-/// MODE_TERMINAL flag (matches C MODE_TERMINAL = 0x4000)
-const MODE_TERMINAL: c_int = 0x4000;
+/// MODE_TERMINAL flag -- state_defs.h MODE_TERMINAL = 0x80
+const MODE_TERMINAL: c_int = 0x80;
 /// MB_MAXBYTES = 21 (max bytes for a multibyte char)
 const MB_MAXBYTES: usize = 21;
 
@@ -1972,5 +1972,11 @@ mod tests {
         assert_eq!(RemapValues::from(-1), RemapValues::None);
         assert_eq!(RemapValues::from(-2), RemapValues::Script);
         assert_eq!(RemapValues::from(-3), RemapValues::Skip);
+    }
+
+    #[test]
+    fn test_mode_terminal_constant() {
+        // Canonical value from state_defs.h: MODE_TERMINAL = 0x80
+        assert_eq!(MODE_TERMINAL, 0x80);
     }
 }

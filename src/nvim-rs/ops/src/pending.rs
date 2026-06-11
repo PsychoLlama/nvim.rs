@@ -51,8 +51,15 @@ const NUL: c_int = 0;
 const MAXCOL: c_int = i32::MAX;
 
 // Key codes
-const K_LUA: c_int = 0xd102; // KS_EXTRA << 8 | KE_LUA -- matches keycodes.h
-const K_COMMAND: c_int = 0xd107; // KS_EXTRA << 8 | KE_COMMAND
+// TERMCAP2KEY(a, b) = -(a + (b << 8)); KS_EXTRA=253, KE_LUA=103, KE_COMMAND=104 -- keycodes.h
+const fn termcap2key(a: c_int, b: c_int) -> c_int {
+    -(a + (b << 8))
+}
+const KS_EXTRA: c_int = 253;
+const KE_LUA: c_int = 103;
+const KE_COMMAND: c_int = 104;
+const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA); // keycodes.h: -(253 + (103 << 8)) = -26621
+const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND); // keycodes.h: -(253 + (104 << 8)) = -26877
 const CPO_YANK: c_int = b'y' as c_int;
 const CPO_REDO: c_int = b'r' as c_int;
 const CPO_EMPTYREGION: c_int = b'E' as c_int;
@@ -1144,6 +1151,8 @@ pub unsafe extern "C" fn rs_do_pending_operator(cap: *mut c_void, old_col: c_int
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_module_compiles() {
         // The pending operator module requires full C runtime;
@@ -1151,5 +1160,13 @@ mod tests {
         let size =
             std::mem::size_of::<unsafe extern "C" fn(*mut std::ffi::c_void) -> std::ffi::c_int>();
         assert!(size > 0);
+    }
+
+    #[test]
+    fn test_key_constants() {
+        // Canonical values from keycodes.h: TERMCAP2KEY(KS_EXTRA=253, KE_LUA=103/KE_COMMAND=104)
+        // = -(253 + (b << 8))
+        assert_eq!(K_LUA, -26621);
+        assert_eq!(K_COMMAND, -26877);
     }
 }

@@ -609,7 +609,7 @@ unsafe fn coladvance2(
 /// Insert mode flag
 pub const MODE_INSERT: c_int = 0x10;
 /// Terminal mode flag
-pub const MODE_TERMINAL: c_int = 0x2000;
+pub const MODE_TERMINAL: c_int = 0x80; // state_defs.h MODE_TERMINAL
 
 // =============================================================================
 // Redraw Constants (from drawscreen.h)
@@ -1648,7 +1648,7 @@ mod tests {
     #[test]
     fn test_mode_flags() {
         assert_eq!(MODE_INSERT, 0x10);
-        assert_eq!(MODE_TERMINAL, 0x2000);
+        assert_eq!(MODE_TERMINAL, 0x80); // state_defs.h MODE_TERMINAL (was wrong 0x2000)
     }
 
     #[test]
