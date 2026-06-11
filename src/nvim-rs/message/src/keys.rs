@@ -17,6 +17,22 @@ pub const KS_MODIFIER: c_int = 253;
 /// KS_EXTRA - extra byte marker
 pub const KS_EXTRA: c_int = 254;
 
+/// KS_SPECIAL (254) - escape byte for a literal K_SPECIAL in the stream.
+/// See keycodes.h:37
+const KS_SPECIAL: u8 = 254;
+
+/// KS_ZERO (255) - escape byte for a literal NUL in the stream.
+/// See keycodes.h:33
+const KS_ZERO: u8 = 255;
+
+/// KE_FILLER - padding byte used after KS_SPECIAL and KS_ZERO.
+/// See keycodes.h:70
+const KE_FILLER: u8 = b'X'; // 0x58
+
+/// K_ZERO = TERMCAP2KEY(KS_ZERO, KE_FILLER) = -(255 + (0x58 << 8)).
+/// See keycodes.h:231
+const K_ZERO: c_int = -((KS_ZERO as c_int) + ((KE_FILLER as c_int) << 8));
+
 /// Check if a byte is KS_MODIFIER.
 #[no_mangle]
 pub const extern "C" fn rs_is_ks_modifier(c: c_int) -> c_int {
@@ -195,11 +211,26 @@ const fn is_special_key(c: c_int) -> bool {
 
 /// Encode `(a, b)` bytes after `K_SPECIAL` into an internal key code.
 ///
-/// Matches the C macro `TO_SPECIAL(a, b)`.
+/// Matches the C macro `TO_SPECIAL(a, b)` from `keycodes.h:87-88`:
+/// ```c
+/// #define TERMCAP2KEY(a, b)  (-((a) + ((int)(b) << 8)))
+/// #define TO_SPECIAL(a, b)   ((a) == KS_SPECIAL ? K_SPECIAL : \
+///                             (a) == KS_ZERO    ? K_ZERO    : TERMCAP2KEY(a, b))
+/// ```
+///
+/// - `a == KS_SPECIAL (254)` → literal `K_SPECIAL` (0x80)
+/// - `a == KS_ZERO (255)`    → literal NUL encoding `K_ZERO`
+/// - otherwise               → `TERMCAP2KEY(a, b) = -(a + (b << 8))`
 #[inline]
 #[allow(clippy::cast_possible_wrap)]
 const fn to_special(a: u8, b: u8) -> c_int {
-    (-1 - a as i32) * 256 - b as i32
+    if a == KS_SPECIAL {
+        K_SPECIAL
+    } else if a == KS_ZERO {
+        K_ZERO
+    } else {
+        -((a as c_int) + ((b as c_int) << 8))
+    }
 }
 
 /// Convert one key-code at `*sp` to its printable representation.
@@ -435,5 +466,26 @@ mod tests {
         let shift = MOD_MASK_SHIFT;
         let ctrl = MOD_MASK_CTRL;
         assert_eq!(rs_combine_mod(shift, ctrl), shift | ctrl);
+    }
+
+    #[test]
+    fn test_to_special_termcap2key() {
+        // K_F12 = TERMCAP2KEY('F'=70, '2'=50) = -(70 + (50<<8)) = -12870
+        assert_eq!(to_special(b'F', b'2'), -12870);
+        // K_F2 = TERMCAP2KEY('k'=107, '2'=50) = -(107 + (50<<8)) = -12907
+        assert_eq!(to_special(b'k', b'2'), -12907);
+    }
+
+    #[test]
+    fn test_to_special_ks_special() {
+        // KS_SPECIAL branch: a==254 → K_SPECIAL (0x80)
+        assert_eq!(to_special(254, 0), K_SPECIAL);
+    }
+
+    #[test]
+    fn test_to_special_ks_zero() {
+        // KS_ZERO branch: a==255 → K_ZERO = -(255 + (0x58<<8)) = -22783
+        assert_eq!(to_special(255, b'X'), K_ZERO);
+        assert_eq!(K_ZERO, -22783);
     }
 }
