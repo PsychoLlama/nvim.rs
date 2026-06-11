@@ -1345,6 +1345,9 @@ type ExpandTHandle = *mut c_void;
 /// EX_NOSPC = 0x010
 const EX_NOSPC: u32 = 0x010;
 
+/// EXPAND_FILES = 2 (ExpandContext::Files)
+const EXPAND_FILES: c_int = 2;
+
 extern "C" {
     // expand_filename helpers
     #[link_name = "skip_grep_pat"]
@@ -1365,6 +1368,7 @@ extern "C" {
     fn nvim_backslash_halve(p: *mut c_char);
     fn nvim_ExpandT_size() -> usize;
     fn nvim_ExpandInit(xpc: ExpandTHandle);
+    fn nvim_expand_set_context(xpc: ExpandTHandle, context: c_int);
     fn nvim_ExpandOne_files(
         xpc: ExpandTHandle,
         str: *const c_char,
@@ -1623,6 +1627,9 @@ pub unsafe extern "C" fn rs_expand_filename(
             let xpc_size = nvim_ExpandT_size();
             let xpc = xcalloc(1, xpc_size) as ExpandTHandle;
             nvim_ExpandInit(xpc);
+            // Set EXPAND_FILES context so backtick/wildcard expansion works.
+            // Without this, ExpandFromContext returns FAIL for EXPAND_NOTHING (0).
+            nvim_expand_set_context(xpc, EXPAND_FILES);
             let arg = (*eap).arg;
             let p_result = nvim_ExpandOne_files(xpc, arg as *const c_char, wildflags, icase);
             xfree(xpc);

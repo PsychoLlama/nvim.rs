@@ -7487,7 +7487,7 @@ pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
                 // Null out after free (defense-in-depth against double-free).
                 // This makes nvim_shada_fm_xfree_fname idempotent if called again.
                 let fname_ptr = std::ptr::addr_of_mut!(
-                    (*(*std::ptr::addr_of_mut!((*entry).data.filemark))).fname
+                    (&mut (*std::ptr::addr_of_mut!((*entry).data.filemark))).fname
                 );
                 std::ptr::write(fname_ptr, std::ptr::null_mut());
             }
@@ -8289,11 +8289,10 @@ pub unsafe extern "C" fn rs_shada_pack_entry(
             vardesc[prefix.len() + copy_len] = 0;
             // Encode the typval_T
             let tv_ptr = nvim_shada_entry_var_value_ptr(entry.cast_mut());
-            let encode_ret = encode_vim_to_msgpack(sbuf, tv_ptr, vardesc.as_ptr().cast::<c_char>());
             // encode_vim_to_msgpack uses Vim convention: OK=1, FAIL=0.
             // FAIL (== 0) means non-serializable; discard the entry.
-            const ENCODE_FAIL: c_int = 0;
-            if encode_ret == ENCODE_FAIL {
+            let encode_ret = encode_vim_to_msgpack(sbuf, tv_ptr, vardesc.as_ptr().cast::<c_char>());
+            if encode_ret == 0 {
                 // Value is not serializable (e.g. Funcref): skip silently.
                 let sbuf_str = nvim_shada_packer_take_string(sbuf);
                 nvim_xfree(sbuf_str.data.cast::<c_void>());
