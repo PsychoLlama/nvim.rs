@@ -7,3 +7,7 @@
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
 #include "eval/funcs_shim.h.generated.h"
+
+// Hand-written prototype: grammar skips function-pointer params.
+int nvim_readdir_core(garray_T *gap, const char *path, void *context,
+                      varnumber_T (*checkitem)(void *context, const char *name));

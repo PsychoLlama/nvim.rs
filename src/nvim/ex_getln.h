@@ -17,6 +17,11 @@ enum {
 
 #include "ex_getln.h.generated.h"
 
+// Hand-written prototypes: grammar skips unsigned int return types.
+unsigned int nvim_get_ccline_last_colors_prompt_id(void);
+void nvim_set_ccline_last_colors_prompt_id(unsigned int id);
+unsigned int nvim_get_ccline_prompt_id(void);
+
 // Functions implemented in Rust (src/nvim-rs/) that replace C implementations:
 #ifdef __cplusplus
 extern "C" {

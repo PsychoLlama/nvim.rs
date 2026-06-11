@@ -7,3 +7,6 @@
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
 #include "normal_shim.h.generated.h"
+
+// Hand-written prototype: grammar skips unsigned int return types.
+unsigned int nvim_get_ve_flags(void);

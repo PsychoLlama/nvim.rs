@@ -13,6 +13,7 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/fuzzy.h"
+#include "nvim/fuzzy_shim.h"
 #include "nvim/mbyte.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
@@ -413,5 +414,4 @@ void nvim_fuzzy_xfree(void *p)
   xfree(p);
 }
 
-#include "nvim/fuzzy_shim.h"
 #include "fuzzy_shim.c.generated.h"

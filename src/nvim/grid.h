@@ -48,6 +48,9 @@ enum {
 
 #include "grid.h.generated.h"
 
+// Hand-written prototype: grammar skips unsigned int return types.
+unsigned int nvim_get_rdb_flags(void);
+
 // Declarations for functions now implemented in Rust via #[export_name].
 // These were previously generated from C wrappers in grid.c.
 schar_T schar_from_str(const char *str);
