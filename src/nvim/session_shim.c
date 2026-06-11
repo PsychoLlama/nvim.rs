@@ -29,6 +29,7 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+#include "nvim/session_shim.h"
 #include "session_shim.c.generated.h"
 
 extern var_flavour_T rs_var_flavour(const char *varname);

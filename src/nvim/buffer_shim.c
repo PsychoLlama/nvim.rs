@@ -66,6 +66,7 @@
 #include "nvim/digraph.h"
 #include "nvim/optionstr.h"
 
+#include "nvim/buffer_shim.h"
 #include "buffer_shim.c.generated.h"
 
 // Rust-exported fold/window helpers

@@ -26,6 +26,9 @@
 #include "nvim/textobject.h"
 #include "nvim/types_defs.h"
 
+#include "nvim/mark_shim.h"
+#include "mark_shim.c.generated.h"
+
 extern void rs_tagstack_clear_entry(void *tg);
 
 int nvim_mark_bt_prompt(buf_T *buf) { return bt_prompt(buf); }

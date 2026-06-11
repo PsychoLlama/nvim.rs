@@ -145,6 +145,7 @@ extern void f_input(typval_T *argvars, typval_T *rettv, EvalFuncData fptr);
 void get_user_input(const typval_T *const argvars, typval_T *const rettv,
                     const bool inputdialog, const bool secret);
 
+#include "nvim/eval/funcs_shim.h"
 #include "eval/funcs_shim.c.generated.h"
 
 // =============================================================================

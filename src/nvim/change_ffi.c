@@ -49,6 +49,9 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/change_ffi.h"
+#include "change_ffi.c.generated.h"
+
 bool nvim_buf_get_b_may_swap(buf_T *buf) { return buf->b_may_swap; }
 bool nvim_buf_get_b_p_eol(buf_T *buf) { return buf->b_p_eol; }
 linenr_T nvim_buf_get_b_ml_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
