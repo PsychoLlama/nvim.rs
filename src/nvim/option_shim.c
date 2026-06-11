@@ -92,6 +92,7 @@ int nvim_winhl_ns_prepare(win_T *wp)
   { if (wp->w_ns_hl_winhl == 0) { wp->w_ns_hl_winhl = (int)nvim_create_namespace(NULL_STRING); } else { get_decor_provider(wp->w_ns_hl_winhl, true)->hl_valid++; } return wp->w_ns_hl_winhl; }
 void nvim_winhl_ns_hl_def(int ns_hl, int hl_id_link, int hl_id) { HlAttrs attrs = HLATTRS_INIT; attrs.rgb_ae_attr |= HL_GLOBAL; ns_hl_def(ns_hl, hl_id_link, attrs, hl_id, NULL); }
 const char *nvim_win_get_p_culopt(win_T *wp) { return wp ? wp->w_p_culopt : NULL; }
+#include "nvim/option_shim.h"
 #include "option_shim.c.generated.h"
 #include "options.generated.h"
 #include "options_map.generated.h"

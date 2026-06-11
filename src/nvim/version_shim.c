@@ -31,6 +31,9 @@
 #include "nvim/version.h"
 #include "nvim/window.h"
 
+#include "nvim/version_shim.h"
+#include "version_shim.c.generated.h"
+
 // for ":version", ":intro", and "nvim --version"
 #ifndef NVIM_VERSION_MEDIUM
 # define NVIM_VERSION_MEDIUM "v" STR(NVIM_VERSION_MAJOR) \

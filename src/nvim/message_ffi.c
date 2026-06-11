@@ -9,6 +9,7 @@
 #include "nvim/message.h"
 #include "nvim/gettext_defs.h"
 
+#include "nvim/message_ffi.h"
 #include "message_ffi.c.generated.h"
 
 /// Emit "E35: No previous regular expression" error.

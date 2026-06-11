@@ -18,6 +18,7 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/testing_shim.h"
 #include "testing_shim.c.generated.h"
 
 // Rust code hard-codes sizeof(typval_T) for pointer arithmetic on argvar arrays.

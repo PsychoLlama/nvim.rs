@@ -4,6 +4,9 @@
 
 #include "nvim/memory.h"
 
+#include "nvim/memory_accessors.h"
+#include "memory_accessors.c.generated.h"
+
 void nvim_inc_arena_alloc_count(void)
 {
   arena_alloc_count++;

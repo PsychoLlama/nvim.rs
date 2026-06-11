@@ -44,6 +44,7 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/spell_shim.h"
 #include "spell_shim.c.generated.h"
 
 // =============================================================================

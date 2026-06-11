@@ -61,6 +61,9 @@
 #include "nvim/undo_defs.h"
 #include "nvim/vim_defs.h"
 
+#include "nvim/fileio_shim.h"
+#include "fileio_shim.c.generated.h"
+
 // =============================================================================
 // curbuf field accessors (mfp dirty state only -- others accessed via BufStruct)
 // =============================================================================

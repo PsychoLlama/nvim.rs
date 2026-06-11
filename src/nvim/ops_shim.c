@@ -8,6 +8,7 @@
 #include "nvim/normal.h"
 #include "nvim/pos_defs.h"
 
+#include "nvim/ops_shim.h"
 #include "ops_shim.c.generated.h"
 
 void nvim_curbuf_set_op_start_from_oap_start(void *oap_ptr) { oparg_T *oap = (oparg_T *)oap_ptr; curbuf->b_op_start = oap->start; }

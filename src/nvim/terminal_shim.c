@@ -66,6 +66,7 @@
 #include "nvim/vterm/vterm_keycodes_defs.h"
 #include "nvim/window.h"
 
+#include "nvim/terminal_shim.h"
 #include "terminal_shim.c.generated.h"
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)

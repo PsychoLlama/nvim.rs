@@ -53,6 +53,7 @@ extern void rs_ins_compl_show_pum(void);
 extern int rs_min_rows(tabpage_T *tp);
 extern bool rs_win_redraw_signcols(win_T *wp);
 
+#include "nvim/drawscreen_shim.h"
 #include "drawscreen_shim.c.generated.h"
 
 /// Return 1 if default_grid needs reallocation (size mismatch or NULL), else 0.

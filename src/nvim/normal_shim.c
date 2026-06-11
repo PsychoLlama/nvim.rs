@@ -68,6 +68,7 @@ typedef struct {
   pos_T old_pos;
 } NormalState;
 
+#include "nvim/normal_shim.h"
 #include "normal_shim.c.generated.h"
 
 static inline void normal_state_init(NormalState *s) { memset(s, 0, sizeof(NormalState)); s->state.check = normal_check; s->state.execute = normal_execute; }
