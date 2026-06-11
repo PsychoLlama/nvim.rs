@@ -6379,35 +6379,39 @@ pub unsafe extern "C" fn rs_spell_suggest(count: c_int) {
         if badlen > line_len - cursor_col {
             badlen = line_len - cursor_col;
         }
-    } else if spell_move_to(
-        stp_sal_curwin,
-        SPELL_SUGGEST_FORWARD,
-        SPELL_SUGGEST_SMT_ALL,
-        true,
-        std::ptr::null_mut(),
-    ) == 0
-        || nvim_ss_get_cursor_col() > prev_col
-    {
-        // No bad word or it starts after the cursor: use the word under cursor.
-        nvim_ss_set_cursor_col(prev_col);
-        nvim_ss_set_cursor_lnum(prev_lnum);
-        let line = get_cursor_line_ptr().cast_mut();
-        let mut p = line.add(nvim_ss_get_cursor_col() as usize);
+    } else {
+        let smt_result = spell_move_to(
+            stp_sal_curwin,
+            SPELL_SUGGEST_FORWARD,
+            SPELL_SUGGEST_SMT_ALL,
+            true,
+            std::ptr::null_mut(),
+        );
+        if smt_result == 0 || nvim_ss_get_cursor_col() > prev_col {
+            // No bad word or it starts after the cursor: use the word under cursor.
+            nvim_ss_set_cursor_col(prev_col);
+            nvim_ss_set_cursor_lnum(prev_lnum);
+            let line = get_cursor_line_ptr().cast_mut();
+            let mut p = line.add(nvim_ss_get_cursor_col() as usize);
 
-        // Backup to before start of word
-        while p > line && ss_spell_iswordp_nmw(p, stp_sal_curwin) {
-            nvim_ss_mb_ptr_back(line, &raw mut p);
-        }
-        // Forward to start of word
-        while *(p as *const u8) != NUL && !ss_spell_iswordp_nmw(p, stp_sal_curwin) {
-            nvim_ss_mb_ptr_adv(&raw mut p);
-        }
+            // Backup to before start of word
+            while p > line && ss_spell_iswordp_nmw(p, stp_sal_curwin) {
+                nvim_ss_mb_ptr_back(line, &raw mut p);
+            }
+            // Forward to start of word
+            while *(p as *const u8) != NUL && !ss_spell_iswordp_nmw(p, stp_sal_curwin) {
+                nvim_ss_mb_ptr_adv(&raw mut p);
+            }
 
-        if !ss_spell_iswordp_nmw(p, stp_sal_curwin) {
-            beep_flush();
-            return;
+            if !ss_spell_iswordp_nmw(p, stp_sal_curwin) {
+                beep_flush();
+                return;
+            }
+            nvim_ss_set_cursor_col((p.offset_from(line)) as c_int);
+        } else {
+            // Bad word found at cursor position; capture its length.
+            badlen = smt_result as c_int;
         }
-        nvim_ss_set_cursor_col((p.offset_from(line)) as c_int);
     }
 
     // Figure out if the word should be capitalised
