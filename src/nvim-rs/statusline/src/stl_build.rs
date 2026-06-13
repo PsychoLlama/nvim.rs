@@ -187,6 +187,9 @@ extern "C" {
     fn nvim_stl_schar_len(c: ScharT) -> usize;
     #[link_name = "schar_get"]
     fn nvim_stl_schar_get(buf: *mut c_char, c: ScharT) -> usize;
+    /// Write schar bytes and advance the pointer (no NUL terminator).
+    #[link_name = "schar_get_adv"]
+    fn nvim_stl_schar_get_adv(pp: *mut *mut c_char, c: ScharT) -> usize;
     #[link_name = "rs_schar_from_ascii"]
     fn nvim_stl_schar_from_ascii(c: c_char) -> ScharT;
 
@@ -913,11 +916,12 @@ thread_local! {
 // Helper: schar_get_adv
 // =============================================================================
 
-/// Advance pointer by writing schar bytes. Equivalent to C's schar_get_adv.
+/// Advance pointer by writing schar bytes without NUL termination.
+/// Calls the real `schar_get_adv` (grid crate), which writes char bytes
+/// only and advances the pointer — no trailing NUL is written.
 #[inline]
 unsafe fn schar_get_adv(pp: &mut *mut c_char, fillchar: ScharT) {
-    let n = nvim_stl_schar_get(*pp, fillchar);
-    *pp = (*pp).add(n);
+    nvim_stl_schar_get_adv(std::ptr::from_mut::<*mut c_char>(pp), fillchar);
 }
 
 // =============================================================================
