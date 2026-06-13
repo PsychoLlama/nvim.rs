@@ -70,6 +70,13 @@ pub enum LexExprTokenType {
     Assignment,
 }
 
+// Compile-time ABI guards: LexExprTokenType discriminants must match the C enum
+// in expressions.h exactly.  A mismatch means a silent runtime regression —
+// these asserts convert that into a build failure.
+const _: () = assert!(LexExprTokenType::Invalid as i32 == 0);
+const _: () = assert!(LexExprTokenType::Missing as i32 == 1);
+const _: () = assert!(LexExprTokenType::Number as i32 == 14);
+
 /// ExprComparisonType — which comparison operator.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

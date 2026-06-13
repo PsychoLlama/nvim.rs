@@ -591,6 +591,10 @@ fn get_ccs(len: &mut usize, data: &[u8], size: usize) -> ExprCaseCompareStrategy
 // ---------------------------------------------------------------------------
 
 fn lex_number(mut ret: LexExprToken, data: &[u8], size: usize, flags: c_int) -> LexExprToken {
+    // Tag as Number immediately so both the float early-return and the integer
+    // fall-through path emit a Number token.  This was the dropped CHARREG
+    // assignment (ret.type = kExprLexNumber) from the original C code.
+    ret.typ = LexExprTokenType::Number;
     ret.data = LexTknData {
         num: LexTknDataNum {
             val: LexTknNumVal { integer: 0 },
@@ -896,4 +900,137 @@ fn lex_option(mut ret: LexExprToken, data: &[u8], size: usize) -> LexExprToken {
         },
     };
     ret
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use std::mem::MaybeUninit;
+
+    use super::*;
+    use crate::expr_types::LexExprTokenType;
+
+    // Stub out C symbols that are not available when running unit tests without
+    // the full nvim link.  The stubs are only compiled into the test binary.
+    //
+    // vim_str2nr: called by lex_number's integer path.  The stub fills *len with
+    // the number of decimal/hex/octal digits it would consume and leaves *unptr
+    // with a placeholder, which is sufficient for the type-tag regression test.
+    #[no_mangle]
+    unsafe extern "C" fn vim_str2nr(
+        start: *const std::ffi::c_char,
+        _prep: *mut std::ffi::c_int,
+        len: *mut std::ffi::c_int,
+        _what: std::ffi::c_int,
+        _nptr: *mut i64,
+        unptr: *mut u64,
+        maxlen: std::ffi::c_int,
+        _strict: bool,
+        _overflow: *mut bool,
+    ) {
+        // Minimal stub: consume digits (decimal or hex) up to maxlen.
+        let buf = unsafe { std::slice::from_raw_parts(start as *const u8, maxlen as usize) };
+        let mut i = 0usize;
+        // Skip "0x" / "0b" prefix
+        if buf.len() >= 2 && buf[0] == b'0' && (buf[1] == b'x' || buf[1] == b'X') {
+            i = 2;
+            while i < buf.len() && buf[i].is_ascii_hexdigit() {
+                i += 1;
+            }
+        } else {
+            while i < buf.len() && buf[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+        if !len.is_null() {
+            unsafe { *len = i as std::ffi::c_int };
+        }
+        if !unptr.is_null() {
+            unsafe { *unptr = 42 }; // placeholder
+        }
+    }
+
+    // utfc_ptr2len_len: called by the fallback/invalid arm of
+    // viml_pexpr_next_token; not exercised by these tests but must resolve.
+    #[no_mangle]
+    unsafe extern "C" fn utfc_ptr2len_len(
+        _p: *const std::ffi::c_char,
+        _size: std::ffi::c_int,
+    ) -> std::ffi::c_int {
+        1
+    }
+
+    // nvim_viml_parser_advance / nvim_viml_parser_get_remaining_line /
+    // nvim_parser_get_pos: used only by viml_pexpr_next_token, not by
+    // lex_number.  Provide minimal stubs to satisfy the linker.
+    #[no_mangle]
+    unsafe extern "C" fn nvim_viml_parser_advance(_pstate: *mut ParserState, _len: usize) {}
+
+    #[no_mangle]
+    unsafe extern "C" fn nvim_viml_parser_get_remaining_line(
+        _pstate: *mut ParserState,
+        _ret_pline: *mut crate::expr_types::ParserLine,
+    ) -> bool {
+        false
+    }
+
+    #[no_mangle]
+    unsafe extern "C" fn nvim_parser_get_pos(
+        _pstate: *const ParserState,
+    ) -> crate::expr_types::ParserPosition {
+        crate::expr_types::ParserPosition { line: 0, col: 0 }
+    }
+
+    /// Build a minimal seed token (as viml_pexpr_next_token does before calling lex_number).
+    fn seed_token() -> LexExprToken {
+        LexExprToken {
+            typ: LexExprTokenType::Invalid,
+            start: crate::expr_types::ParserPosition { line: 0, col: 0 },
+            len: 1,
+            data: unsafe { MaybeUninit::zeroed().assume_init() },
+        }
+    }
+
+    /// Regression test: lex_number must tag the returned token as Number, not Invalid.
+    /// This pins the dropped `ret.type = kExprLexNumber` (CHARREG) regression.
+    #[test]
+    fn lex_number_decimal_is_number_type() {
+        let ret = seed_token();
+        let input = b"2";
+        let result = lex_number(ret, input, input.len(), 0);
+        assert_eq!(
+            result.typ,
+            LexExprTokenType::Number,
+            "lex_number must emit LexExprTokenType::Number, not {:?}",
+            result.typ
+        );
+        assert!(result.len > 0, "decimal '2' should consume at least 1 byte");
+    }
+
+    #[test]
+    fn lex_number_hex_is_number_type() {
+        let ret = seed_token();
+        let input = b"0xABCDEF";
+        let result = lex_number(ret, input, input.len(), 0);
+        assert_eq!(result.typ, LexExprTokenType::Number);
+        assert!(result.len > 0);
+    }
+
+    #[test]
+    fn lex_number_float_is_number_type() {
+        let ret = seed_token();
+        let input = b"1.2";
+        // Float lexing requires the KELFLAG_ALLOW_FLOAT flag (bit 2).
+        let flags: c_int = 1 << 2;
+        let result = lex_number(ret, input, input.len(), flags);
+        assert_eq!(
+            result.typ,
+            LexExprTokenType::Number,
+            "float literal must also emit LexExprTokenType::Number"
+        );
+        assert!(result.len > 0, "float literal should consume bytes");
+    }
 }
