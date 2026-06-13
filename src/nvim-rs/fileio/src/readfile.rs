@@ -1453,11 +1453,11 @@ pub unsafe extern "C" fn rs_readfile(
                 conv_restlen = 0;
             }
 
-            if size <= 0 {
-                break 'read_loop;
-            }
-
             // BOM detection at start of file
+            // NOTE: In C this block runs BEFORE the size <= 0 break, so that
+            // an empty file with fio_flags == FIO_UCSBOM can advance_fenc and
+            // retry with the next encoding (e.g. "utf-8") rather than storing
+            // "ucs-bom" in b_p_fenc and later triggering E213 on write.
             if filesize == 0
                 && (fio_flags == FIO_UCSBOM
                     || (curbuf_ref().b_p_bomb == 0
@@ -1505,6 +1505,13 @@ pub unsafe extern "C" fn rs_readfile(
                     skip_read = true;
                     continue 'retry;
                 }
+            }
+
+            // Break for EOF/read-error.  In C this check follows the BOM block;
+            // placed here to match that ordering (so FIO_UCSBOM can advance_fenc
+            // before we give up on an empty file).
+            if size <= 0 {
+                break 'read_loop;
             }
 
             // iconv conversion
