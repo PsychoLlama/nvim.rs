@@ -74,8 +74,7 @@ extern "C" {
     fn rs_option_is_global_local(opt_idx: c_int) -> c_int;
     fn rs_get_option_unset_value(opt_idx: c_int) -> OptVal;
 
-    // Script context handling: construct sctx from set_sid and call set_option_sctx
-    // Uses C to avoid sctx_T layout issues (sc_chan field missing in Rust's ScriptContext)
+    // Script context handling: construct sctx from set_sid and call set_option_sctx.
     fn nvim_set_option_sctx_from_sid(opt_idx: c_int, opt_flags: c_int, set_sid: c_int);
 
     // buf_init_chartab(curbuf, true)

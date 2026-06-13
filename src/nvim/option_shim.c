@@ -1,4 +1,5 @@
 #define IN_OPTION_C
+#include <stddef.h>
 #include <string.h>
 #include "auto/config.h"
 #include "nvim/api/extmark.h"
@@ -116,6 +117,21 @@ int64_t nvim_get_cmdheight_def_number(void) { return options[kOptCmdheight].def_
 sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) { return (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : options[opt_idx].script_ctx; }
 sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) { return (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : win->w_p_script_ctx[opt_idx]; }
 sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) { return (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) ? (sctx_T){ 0 } : buf->b_p_script_ctx[opt_idx]; }
+// Pointer-based sctx_T accessors (preferred over by-value to avoid sret ABI hazard).
+// Use correct per-scope array bounds: kWinOptCount / kBufOptCount.
+_Static_assert(sizeof(sctx_T) == 24, "sctx_T size mismatch with Rust SctxT");
+_Static_assert(offsetof(sctx_T, sc_sid) == 0, "sctx_T.sc_sid offset mismatch");
+_Static_assert(offsetof(sctx_T, sc_seq) == 4, "sctx_T.sc_seq offset mismatch");
+_Static_assert(offsetof(sctx_T, sc_lnum) == 8, "sctx_T.sc_lnum offset mismatch");
+_Static_assert(offsetof(sctx_T, sc_chan) == 16, "sctx_T.sc_chan offset mismatch");
+sctx_T *nvim_get_win_p_script_ctx_ptr(win_T *win, OptIndex scope_idx) {
+  if (!win || scope_idx < 0 || (size_t)scope_idx >= kWinOptCount) { return NULL; }
+  return &win->w_p_script_ctx[scope_idx];
+}
+sctx_T *nvim_get_buf_p_script_ctx_ptr(buf_T *buf, OptIndex scope_idx) {
+  if (!buf || scope_idx < 0 || (size_t)scope_idx >= kBufOptCount) { return NULL; }
+  return &buf->b_p_script_ctx[scope_idx];
+}
 void nvim_curbuf_set_b_p_tw(OptInt v) { curbuf->b_p_tw = v; }
 int nvim_curbuf_get_b_p_ml(void) { return curbuf->b_p_ml; }
 int nvim_curbuf_get_b_p_et(void) { return curbuf->b_p_et; }

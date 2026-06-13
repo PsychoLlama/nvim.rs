@@ -355,6 +355,16 @@ pub struct SctxT {
     pub sc_chan: u64,
 }
 
+// Compile-time layout guard: must match C sctx_T in eval/typval_defs.h exactly.
+// Any drift from the C definition will cause a build failure here.
+const _: () = {
+    assert!(core::mem::size_of::<SctxT>() == 24);
+    assert!(core::mem::offset_of!(SctxT, sc_sid) == 0);
+    assert!(core::mem::offset_of!(SctxT, sc_seq) == 4);
+    assert!(core::mem::offset_of!(SctxT, sc_lnum) == 8);
+    assert!(core::mem::offset_of!(SctxT, sc_chan) == 16);
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;

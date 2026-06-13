@@ -22,14 +22,36 @@ use crate::{BufHandle, OptFlags, WinHandle};
 // C Function Declarations
 // =============================================================================
 
-/// Script context structure (matches C's sctx_T)
+/// Script context structure (matches C's sctx_T exactly).
+///
+/// C definition (eval/typval_defs.h):
+///   scid_T   sc_sid;    // int,      offset 0
+///   int      sc_seq;    // int,      offset 4
+///   linenr_T sc_lnum;   // int32_t,  offset 8
+///   // 4 bytes implicit padding for sc_chan alignment
+///   uint64_t sc_chan;   // uint64_t, offset 16
+///                       // sizeof = 24
+///
+/// Previously this struct had `sc_lnum: i64` (8 bytes) and no `sc_chan`,
+/// giving size=16.  That was a layout mismatch causing an sret ABI hazard
+/// when calling C functions that take/return sctx_T by value.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScriptContext {
     pub sc_sid: c_int,
     pub sc_seq: c_int,
-    pub sc_lnum: i64,
+    pub sc_lnum: i32,
+    // 4 bytes of implicit padding here (repr(C) aligns sc_chan to 8 bytes)
+    pub sc_chan: u64,
 }
+
+const _: () = {
+    assert!(core::mem::size_of::<ScriptContext>() == 24);
+    assert!(core::mem::offset_of!(ScriptContext, sc_sid) == 0);
+    assert!(core::mem::offset_of!(ScriptContext, sc_seq) == 4);
+    assert!(core::mem::offset_of!(ScriptContext, sc_lnum) == 8);
+    assert!(core::mem::offset_of!(ScriptContext, sc_chan) == 16);
+};
 
 // OptIndex type alias (matches C's OptIndex = int)
 type OptIndex = c_int;
@@ -207,7 +229,10 @@ pub unsafe extern "C" fn rs_set_option_sctx(
 
     // Modeline already has the line number set.
     if (opt_flags & OPT_MODELINE) == 0 {
-        script_ctx.sc_lnum += nvim_option_get_sourcing_lnum();
+        // nvim_option_get_sourcing_lnum() returns i64, sc_lnum is i32 (linenr_T).
+        script_ctx.sc_lnum = script_ctx
+            .sc_lnum
+            .wrapping_add(nvim_option_get_sourcing_lnum() as i32);
     }
     nlua_set_sctx(&mut script_ctx);
 

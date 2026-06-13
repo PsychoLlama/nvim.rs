@@ -76,7 +76,7 @@ extern "C" {
     fn nvim_get_option_scope_idx(opt_idx: OptIndex, scope: c_int) -> c_int;
     fn nvim_get_option_immutable(opt_idx: OptIndex) -> c_int;
     fn nvim_get_option_def_val_data_ptr(opt_idx: OptIndex) -> *const std::ffi::c_void;
-    fn nvim_get_option_script_ctx_ptr(opt_idx: OptIndex) -> *mut std::ffi::c_void;
+    fn nvim_get_option_script_ctx_ptr(opt_idx: OptIndex) -> *mut crate::storage::SctxT;
     fn nvim_get_option_var(opt_idx: OptIndex) -> *mut std::ffi::c_void;
     fn nvim_get_option_flags(opt_idx: OptIndex) -> c_uint;
     fn nvim_option_get_flags_ptr(opt_idx: OptIndex) -> *mut c_uint;
@@ -413,7 +413,7 @@ pub unsafe extern "C" fn rs_reset_option_was_set(opt_idx: OptIndex) {
 #[allow(clippy::must_use_candidate)]
 #[export_name = "get_option_sctx"]
 pub unsafe extern "C" fn rs_get_option_sctx(opt_idx: OptIndex) -> *mut std::ffi::c_void {
-    nvim_get_option_script_ctx_ptr(opt_idx)
+    nvim_get_option_script_ctx_ptr(opt_idx).cast()
 }
 
 /// Check if option has secure flag.

@@ -577,13 +577,12 @@ extern "C" {
     fn rs_option_is_global_local(opt_idx: OptIndex) -> c_int;
     fn rs_option_get_type(opt_idx: OptIndex) -> c_int;
 
-    // Script context accessors (return sctx_T by value)
-    // Use link_name alias to avoid clash with setcmd.rs's ScriptContext variant
-    #[link_name = "nvim_get_option_script_ctx"]
-    fn nvim_get_option_script_ctx_sctx(opt_idx: OptIndex) -> SctxT;
-    // scope-index based script context accessors (scope_idx = scope_specific index)
-    fn nvim_get_buf_p_script_ctx(buf: *const c_void, scope_idx: c_int) -> SctxT;
-    fn nvim_get_win_p_script_ctx(win: *const c_void, scope_idx: c_int) -> SctxT;
+    // Script context accessors (pointer-based, avoids sret ABI hazard for 24-byte sctx_T).
+    // nvim_get_option_script_ctx_ptr already exists in option_shim.c (global path).
+    fn nvim_get_option_script_ctx_ptr(opt_idx: OptIndex) -> *mut SctxT;
+    // scope-index based script context pointer accessors (scope_idx = scope_specific index)
+    fn nvim_get_win_p_script_ctx_ptr(win: *const c_void, scope_idx: c_int) -> *mut SctxT;
+    fn nvim_get_buf_p_script_ctx_ptr(buf: *const c_void, scope_idx: c_int) -> *mut SctxT;
 
     // def_val accessor
     fn nvim_get_option_def_val_data_ptr(opt_idx: OptIndex) -> *const c_void;
@@ -704,26 +703,43 @@ unsafe fn vimoption2dict_rs(
     );
 
     // Determine script context for this option.
+    // Read through pointers to avoid sret ABI hazard with 24-byte sctx_T on x86-64 SysV.
+    // A null pointer means "not set"; fall back to zeroed SctxT.
+    let zeroed = SctxT {
+        sc_sid: 0,
+        sc_seq: 0,
+        sc_lnum: 0,
+        sc_chan: 0,
+    };
     let script_ctx = if opt_flags == OPT_GLOBAL_FLAG {
-        nvim_get_option_script_ctx_sctx(opt_idx)
+        let p = nvim_get_option_script_ctx_ptr(opt_idx);
+        if p.is_null() {
+            zeroed
+        } else {
+            *p
+        }
     } else {
         // OPT_LOCAL or fallback mode
-        let mut sctx = SctxT {
-            sc_sid: 0,
-            sc_seq: 0,
-            sc_lnum: 0,
-            sc_chan: 0,
-        };
+        let mut sctx = zeroed;
         if option_has_scope(opt_idx, K_OPT_SCOPE_BUF) != 0 {
             let idx = nvim_get_option_scope_idx(opt_idx, K_OPT_SCOPE_BUF);
-            sctx = nvim_get_buf_p_script_ctx(buf, idx);
+            let p = nvim_get_buf_p_script_ctx_ptr(buf, idx);
+            if !p.is_null() {
+                sctx = *p;
+            }
         }
         if option_has_scope(opt_idx, K_OPT_SCOPE_WIN) != 0 {
             let idx = nvim_get_option_scope_idx(opt_idx, K_OPT_SCOPE_WIN);
-            sctx = nvim_get_win_p_script_ctx(win, idx);
+            let p = nvim_get_win_p_script_ctx_ptr(win, idx);
+            if !p.is_null() {
+                sctx = *p;
+            }
         }
         if opt_flags != OPT_LOCAL_FLAG && sctx.sc_sid == 0 {
-            sctx = nvim_get_option_script_ctx_sctx(opt_idx);
+            let p = nvim_get_option_script_ctx_ptr(opt_idx);
+            if !p.is_null() {
+                sctx = *p;
+            }
         }
         sctx
     };
