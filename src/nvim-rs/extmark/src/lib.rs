@@ -670,11 +670,12 @@ pub const fn mt_decor(key: MTKey) -> (DecorInlineData, bool) {
 }
 
 /// Convert mark to lookup key.
+///
+/// Must match the encoding in marktree/src/lib.rs: `(ns << 33) | (id << 1) | end`.
 #[inline]
 #[must_use]
 pub const fn mt_lookup_key(key: MTKey) -> u64 {
-    // Lookup key encodes ns, id, and end flag
-    ((key.ns as u64) << 32) | (key.id as u64) | (if mt_end(key) { 1 } else { 0 })
+    ((key.ns as u64) << 33) | ((key.id as u64) << 1) | (if mt_end(key) { 1 } else { 0 })
 }
 
 // ============================================================================
@@ -1875,6 +1876,55 @@ mod tests {
         assert_eq!(info.end_row, 0);
         assert_eq!(info.ns_id, 0);
         assert_eq!(info.mark_id, 0);
+    }
+
+    /// Regression test: mt_lookup_key must use the same encoding as
+    /// marktree/src/lib.rs mt_lookup_id: `(ns << 33) | (id << 1) | end`.
+    ///
+    /// A previous bug used `(ns << 32) | id | end` (missing the id<<1 shift
+    /// and using <<32 instead of <<33 for ns). This caused SavePos mark IDs
+    /// saved during a delete to not match id2node entries, so undo of a
+    /// character delete after a right-gravity extmark silently skipped
+    /// restoring the mark position.
+    #[test]
+    fn test_mt_lookup_key_encoding_matches_marktree() {
+        // ns=2, id=1, start mark (not end)
+        let start_key = MTKey {
+            pos: MTPos::new(0, 2),
+            ns: 2,
+            id: 1,
+            flags: MT_FLAG_RIGHT_GRAVITY,
+            decor_data: DecorInlineData::zero(),
+        };
+        // Expected: (2u64 << 33) | (1u64 << 1) | 0 = 17_179_869_186
+        assert_eq!(
+            mt_lookup_key(start_key),
+            17_179_869_186_u64,
+            "mt_lookup_key must use (ns<<33)|(id<<1)|end encoding"
+        );
+
+        // ns=2, id=1, end mark
+        let end_key = MTKey {
+            pos: MTPos::new(0, 5),
+            ns: 2,
+            id: 1,
+            flags: MT_FLAG_END,
+            decor_data: DecorInlineData::zero(),
+        };
+        // Expected: (2u64 << 33) | (1u64 << 1) | 1 = 17_179_869_187
+        assert_eq!(
+            mt_lookup_key(end_key),
+            17_179_869_187_u64,
+            "mt_lookup_key end flag must be bit 0"
+        );
+
+        // The old wrong encoding (ns<<32)|id|end would give 8_589_934_593 for ns=2,id=1,start
+        let wrong_result = 8_589_934_593_u64;
+        assert_ne!(
+            mt_lookup_key(start_key),
+            wrong_result,
+            "must not use the old wrong encoding (ns<<32)|id|end"
+        );
     }
 }
 
