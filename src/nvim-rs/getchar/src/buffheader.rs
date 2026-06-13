@@ -297,18 +297,36 @@ impl BuffHeader {
         }
     }
 
-    /// Add a character to the buffer (like C's add_char_buff).
+    /// Add a character to the buffer (like C's `add_char_buff` in C Neovim).
     ///
-    /// Encodes the character as UTF-8 bytes and calls add_byte for each.
-    /// Special keys are encoded as a single 3-byte sequence.
+    /// Mirrors the C implementation exactly:
+    ///
+    /// - **Special keys** (negative `c`, i.e. `IS_SPECIAL(c)`) and the literal
+    ///   byte values `K_SPECIAL` (0x80) and `NUL` (0x00): emit a 3-byte escape
+    ///   sequence `[K_SPECIAL, K_SECOND(c), K_THIRD(c)]` **verbatim** via
+    ///   `add()`.  These three bytes are already in final encoded form.
+    ///
+    /// - **Non-special characters** (positive codepoints, including ASCII and
+    ///   multibyte Unicode): convert to UTF-8 bytes, then pass each byte through
+    ///   `add_byte()`, which escapes any 0x80 or NUL content byte as
+    ///   `[K_SPECIAL, KS_SPECIAL, KE_FILLER]` / `[K_SPECIAL, KS_ZERO, KE_FILLER]`.
+    ///
+    /// The previous (buggy) implementation called `add_byte` on ALL bytes of
+    /// `encode_char` output, which double-escaped the leading 0x80 of special-key
+    /// sequences, corrupting `K_PASTE_START`/`K_PASTE_END` in redo/record buffers.
     pub fn add_char(&mut self, c: c_int) {
         let mut buf = [0u8; stuff::CHAR_BUF_SIZE];
         let len = stuff::encode_char(c, &mut buf);
-
-        // Both special keys and normal/UTF-8 chars get add_byte'd per byte
-        // to handle K_SPECIAL/NUL escaping.
-        for &b in &buf[..len] {
-            self.add_byte(b);
+        if stuff::is_special(c) || c == c_int::from(K_SPECIAL) || c == 0 {
+            // Special key or literal K_SPECIAL/NUL: encode_char already produces
+            // the final 3-byte sequence [K_SPECIAL, K_SECOND, K_THIRD]; write verbatim.
+            self.add(&buf[..len]);
+        } else {
+            // Non-special: UTF-8 bytes — each byte may be 0x80 (content) and must
+            // be escaped through add_byte to produce [K_SPECIAL, KS_SPECIAL, KE_FILLER].
+            for &b in &buf[..len] {
+                self.add_byte(b);
+            }
         }
     }
 }
@@ -732,6 +750,15 @@ pub unsafe extern "C" fn rs_read_redo_peek() -> c_int {
     c_int::from(REDO_READER_BUF[REDO_READER_POS])
 }
 
+/// Returns 1 (true) if the redo reader has no more bytes to consume.
+///
+/// Used by rs_copy_redo to distinguish genuine end-of-buffer from a
+/// decoded NUL content byte (both cause read_redo_char to return 0).
+#[no_mangle]
+pub unsafe extern "C" fn rs_redo_reader_at_end() -> c_int {
+    c_int::from(REDO_READER_POS >= REDO_READER_BUF.len())
+}
+
 // --- Save/restore readbufs for typeahead ---
 
 static mut SAVE_READBUF1: BuffHeader = BuffHeader::new();
@@ -1030,5 +1057,103 @@ mod tests {
         buf.add(b"hello");
         buf.delete_tail(2);
         assert_eq!(buf.get_contents(), b"hel");
+    }
+
+    // -------------------------------------------------------------------------
+    // add_char correctness tests — guard against double-escaping of special keys
+    // -------------------------------------------------------------------------
+
+    /// K_PASTE_START = TERMCAP2KEY('P', 'S') = -(0x50 + (0x53 << 8)) = -21328
+    /// encode_char must produce [0x80, 0x50, 0x53]; add_char must store it verbatim.
+    /// The old double-escape bug would produce [0x80, 0xfe, 0x58, 0x50, 0x53]
+    /// (re-encoding the leading 0x80 as K_SPECIAL/KS_SPECIAL/KE_FILLER).
+    #[test]
+    fn test_add_char_k_paste_start_no_double_escape() {
+        const K_PASTE_START: c_int = -(0x50 + (0x53_i32 << 8)); // -21328
+        let mut buf = BuffHeader::new();
+        buf.add_char(K_PASTE_START);
+        // Expected: raw 3-byte special sequence [K_SPECIAL, 'P', 'S']
+        assert_eq!(
+            buf.get_contents(),
+            &[0x80u8, 0x50, 0x53],
+            "K_PASTE_START must be stored as [0x80, 'P', 'S'] — not double-escaped"
+        );
+    }
+
+    /// K_PASTE_END = TERMCAP2KEY('P', 'E') = -(0x50 + (0x45 << 8))
+    #[test]
+    fn test_add_char_k_paste_end_no_double_escape() {
+        const K_PASTE_END: c_int = -(0x50 + (0x45_i32 << 8));
+        let mut buf = BuffHeader::new();
+        buf.add_char(K_PASTE_END);
+        assert_eq!(
+            buf.get_contents(),
+            &[0x80u8, 0x50, 0x45],
+            "K_PASTE_END must be stored as [0x80, 'P', 'E'] — not double-escaped"
+        );
+    }
+
+    /// NUL (0) must be stored as [K_SPECIAL, KS_ZERO, KE_FILLER] = [0x80, 0xff, 0x58].
+    #[test]
+    fn test_add_char_nul() {
+        let mut buf = BuffHeader::new();
+        // KS_ZERO = 255 = 0xff, KE_FILLER = b'X' = 0x58
+        buf.add_char(0); // NUL
+        assert_eq!(
+            buf.get_contents(),
+            &[0x80u8, 0xff, 0x58],
+            "NUL must be stored as [K_SPECIAL, KS_ZERO, KE_FILLER]"
+        );
+    }
+
+    /// Literal K_SPECIAL (0x80 as positive c_int) must be stored as
+    /// [K_SPECIAL, KS_SPECIAL, KE_FILLER] = [0x80, 0xfe, 0x58].
+    #[test]
+    fn test_add_char_literal_k_special() {
+        let mut buf = BuffHeader::new();
+        // KS_SPECIAL = 254 = 0xfe
+        buf.add_char(0x80); // K_SPECIAL as positive int
+        assert_eq!(
+            buf.get_contents(),
+            &[0x80u8, 0xfe, 0x58],
+            "K_SPECIAL must be stored as [K_SPECIAL, KS_SPECIAL, KE_FILLER]"
+        );
+    }
+
+    /// Plain ASCII must pass through as-is.
+    #[test]
+    fn test_add_char_ascii() {
+        let mut buf = BuffHeader::new();
+        buf.add_char(c_int::from(b'A'));
+        assert_eq!(buf.get_contents(), b"A");
+    }
+
+    /// U+5000 (倀) encodes as UTF-8 [0xE5, 0x80, 0x80].  The two 0x80 bytes are
+    /// content bytes that must be escaped by add_byte (matching C add_char_buff):
+    /// each 0x80 content byte becomes [K_SPECIAL=0x80, KS_SPECIAL=0xFE, KE_FILLER=0x58].
+    #[test]
+    fn test_add_char_multibyte_with_0x80_bytes() {
+        let mut buf = BuffHeader::new();
+        // UTF-8 of U+5000 is [E5, 80, 80].
+        // 0xE5 is stored raw; each 0x80 content byte is escaped via add_byte.
+        buf.add_char(0x5000); // U+5000 倀
+        assert_eq!(
+            buf.get_contents(),
+            // 0xE5 raw, then 0x80 -> [0x80, 0xFE, 0x58], then 0x80 -> [0x80, 0xFE, 0x58]
+            &[0xE5u8, 0x80, 0xFE, 0x58, 0x80, 0xFE, 0x58],
+            "Content 0x80 bytes must be escaped as [K_SPECIAL, KS_SPECIAL, KE_FILLER]"
+        );
+    }
+
+    /// Round-trip test: two K_PASTE_START chars stored via add_char then read
+    /// back byte-by-byte must reproduce the two 3-byte sequences.
+    #[test]
+    fn test_add_char_k_paste_start_round_trip() {
+        const K_PASTE_START: c_int = -(0x50 + (0x53_i32 << 8));
+        let mut buf = BuffHeader::new();
+        buf.add_char(K_PASTE_START);
+        buf.add_char(K_PASTE_START);
+        let expected: &[u8] = &[0x80, 0x50, 0x53, 0x80, 0x50, 0x53];
+        assert_eq!(buf.get_contents(), expected);
     }
 }

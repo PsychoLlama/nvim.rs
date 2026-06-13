@@ -128,8 +128,6 @@ extern "C" {
     static mut typebuf_was_filled: bool;
     /// xmalloc: allocate memory
     fn xmalloc(size: usize) -> *mut u8;
-    /// xrealloc: reallocate memory
-    fn xrealloc(ptr: *mut u8, size: usize) -> *mut u8;
     /// xfree: free memory
     fn xfree(ptr: *mut c_void);
     /// internal_error: report internal error
@@ -1069,7 +1067,13 @@ pub unsafe extern "C" fn rs_ins_typebuf(
             addlen as usize,
         );
     } else {
-        // Need to allocate more room for the buffer
+        // Need to allocate a new buffer.
+        // In typebuf.tb_buf there must always be room for 3*(MAXMAPLEN+4) chars.
+        // We add some extra room to avoid too-frequent allocations.
+        //
+        // IMPORTANT: use xmalloc (not xrealloc) here because typebuf.tb_buf
+        // may point to the static TYPEBUF_INIT array, which cannot be
+        // passed to xrealloc.  Mirrors C's ins_typebuf() exactly.
         let newoff = maxmaplen + 4;
         let extra = addlen + newoff + 4 * (maxmaplen + 4);
 
@@ -1078,57 +1082,59 @@ pub unsafe extern "C" fn rs_ins_typebuf(
             return FAIL;
         }
 
-        // Grow the typeahead buffer via xrealloc
         let new_buflen = typebuf.tb_len + extra;
-        let new_buf = xrealloc(typebuf.tb_buf, new_buflen as usize);
-        let new_noremap = xrealloc(typebuf.tb_noremap, new_buflen as usize);
-        if new_buf.is_null() || new_noremap.is_null() {
-            return FAIL;
-        }
-        typebuf.tb_buf = new_buf;
-        typebuf.tb_noremap = new_noremap;
+        // Allocate fresh buffers (never realloc the static init arrays).
+        let s1 = xmalloc(new_buflen as usize);
+        let s2 = xmalloc(new_buflen as usize);
         typebuf.tb_buflen = new_buflen;
 
+        let old_buf = typebuf.tb_buf;
+        let old_noremap = typebuf.tb_noremap;
         let old_off = typebuf.tb_off;
 
-        // Copy existing content to new position, making room for insertion
-        // First: bytes before offset
+        // Copy bytes before offset into new buffer at newoff.
         if offset > 0 {
-            std::ptr::copy(
-                typebuf.tb_buf.offset(old_off as isize),
-                typebuf.tb_buf.offset(newoff as isize),
+            std::ptr::copy_nonoverlapping(
+                old_buf.offset(old_off as isize),
+                s1.offset(newoff as isize),
                 offset as usize,
             );
-            std::ptr::copy(
-                typebuf.tb_noremap.offset(old_off as isize),
-                typebuf.tb_noremap.offset(newoff as isize),
+            std::ptr::copy_nonoverlapping(
+                old_noremap.offset(old_off as isize),
+                s2.offset(newoff as isize),
                 offset as usize,
             );
         }
 
-        // Copy new string at offset position
-        std::ptr::copy_nonoverlapping(
-            str,
-            typebuf.tb_buf.offset((newoff + offset) as isize),
-            addlen as usize,
-        );
+        // Copy new string at offset position.
+        std::ptr::copy_nonoverlapping(str, s1.offset((newoff + offset) as isize), addlen as usize);
 
-        // Copy bytes after offset (including NUL)
+        // Copy old bytes after offset (including NUL terminator).
         let bytes_after = (typebuf.tb_len - offset + 1) as usize;
-        std::ptr::copy(
-            typebuf.tb_buf.offset((old_off + offset) as isize),
-            typebuf.tb_buf.offset((newoff + offset + addlen) as isize),
+        std::ptr::copy_nonoverlapping(
+            old_buf.offset((old_off + offset) as isize),
+            s1.offset((newoff + offset + addlen) as isize),
             bytes_after,
         );
         let noremap_after = (typebuf.tb_len - offset) as usize;
-        std::ptr::copy(
-            typebuf.tb_noremap.offset((old_off + offset) as isize),
-            typebuf
-                .tb_noremap
-                .offset((newoff + offset + addlen) as isize),
+        std::ptr::copy_nonoverlapping(
+            old_noremap.offset((old_off + offset) as isize),
+            s2.offset((newoff + offset + addlen) as isize),
             noremap_after,
         );
 
+        // Free old buffers only if they are heap-allocated (not the static init arrays).
+        let init_buf_ptr: *const u8 = std::ptr::addr_of!(TYPEBUF_INIT[0]);
+        let init_noremap_ptr: *const u8 = std::ptr::addr_of!(NOREMAPBUF_INIT[0]);
+        if old_buf.cast_const() != init_buf_ptr {
+            xfree(old_buf.cast::<c_void>());
+        }
+        if old_noremap.cast_const() != init_noremap_ptr {
+            xfree(old_noremap.cast::<c_void>());
+        }
+
+        typebuf.tb_buf = s1;
+        typebuf.tb_noremap = s2;
         typebuf.tb_off = newoff;
     }
 

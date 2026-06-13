@@ -1479,7 +1479,7 @@ pub unsafe extern "C" fn rs_map_execute_lua(may_repeat: bool, discard: bool) -> 
     }
 
     let mut err = NvimError {
-        err_type: 0,
+        err_type: -1, // kErrorTypeNone = -1
         msg: std::ptr::null_mut(),
     };
     let args = Array {
@@ -1564,7 +1564,7 @@ pub unsafe extern "C" fn rs_paste_repeat(count: c_int) {
     };
     let mut arena = CArena::empty();
     let mut err = NvimError {
-        err_type: 0,
+        err_type: -1, // kErrorTypeNone = -1
         msg: std::ptr::null_mut(),
     };
     let mut i = 0;

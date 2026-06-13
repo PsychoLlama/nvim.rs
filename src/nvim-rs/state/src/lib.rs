@@ -749,7 +749,6 @@ pub unsafe extern "C" fn rs_state_enter(s: *mut VimState) {
                 check_end_reg_executing(true);
                 may_sync_undo();
             }
-
             let execute_result = (*s).execute.map_or(0, |execute| execute(s, key));
 
             if execute_result == 0 {

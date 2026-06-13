@@ -639,7 +639,6 @@ pub unsafe extern "C" fn paste_store_export(
 
     let need_redo = rs_get_block_redo() == 0;
     let need_record = nvim_get_reg_recording() != 0 && rs_is_internal_call(channel_id) == 0;
-
     if !need_redo && !need_record {
         return;
     }
@@ -785,10 +784,13 @@ pub unsafe extern "C" fn rs_copy_redo(old_redo: c_int) {
     // same old_redo value, and the reader is already positioned.
     let _ = old_redo; // reader already positioned by caller
     loop {
-        let c = read_redo_char();
-        if c == 0 {
+        // Check for end-of-buffer BEFORE reading: read_redo_char() also
+        // returns 0 for a decoded NUL content byte (KS_ZERO escape), so we
+        // must not use the return value alone as an end-of-buffer sentinel.
+        if buffheader::rs_redo_reader_at_end() != 0 {
             break;
         }
+        let c = read_redo_char();
         buffheader::readbuf2().add_char(c);
     }
 }
