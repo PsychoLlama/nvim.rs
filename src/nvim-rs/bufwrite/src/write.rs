@@ -745,13 +745,12 @@ pub unsafe extern "C" fn rs_buf_write(
     if end > ml_line_count {
         end = ml_line_count;
     }
-    if unsafe { nvim_bw_buf_get_ml_flags(buf) } & ML_EMPTY != 0 {
-        end = start - 1; // start = end + 1 in C, but end = start - 1 makes start > end
-                         // Actually C does: start = end + 1, meaning empty loop
-                         // In C: if ML_EMPTY, start = end + 1. We need to mirror that.
-                         // But we receive start as parameter and can't change the loop start easily.
-                         // Let's set end = start - 1 to skip the loop.
-    }
+    // Mirror C behaviour: for an empty buffer (ML_EMPTY), make the write loop
+    // a no-op by noting that we should start past the end.  We must NOT set
+    // end = 0 here because the post-loop checks use end == 0 as a write-error
+    // sentinel.  The original C code does `start = end + 1`, making the loop
+    // condition false; we replicate that via a separate lnum adjustment below.
+    let ml_empty = unsafe { nvim_bw_buf_get_ml_flags(buf) } & ML_EMPTY != 0;
 
     let mut wfname: *mut c_char = ptr::null_mut();
     let mut wfname_allocated = false;
@@ -1113,7 +1112,9 @@ pub unsafe extern "C" fn rs_buf_write(
         let mut s = buffer;
         let mut len: c_int = 0;
 
-        lnum = start;
+        // For an empty buffer (ML_EMPTY) the loop must not run.
+        // C does `start = end + 1`; we mirror that by starting lnum past end.
+        lnum = if ml_empty { end + 1 } else { start };
         while lnum <= end {
             let ptr_base = unsafe { nvim_bw_ml_get_buf(buf, lnum) };
             let mut ptr = unsafe { ptr_base.offset(-1) };

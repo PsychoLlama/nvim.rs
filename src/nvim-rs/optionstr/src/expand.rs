@@ -111,9 +111,9 @@ fn normalize_opt_idx_for_expand(idx: c_int) -> c_int {
     }
 }
 
-// Return values matching C OK/FAIL
-const OK: c_int = 0;
-const FAIL: c_int = -1;
+// Return values matching C OK/FAIL (vim_defs.h: OK=1, FAIL=0)
+const OK: c_int = 1;
+const FAIL: c_int = 0;
 
 // =============================================================================
 // expand_set_opt_string: expands a list of string values
@@ -462,7 +462,7 @@ pub unsafe extern "C" fn get_fileformat_name(_xp: *mut ExpandT, idx: c_int) -> *
 }
 
 /// Check if value is a valid fileformat name.
-/// Returns OK (0) if valid, FAIL (-1) otherwise.
+/// Returns OK (1) if valid, FAIL (0) otherwise.
 /// Equivalent to C's check_ff_value().
 ///
 /// # Safety
@@ -625,4 +625,19 @@ pub unsafe extern "C" fn expand_set_chars_option(
     };
 
     expand_set_opt_generic_impl(args, func, num_matches, matches)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FAIL, OK};
+
+    /// Compile-time guard: OK and FAIL must match vim_defs.h (OK=1, FAIL=0).
+    /// If this test fails, the constants in this file are inverted again.
+    #[test]
+    fn ok_fail_constants_match_vim_defs() {
+        assert_eq!(OK, 1, "OK must equal 1 (vim_defs.h)");
+        assert_eq!(FAIL, 0, "FAIL must equal 0 (vim_defs.h)");
+        // Sanity: they must be distinct
+        assert_ne!(OK, FAIL);
+    }
 }
