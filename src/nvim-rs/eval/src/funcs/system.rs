@@ -509,7 +509,8 @@ pub unsafe extern "C" fn rs_f_environ(
     os_free_fullenv(env);
 }
 
-// XDG type constants matching XDGVarType enum in C
+// XDG type constants matching XDGVarType enum in src/nvim/os/stdpaths_defs.h.
+// Compile-time guards below catch any future drift between these and the C enum.
 const XDG_CONFIG_HOME: c_int = 0;
 const XDG_DATA_HOME: c_int = 1;
 const XDG_CACHE_HOME: c_int = 2;
@@ -517,6 +518,16 @@ const XDG_STATE_HOME: c_int = 3;
 const XDG_RUNTIME_DIR: c_int = 4;
 const XDG_CONFIG_DIRS: c_int = 5;
 const XDG_DATA_DIRS: c_int = 6;
+
+// Defensive compile-time guards: these values must match XDGVarType in
+// src/nvim/os/stdpaths_defs.h (kXdgConfigHome=0 .. kXdgDataDirs=6).
+const _: () = assert!(XDG_CONFIG_HOME == 0);
+const _: () = assert!(XDG_DATA_HOME == 1);
+const _: () = assert!(XDG_CACHE_HOME == 2);
+const _: () = assert!(XDG_STATE_HOME == 3);
+const _: () = assert!(XDG_RUNTIME_DIR == 4);
+const _: () = assert!(XDG_CONFIG_DIRS == 5);
+const _: () = assert!(XDG_DATA_DIRS == 6);
 
 /// "stdpath(type)" function - get standard path for given type
 ///

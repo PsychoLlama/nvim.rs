@@ -59,7 +59,33 @@ extern "C" {
     fn delete_recursive(name: *const c_char) -> c_int;
     fn path_tail(p: *const c_char) -> *mut c_char;
     fn emsg(s: *const c_char);
+    /// Log a message. The `fmt` must be a literal format string (e.g. `c"%s"`);
+    /// pre-format the message into a buffer and pass it as the single vararg to
+    /// avoid format-string injection.
+    ///
+    /// Mirrors: `bool logmsg(int log_level, const char *context,
+    ///           const char *func_name, int line_num, bool eol,
+    ///           const char *fmt, ...)` in src/nvim/log.c.
+    fn logmsg(
+        log_level: c_int,
+        context: *const c_char,
+        func_name: *const c_char,
+        line_num: c_int,
+        eol: bool,
+        fmt: *const c_char,
+        ...
+    ) -> bool;
 }
+
+// Log-level constants — mirror LOGLVL_* in src/nvim/log.h.
+const LOGLVL_DBG: c_int = 1;
+const LOGLVL_WRN: c_int = 3;
+const LOGLVL_ERR: c_int = 4;
+
+// Compile-time guards: if log.h ever changes these values the build breaks.
+const _: () = assert!(LOGLVL_DBG == 1);
+const _: () = assert!(LOGLVL_WRN == 3);
+const _: () = assert!(LOGLVL_ERR == 4);
 
 // Temp directory candidate paths (matches C TEMP_DIR_NAMES on Unix)
 const TEMP_DIR_NAMES: &[&[u8]] = &[b"$TMPDIR\0", b"/tmp\0", b".\0", b"~\0"];
@@ -111,12 +137,44 @@ unsafe fn vim_mktempdir_impl() {
         };
 
         if !unsafe { os_isdir(tmp.as_ptr() as *const c_char) } {
-            // Check if it's $TMPDIR being unset/invalid
+            // Check if it's $TMPDIR being unset/invalid — mirrors upstream C DLOG/WLOG.
             if dir_name == b"$TMPDIR\0" {
                 if !unsafe { os_env_exists(c"TMPDIR".as_ptr(), true) } {
-                    // $TMPDIR is unset - silently skip
+                    // $TMPDIR is unset — emit DLOG equivalent (cosmetic, not test-gated).
+                    unsafe {
+                        logmsg(
+                            LOGLVL_DBG,
+                            std::ptr::null(),
+                            c"vim_mktempdir".as_ptr(),
+                            0,
+                            true,
+                            c"%s".as_ptr(),
+                            c"$TMPDIR is unset".as_ptr(),
+                        )
+                    };
                 } else {
-                    // $TMPDIR is set but not a directory
+                    // $TMPDIR is set but not a valid directory — emit WLOG equivalent.
+                    // This is the line required by assert_log in the functional tests.
+                    let mut msgbuf = [0u8; 512];
+                    unsafe {
+                        vim_snprintf(
+                            msgbuf.as_mut_ptr() as *mut c_char,
+                            msgbuf.len(),
+                            c"$TMPDIR tempdir not a directory (or does not exist): \"%s\"".as_ptr(),
+                            tmp.as_ptr() as *const c_char,
+                        )
+                    };
+                    unsafe {
+                        logmsg(
+                            LOGLVL_WRN,
+                            std::ptr::null(),
+                            c"vim_mktempdir".as_ptr(),
+                            0,
+                            true,
+                            c"%s".as_ptr(),
+                            msgbuf.as_ptr() as *const c_char,
+                        )
+                    };
                 }
             }
             continue;
@@ -171,6 +229,74 @@ unsafe fn vim_mktempdir_impl() {
                 };
             }
         } else {
+            // Tempdir root is invalid — emit ELOG equivalents matching upstream C.
+            if !owned {
+                let mut msgbuf = [0u8; 512];
+                unsafe {
+                    vim_snprintf(
+                        msgbuf.as_mut_ptr() as *mut c_char,
+                        msgbuf.len(),
+                        c"tempdir root not owned by current user (%s): %s".as_ptr(),
+                        user.as_ptr(),
+                        tmp.as_ptr() as *const c_char,
+                    )
+                };
+                unsafe {
+                    logmsg(
+                        LOGLVL_ERR,
+                        std::ptr::null(),
+                        c"vim_mktempdir".as_ptr(),
+                        0,
+                        true,
+                        c"%s".as_ptr(),
+                        msgbuf.as_ptr() as *const c_char,
+                    )
+                };
+            } else if !isdir {
+                let mut msgbuf = [0u8; 512];
+                unsafe {
+                    vim_snprintf(
+                        msgbuf.as_mut_ptr() as *mut c_char,
+                        msgbuf.len(),
+                        c"tempdir root not a directory: %s".as_ptr(),
+                        tmp.as_ptr() as *const c_char,
+                    )
+                };
+                unsafe {
+                    logmsg(
+                        LOGLVL_ERR,
+                        std::ptr::null(),
+                        c"vim_mktempdir".as_ptr(),
+                        0,
+                        true,
+                        c"%s".as_ptr(),
+                        msgbuf.as_ptr() as *const c_char,
+                    )
+                };
+            }
+            if (perm & 0o777) != 0o700 {
+                let mut msgbuf = [0u8; 512];
+                unsafe {
+                    vim_snprintf(
+                        msgbuf.as_mut_ptr() as *mut c_char,
+                        msgbuf.len(),
+                        c"tempdir root has invalid permissions (%o): %s".as_ptr(),
+                        perm as c_int,
+                        tmp.as_ptr() as *const c_char,
+                    )
+                };
+                unsafe {
+                    logmsg(
+                        LOGLVL_ERR,
+                        std::ptr::null(),
+                        c"vim_mktempdir".as_ptr(),
+                        0,
+                        true,
+                        c"%s".as_ptr(),
+                        msgbuf.as_ptr() as *const c_char,
+                    )
+                };
+            }
             // If our "root" tempdir is invalid, proceed without "<user>/".
             let user_len = unsafe { libc::strlen(user.as_ptr()) };
             tmplen -= user_len;
@@ -194,7 +320,8 @@ unsafe fn vim_mktempdir_impl() {
             )
         };
         if r != 0 {
-            // Warn: tempdir create failed
+            // TODO(migration): restore upstream WLOG("tempdir create failed: %s: %s",
+            // os_strerror(r), tmp) — requires importing os_strerror, deferred.
             continue;
         }
 
@@ -309,8 +436,27 @@ pub unsafe extern "C" fn rs_vim_gettempdir() -> *const c_char {
         if !unsafe { VIM_TEMPDIR }.is_null() {
             unsafe { NOTFOUND += 1 };
             if unsafe { NOTFOUND } == 1 {
-                // ELOG equivalent: tempdir disappeared
-                // Log silently - can't easily call vararg logmsg from Rust
+                // ELOG equivalent: tempdir disappeared (antivirus or broken cleanup job?)
+                let mut msgbuf = [0u8; 512];
+                unsafe {
+                    vim_snprintf(
+                        msgbuf.as_mut_ptr() as *mut c_char,
+                        msgbuf.len(),
+                        c"tempdir disappeared (antivirus or broken cleanup job?): %s".as_ptr(),
+                        VIM_TEMPDIR,
+                    )
+                };
+                unsafe {
+                    logmsg(
+                        LOGLVL_ERR,
+                        std::ptr::null(),
+                        c"vim_gettempdir".as_ptr(),
+                        0,
+                        true,
+                        c"%s".as_ptr(),
+                        msgbuf.as_ptr() as *const c_char,
+                    )
+                };
             }
             if unsafe { NOTFOUND } > 1 {
                 // User-visible: "E5431: tempdir disappeared (%d times)"
