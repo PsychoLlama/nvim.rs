@@ -345,6 +345,30 @@ A (E908) → C (codec crash) → D cmdwin/textlock sub-theme → B (quickfix cod
 - **Cluster H — partially open**: let_spec FIXED; ctx_functions still 5 FAIL (register/jumplist/
   buflist round-trip), match_functions 1 FAIL (matchaddpos zero-length) + setmatches was CRASH
   (recheck), editor/ctrl_c/fold, api/autocmd lambda.
+- **inline virtual text off-by-one + multi-chunk drop — FIXED (2026-06-13):**
+  Two separate bugs in the Rust drawline/decoration render path caused inline virt text to render
+  one buffer column too far right and drop multi-chunk continuations.
+  **Bug 1 — missing col_until guard:** `rs_decor_redraw_col_impl` in
+  `src/nvim-rs/decoration/src/redraw.rs` was called directly at every column, bypassing the C
+  `decor_redraw_col()` inline wrapper guard (`decoration.h:171`:
+  `if (col <= state->col_until) return state->current`). Without this guard, multiple calls at
+  the same column (once to promote the inline range, once per virt-text chunk) corrupted the
+  draw_col/retire sequence, causing multi-chunk virt text second chunks to be dropped.
+  **Bug 2 — spurious break in handle_inline outer loop:** `handle_inline_virtual_text_impl`
+  in `src/nvim-rs/drawline/src/lib.rs` had an unconditional `break` at the bottom of its
+  `loop {}` that exited after the IF branch (which sets up `virt_inline`) without looping back
+  to the ELSE branch (which loads the first chunk). The C original used `while (wlv->n_extra == 0)`
+  which naturally falls through. This caused: match found at col=14 → loop exits with n_extra=0
+  → comma at col=14 drawn first → virt text fires at col=15 (one too late).
+  FIX: (1) Added `if col <= (*state).col_until { return (*state).current; }` guard to
+  `rs_decor_redraw_col_impl`. (2) Restructured `handle_inline_virtual_text_impl` outer loop so
+  the IF branch (find new match) falls through to the chunk-processing block instead of breaking.
+  EVIDENCE: Runtime instrumentation (file-based log) confirmed: at v=14, match found with
+  `virt_size=2`, but no "ELSE branch" fired at v=14 — only at v=15. After fix, both chunks
+  render before the buffer comma.
+  IMPACT: `decorations_spec.lua` 75 FAIL → 64 FAIL (11 tests newly passing); no regressions.
+  Note: ~46 tests expected to flip per plan; remaining 64 failures are pre-existing issues in
+  other parts of the rendering pipeline (viewport counting, cursor positioning, etc.).
 
 ## FRESH BASELINE (2026-06-09, after the insert-spin fix 5e7aed2dc0)
 

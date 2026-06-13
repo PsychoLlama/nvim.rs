@@ -2137,6 +2137,9 @@ unsafe fn handle_inline_virtual_text_impl(
     v: isize,
     selected: bool,
 ) {
+    // Mirror C `while (wlv->n_extra == 0)` semantics exactly.
+    // The loop exits when n_extra > 0 (virt text chunk ready to render) or
+    // when no more inline virt text is found at this column.
     loop {
         let n_extra = (*wlv).n_extra;
         if n_extra != 0 {
@@ -2146,8 +2149,9 @@ unsafe fn handle_inline_virtual_text_impl(
         let virt_inline_i = (*wlv).virt_inline_i;
         let virt_inline_size = (*wlv).virt_inline.size;
 
+        // Phase A: If we need a new inline virt text item, search for one.
+        // Mirrors C: if (wlv->virt_inline_i >= kv_size(wlv->virt_inline)) { ... }
         if virt_inline_i >= virt_inline_size {
-            // Need to find inline virtual text
             (*wlv).virt_inline = KVec::empty();
             (*wlv).virt_inline_i = 0;
 
@@ -2206,11 +2210,19 @@ unsafe fn handle_inline_virtual_text_impl(
             }
 
             if !found {
-                // No more inline virtual text here
+                // No inline virtual text at this column.
+                // Mirrors C: if (!kv_size(wlv->virt_inline)) { break; }
                 break;
             }
-        } else {
-            // Already inside existing inline virtual text with multiple chunks
+            // virt_inline is now set; fall through to Phase B to load the first chunk.
+            // This mirrors C's while-loop where the if-branch falls through to the
+            // else-branch on the next while iteration.
+        }
+
+        // Phase B: Load the next chunk of wlv->virt_inline.
+        // Mirrors C: else { ... next_virt_text_chunk ... }
+        // Reached when virt_inline was already set (multi-chunk) OR just found (Phase A).
+        {
             let virt_inline_ptr = VirtTextHandle(
                 std::ptr::from_mut::<KVec<VirtTextChunkC>>(&mut (*wlv).virt_inline)
                     .cast::<c_void>(),
@@ -2296,13 +2308,10 @@ unsafe fn handle_inline_virtual_text_impl(
                 }
             }
 
-            // Assert n_extra > 0
+            // n_extra > 0: chunk is ready to render; mark as extmark extra and exit.
             debug_assert!((*wlv).n_extra > 0);
             (*wlv).extra_for_extmark = true;
         }
-
-        // Break after successfully processing (either found new or processed existing)
-        break;
     }
 }
 

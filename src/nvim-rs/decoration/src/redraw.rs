@@ -1476,6 +1476,18 @@ pub unsafe extern "C" fn rs_decor_redraw_col_impl(
     hidden: bool,
     state: DecorStateHandle,
 ) -> c_int {
+    // Mirror the C decor_redraw_col() inline wrapper guard (src/nvim/decoration.h:171):
+    //   if (col <= state->col_until) return state->current;
+    // This short-circuit prevents redundant re-execution of the impl when the
+    // decoration state is already valid for the current column. Without this
+    // guard, calling decor_redraw_col_impl multiple times at the same column
+    // (e.g. once to promote the inline range, once for each virt-text chunk)
+    // corrupts the draw_col / retire sequence and shifts inline virtual text
+    // one column to the right, dropping multi-chunk continuations.
+    if col <= (*state).col_until {
+        return (*state).current;
+    }
+
     // Part 1: Advance marktree iterator, get initial col_until
     let col_until_from_itr = decor_col_iter_marks_impl(wp, col, state);
 
