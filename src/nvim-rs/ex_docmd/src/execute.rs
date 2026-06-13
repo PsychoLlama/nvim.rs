@@ -997,11 +997,12 @@ pub unsafe extern "C" fn rs_parse_cmdline(
         (*eap).nextcmd = nvim_skip_colon_white((*eap).nextcmd, true);
     }
 
-    // Set "magic" values.
-    // These are set via nvim_eap_argt_has_xfile / nvim_eap_argt_has_trlbar.
-    // The C code sets cmdinfo->magic.file and cmdinfo->magic.bar.
-    // We need accessors for this. For now, use the existing C setters.
-    // (These are in CmdParseInfo which is opaque to us; we'll handle via wrapper.)
+    // Set "magic" values from the command's argt flags, matching canonical C parse_cmdline:
+    //   cmdinfo->magic.file = (eap->argt & EX_XFILE);
+    //   cmdinfo->magic.bar  = (eap->argt & EX_TRLBAR);
+    // CmdParseInfo is #[repr(C)] with pub bool fields, so write them directly.
+    (*cmdinfo).magic.file = ((*eap).argt & crate::table::EX_XFILE) != 0;
+    (*cmdinfo).magic.bar = ((*eap).argt & crate::table::EX_TRLBAR) != 0;
 
     crate::state::nvim_set_ex_pressedreturn(save_ex_pressedreturn != 0);
     nvim_restore_cursor(save_cursor);

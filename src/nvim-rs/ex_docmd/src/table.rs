@@ -60,6 +60,11 @@ pub const EX_KEEPSCRIPT: u32 = 0x4000000;
 /// Allow incremental command preview
 pub const EX_PREVIEW: u32 = 0x8000000;
 
+// Compile-time guards: these must match ex_cmds_defs.h (C canonical values).
+// Any drift becomes a build error rather than a silent wrong-magic bug.
+const _: () = assert!(EX_XFILE == 0x008, "EX_XFILE must match ex_cmds_defs.h:39");
+const _: () = assert!(EX_TRLBAR == 0x100, "EX_TRLBAR must match ex_cmds_defs.h:45");
+
 // Composite flags
 /// Multiple extra files allowed
 pub const EX_FILES: u32 = EX_XFILE | EX_EXTRA;
