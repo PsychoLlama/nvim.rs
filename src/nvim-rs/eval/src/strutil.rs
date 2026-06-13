@@ -149,6 +149,11 @@ pub unsafe extern "C" fn rs_save_tv_as_string(
     // VAR_LIST: iterate items, replacing NL with NUL.
     let list = (*tv.cast::<TypvalTRepr>()).vval.v_list;
 
+    // NULL list (v:_null_list) behaves as empty: no items, no output.
+    if list.is_null() {
+        return std::ptr::null_mut();
+    }
+
     // First pass: calculate total length.
     // nvim_list_first_item inlined: lv_first at offset 0 in list_T
     let mut item = *(list as *const *mut c_void);

@@ -517,20 +517,20 @@ void nvim_tv_list_append_item(list_T *l, listitem_T *item)
   item->li_next = NULL;
 }
 
-/// Get lv_len from a list (accessor for Rust).
-int nvim_list_get_len(const list_T *l) { return l->lv_len; }
+/// Get lv_len from a list (accessor for Rust). NULL -> 0 (empty list).
+int nvim_list_get_len(const list_T *l) { return l == NULL ? 0 : l->lv_len; }
 
-/// Get lv_lock from a list (accessor for Rust).
-int nvim_list_get_lock(const list_T *l) { return (int)l->lv_lock; }
+/// Get lv_lock from a list (accessor for Rust). NULL -> VAR_FIXED (immutable).
+int nvim_list_get_lock(const list_T *l) { return l == NULL ? VAR_FIXED : (int)l->lv_lock; }
 
-/// Check if lv_watch is non-NULL (accessor for Rust).
-int nvim_list_has_watchers(const list_T *l) { return l->lv_watch != NULL; }
+/// Check if lv_watch is non-NULL (accessor for Rust). NULL -> 0 (no watchers).
+int nvim_list_has_watchers(const list_T *l) { return l == NULL ? 0 : (l->lv_watch != NULL); }
 
-/// Get lv_first from a list (accessor for Rust).
-listitem_T *nvim_list_get_first(const list_T *l) { return l->lv_first; }
+/// Get lv_first from a list (accessor for Rust). NULL -> NULL (empty list).
+listitem_T *nvim_list_get_first(const list_T *l) { return l == NULL ? NULL : l->lv_first; }
 
-/// Get lv_last from a list (accessor for Rust).
-listitem_T *nvim_list_get_last(const list_T *l) { return l->lv_last; }
+/// Get lv_last from a list (accessor for Rust). NULL -> NULL (empty list).
+listitem_T *nvim_list_get_last(const list_T *l) { return l == NULL ? NULL : l->lv_last; }
 
 // Dict accessor functions for Rust
 
