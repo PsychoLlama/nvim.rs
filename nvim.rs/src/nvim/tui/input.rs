@@ -1,0 +1,3191 @@
+extern "C" {
+    pub type multiqueue;
+    pub type TUIData;
+    pub type TermKey;
+    fn __assert_fail(
+        __assertion: *const ::core::ffi::c_char,
+        __file: *const ::core::ffi::c_char,
+        __line: ::core::ffi::c_uint,
+        __function: *const ::core::ffi::c_char,
+    ) -> !;
+    fn snprintf(
+        __s: *mut ::core::ffi::c_char,
+        __maxlen: size_t,
+        __format: *const ::core::ffi::c_char,
+        ...
+    ) -> ::core::ffi::c_int;
+    fn abort() -> !;
+    fn memcpy(
+        __dest: *mut ::core::ffi::c_void,
+        __src: *const ::core::ffi::c_void,
+        __n: size_t,
+    ) -> *mut ::core::ffi::c_void;
+    fn memmove(
+        __dest: *mut ::core::ffi::c_void,
+        __src: *const ::core::ffi::c_void,
+        __n: size_t,
+    ) -> *mut ::core::ffi::c_void;
+    fn memcmp(
+        __s1: *const ::core::ffi::c_void,
+        __s2: *const ::core::ffi::c_void,
+        __n: size_t,
+    ) -> ::core::ffi::c_int;
+    fn strlen(__s: *const ::core::ffi::c_char) -> size_t;
+    fn xfree(ptr: *mut ::core::ffi::c_void);
+    fn xrealloc(ptr: *mut ::core::ffi::c_void, size: size_t) -> *mut ::core::ffi::c_void;
+    fn strnequal(
+        a: *const ::core::ffi::c_char,
+        b: *const ::core::ffi::c_char,
+        n: size_t,
+    ) -> bool;
+    fn mh_get_int(set: *mut Set_int, key: ::core::ffi::c_int) -> uint32_t;
+    fn map_put_ref_int_ptr_t(
+        map: *mut Map_int_ptr_t,
+        key: ::core::ffi::c_int,
+        key_alloc: *mut *mut ::core::ffi::c_int,
+        new_item: *mut bool,
+    ) -> *mut ptr_t;
+    fn uv_close(handle: *mut uv_handle_t, close_cb: uv_close_cb);
+    fn uv_timer_init(_: *mut uv_loop_t, handle: *mut uv_timer_t) -> ::core::ffi::c_int;
+    fn uv_timer_start(
+        handle: *mut uv_timer_t,
+        cb: uv_timer_cb,
+        timeout: uint64_t,
+        repeat: uint64_t,
+    ) -> ::core::ffi::c_int;
+    fn uv_timer_stop(handle: *mut uv_timer_t) -> ::core::ffi::c_int;
+    fn uv_timer_get_due_in(handle: *const uv_timer_t) -> uint64_t;
+    fn loop_schedule_fast(loop_0: *mut Loop, event: Event);
+    static mut main_loop: Loop;
+    fn rstream_init_fd(loop_0: *mut Loop, stream: *mut RStream, fd: ::core::ffi::c_int);
+    fn rstream_start(
+        stream: *mut RStream,
+        cb: stream_read_cb,
+        data: *mut ::core::ffi::c_void,
+    );
+    fn rstream_stop(stream: *mut RStream);
+    fn rstream_available(stream: *mut RStream) -> size_t;
+    fn rstream_consume(stream: *mut RStream, consumed: size_t);
+    fn rstream_may_close(stream: *mut RStream);
+    fn os_exit(r: ::core::ffi::c_int) -> !;
+    fn rpc_send_event(
+        id: uint64_t,
+        name: *const ::core::ffi::c_char,
+        args: Array,
+    ) -> bool;
+    static mut p_ttimeout: ::core::ffi::c_int;
+    static mut p_ttm: OptInt;
+    fn kv_do_printf(
+        str: *mut StringBuilder,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> ::core::ffi::c_int;
+    fn termkey_interpret_mouse(
+        tk: *mut TermKey,
+        key: *const TermKeyKey,
+        event: *mut TermKeyMouseEvent,
+        button: *mut ::core::ffi::c_int,
+        line: *mut ::core::ffi::c_int,
+        col: *mut ::core::ffi::c_int,
+    ) -> TermKeyResult;
+    fn termkey_interpret_modereport(
+        tk: *mut TermKey,
+        key: *const TermKeyKey,
+        initial: *mut ::core::ffi::c_int,
+        mode: *mut ::core::ffi::c_int,
+        value: *mut ::core::ffi::c_int,
+    ) -> TermKeyResult;
+    fn termkey_interpret_csi(
+        tk: *mut TermKey,
+        key: *const TermKeyKey,
+        params: *mut TermKeyCsiParam,
+        nparams: *mut size_t,
+        cmd: *mut ::core::ffi::c_uint,
+    ) -> TermKeyResult;
+    fn termkey_interpret_csi_param(
+        param: TermKeyCsiParam,
+        paramp: *mut ::core::ffi::c_int,
+        subparams: *mut ::core::ffi::c_int,
+        nsubparams: *mut size_t,
+    ) -> TermKeyResult;
+    fn termkey_interpret_string(
+        tk: *mut TermKey,
+        key: *const TermKeyKey,
+        strp: *mut *const ::core::ffi::c_char,
+    ) -> TermKeyResult;
+    fn termkey_new_abstract(
+        term: *mut TerminfoEntry,
+        flags: ::core::ffi::c_int,
+    ) -> *mut TermKey;
+    fn termkey_destroy(tk: *mut TermKey);
+    fn termkey_hook_terminfo_getstr(
+        tk: *mut TermKey,
+        hookfn: Option<TermKey_Terminfo_Getstr_Hook>,
+        data: *mut ::core::ffi::c_void,
+    );
+    fn termkey_start(tk: *mut TermKey) -> ::core::ffi::c_int;
+    fn termkey_get_canonflags(tk: *mut TermKey) -> ::core::ffi::c_int;
+    fn termkey_set_canonflags(tk: *mut TermKey, flags: ::core::ffi::c_int);
+    fn termkey_get_buffer_size(tk: *mut TermKey) -> size_t;
+    fn termkey_set_buffer_size(tk: *mut TermKey, size: size_t) -> ::core::ffi::c_int;
+    fn termkey_get_buffer_remaining(tk: *mut TermKey) -> size_t;
+    fn termkey_getkey(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult;
+    fn termkey_getkey_force(tk: *mut TermKey, key: *mut TermKeyKey) -> TermKeyResult;
+    fn termkey_push_bytes(
+        tk: *mut TermKey,
+        bytes: *const ::core::ffi::c_char,
+        len: size_t,
+    ) -> size_t;
+    fn termkey_strfkey(
+        tk: *mut TermKey,
+        buffer: *mut ::core::ffi::c_char,
+        len: size_t,
+        key: *mut TermKeyKey,
+        format: TermKeyFormat,
+    ) -> size_t;
+    static mut ui_client_channel_id: uint64_t;
+    fn tui_handle_term_mode(tui: *mut TUIData, mode: TermMode, state: TermModeState);
+    fn tui_enable_extended_underline(tui: *mut TUIData);
+    fn tui_query_bg_color(tui: *mut TUIData);
+    fn tui_set_size(
+        tui: *mut TUIData,
+        width: ::core::ffi::c_int,
+        height: ::core::ffi::c_int,
+    );
+}
+pub type size_t = usize;
+pub type ssize_t = isize;
+pub type int8_t = i8;
+pub type int64_t = i64;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct __pthread_internal_list {
+    pub __prev: *mut __pthread_internal_list,
+    pub __next: *mut __pthread_internal_list,
+}
+pub type __pthread_list_t = __pthread_internal_list;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct __pthread_mutex_s {
+    pub __lock: ::core::ffi::c_int,
+    pub __count: ::core::ffi::c_uint,
+    pub __owner: ::core::ffi::c_int,
+    pub __nusers: ::core::ffi::c_uint,
+    pub __kind: ::core::ffi::c_int,
+    pub __spins: ::core::ffi::c_short,
+    pub __elision: ::core::ffi::c_short,
+    pub __list: __pthread_list_t,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct __pthread_rwlock_arch_t {
+    pub __readers: ::core::ffi::c_uint,
+    pub __writers: ::core::ffi::c_uint,
+    pub __wrphase_futex: ::core::ffi::c_uint,
+    pub __writers_futex: ::core::ffi::c_uint,
+    pub __pad3: ::core::ffi::c_uint,
+    pub __pad4: ::core::ffi::c_uint,
+    pub __cur_writer: ::core::ffi::c_int,
+    pub __shared: ::core::ffi::c_int,
+    pub __rwelision: ::core::ffi::c_schar,
+    pub __pad1: [::core::ffi::c_uchar; 7],
+    pub __pad2: ::core::ffi::c_ulong,
+    pub __flags: ::core::ffi::c_uint,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union pthread_mutex_t {
+    pub __data: __pthread_mutex_s,
+    pub __size: [::core::ffi::c_char; 40],
+    pub __align: ::core::ffi::c_long,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union pthread_rwlock_t {
+    pub __data: __pthread_rwlock_arch_t,
+    pub __size: [::core::ffi::c_char; 56],
+    pub __align: ::core::ffi::c_long,
+}
+pub type uint8_t = u8;
+pub type uint32_t = u32;
+pub type uint64_t = u64;
+pub type LuaRef = ::core::ffi::c_int;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Array {
+    pub size: size_t,
+    pub capacity: size_t,
+    pub items: *mut Object,
+}
+pub type Object = object;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct object {
+    pub type_0: ObjectType,
+    pub data: C2Rust_Unnamed,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed {
+    pub boolean: Boolean,
+    pub integer: Integer,
+    pub floating: Float,
+    pub string: String_0,
+    pub array: Array,
+    pub dict: Dict,
+    pub luaref: LuaRef,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Dict {
+    pub size: size_t,
+    pub capacity: size_t,
+    pub items: *mut KeyValuePair,
+}
+pub type KeyValuePair = key_value_pair;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct key_value_pair {
+    pub key: String_0,
+    pub value: Object,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct String_0 {
+    pub data: *mut ::core::ffi::c_char,
+    pub size: size_t,
+}
+pub type Float = ::core::ffi::c_double;
+pub type Integer = int64_t;
+pub type Boolean = bool;
+pub type ObjectType = ::core::ffi::c_uint;
+pub const kObjectTypeTabpage: ObjectType = 10;
+pub const kObjectTypeWindow: ObjectType = 9;
+pub const kObjectTypeBuffer: ObjectType = 8;
+pub const kObjectTypeLuaRef: ObjectType = 7;
+pub const kObjectTypeDict: ObjectType = 6;
+pub const kObjectTypeArray: ObjectType = 5;
+pub const kObjectTypeString: ObjectType = 4;
+pub const kObjectTypeFloat: ObjectType = 3;
+pub const kObjectTypeInteger: ObjectType = 2;
+pub const kObjectTypeBoolean: ObjectType = 1;
+pub const kObjectTypeNil: ObjectType = 0;
+pub type OptInt = int64_t;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct MapHash {
+    pub n_buckets: uint32_t,
+    pub size: uint32_t,
+    pub n_occupied: uint32_t,
+    pub upper_bound: uint32_t,
+    pub n_keys: uint32_t,
+    pub keys_capacity: uint32_t,
+    pub hash: *mut uint32_t,
+}
+pub type ptr_t = *mut ::core::ffi::c_void;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct hashtab_T {
+    pub ht_mask: hash_T,
+    pub ht_used: size_t,
+    pub ht_filled: size_t,
+    pub ht_changed: ::core::ffi::c_int,
+    pub ht_locked: ::core::ffi::c_int,
+    pub ht_array: *mut hashitem_T,
+    pub ht_smallarray: [hashitem_T; 16],
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct hashitem_T {
+    pub hi_hash: hash_T,
+    pub hi_key: *mut ::core::ffi::c_char,
+}
+pub type hash_T = size_t;
+pub type dict_T = dictvar_S;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct dictvar_S {
+    pub dv_lock: VarLockStatus,
+    pub dv_scope: ScopeType,
+    pub dv_refcount: ::core::ffi::c_int,
+    pub dv_copyID: ::core::ffi::c_int,
+    pub dv_hashtab: hashtab_T,
+    pub dv_copydict: *mut dict_T,
+    pub dv_used_next: *mut dict_T,
+    pub dv_used_prev: *mut dict_T,
+    pub watchers: QUEUE,
+    pub lua_table_ref: LuaRef,
+}
+pub type QUEUE = queue;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct queue {
+    pub next: *mut queue,
+    pub prev: *mut queue,
+}
+pub type ScopeType = ::core::ffi::c_uint;
+pub const VAR_DEF_SCOPE: ScopeType = 2;
+pub const VAR_SCOPE: ScopeType = 1;
+pub const VAR_NO_SCOPE: ScopeType = 0;
+pub type VarLockStatus = ::core::ffi::c_uint;
+pub const VAR_FIXED: VarLockStatus = 2;
+pub const VAR_LOCKED: VarLockStatus = 1;
+pub const VAR_UNLOCKED: VarLockStatus = 0;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct loop_0 {
+    pub uv: uv_loop_t,
+    pub events: *mut MultiQueue,
+    pub thread_events: *mut MultiQueue,
+    pub fast_events: *mut MultiQueue,
+    pub children: C2Rust_Unnamed_8,
+    pub children_watcher: uv_signal_t,
+    pub children_kill_timer: uv_timer_t,
+    pub poll_timer: uv_timer_t,
+    pub exit_delay_timer: uv_timer_t,
+    pub async_0: uv_async_t,
+    pub mutex: uv_mutex_t,
+    pub recursive: ::core::ffi::c_int,
+    pub closing: bool,
+}
+pub type uv_mutex_t = pthread_mutex_t;
+pub type uv_async_t = uv_async_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_async_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_5,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub async_cb: uv_async_cb,
+    pub queue: uv__queue,
+    pub pending: ::core::ffi::c_int,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv__queue {
+    pub next: *mut uv__queue,
+    pub prev: *mut uv__queue,
+}
+pub type uv_async_cb = Option<unsafe extern "C" fn(*mut uv_async_t) -> ()>;
+pub type uv_handle_t = uv_handle_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_handle_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_0,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_0 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+pub type uv_close_cb = Option<unsafe extern "C" fn(*mut uv_handle_t) -> ()>;
+pub type uv_handle_type = ::core::ffi::c_uint;
+pub const UV_HANDLE_TYPE_MAX: uv_handle_type = 18;
+pub const UV_FILE: uv_handle_type = 17;
+pub const UV_SIGNAL: uv_handle_type = 16;
+pub const UV_UDP: uv_handle_type = 15;
+pub const UV_TTY: uv_handle_type = 14;
+pub const UV_TIMER: uv_handle_type = 13;
+pub const UV_TCP: uv_handle_type = 12;
+pub const UV_STREAM: uv_handle_type = 11;
+pub const UV_PROCESS: uv_handle_type = 10;
+pub const UV_PREPARE: uv_handle_type = 9;
+pub const UV_POLL: uv_handle_type = 8;
+pub const UV_NAMED_PIPE: uv_handle_type = 7;
+pub const UV_IDLE: uv_handle_type = 6;
+pub const UV_HANDLE: uv_handle_type = 5;
+pub const UV_FS_POLL: uv_handle_type = 4;
+pub const UV_FS_EVENT: uv_handle_type = 3;
+pub const UV_CHECK: uv_handle_type = 2;
+pub const UV_ASYNC: uv_handle_type = 1;
+pub const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
+pub type uv_loop_t = uv_loop_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_loop_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub active_handles: ::core::ffi::c_uint,
+    pub handle_queue: uv__queue,
+    pub active_reqs: C2Rust_Unnamed_4,
+    pub internal_fields: *mut ::core::ffi::c_void,
+    pub stop_flag: ::core::ffi::c_uint,
+    pub flags: ::core::ffi::c_ulong,
+    pub backend_fd: ::core::ffi::c_int,
+    pub pending_queue: uv__queue,
+    pub watcher_queue: uv__queue,
+    pub watchers: *mut *mut uv__io_t,
+    pub nwatchers: ::core::ffi::c_uint,
+    pub nfds: ::core::ffi::c_uint,
+    pub wq: uv__queue,
+    pub wq_mutex: uv_mutex_t,
+    pub wq_async: uv_async_t,
+    pub cloexec_lock: uv_rwlock_t,
+    pub closing_handles: *mut uv_handle_t,
+    pub process_handles: uv__queue,
+    pub prepare_handles: uv__queue,
+    pub check_handles: uv__queue,
+    pub idle_handles: uv__queue,
+    pub async_handles: uv__queue,
+    pub async_unused: Option<unsafe extern "C" fn() -> ()>,
+    pub async_io_watcher: uv__io_t,
+    pub async_wfd: ::core::ffi::c_int,
+    pub timer_heap: C2Rust_Unnamed_3,
+    pub timer_counter: uint64_t,
+    pub time: uint64_t,
+    pub signal_pipefd: [::core::ffi::c_int; 2],
+    pub signal_io_watcher: uv__io_t,
+    pub child_watcher: uv_signal_t,
+    pub emfile_fd: ::core::ffi::c_int,
+    pub inotify_read_watcher: uv__io_t,
+    pub inotify_watchers: *mut ::core::ffi::c_void,
+    pub inotify_fd: ::core::ffi::c_int,
+}
+pub type uv__io_t = uv__io_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv__io_s {
+    pub cb: uv__io_cb,
+    pub pending_queue: uv__queue,
+    pub watcher_queue: uv__queue,
+    pub pevents: ::core::ffi::c_uint,
+    pub events: ::core::ffi::c_uint,
+    pub fd: ::core::ffi::c_int,
+}
+pub type uv__io_cb = Option<
+    unsafe extern "C" fn(*mut uv_loop_s, *mut uv__io_s, ::core::ffi::c_uint) -> (),
+>;
+pub type uv_signal_t = uv_signal_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_signal_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_2,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub signal_cb: uv_signal_cb,
+    pub signum: ::core::ffi::c_int,
+    pub tree_entry: C2Rust_Unnamed_1,
+    pub caught_signals: ::core::ffi::c_uint,
+    pub dispatched_signals: ::core::ffi::c_uint,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct C2Rust_Unnamed_1 {
+    pub rbe_left: *mut uv_signal_s,
+    pub rbe_right: *mut uv_signal_s,
+    pub rbe_parent: *mut uv_signal_s,
+    pub rbe_color: ::core::ffi::c_int,
+}
+pub type uv_signal_cb = Option<
+    unsafe extern "C" fn(*mut uv_signal_t, ::core::ffi::c_int) -> (),
+>;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_2 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct C2Rust_Unnamed_3 {
+    pub min: *mut ::core::ffi::c_void,
+    pub nelts: ::core::ffi::c_uint,
+}
+pub type uv_rwlock_t = pthread_rwlock_t;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_4 {
+    pub unused: *mut ::core::ffi::c_void,
+    pub count: ::core::ffi::c_uint,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_5 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+pub type uv_timer_t = uv_timer_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_timer_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_7,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub timer_cb: uv_timer_cb,
+    pub node: C2Rust_Unnamed_6,
+    pub timeout: uint64_t,
+    pub repeat: uint64_t,
+    pub start_id: uint64_t,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_6 {
+    pub heap: [*mut ::core::ffi::c_void; 3],
+    pub queue: uv__queue,
+}
+pub type uv_timer_cb = Option<unsafe extern "C" fn(*mut uv_timer_t) -> ()>;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_7 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct C2Rust_Unnamed_8 {
+    pub size: size_t,
+    pub capacity: size_t,
+    pub items: *mut *mut Proc,
+}
+pub type Proc = proc;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct proc {
+    pub type_0: ProcType,
+    pub loop_0: *mut Loop,
+    pub data: *mut ::core::ffi::c_void,
+    pub pid: ::core::ffi::c_int,
+    pub status: ::core::ffi::c_int,
+    pub refcount: ::core::ffi::c_int,
+    pub exit_signal: uint8_t,
+    pub stopped_time: uint64_t,
+    pub cwd: *const ::core::ffi::c_char,
+    pub argv: *mut *mut ::core::ffi::c_char,
+    pub exepath: *const ::core::ffi::c_char,
+    pub env: *mut dict_T,
+    pub in_0: Stream,
+    pub out: RStream,
+    pub err: RStream,
+    pub cb: proc_exit_cb,
+    pub state_cb: proc_state_cb,
+    pub internal_exit_cb: internal_proc_cb,
+    pub internal_close_cb: internal_proc_cb,
+    pub closed: bool,
+    pub detach: bool,
+    pub overlapped: bool,
+    pub fwd_err: bool,
+    pub stdio_noinherit: bool,
+    pub events: *mut MultiQueue,
+}
+pub type MultiQueue = multiqueue;
+pub type internal_proc_cb = Option<unsafe extern "C" fn(*mut Proc) -> ()>;
+pub type proc_state_cb = Option<
+    unsafe extern "C" fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> (),
+>;
+pub type proc_exit_cb = Option<
+    unsafe extern "C" fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> (),
+>;
+pub type RStream = rstream;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct rstream {
+    pub s: Stream,
+    pub did_eof: bool,
+    pub want_read: bool,
+    pub pending_read: bool,
+    pub paused_full: bool,
+    pub buffer: *mut ::core::ffi::c_char,
+    pub read_pos: *mut ::core::ffi::c_char,
+    pub write_pos: *mut ::core::ffi::c_char,
+    pub uvbuf: uv_buf_t,
+    pub read_cb: stream_read_cb,
+    pub num_bytes: size_t,
+}
+pub type stream_read_cb = Option<
+    unsafe extern "C" fn(
+        *mut RStream,
+        *const ::core::ffi::c_char,
+        size_t,
+        *mut ::core::ffi::c_void,
+        bool,
+    ) -> size_t,
+>;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_buf_t {
+    pub base: *mut ::core::ffi::c_char,
+    pub len: size_t,
+}
+pub type Stream = stream;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct stream {
+    pub closed: bool,
+    pub uv: C2Rust_Unnamed_10,
+    pub uvstream: *mut uv_stream_t,
+    pub fd: uv_file,
+    pub fpos: int64_t,
+    pub cb_data: *mut ::core::ffi::c_void,
+    pub before_close_cb: stream_close_cb,
+    pub close_cb: stream_close_cb,
+    pub internal_close_cb: stream_close_cb,
+    pub close_cb_data: *mut ::core::ffi::c_void,
+    pub internal_data: *mut ::core::ffi::c_void,
+    pub pending_reqs: size_t,
+    pub events: *mut MultiQueue,
+    pub write_cb: stream_write_cb,
+    pub curmem: size_t,
+    pub maxmem: size_t,
+}
+pub type stream_write_cb = Option<
+    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> (),
+>;
+pub type stream_close_cb = Option<
+    unsafe extern "C" fn(*mut Stream, *mut ::core::ffi::c_void) -> (),
+>;
+pub type uv_file = ::core::ffi::c_int;
+pub type uv_stream_t = uv_stream_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_stream_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_9,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub write_queue_size: size_t,
+    pub alloc_cb: uv_alloc_cb,
+    pub read_cb: uv_read_cb,
+    pub connect_req: *mut uv_connect_t,
+    pub shutdown_req: *mut uv_shutdown_t,
+    pub io_watcher: uv__io_t,
+    pub write_queue: uv__queue,
+    pub write_completed_queue: uv__queue,
+    pub connection_cb: uv_connection_cb,
+    pub delayed_error: ::core::ffi::c_int,
+    pub accepted_fd: ::core::ffi::c_int,
+    pub queued_fds: *mut ::core::ffi::c_void,
+}
+pub type uv_connection_cb = Option<
+    unsafe extern "C" fn(*mut uv_stream_t, ::core::ffi::c_int) -> (),
+>;
+pub type uv_shutdown_t = uv_shutdown_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_shutdown_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub type_0: uv_req_type,
+    pub reserved: [*mut ::core::ffi::c_void; 6],
+    pub handle: *mut uv_stream_t,
+    pub cb: uv_shutdown_cb,
+}
+pub type uv_shutdown_cb = Option<
+    unsafe extern "C" fn(*mut uv_shutdown_t, ::core::ffi::c_int) -> (),
+>;
+pub type uv_req_type = ::core::ffi::c_uint;
+pub const UV_REQ_TYPE_MAX: uv_req_type = 11;
+pub const UV_RANDOM: uv_req_type = 10;
+pub const UV_GETNAMEINFO: uv_req_type = 9;
+pub const UV_GETADDRINFO: uv_req_type = 8;
+pub const UV_WORK: uv_req_type = 7;
+pub const UV_FS: uv_req_type = 6;
+pub const UV_UDP_SEND: uv_req_type = 5;
+pub const UV_SHUTDOWN: uv_req_type = 4;
+pub const UV_WRITE: uv_req_type = 3;
+pub const UV_CONNECT: uv_req_type = 2;
+pub const UV_REQ: uv_req_type = 1;
+pub const UV_UNKNOWN_REQ: uv_req_type = 0;
+pub type uv_connect_t = uv_connect_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_connect_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub type_0: uv_req_type,
+    pub reserved: [*mut ::core::ffi::c_void; 6],
+    pub cb: uv_connect_cb,
+    pub handle: *mut uv_stream_t,
+    pub queue: uv__queue,
+}
+pub type uv_connect_cb = Option<
+    unsafe extern "C" fn(*mut uv_connect_t, ::core::ffi::c_int) -> (),
+>;
+pub type uv_read_cb = Option<
+    unsafe extern "C" fn(*mut uv_stream_t, ssize_t, *const uv_buf_t) -> (),
+>;
+pub type uv_alloc_cb = Option<
+    unsafe extern "C" fn(*mut uv_handle_t, size_t, *mut uv_buf_t) -> (),
+>;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_9 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_10 {
+    pub pipe: uv_pipe_t,
+    pub tcp: uv_tcp_t,
+    pub idle: uv_idle_t,
+}
+pub type uv_idle_t = uv_idle_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_idle_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_11,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub idle_cb: uv_idle_cb,
+    pub queue: uv__queue,
+}
+pub type uv_idle_cb = Option<unsafe extern "C" fn(*mut uv_idle_t) -> ()>;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_11 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+pub type uv_tcp_t = uv_tcp_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_tcp_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_12,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub write_queue_size: size_t,
+    pub alloc_cb: uv_alloc_cb,
+    pub read_cb: uv_read_cb,
+    pub connect_req: *mut uv_connect_t,
+    pub shutdown_req: *mut uv_shutdown_t,
+    pub io_watcher: uv__io_t,
+    pub write_queue: uv__queue,
+    pub write_completed_queue: uv__queue,
+    pub connection_cb: uv_connection_cb,
+    pub delayed_error: ::core::ffi::c_int,
+    pub accepted_fd: ::core::ffi::c_int,
+    pub queued_fds: *mut ::core::ffi::c_void,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_12 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+pub type uv_pipe_t = uv_pipe_s;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct uv_pipe_s {
+    pub data: *mut ::core::ffi::c_void,
+    pub loop_0: *mut uv_loop_t,
+    pub type_0: uv_handle_type,
+    pub close_cb: uv_close_cb,
+    pub handle_queue: uv__queue,
+    pub u: C2Rust_Unnamed_13,
+    pub next_closing: *mut uv_handle_t,
+    pub flags: ::core::ffi::c_uint,
+    pub write_queue_size: size_t,
+    pub alloc_cb: uv_alloc_cb,
+    pub read_cb: uv_read_cb,
+    pub connect_req: *mut uv_connect_t,
+    pub shutdown_req: *mut uv_shutdown_t,
+    pub io_watcher: uv__io_t,
+    pub write_queue: uv__queue,
+    pub write_completed_queue: uv__queue,
+    pub connection_cb: uv_connection_cb,
+    pub delayed_error: ::core::ffi::c_int,
+    pub accepted_fd: ::core::ffi::c_int,
+    pub queued_fds: *mut ::core::ffi::c_void,
+    pub ipc: ::core::ffi::c_int,
+    pub pipe_fname: *const ::core::ffi::c_char,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_13 {
+    pub fd: ::core::ffi::c_int,
+    pub reserved: [*mut ::core::ffi::c_void; 4],
+}
+pub type Loop = loop_0;
+pub type ProcType = ::core::ffi::c_uint;
+pub const kProcTypePty: ProcType = 1;
+pub const kProcTypeUv: ProcType = 0;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct StringBuilder {
+    pub size: size_t,
+    pub capacity: size_t,
+    pub items: *mut ::core::ffi::c_char,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Set_int {
+    pub h: MapHash,
+    pub keys: *mut ::core::ffi::c_int,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Map_int_ptr_t {
+    pub set: Set_int,
+    pub values: *mut ptr_t,
+}
+pub type argv_callback = Option<
+    unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> (),
+>;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct Event {
+    pub handler: argv_callback,
+    pub argv: [*mut ::core::ffi::c_void; 10],
+}
+pub type C2Rust_Unnamed_14 = ::core::ffi::c_uint;
+pub const KITTY_KEY_ISO_LEVEL5_SHIFT: C2Rust_Unnamed_14 = 57454;
+pub const KITTY_KEY_ISO_LEVEL3_SHIFT: C2Rust_Unnamed_14 = 57453;
+pub const KITTY_KEY_RIGHT_META: C2Rust_Unnamed_14 = 57452;
+pub const KITTY_KEY_RIGHT_HYPER: C2Rust_Unnamed_14 = 57451;
+pub const KITTY_KEY_RIGHT_SUPER: C2Rust_Unnamed_14 = 57450;
+pub const KITTY_KEY_RIGHT_ALT: C2Rust_Unnamed_14 = 57449;
+pub const KITTY_KEY_RIGHT_CONTROL: C2Rust_Unnamed_14 = 57448;
+pub const KITTY_KEY_RIGHT_SHIFT: C2Rust_Unnamed_14 = 57447;
+pub const KITTY_KEY_LEFT_META: C2Rust_Unnamed_14 = 57446;
+pub const KITTY_KEY_LEFT_HYPER: C2Rust_Unnamed_14 = 57445;
+pub const KITTY_KEY_LEFT_SUPER: C2Rust_Unnamed_14 = 57444;
+pub const KITTY_KEY_LEFT_ALT: C2Rust_Unnamed_14 = 57443;
+pub const KITTY_KEY_LEFT_CONTROL: C2Rust_Unnamed_14 = 57442;
+pub const KITTY_KEY_LEFT_SHIFT: C2Rust_Unnamed_14 = 57441;
+pub const KITTY_KEY_MUTE_VOLUME: C2Rust_Unnamed_14 = 57440;
+pub const KITTY_KEY_RAISE_VOLUME: C2Rust_Unnamed_14 = 57439;
+pub const KITTY_KEY_LOWER_VOLUME: C2Rust_Unnamed_14 = 57438;
+pub const KITTY_KEY_MEDIA_RECORD: C2Rust_Unnamed_14 = 57437;
+pub const KITTY_KEY_MEDIA_TRACK_PREVIOUS: C2Rust_Unnamed_14 = 57436;
+pub const KITTY_KEY_MEDIA_TRACK_NEXT: C2Rust_Unnamed_14 = 57435;
+pub const KITTY_KEY_MEDIA_REWIND: C2Rust_Unnamed_14 = 57434;
+pub const KITTY_KEY_MEDIA_FAST_FORWARD: C2Rust_Unnamed_14 = 57433;
+pub const KITTY_KEY_MEDIA_STOP: C2Rust_Unnamed_14 = 57432;
+pub const KITTY_KEY_MEDIA_REVERSE: C2Rust_Unnamed_14 = 57431;
+pub const KITTY_KEY_MEDIA_PLAY_PAUSE: C2Rust_Unnamed_14 = 57430;
+pub const KITTY_KEY_MEDIA_PAUSE: C2Rust_Unnamed_14 = 57429;
+pub const KITTY_KEY_MEDIA_PLAY: C2Rust_Unnamed_14 = 57428;
+pub const KITTY_KEY_KP_BEGIN: C2Rust_Unnamed_14 = 57427;
+pub const KITTY_KEY_KP_DELETE: C2Rust_Unnamed_14 = 57426;
+pub const KITTY_KEY_KP_INSERT: C2Rust_Unnamed_14 = 57425;
+pub const KITTY_KEY_KP_END: C2Rust_Unnamed_14 = 57424;
+pub const KITTY_KEY_KP_HOME: C2Rust_Unnamed_14 = 57423;
+pub const KITTY_KEY_KP_PAGE_DOWN: C2Rust_Unnamed_14 = 57422;
+pub const KITTY_KEY_KP_PAGE_UP: C2Rust_Unnamed_14 = 57421;
+pub const KITTY_KEY_KP_DOWN: C2Rust_Unnamed_14 = 57420;
+pub const KITTY_KEY_KP_UP: C2Rust_Unnamed_14 = 57419;
+pub const KITTY_KEY_KP_RIGHT: C2Rust_Unnamed_14 = 57418;
+pub const KITTY_KEY_KP_LEFT: C2Rust_Unnamed_14 = 57417;
+pub const KITTY_KEY_KP_SEPARATOR: C2Rust_Unnamed_14 = 57416;
+pub const KITTY_KEY_KP_EQUAL: C2Rust_Unnamed_14 = 57415;
+pub const KITTY_KEY_KP_ENTER: C2Rust_Unnamed_14 = 57414;
+pub const KITTY_KEY_KP_ADD: C2Rust_Unnamed_14 = 57413;
+pub const KITTY_KEY_KP_SUBTRACT: C2Rust_Unnamed_14 = 57412;
+pub const KITTY_KEY_KP_MULTIPLY: C2Rust_Unnamed_14 = 57411;
+pub const KITTY_KEY_KP_DIVIDE: C2Rust_Unnamed_14 = 57410;
+pub const KITTY_KEY_KP_DECIMAL: C2Rust_Unnamed_14 = 57409;
+pub const KITTY_KEY_KP_9: C2Rust_Unnamed_14 = 57408;
+pub const KITTY_KEY_KP_8: C2Rust_Unnamed_14 = 57407;
+pub const KITTY_KEY_KP_7: C2Rust_Unnamed_14 = 57406;
+pub const KITTY_KEY_KP_6: C2Rust_Unnamed_14 = 57405;
+pub const KITTY_KEY_KP_5: C2Rust_Unnamed_14 = 57404;
+pub const KITTY_KEY_KP_4: C2Rust_Unnamed_14 = 57403;
+pub const KITTY_KEY_KP_3: C2Rust_Unnamed_14 = 57402;
+pub const KITTY_KEY_KP_2: C2Rust_Unnamed_14 = 57401;
+pub const KITTY_KEY_KP_1: C2Rust_Unnamed_14 = 57400;
+pub const KITTY_KEY_KP_0: C2Rust_Unnamed_14 = 57399;
+pub const KITTY_KEY_F35: C2Rust_Unnamed_14 = 57398;
+pub const KITTY_KEY_F34: C2Rust_Unnamed_14 = 57397;
+pub const KITTY_KEY_F33: C2Rust_Unnamed_14 = 57396;
+pub const KITTY_KEY_F32: C2Rust_Unnamed_14 = 57395;
+pub const KITTY_KEY_F31: C2Rust_Unnamed_14 = 57394;
+pub const KITTY_KEY_F30: C2Rust_Unnamed_14 = 57393;
+pub const KITTY_KEY_F29: C2Rust_Unnamed_14 = 57392;
+pub const KITTY_KEY_F28: C2Rust_Unnamed_14 = 57391;
+pub const KITTY_KEY_F27: C2Rust_Unnamed_14 = 57390;
+pub const KITTY_KEY_F26: C2Rust_Unnamed_14 = 57389;
+pub const KITTY_KEY_F25: C2Rust_Unnamed_14 = 57388;
+pub const KITTY_KEY_F24: C2Rust_Unnamed_14 = 57387;
+pub const KITTY_KEY_F23: C2Rust_Unnamed_14 = 57386;
+pub const KITTY_KEY_F22: C2Rust_Unnamed_14 = 57385;
+pub const KITTY_KEY_F21: C2Rust_Unnamed_14 = 57384;
+pub const KITTY_KEY_F20: C2Rust_Unnamed_14 = 57383;
+pub const KITTY_KEY_F19: C2Rust_Unnamed_14 = 57382;
+pub const KITTY_KEY_F18: C2Rust_Unnamed_14 = 57381;
+pub const KITTY_KEY_F17: C2Rust_Unnamed_14 = 57380;
+pub const KITTY_KEY_F16: C2Rust_Unnamed_14 = 57379;
+pub const KITTY_KEY_F15: C2Rust_Unnamed_14 = 57378;
+pub const KITTY_KEY_F14: C2Rust_Unnamed_14 = 57377;
+pub const KITTY_KEY_F13: C2Rust_Unnamed_14 = 57376;
+pub const KITTY_KEY_F12: C2Rust_Unnamed_14 = 57375;
+pub const KITTY_KEY_F11: C2Rust_Unnamed_14 = 57374;
+pub const KITTY_KEY_F10: C2Rust_Unnamed_14 = 57373;
+pub const KITTY_KEY_F9: C2Rust_Unnamed_14 = 57372;
+pub const KITTY_KEY_F8: C2Rust_Unnamed_14 = 57371;
+pub const KITTY_KEY_F7: C2Rust_Unnamed_14 = 57370;
+pub const KITTY_KEY_F6: C2Rust_Unnamed_14 = 57369;
+pub const KITTY_KEY_F5: C2Rust_Unnamed_14 = 57368;
+pub const KITTY_KEY_F4: C2Rust_Unnamed_14 = 57367;
+pub const KITTY_KEY_F3: C2Rust_Unnamed_14 = 57366;
+pub const KITTY_KEY_F2: C2Rust_Unnamed_14 = 57365;
+pub const KITTY_KEY_F1: C2Rust_Unnamed_14 = 57364;
+pub const KITTY_KEY_MENU: C2Rust_Unnamed_14 = 57363;
+pub const KITTY_KEY_PAUSE: C2Rust_Unnamed_14 = 57362;
+pub const KITTY_KEY_PRINT_SCREEN: C2Rust_Unnamed_14 = 57361;
+pub const KITTY_KEY_NUM_LOCK: C2Rust_Unnamed_14 = 57360;
+pub const KITTY_KEY_SCROLL_LOCK: C2Rust_Unnamed_14 = 57359;
+pub const KITTY_KEY_CAPS_LOCK: C2Rust_Unnamed_14 = 57358;
+pub const KITTY_KEY_END: C2Rust_Unnamed_14 = 57357;
+pub const KITTY_KEY_HOME: C2Rust_Unnamed_14 = 57356;
+pub const KITTY_KEY_PAGE_DOWN: C2Rust_Unnamed_14 = 57355;
+pub const KITTY_KEY_PAGE_UP: C2Rust_Unnamed_14 = 57354;
+pub const KITTY_KEY_DOWN: C2Rust_Unnamed_14 = 57353;
+pub const KITTY_KEY_UP: C2Rust_Unnamed_14 = 57352;
+pub const KITTY_KEY_RIGHT: C2Rust_Unnamed_14 = 57351;
+pub const KITTY_KEY_LEFT: C2Rust_Unnamed_14 = 57350;
+pub const KITTY_KEY_DELETE: C2Rust_Unnamed_14 = 57349;
+pub const KITTY_KEY_INSERT: C2Rust_Unnamed_14 = 57348;
+pub const KITTY_KEY_BACKSPACE: C2Rust_Unnamed_14 = 57347;
+pub const KITTY_KEY_TAB: C2Rust_Unnamed_14 = 57346;
+pub const KITTY_KEY_ENTER: C2Rust_Unnamed_14 = 57345;
+pub const KITTY_KEY_ESCAPE: C2Rust_Unnamed_14 = 57344;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct TerminfoEntry {
+    pub bce: bool,
+    pub has_Tc_or_RGB: bool,
+    pub Su: bool,
+    pub max_colors: ::core::ffi::c_int,
+    pub lines: ::core::ffi::c_int,
+    pub columns: ::core::ffi::c_int,
+    pub defs: [*const ::core::ffi::c_char; 49],
+    pub keys: [[*const ::core::ffi::c_char; 2]; 16],
+    pub f_keys: [*const ::core::ffi::c_char; 63],
+}
+pub type TermMode = ::core::ffi::c_uint;
+pub const kTermModeResizeEvents: TermMode = 2048;
+pub const kTermModeThemeUpdates: TermMode = 2031;
+pub const kTermModeGraphemeClusters: TermMode = 2027;
+pub const kTermModeSynchronizedOutput: TermMode = 2026;
+pub const kTermModeBracketedPaste: TermMode = 2004;
+pub const kTermModeMouseSGRExt: TermMode = 1006;
+pub const kTermModeMouseAnyEvent: TermMode = 1003;
+pub const kTermModeMouseButtonEvent: TermMode = 1002;
+pub const kTermModeLeftAndRightMargins: TermMode = 69;
+pub type TermModeState = ::core::ffi::c_uint;
+pub const kTermModePermanentlyReset: TermModeState = 4;
+pub const kTermModePermanentlySet: TermModeState = 3;
+pub const kTermModeReset: TermModeState = 2;
+pub const kTermModeSet: TermModeState = 1;
+pub const kTermModeNotRecognized: TermModeState = 0;
+pub type TermKeyResult = ::core::ffi::c_uint;
+pub const TERMKEY_RES_ERROR: TermKeyResult = 4;
+pub const TERMKEY_RES_AGAIN: TermKeyResult = 3;
+pub const TERMKEY_RES_EOF: TermKeyResult = 2;
+pub const TERMKEY_RES_KEY: TermKeyResult = 1;
+pub const TERMKEY_RES_NONE: TermKeyResult = 0;
+pub type TermKeySym = ::core::ffi::c_int;
+pub const TERMKEY_N_SYMS: TermKeySym = 60;
+pub const TERMKEY_SYM_KPEQUALS: TermKeySym = 59;
+pub const TERMKEY_SYM_KPPERIOD: TermKeySym = 58;
+pub const TERMKEY_SYM_KPCOMMA: TermKeySym = 57;
+pub const TERMKEY_SYM_KPDIV: TermKeySym = 56;
+pub const TERMKEY_SYM_KPMULT: TermKeySym = 55;
+pub const TERMKEY_SYM_KPMINUS: TermKeySym = 54;
+pub const TERMKEY_SYM_KPPLUS: TermKeySym = 53;
+pub const TERMKEY_SYM_KPENTER: TermKeySym = 52;
+pub const TERMKEY_SYM_KP9: TermKeySym = 51;
+pub const TERMKEY_SYM_KP8: TermKeySym = 50;
+pub const TERMKEY_SYM_KP7: TermKeySym = 49;
+pub const TERMKEY_SYM_KP6: TermKeySym = 48;
+pub const TERMKEY_SYM_KP5: TermKeySym = 47;
+pub const TERMKEY_SYM_KP4: TermKeySym = 46;
+pub const TERMKEY_SYM_KP3: TermKeySym = 45;
+pub const TERMKEY_SYM_KP2: TermKeySym = 44;
+pub const TERMKEY_SYM_KP1: TermKeySym = 43;
+pub const TERMKEY_SYM_KP0: TermKeySym = 42;
+pub const TERMKEY_SYM_UNDO: TermKeySym = 41;
+pub const TERMKEY_SYM_SUSPEND: TermKeySym = 40;
+pub const TERMKEY_SYM_SAVE: TermKeySym = 39;
+pub const TERMKEY_SYM_RESUME: TermKeySym = 38;
+pub const TERMKEY_SYM_RESTART: TermKeySym = 37;
+pub const TERMKEY_SYM_REPLACE: TermKeySym = 36;
+pub const TERMKEY_SYM_REFRESH: TermKeySym = 35;
+pub const TERMKEY_SYM_REFERENCE: TermKeySym = 34;
+pub const TERMKEY_SYM_REDO: TermKeySym = 33;
+pub const TERMKEY_SYM_PRINT: TermKeySym = 32;
+pub const TERMKEY_SYM_OPTIONS: TermKeySym = 31;
+pub const TERMKEY_SYM_OPEN: TermKeySym = 30;
+pub const TERMKEY_SYM_MOVE: TermKeySym = 29;
+pub const TERMKEY_SYM_MESSAGE: TermKeySym = 28;
+pub const TERMKEY_SYM_MARK: TermKeySym = 27;
+pub const TERMKEY_SYM_HELP: TermKeySym = 26;
+pub const TERMKEY_SYM_EXIT: TermKeySym = 25;
+pub const TERMKEY_SYM_COPY: TermKeySym = 24;
+pub const TERMKEY_SYM_COMMAND: TermKeySym = 23;
+pub const TERMKEY_SYM_CLOSE: TermKeySym = 22;
+pub const TERMKEY_SYM_CLEAR: TermKeySym = 21;
+pub const TERMKEY_SYM_CANCEL: TermKeySym = 20;
+pub const TERMKEY_SYM_END: TermKeySym = 19;
+pub const TERMKEY_SYM_HOME: TermKeySym = 18;
+pub const TERMKEY_SYM_PAGEDOWN: TermKeySym = 17;
+pub const TERMKEY_SYM_PAGEUP: TermKeySym = 16;
+pub const TERMKEY_SYM_SELECT: TermKeySym = 15;
+pub const TERMKEY_SYM_DELETE: TermKeySym = 14;
+pub const TERMKEY_SYM_INSERT: TermKeySym = 13;
+pub const TERMKEY_SYM_FIND: TermKeySym = 12;
+pub const TERMKEY_SYM_BEGIN: TermKeySym = 11;
+pub const TERMKEY_SYM_RIGHT: TermKeySym = 10;
+pub const TERMKEY_SYM_LEFT: TermKeySym = 9;
+pub const TERMKEY_SYM_DOWN: TermKeySym = 8;
+pub const TERMKEY_SYM_UP: TermKeySym = 7;
+pub const TERMKEY_SYM_DEL: TermKeySym = 6;
+pub const TERMKEY_SYM_SPACE: TermKeySym = 5;
+pub const TERMKEY_SYM_ESCAPE: TermKeySym = 4;
+pub const TERMKEY_SYM_ENTER: TermKeySym = 3;
+pub const TERMKEY_SYM_TAB: TermKeySym = 2;
+pub const TERMKEY_SYM_BACKSPACE: TermKeySym = 1;
+pub const TERMKEY_SYM_NONE: TermKeySym = 0;
+pub const TERMKEY_SYM_UNKNOWN: TermKeySym = -1;
+pub type TermKeyType = ::core::ffi::c_int;
+pub const TERMKEY_TYPE_UNKNOWN_CSI: TermKeyType = -1;
+pub const TERMKEY_TYPE_APC: TermKeyType = 8;
+pub const TERMKEY_TYPE_OSC: TermKeyType = 7;
+pub const TERMKEY_TYPE_DCS: TermKeyType = 6;
+pub const TERMKEY_TYPE_MODEREPORT: TermKeyType = 5;
+pub const TERMKEY_TYPE_POSITION: TermKeyType = 4;
+pub const TERMKEY_TYPE_MOUSE: TermKeyType = 3;
+pub const TERMKEY_TYPE_KEYSYM: TermKeyType = 2;
+pub const TERMKEY_TYPE_FUNCTION: TermKeyType = 1;
+pub const TERMKEY_TYPE_UNICODE: TermKeyType = 0;
+pub type TermKeyMouseEvent = ::core::ffi::c_uint;
+pub const TERMKEY_MOUSE_RELEASE: TermKeyMouseEvent = 3;
+pub const TERMKEY_MOUSE_DRAG: TermKeyMouseEvent = 2;
+pub const TERMKEY_MOUSE_PRESS: TermKeyMouseEvent = 1;
+pub const TERMKEY_MOUSE_UNKNOWN: TermKeyMouseEvent = 0;
+pub type TermKeyEvent = ::core::ffi::c_uint;
+pub const TERMKEY_EVENT_RELEASE: TermKeyEvent = 3;
+pub const TERMKEY_EVENT_REPEAT: TermKeyEvent = 2;
+pub const TERMKEY_EVENT_PRESS: TermKeyEvent = 1;
+pub const TERMKEY_EVENT_UNKNOWN: TermKeyEvent = 0;
+pub type C2Rust_Unnamed_15 = ::core::ffi::c_uint;
+pub const TERMKEY_KEYMOD_CTRL: C2Rust_Unnamed_15 = 4;
+pub const TERMKEY_KEYMOD_ALT: C2Rust_Unnamed_15 = 2;
+pub const TERMKEY_KEYMOD_SHIFT: C2Rust_Unnamed_15 = 1;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct TermKeyCsiParam {
+    pub param: *const ::core::ffi::c_uchar,
+    pub length: size_t,
+}
+pub type C2Rust_Unnamed_16 = ::core::ffi::c_uint;
+pub const TERMKEY_FLAG_KEEPC0: C2Rust_Unnamed_16 = 512;
+pub const TERMKEY_FLAG_NOSTART: C2Rust_Unnamed_16 = 256;
+pub const TERMKEY_FLAG_EINTR: C2Rust_Unnamed_16 = 128;
+pub const TERMKEY_FLAG_CTRLC: C2Rust_Unnamed_16 = 64;
+pub const TERMKEY_FLAG_SPACESYMBOL: C2Rust_Unnamed_16 = 32;
+pub const TERMKEY_FLAG_NOTERMIOS: C2Rust_Unnamed_16 = 16;
+pub const TERMKEY_FLAG_UTF8: C2Rust_Unnamed_16 = 8;
+pub const TERMKEY_FLAG_RAW: C2Rust_Unnamed_16 = 4;
+pub const TERMKEY_FLAG_CONVERTKP: C2Rust_Unnamed_16 = 2;
+pub const TERMKEY_FLAG_NOINTERPRET: C2Rust_Unnamed_16 = 1;
+pub type C2Rust_Unnamed_17 = ::core::ffi::c_uint;
+pub const TERMKEY_CANON_DELBS: C2Rust_Unnamed_17 = 2;
+pub const TERMKEY_CANON_SPACESYMBOL: C2Rust_Unnamed_17 = 1;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct TermKeyKey {
+    pub type_0: TermKeyType,
+    pub code: C2Rust_Unnamed_18,
+    pub modifiers: ::core::ffi::c_int,
+    pub event: TermKeyEvent,
+    pub utf8: [::core::ffi::c_char; 7],
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union C2Rust_Unnamed_18 {
+    pub codepoint: ::core::ffi::c_int,
+    pub number: ::core::ffi::c_int,
+    pub sym: TermKeySym,
+    pub mouse: [::core::ffi::c_char; 4],
+}
+pub type TermKey_Terminfo_Getstr_Hook = unsafe extern "C" fn(
+    *const ::core::ffi::c_char,
+    *const ::core::ffi::c_char,
+    *mut ::core::ffi::c_void,
+) -> *const ::core::ffi::c_char;
+pub type TermKeyFormat = ::core::ffi::c_uint;
+pub const TERMKEY_FORMAT_MOUSE_POS: TermKeyFormat = 256;
+pub const TERMKEY_FORMAT_LOWERSPACE: TermKeyFormat = 64;
+pub const TERMKEY_FORMAT_LOWERMOD: TermKeyFormat = 32;
+pub const TERMKEY_FORMAT_SPACEMOD: TermKeyFormat = 16;
+pub const TERMKEY_FORMAT_WRAPBRACKET: TermKeyFormat = 8;
+pub const TERMKEY_FORMAT_ALTISMETA: TermKeyFormat = 4;
+pub const TERMKEY_FORMAT_CARETCTRL: TermKeyFormat = 2;
+pub const TERMKEY_FORMAT_LONGMOD: TermKeyFormat = 1;
+pub type KeyEncoding = ::core::ffi::c_uint;
+pub const kKeyEncodingXterm: KeyEncoding = 2;
+pub const kKeyEncodingKitty: KeyEncoding = 1;
+pub const kKeyEncodingLegacy: KeyEncoding = 0;
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct TermInputCallbacks {
+    pub primary_device_attr: Option<unsafe extern "C" fn(*mut TUIData) -> ()>,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct TermInput {
+    pub in_fd: ::core::ffi::c_int,
+    pub paste: int8_t,
+    pub ttimeout: bool,
+    pub callbacks: TermInputCallbacks,
+    pub key_encoding: KeyEncoding,
+    pub ttimeoutlen: OptInt,
+    pub tk: *mut TermKey,
+    pub tk_ti_hook_fn: Option<TermKey_Terminfo_Getstr_Hook>,
+    pub timer_handle: uv_timer_t,
+    pub bg_query_timer: uv_timer_t,
+    pub loop_0: *mut Loop,
+    pub read_stream: RStream,
+    pub tui_data: *mut TUIData,
+    pub key_buffer: [::core::ffi::c_char; 4096],
+    pub key_buffer_len: size_t,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct kitty_key_map_entry {
+    pub key: ::core::ffi::c_int,
+    pub name: *const ::core::ffi::c_char,
+}
+pub const KEYMOD_META: C2Rust_Unnamed_19 = 32;
+pub const KEYMOD_SUPER: C2Rust_Unnamed_19 = 8;
+pub const KEYMOD_RECOGNIZED: C2Rust_Unnamed_19 = 47;
+pub type C2Rust_Unnamed_19 = ::core::ffi::c_uint;
+pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
+    ::core::ffi::c_void,
+>();
+pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<
+    ::core::ffi::c_void,
+>();
+pub const UINT32_MAX: ::core::ffi::c_uint = 4294967295 as ::core::ffi::c_uint;
+pub const STDIN_FILENO: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+pub const ARRAY_DICT_INIT: Array = Array {
+    size: 0 as size_t,
+    capacity: 0 as size_t,
+    items: ::core::ptr::null_mut::<Object>(),
+};
+static mut value_init_ptr_t: ptr_t = NULL;
+pub const MAPHASH_INIT: MapHash = MapHash {
+    n_buckets: 0 as uint32_t,
+    size: 0 as uint32_t,
+    n_occupied: 0 as uint32_t,
+    upper_bound: 0 as uint32_t,
+    n_keys: 0 as uint32_t,
+    keys_capacity: 0 as uint32_t,
+    hash: ::core::ptr::null_mut::<uint32_t>(),
+};
+pub const SET_INIT: Set_int = Set_int {
+    h: MAPHASH_INIT,
+    keys: ::core::ptr::null_mut::<::core::ffi::c_int>(),
+};
+pub const MAP_INIT: Map_int_ptr_t = Map_int_ptr_t {
+    set: SET_INIT,
+    values: ::core::ptr::null_mut::<ptr_t>(),
+};
+pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
+#[inline]
+unsafe extern "C" fn set_has_int(
+    mut set: *mut Set_int,
+    mut key: ::core::ffi::c_int,
+) -> bool {
+    return mh_get_int(set, key) != MH_TOMBSTONE as uint32_t;
+}
+#[inline]
+unsafe extern "C" fn map_put_int_ptr_t(
+    mut map: *mut Map_int_ptr_t,
+    mut key: ::core::ffi::c_int,
+    mut value: ptr_t,
+) {
+    let mut val: *mut ptr_t = map_put_ref_int_ptr_t(
+        map,
+        key,
+        ::core::ptr::null_mut::<*mut ::core::ffi::c_int>(),
+        ::core::ptr::null_mut::<bool>(),
+    );
+    *val = value;
+}
+#[inline]
+unsafe extern "C" fn map_get_int_ptr_t(
+    mut map: *mut Map_int_ptr_t,
+    mut key: ::core::ffi::c_int,
+) -> ptr_t {
+    let mut k: uint32_t = mh_get_int(&raw mut (*map).set, key);
+    return if k == MH_TOMBSTONE as uint32_t {
+        value_init_ptr_t
+    } else {
+        *(*map).values.offset(k as isize)
+    };
+}
+pub const INPUT_BUFFER_SIZE: ::core::ffi::c_int = 256 as ::core::ffi::c_int;
+static mut kitty_key_map_entry: [kitty_key_map_entry; 77] = [
+    kitty_key_map_entry {
+        key: KITTY_KEY_ESCAPE as ::core::ffi::c_int,
+        name: b"Esc\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_ENTER as ::core::ffi::c_int,
+        name: b"CR\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_TAB as ::core::ffi::c_int,
+        name: b"Tab\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_BACKSPACE as ::core::ffi::c_int,
+        name: b"BS\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_INSERT as ::core::ffi::c_int,
+        name: b"Insert\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_DELETE as ::core::ffi::c_int,
+        name: b"Del\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_LEFT as ::core::ffi::c_int,
+        name: b"Left\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_RIGHT as ::core::ffi::c_int,
+        name: b"Right\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_UP as ::core::ffi::c_int,
+        name: b"Up\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_DOWN as ::core::ffi::c_int,
+        name: b"Down\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_PAGE_UP as ::core::ffi::c_int,
+        name: b"PageUp\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_PAGE_DOWN as ::core::ffi::c_int,
+        name: b"PageDown\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_HOME as ::core::ffi::c_int,
+        name: b"Home\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_END as ::core::ffi::c_int,
+        name: b"End\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F1 as ::core::ffi::c_int,
+        name: b"F1\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F2 as ::core::ffi::c_int,
+        name: b"F2\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F3 as ::core::ffi::c_int,
+        name: b"F3\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F4 as ::core::ffi::c_int,
+        name: b"F4\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F5 as ::core::ffi::c_int,
+        name: b"F5\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F6 as ::core::ffi::c_int,
+        name: b"F6\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F7 as ::core::ffi::c_int,
+        name: b"F7\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F8 as ::core::ffi::c_int,
+        name: b"F8\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F9 as ::core::ffi::c_int,
+        name: b"F9\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F10 as ::core::ffi::c_int,
+        name: b"F10\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F11 as ::core::ffi::c_int,
+        name: b"F11\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F12 as ::core::ffi::c_int,
+        name: b"F12\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F13 as ::core::ffi::c_int,
+        name: b"F13\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F14 as ::core::ffi::c_int,
+        name: b"F14\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F15 as ::core::ffi::c_int,
+        name: b"F15\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F16 as ::core::ffi::c_int,
+        name: b"F16\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F17 as ::core::ffi::c_int,
+        name: b"F17\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F18 as ::core::ffi::c_int,
+        name: b"F18\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F19 as ::core::ffi::c_int,
+        name: b"F19\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F20 as ::core::ffi::c_int,
+        name: b"F20\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F21 as ::core::ffi::c_int,
+        name: b"F21\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F22 as ::core::ffi::c_int,
+        name: b"F22\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F23 as ::core::ffi::c_int,
+        name: b"F23\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F24 as ::core::ffi::c_int,
+        name: b"F24\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F25 as ::core::ffi::c_int,
+        name: b"F25\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F26 as ::core::ffi::c_int,
+        name: b"F26\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F27 as ::core::ffi::c_int,
+        name: b"F27\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F28 as ::core::ffi::c_int,
+        name: b"F28\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F29 as ::core::ffi::c_int,
+        name: b"F29\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F30 as ::core::ffi::c_int,
+        name: b"F30\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F31 as ::core::ffi::c_int,
+        name: b"F31\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F32 as ::core::ffi::c_int,
+        name: b"F32\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F33 as ::core::ffi::c_int,
+        name: b"F33\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F34 as ::core::ffi::c_int,
+        name: b"F34\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_F35 as ::core::ffi::c_int,
+        name: b"F35\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_0 as ::core::ffi::c_int,
+        name: b"k0\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_1 as ::core::ffi::c_int,
+        name: b"k1\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_2 as ::core::ffi::c_int,
+        name: b"k2\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_3 as ::core::ffi::c_int,
+        name: b"k3\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_4 as ::core::ffi::c_int,
+        name: b"k4\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_5 as ::core::ffi::c_int,
+        name: b"k5\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_6 as ::core::ffi::c_int,
+        name: b"k6\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_7 as ::core::ffi::c_int,
+        name: b"k7\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_8 as ::core::ffi::c_int,
+        name: b"k8\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_9 as ::core::ffi::c_int,
+        name: b"k9\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_DECIMAL as ::core::ffi::c_int,
+        name: b"kPoint\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_DIVIDE as ::core::ffi::c_int,
+        name: b"kDivide\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_MULTIPLY as ::core::ffi::c_int,
+        name: b"kMultiply\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_SUBTRACT as ::core::ffi::c_int,
+        name: b"kMinus\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_ADD as ::core::ffi::c_int,
+        name: b"kPlus\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_ENTER as ::core::ffi::c_int,
+        name: b"kEnter\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_EQUAL as ::core::ffi::c_int,
+        name: b"kEqual\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_LEFT as ::core::ffi::c_int,
+        name: b"kLeft\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_RIGHT as ::core::ffi::c_int,
+        name: b"kRight\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_UP as ::core::ffi::c_int,
+        name: b"kUp\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_DOWN as ::core::ffi::c_int,
+        name: b"kDown\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_PAGE_UP as ::core::ffi::c_int,
+        name: b"kPageUp\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_PAGE_DOWN as ::core::ffi::c_int,
+        name: b"kPageDown\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_HOME as ::core::ffi::c_int,
+        name: b"kHome\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_END as ::core::ffi::c_int,
+        name: b"kEnd\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_INSERT as ::core::ffi::c_int,
+        name: b"kInsert\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_DELETE as ::core::ffi::c_int,
+        name: b"kDel\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+    kitty_key_map_entry {
+        key: KITTY_KEY_KP_BEGIN as ::core::ffi::c_int,
+        name: b"kOrigin\0".as_ptr() as *const ::core::ffi::c_char,
+    },
+];
+static mut kitty_key_map: Map_int_ptr_t = MAP_INIT;
+#[no_mangle]
+pub unsafe extern "C" fn tinput_init(
+    mut input: *mut TermInput,
+    mut loop_0: *mut Loop,
+    mut ti: *mut TerminfoEntry,
+) {
+    '_c2rust_label: {
+        if (*input).loop_0.is_null() {} else {
+            __assert_fail(
+                b"input->loop == NULL\0".as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+                128 as ::core::ffi::c_uint,
+                b"void tinput_init(TermInput *, Loop *, TerminfoEntry *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            );
+        }
+    };
+    (*input).loop_0 = loop_0;
+    (*input).paste = 0 as int8_t;
+    (*input).in_fd = STDIN_FILENO;
+    (*input).ttimeout = p_ttimeout != 0;
+    (*input).ttimeoutlen = p_ttm;
+    rstream_init_fd(loop_0, &raw mut (*input).read_stream, (*input).in_fd);
+    let mut i: size_t = 0 as size_t;
+    while i
+        < ::core::mem::size_of::<[kitty_key_map_entry; 77]>()
+            .wrapping_div(::core::mem::size_of::<kitty_key_map_entry>())
+            .wrapping_div(
+                (::core::mem::size_of::<[kitty_key_map_entry; 77]>()
+                    .wrapping_rem(::core::mem::size_of::<kitty_key_map_entry>()) == 0)
+                    as ::core::ffi::c_int as usize,
+            )
+    {
+        map_put_int_ptr_t(
+            &raw mut kitty_key_map,
+            kitty_key_map_entry[i as usize].key,
+            kitty_key_map_entry[i as usize].name as ptr_t,
+        );
+        i = i.wrapping_add(1);
+    }
+    (*input).tk = termkey_new_abstract(
+        ti,
+        TERMKEY_FLAG_UTF8 as ::core::ffi::c_int
+            | TERMKEY_FLAG_NOSTART as ::core::ffi::c_int
+            | TERMKEY_FLAG_KEEPC0 as ::core::ffi::c_int,
+    );
+    termkey_set_buffer_size((*input).tk, INPUT_BUFFER_SIZE as size_t);
+    termkey_hook_terminfo_getstr(
+        (*input).tk,
+        (*input).tk_ti_hook_fn,
+        input as *mut ::core::ffi::c_void,
+    );
+    termkey_start((*input).tk);
+    let mut curflags: ::core::ffi::c_int = termkey_get_canonflags((*input).tk);
+    termkey_set_canonflags(
+        (*input).tk,
+        curflags | TERMKEY_CANON_DELBS as ::core::ffi::c_int,
+    );
+    uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*input).timer_handle);
+    (*input).timer_handle.data = input as *mut ::core::ffi::c_void;
+    uv_timer_init(&raw mut (*loop_0).uv, &raw mut (*input).bg_query_timer);
+    (*input).bg_query_timer.data = input as *mut ::core::ffi::c_void;
+}
+#[no_mangle]
+pub unsafe extern "C" fn tinput_destroy(mut input: *mut TermInput) {
+    xfree(kitty_key_map.set.keys as *mut ::core::ffi::c_void);
+    xfree(kitty_key_map.set.h.hash as *mut ::core::ffi::c_void);
+    kitty_key_map.set = SET_INIT;
+    let mut ptr_: *mut *mut ::core::ffi::c_void = &raw mut kitty_key_map.values
+        as *mut *mut ::core::ffi::c_void;
+    xfree(*ptr_);
+    *ptr_ = NULL_0;
+    *ptr_;
+    uv_close(&raw mut (*input).timer_handle as *mut uv_handle_t, None);
+    uv_close(&raw mut (*input).bg_query_timer as *mut uv_handle_t, None);
+    rstream_may_close(&raw mut (*input).read_stream);
+    termkey_destroy((*input).tk);
+    (*input).loop_0 = ::core::ptr::null_mut::<Loop>();
+}
+#[no_mangle]
+pub unsafe extern "C" fn tinput_start(mut input: *mut TermInput) {
+    rstream_start(
+        &raw mut (*input).read_stream,
+        Some(
+            tinput_read_cb
+                as unsafe extern "C" fn(
+                    *mut RStream,
+                    *const ::core::ffi::c_char,
+                    size_t,
+                    *mut ::core::ffi::c_void,
+                    bool,
+                ) -> size_t,
+        ),
+        input as *mut ::core::ffi::c_void,
+    );
+}
+#[no_mangle]
+pub unsafe extern "C" fn tinput_stop(mut input: *mut TermInput) {
+    rstream_stop(&raw mut (*input).read_stream);
+    uv_timer_stop(&raw mut (*input).timer_handle);
+    uv_timer_stop(&raw mut (*input).bg_query_timer);
+}
+unsafe extern "C" fn tinput_done_event(mut argv: *mut *mut ::core::ffi::c_void) -> ! {
+    os_exit(1 as ::core::ffi::c_int);
+}
+unsafe extern "C" fn tinput_flush(mut input: *mut TermInput) {
+    let mut keys: String_0 = String_0 {
+        data: &raw mut (*input).key_buffer as *mut ::core::ffi::c_char,
+        size: (*input).key_buffer_len,
+    };
+    if (*input).paste != 0 {
+        let mut args: Array = ARRAY_DICT_INIT;
+        let mut args__items: [Object; 3] = [Object {
+            type_0: kObjectTypeNil,
+            data: C2Rust_Unnamed { boolean: false },
+        }; 3];
+        args.capacity = 3 as size_t;
+        args.items = &raw mut args__items as *mut Object;
+        let c2rust_fresh0 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh0 as isize) = object {
+            type_0: kObjectTypeString,
+            data: C2Rust_Unnamed { string: keys },
+        };
+        let c2rust_fresh1 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh1 as isize) = object {
+            type_0: kObjectTypeBoolean,
+            data: C2Rust_Unnamed { boolean: true },
+        };
+        let c2rust_fresh2 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh2 as isize) = object {
+            type_0: kObjectTypeInteger,
+            data: C2Rust_Unnamed {
+                integer: (*input).paste as Integer,
+            },
+        };
+        rpc_send_event(
+            ui_client_channel_id,
+            b"nvim_paste\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
+        if (*input).paste as ::core::ffi::c_int == 1 as ::core::ffi::c_int {
+            (*input).paste = 2 as int8_t;
+        }
+    } else if (*input).key_buffer_len > 0 as size_t {
+        let mut args_0: Array = ARRAY_DICT_INIT;
+        let mut args__items_0: [Object; 1] = [Object {
+            type_0: kObjectTypeNil,
+            data: C2Rust_Unnamed { boolean: false },
+        }; 1];
+        args_0.capacity = 1 as size_t;
+        args_0.items = &raw mut args__items_0 as *mut Object;
+        let c2rust_fresh3 = args_0.size;
+        args_0.size = args_0.size.wrapping_add(1);
+        *args_0.items.offset(c2rust_fresh3 as isize) = object {
+            type_0: kObjectTypeString,
+            data: C2Rust_Unnamed { string: keys },
+        };
+        rpc_send_event(
+            ui_client_channel_id,
+            b"nvim_input\0".as_ptr() as *const ::core::ffi::c_char,
+            args_0,
+        );
+    }
+    (*input).key_buffer_len = 0 as size_t;
+}
+unsafe extern "C" fn tinput_enqueue(
+    mut input: *mut TermInput,
+    mut buf: *const ::core::ffi::c_char,
+    mut size: size_t,
+) {
+    if (*input).key_buffer_len > (KEY_BUFFER_SIZE as size_t).wrapping_sub(size) {
+        tinput_flush(input);
+    }
+    let mut to_copy: size_t = if size
+        < (0x1000 as size_t).wrapping_sub((*input).key_buffer_len)
+    {
+        size
+    } else {
+        (0x1000 as size_t).wrapping_sub((*input).key_buffer_len)
+    };
+    memcpy(
+        (&raw mut (*input).key_buffer as *mut ::core::ffi::c_char)
+            .offset((*input).key_buffer_len as isize) as *mut ::core::ffi::c_void,
+        buf as *const ::core::ffi::c_void,
+        to_copy,
+    );
+    (*input).key_buffer_len = (*input).key_buffer_len.wrapping_add(to_copy);
+}
+unsafe extern "C" fn handle_termkey_modifiers(
+    mut key: *mut TermKeyKey,
+    mut buf: *mut ::core::ffi::c_char,
+    mut buflen: size_t,
+) -> size_t {
+    let mut len: size_t = 0 as size_t;
+    if (*key).modifiers & TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int != 0 {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    buf.offset(len as isize),
+                    buflen.wrapping_sub(len),
+                    b"S-\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    }
+    if (*key).modifiers & TERMKEY_KEYMOD_ALT as ::core::ffi::c_int != 0 {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    buf.offset(len as isize),
+                    buflen.wrapping_sub(len),
+                    b"A-\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    }
+    if (*key).modifiers & TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int != 0 {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    buf.offset(len as isize),
+                    buflen.wrapping_sub(len),
+                    b"C-\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    }
+    '_c2rust_label: {
+        if len < buflen {} else {
+            __assert_fail(
+                b"len < buflen\0".as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+                240 as ::core::ffi::c_uint,
+                b"size_t handle_termkey_modifiers(TermKeyKey *, char *, size_t)\0"
+                    .as_ptr() as *const ::core::ffi::c_char,
+            );
+        }
+    };
+    return len;
+}
+unsafe extern "C" fn handle_more_modifiers(
+    mut key: *mut TermKeyKey,
+    mut buf: *mut ::core::ffi::c_char,
+    mut buflen: size_t,
+) -> size_t {
+    let mut len: size_t = 0 as size_t;
+    if (*key).modifiers & KEYMOD_SUPER as ::core::ffi::c_int != 0 {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    buf.offset(len as isize),
+                    buflen.wrapping_sub(len),
+                    b"D-\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    }
+    if (*key).modifiers & KEYMOD_META as ::core::ffi::c_int != 0 {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    buf.offset(len as isize),
+                    buflen.wrapping_sub(len),
+                    b"T-\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    }
+    '_c2rust_label: {
+        if len < buflen {} else {
+            __assert_fail(
+                b"len < buflen\0".as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+                272 as ::core::ffi::c_uint,
+                b"size_t handle_more_modifiers(TermKeyKey *, char *, size_t)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            );
+        }
+    };
+    return len;
+}
+unsafe extern "C" fn handle_kitty_key_protocol(
+    mut input: *mut TermInput,
+    mut key: *mut TermKeyKey,
+) {
+    let mut name: *const ::core::ffi::c_char = map_get_int_ptr_t(
+        &raw mut kitty_key_map,
+        (*key).code.codepoint,
+    ) as *const ::core::ffi::c_char;
+    if !name.is_null() {
+        let mut buf: [::core::ffi::c_char; 64] = [0; 64];
+        let mut len: size_t = 0 as size_t;
+        let c2rust_fresh13 = len;
+        len = len.wrapping_add(1);
+        buf[c2rust_fresh13 as usize] = '<' as ::core::ffi::c_char;
+        len = len
+            .wrapping_add(
+                handle_termkey_modifiers(
+                    key,
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(len),
+                ),
+            );
+        len = len
+            .wrapping_add(
+                handle_more_modifiers(
+                    key,
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(len),
+                ),
+            );
+        len = len
+            .wrapping_add(
+                snprintf(
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                        .wrapping_sub(len),
+                    b"%s>\0".as_ptr() as *const ::core::ffi::c_char,
+                    name,
+                ) as size_t,
+            );
+        '_c2rust_label: {
+            if len < ::core::mem::size_of::<[::core::ffi::c_char; 64]>() {} else {
+                __assert_fail(
+                    b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                    286 as ::core::ffi::c_uint,
+                    b"void handle_kitty_key_protocol(TermInput *, TermKeyKey *)\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                );
+            }
+        };
+        tinput_enqueue(input, &raw mut buf as *mut ::core::ffi::c_char, len);
+    }
+}
+unsafe extern "C" fn forward_simple_utf8(
+    mut input: *mut TermInput,
+    mut key: *mut TermKeyKey,
+) {
+    let mut len: size_t = 0 as size_t;
+    let mut buf: [::core::ffi::c_char; 64] = [0; 64];
+    let mut ptr: *mut ::core::ffi::c_char = &raw mut (*key).utf8
+        as *mut ::core::ffi::c_char;
+    if (*key).code.codepoint >= 0xe000 as ::core::ffi::c_int
+        && (*key).code.codepoint <= 0xf8ff as ::core::ffi::c_int
+        && set_has_int(&raw mut kitty_key_map.set, (*key).code.codepoint)
+            as ::core::ffi::c_int != 0
+    {
+        handle_kitty_key_protocol(input, key);
+        return;
+    }
+    while *ptr != 0 {
+        if *ptr as ::core::ffi::c_int == '<' as ::core::ffi::c_int {
+            len = len
+                .wrapping_add(
+                    snprintf(
+                        (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                        ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                            .wrapping_sub(len),
+                        b"<lt>\0".as_ptr() as *const ::core::ffi::c_char,
+                    ) as size_t,
+                );
+        } else {
+            let c2rust_fresh14 = len;
+            len = len.wrapping_add(1);
+            buf[c2rust_fresh14 as usize] = *ptr;
+        }
+        '_c2rust_label: {
+            if len < ::core::mem::size_of::<[::core::ffi::c_char; 64]>() {} else {
+                __assert_fail(
+                    b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                    308 as ::core::ffi::c_uint,
+                    b"void forward_simple_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                );
+            }
+        };
+        ptr = ptr.offset(1);
+    }
+    tinput_enqueue(input, &raw mut buf as *mut ::core::ffi::c_char, len);
+}
+unsafe extern "C" fn forward_modified_utf8(
+    mut input: *mut TermInput,
+    mut key: *mut TermKeyKey,
+) {
+    let mut len: size_t = 0;
+    let mut buf: [::core::ffi::c_char; 64] = [0; 64];
+    if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
+        && (*key).code.sym as ::core::ffi::c_int
+            == TERMKEY_SYM_SUSPEND as ::core::ffi::c_int
+    {
+        len = snprintf(
+            &raw mut buf as *mut ::core::ffi::c_char,
+            ::core::mem::size_of::<[::core::ffi::c_char; 64]>(),
+            b"<C-Z>\0".as_ptr() as *const ::core::ffi::c_char,
+        ) as size_t;
+    } else if (*key).type_0 as ::core::ffi::c_int
+        != TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
+    {
+        len = termkey_strfkey(
+            (*input).tk,
+            &raw mut buf as *mut ::core::ffi::c_char,
+            ::core::mem::size_of::<[::core::ffi::c_char; 64]>(),
+            key,
+            (TERMKEY_FORMAT_ALTISMETA as ::core::ffi::c_int
+                | TERMKEY_FORMAT_WRAPBRACKET as ::core::ffi::c_int) as TermKeyFormat,
+        );
+    } else {
+        '_c2rust_label: {
+            if (*key).modifiers != 0 {} else {
+                __assert_fail(
+                    b"key->modifiers\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                    326 as ::core::ffi::c_uint,
+                    b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                );
+            }
+        };
+        if (*key).code.codepoint >= 0xe000 as ::core::ffi::c_int
+            && (*key).code.codepoint <= 0xf8ff as ::core::ffi::c_int
+            && set_has_int(&raw mut kitty_key_map.set, (*key).code.codepoint)
+                as ::core::ffi::c_int != 0
+        {
+            handle_kitty_key_protocol(input, key);
+            return;
+        }
+        len = termkey_strfkey(
+            (*input).tk,
+            &raw mut buf as *mut ::core::ffi::c_char,
+            ::core::mem::size_of::<[::core::ffi::c_char; 64]>(),
+            key,
+            (TERMKEY_FORMAT_ALTISMETA as ::core::ffi::c_int
+                | TERMKEY_FORMAT_WRAPBRACKET as ::core::ffi::c_int) as TermKeyFormat,
+        );
+        if (*key).modifiers & TERMKEY_KEYMOD_CTRL as ::core::ffi::c_int != 0
+            && (*key).modifiers & TERMKEY_KEYMOD_SHIFT as ::core::ffi::c_int == 0
+            && ((*key).code.codepoint as ::core::ffi::c_uint
+                >= 'A' as ::core::ffi::c_uint
+                && (*key).code.codepoint as ::core::ffi::c_uint
+                    <= 'Z' as ::core::ffi::c_uint)
+        {
+            '_c2rust_label_0: {
+                if len.wrapping_add(2 as size_t)
+                    < ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                {} else {
+                    __assert_fail(
+                        b"len + 2 < sizeof(buf)\0".as_ptr()
+                            as *const ::core::ffi::c_char,
+                        b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                            .as_ptr() as *const ::core::ffi::c_char,
+                        339 as ::core::ffi::c_uint,
+                        b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0"
+                            .as_ptr() as *const ::core::ffi::c_char,
+                    );
+                }
+            };
+            memmove(
+                (&raw mut buf as *mut ::core::ffi::c_char)
+                    .offset(3 as ::core::ffi::c_int as isize)
+                    as *mut ::core::ffi::c_void,
+                (&raw mut buf as *mut ::core::ffi::c_char)
+                    .offset(1 as ::core::ffi::c_int as isize)
+                    as *const ::core::ffi::c_void,
+                len.wrapping_sub(1 as size_t),
+            );
+            buf[1 as ::core::ffi::c_int as usize] = 'S' as ::core::ffi::c_char;
+            buf[2 as ::core::ffi::c_int as usize] = '-' as ::core::ffi::c_char;
+            len = len.wrapping_add(2 as size_t);
+        }
+    }
+    let mut more_buf: [::core::ffi::c_char; 25] = [0; 25];
+    let mut more_len: size_t = handle_more_modifiers(
+        key,
+        &raw mut more_buf as *mut ::core::ffi::c_char,
+        ::core::mem::size_of::<[::core::ffi::c_char; 25]>(),
+    );
+    if more_len > 0 as size_t {
+        '_c2rust_label_1: {
+            if len.wrapping_add(more_len)
+                < ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+            {} else {
+                __assert_fail(
+                    b"len + more_len < sizeof(buf)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                    351 as ::core::ffi::c_uint,
+                    b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
+                        as *const ::core::ffi::c_char,
+                );
+            }
+        };
+        memmove(
+            (&raw mut buf as *mut ::core::ffi::c_char)
+                .offset(1 as ::core::ffi::c_int as isize)
+                .offset(more_len as isize) as *mut ::core::ffi::c_void,
+            (&raw mut buf as *mut ::core::ffi::c_char)
+                .offset(1 as ::core::ffi::c_int as isize) as *const ::core::ffi::c_void,
+            len.wrapping_sub(1 as size_t),
+        );
+        memcpy(
+            (&raw mut buf as *mut ::core::ffi::c_char)
+                .offset(1 as ::core::ffi::c_int as isize) as *mut ::core::ffi::c_void,
+            &raw mut more_buf as *mut ::core::ffi::c_char as *const ::core::ffi::c_void,
+            more_len,
+        );
+        len = len.wrapping_add(more_len);
+    }
+    '_c2rust_label_2: {
+        if len < ::core::mem::size_of::<[::core::ffi::c_char; 64]>() {} else {
+            __assert_fail(
+                b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+                357 as ::core::ffi::c_uint,
+                b"void forward_modified_utf8(TermInput *, TermKeyKey *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            );
+        }
+    };
+    tinput_enqueue(input, &raw mut buf as *mut ::core::ffi::c_char, len);
+}
+unsafe extern "C" fn forward_mouse_event(
+    mut input: *mut TermInput,
+    mut key: *mut TermKeyKey,
+) {
+    let mut buf: [::core::ffi::c_char; 64] = [0; 64];
+    let mut len: size_t = 0 as size_t;
+    let mut button: ::core::ffi::c_int = 0;
+    let mut row: ::core::ffi::c_int = 0;
+    let mut col: ::core::ffi::c_int = 0;
+    static mut last_pressed_button: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    let mut ev: TermKeyMouseEvent = TERMKEY_MOUSE_UNKNOWN;
+    termkey_interpret_mouse(
+        (*input).tk,
+        key,
+        &raw mut ev,
+        &raw mut button,
+        &raw mut row,
+        &raw mut col,
+    );
+    if (ev as ::core::ffi::c_uint
+        == TERMKEY_MOUSE_RELEASE as ::core::ffi::c_int as ::core::ffi::c_uint
+        || ev as ::core::ffi::c_uint
+            == TERMKEY_MOUSE_DRAG as ::core::ffi::c_int as ::core::ffi::c_uint)
+        && button == 0 as ::core::ffi::c_int
+    {
+        button = last_pressed_button;
+    }
+    if button == 0 as ::core::ffi::c_int
+        && ev as ::core::ffi::c_uint
+            != TERMKEY_MOUSE_RELEASE as ::core::ffi::c_int as ::core::ffi::c_uint
+        || ev as ::core::ffi::c_uint
+            != TERMKEY_MOUSE_PRESS as ::core::ffi::c_int as ::core::ffi::c_uint
+            && ev as ::core::ffi::c_uint
+                != TERMKEY_MOUSE_DRAG as ::core::ffi::c_int as ::core::ffi::c_uint
+            && ev as ::core::ffi::c_uint
+                != TERMKEY_MOUSE_RELEASE as ::core::ffi::c_int as ::core::ffi::c_uint
+    {
+        return;
+    }
+    row -= 1;
+    col -= 1;
+    let c2rust_fresh12 = len;
+    len = len.wrapping_add(1);
+    buf[c2rust_fresh12 as usize] = '<' as ::core::ffi::c_char;
+    len = len
+        .wrapping_add(
+            handle_termkey_modifiers(
+                key,
+                (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(len),
+            ),
+        );
+    if button == 1 as ::core::ffi::c_int {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                        .wrapping_sub(len),
+                    b"Left\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    } else if button == 2 as ::core::ffi::c_int {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                        .wrapping_sub(len),
+                    b"Middle\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    } else if button == 3 as ::core::ffi::c_int {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                        .wrapping_sub(len),
+                    b"Right\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    } else if button == 8 as ::core::ffi::c_int {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                        .wrapping_sub(len),
+                    b"X1\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    } else if button == 9 as ::core::ffi::c_int {
+        len = len
+            .wrapping_add(
+                snprintf(
+                    (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                    ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                        .wrapping_sub(len),
+                    b"X2\0".as_ptr() as *const ::core::ffi::c_char,
+                ) as size_t,
+            );
+    }
+    match ev as ::core::ffi::c_uint {
+        1 => {
+            if button == 4 as ::core::ffi::c_int {
+                len = len
+                    .wrapping_add(
+                        snprintf(
+                            (&raw mut buf as *mut ::core::ffi::c_char)
+                                .offset(len as isize),
+                            ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                                .wrapping_sub(len),
+                            b"ScrollWheelUp\0".as_ptr() as *const ::core::ffi::c_char,
+                        ) as size_t,
+                    );
+            } else if button == 5 as ::core::ffi::c_int {
+                len = len
+                    .wrapping_add(
+                        snprintf(
+                            (&raw mut buf as *mut ::core::ffi::c_char)
+                                .offset(len as isize),
+                            ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                                .wrapping_sub(len),
+                            b"ScrollWheelDown\0".as_ptr() as *const ::core::ffi::c_char,
+                        ) as size_t,
+                    );
+            } else if button == 6 as ::core::ffi::c_int {
+                len = len
+                    .wrapping_add(
+                        snprintf(
+                            (&raw mut buf as *mut ::core::ffi::c_char)
+                                .offset(len as isize),
+                            ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                                .wrapping_sub(len),
+                            b"ScrollWheelLeft\0".as_ptr() as *const ::core::ffi::c_char,
+                        ) as size_t,
+                    );
+            } else if button == 7 as ::core::ffi::c_int {
+                len = len
+                    .wrapping_add(
+                        snprintf(
+                            (&raw mut buf as *mut ::core::ffi::c_char)
+                                .offset(len as isize),
+                            ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                                .wrapping_sub(len),
+                            b"ScrollWheelRight\0".as_ptr() as *const ::core::ffi::c_char,
+                        ) as size_t,
+                    );
+            } else {
+                len = len
+                    .wrapping_add(
+                        snprintf(
+                            (&raw mut buf as *mut ::core::ffi::c_char)
+                                .offset(len as isize),
+                            ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                                .wrapping_sub(len),
+                            b"Mouse\0".as_ptr() as *const ::core::ffi::c_char,
+                        ) as size_t,
+                    );
+                last_pressed_button = button;
+            }
+        }
+        2 => {
+            len = len
+                .wrapping_add(
+                    snprintf(
+                        (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                        ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                            .wrapping_sub(len),
+                        b"Drag\0".as_ptr() as *const ::core::ffi::c_char,
+                    ) as size_t,
+                );
+        }
+        3 => {
+            len = len
+                .wrapping_add(
+                    snprintf(
+                        (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                        ::core::mem::size_of::<[::core::ffi::c_char; 64]>()
+                            .wrapping_sub(len),
+                        if button != 0 {
+                            b"Release\0".as_ptr() as *const ::core::ffi::c_char
+                        } else {
+                            b"MouseMove\0".as_ptr() as *const ::core::ffi::c_char
+                        },
+                    ) as size_t,
+                );
+            last_pressed_button = 0 as ::core::ffi::c_int;
+        }
+        0 => {
+            abort();
+        }
+        _ => {}
+    }
+    len = len
+        .wrapping_add(
+            snprintf(
+                (&raw mut buf as *mut ::core::ffi::c_char).offset(len as isize),
+                ::core::mem::size_of::<[::core::ffi::c_char; 64]>().wrapping_sub(len),
+                b"><%d,%d>\0".as_ptr() as *const ::core::ffi::c_char,
+                col,
+                row,
+            ) as size_t,
+        );
+    '_c2rust_label: {
+        if len < ::core::mem::size_of::<[::core::ffi::c_char; 64]>() {} else {
+            __assert_fail(
+                b"len < sizeof(buf)\0".as_ptr() as *const ::core::ffi::c_char,
+                b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+                430 as ::core::ffi::c_uint,
+                b"void forward_mouse_event(TermInput *, TermKeyKey *)\0".as_ptr()
+                    as *const ::core::ffi::c_char,
+            );
+        }
+    };
+    tinput_enqueue(input, &raw mut buf as *mut ::core::ffi::c_char, len);
+}
+unsafe extern "C" fn tk_getkey(
+    mut tk: *mut TermKey,
+    mut key: *mut TermKeyKey,
+    mut force: bool,
+) -> TermKeyResult {
+    return (if force as ::core::ffi::c_int != 0 {
+        termkey_getkey_force(tk, key) as ::core::ffi::c_uint
+    } else {
+        termkey_getkey(tk, key) as ::core::ffi::c_uint
+    }) as TermKeyResult;
+}
+unsafe extern "C" fn tk_getkeys(mut input: *mut TermInput, mut force: bool) {
+    let mut key: TermKeyKey = TermKeyKey {
+        type_0: TERMKEY_TYPE_UNICODE,
+        code: C2Rust_Unnamed_18 { codepoint: 0 },
+        modifiers: 0,
+        event: TERMKEY_EVENT_UNKNOWN,
+        utf8: [0; 7],
+    };
+    let mut result: TermKeyResult = TERMKEY_RES_NONE;
+    loop {
+        result = tk_getkey((*input).tk, &raw mut key, force);
+        if result as ::core::ffi::c_uint
+            != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+        {
+            break;
+        }
+        match key.event as ::core::ffi::c_uint {
+            1 | 2 => {}
+            _ => {
+                continue;
+            }
+        }
+        if key.type_0 as ::core::ffi::c_int == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
+            && key.modifiers & KEYMOD_RECOGNIZED as ::core::ffi::c_int == 0
+        {
+            forward_simple_utf8(input, &raw mut key);
+        } else if key.type_0 as ::core::ffi::c_int
+            == TERMKEY_TYPE_UNICODE as ::core::ffi::c_int
+            || key.type_0 as ::core::ffi::c_int
+                == TERMKEY_TYPE_FUNCTION as ::core::ffi::c_int
+            || key.type_0 as ::core::ffi::c_int
+                == TERMKEY_TYPE_KEYSYM as ::core::ffi::c_int
+        {
+            forward_modified_utf8(input, &raw mut key);
+        } else if key.type_0 as ::core::ffi::c_int
+            == TERMKEY_TYPE_MOUSE as ::core::ffi::c_int
+        {
+            forward_mouse_event(input, &raw mut key);
+        } else if key.type_0 as ::core::ffi::c_int
+            == TERMKEY_TYPE_MODEREPORT as ::core::ffi::c_int
+        {
+            handle_modereport(input, &raw mut key);
+        } else if key.type_0 as ::core::ffi::c_int
+            == TERMKEY_TYPE_UNKNOWN_CSI as ::core::ffi::c_int
+        {
+            handle_unknown_csi(input, &raw mut key);
+        } else if key.type_0 as ::core::ffi::c_int
+            == TERMKEY_TYPE_OSC as ::core::ffi::c_int
+            || key.type_0 as ::core::ffi::c_int == TERMKEY_TYPE_DCS as ::core::ffi::c_int
+            || key.type_0 as ::core::ffi::c_int == TERMKEY_TYPE_APC as ::core::ffi::c_int
+        {
+            handle_term_response(input, &raw mut key);
+        }
+    }
+    if result as ::core::ffi::c_uint
+        != TERMKEY_RES_AGAIN as ::core::ffi::c_int as ::core::ffi::c_uint
+    {
+        return;
+    }
+    if (*input).ttimeout as ::core::ffi::c_int != 0
+        && (*input).ttimeoutlen >= 0 as OptInt
+    {
+        uv_timer_stop(&raw mut (*input).timer_handle);
+        uv_timer_start(
+            &raw mut (*input).timer_handle,
+            Some(tinput_timer_cb as unsafe extern "C" fn(*mut uv_timer_t) -> ()),
+            (*input).ttimeoutlen as uint64_t,
+            0 as uint64_t,
+        );
+    } else {
+        tk_getkeys(input, true_0 != 0);
+    };
+}
+unsafe extern "C" fn tinput_timer_cb(mut handle: *mut uv_timer_t) {
+    let mut input: *mut TermInput = (*handle).data as *mut TermInput;
+    let mut size: size_t = rstream_available(&raw mut (*input).read_stream);
+    if size != 0 {
+        let mut consumed: size_t = handle_raw_buffer(
+            input,
+            true_0 != 0,
+            (*input).read_stream.read_pos,
+            size,
+        );
+        rstream_consume(&raw mut (*input).read_stream, consumed);
+    }
+    tk_getkeys(input, true_0 != 0);
+    tinput_flush(input);
+}
+unsafe extern "C" fn bg_query_timer_cb(mut handle: *mut uv_timer_t) {
+    let mut input: *mut TermInput = (*handle).data as *mut TermInput;
+    tui_query_bg_color((*input).tui_data);
+}
+unsafe extern "C" fn handle_focus_event(
+    mut input: *mut TermInput,
+    mut ptr: *const ::core::ffi::c_char,
+    mut size: size_t,
+) -> size_t {
+    if size >= 3 as size_t
+        && (memcmp(
+            ptr as *const ::core::ffi::c_void,
+            b"\x1B[I\0".as_ptr() as *const ::core::ffi::c_char
+                as *const ::core::ffi::c_void,
+            3 as size_t,
+        ) == 0
+            || memcmp(
+                ptr as *const ::core::ffi::c_void,
+                b"\x1B[O\0".as_ptr() as *const ::core::ffi::c_char
+                    as *const ::core::ffi::c_void,
+                3 as size_t,
+            ) == 0)
+    {
+        let mut focus_gained: bool = *ptr.offset(2 as ::core::ffi::c_int as isize)
+            as ::core::ffi::c_int == 'I' as ::core::ffi::c_int;
+        let mut args: Array = ARRAY_DICT_INIT;
+        let mut args__items: [Object; 1] = [Object {
+            type_0: kObjectTypeNil,
+            data: C2Rust_Unnamed { boolean: false },
+        }; 1];
+        args.capacity = 1 as size_t;
+        args.items = &raw mut args__items as *mut Object;
+        let c2rust_fresh15 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh15 as isize) = object {
+            type_0: kObjectTypeBoolean,
+            data: C2Rust_Unnamed {
+                boolean: focus_gained,
+            },
+        };
+        rpc_send_event(
+            ui_client_channel_id,
+            b"nvim_ui_set_focus\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
+        return 3 as size_t;
+    }
+    return 0 as size_t;
+}
+pub const START_PASTE: [::core::ffi::c_char; 7] = unsafe {
+    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"\x1B[200~\0")
+};
+pub const END_PASTE: [::core::ffi::c_char; 7] = unsafe {
+    ::core::mem::transmute::<[u8; 7], [::core::ffi::c_char; 7]>(*b"\x1B[201~\0")
+};
+unsafe extern "C" fn handle_bracketed_paste(
+    mut input: *mut TermInput,
+    mut ptr: *const ::core::ffi::c_char,
+    mut size: size_t,
+    mut incomplete: *mut bool,
+) -> size_t {
+    if size >= 6 as size_t
+        && (memcmp(
+            ptr as *const ::core::ffi::c_void,
+            START_PASTE.as_ptr() as *const ::core::ffi::c_void,
+            6 as size_t,
+        ) == 0
+            || memcmp(
+                ptr as *const ::core::ffi::c_void,
+                END_PASTE.as_ptr() as *const ::core::ffi::c_void,
+                6 as size_t,
+            ) == 0)
+    {
+        let mut enable: bool = *ptr.offset(4 as ::core::ffi::c_int as isize)
+            as ::core::ffi::c_int == '0' as ::core::ffi::c_int;
+        if (*input).paste as ::core::ffi::c_int != 0 && enable as ::core::ffi::c_int != 0
+        {
+            return 0 as size_t;
+        }
+        if ((*input).paste != 0) as ::core::ffi::c_int == enable as ::core::ffi::c_int {
+            return 6 as size_t;
+        }
+        if enable {
+            tinput_flush(input);
+            (*input).paste = 1 as int8_t;
+        } else if (*input).paste != 0 {
+            (*input).paste = (if (*input).paste as ::core::ffi::c_int
+                == 2 as ::core::ffi::c_int
+            {
+                3 as ::core::ffi::c_int
+            } else {
+                -1 as ::core::ffi::c_int
+            }) as int8_t;
+            tinput_flush(input);
+            (*input).paste = 0 as int8_t;
+        }
+        return 6 as size_t;
+    } else if size < 6 as size_t
+        && (memcmp(
+            ptr as *const ::core::ffi::c_void,
+            START_PASTE.as_ptr() as *const ::core::ffi::c_void,
+            size,
+        ) == 0
+            || memcmp(
+                ptr as *const ::core::ffi::c_void,
+                END_PASTE.as_ptr() as *const ::core::ffi::c_void,
+                size,
+            ) == 0)
+    {
+        *incomplete = true_0 != 0;
+        return 0 as size_t;
+    }
+    return 0 as size_t;
+}
+unsafe extern "C" fn handle_term_response(
+    mut input: *mut TermInput,
+    mut key: *const TermKeyKey,
+) {
+    let mut str: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+    if termkey_interpret_string((*input).tk, key, &raw mut str) as ::core::ffi::c_uint
+        == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+    {
+        '_c2rust_label: {
+            if !str.is_null() {} else {
+                __assert_fail(
+                    b"str != NULL\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                    579 as ::core::ffi::c_uint,
+                    b"void handle_term_response(TermInput *, const TermKeyKey *)\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                );
+            }
+        };
+        if (*key).type_0 as ::core::ffi::c_int == TERMKEY_TYPE_DCS as ::core::ffi::c_int
+            && (strnequal(
+                str,
+                b"1$r4:3m\0".as_ptr() as *const ::core::ffi::c_char,
+                ::core::mem::size_of::<[::core::ffi::c_char; 8]>()
+                    .wrapping_sub(1 as size_t),
+            ) as ::core::ffi::c_int != 0
+                || strnequal(
+                    str,
+                    b"1$r0;4:3m\0".as_ptr() as *const ::core::ffi::c_char,
+                    ::core::mem::size_of::<[::core::ffi::c_char; 10]>()
+                        .wrapping_sub(1 as size_t),
+                ) as ::core::ffi::c_int != 0)
+        {
+            tui_enable_extended_underline((*input).tui_data);
+        }
+        let mut args: Array = ARRAY_DICT_INIT;
+        let mut args__items: [Object; 2] = [Object {
+            type_0: kObjectTypeNil,
+            data: C2Rust_Unnamed { boolean: false },
+        }; 2];
+        args.capacity = 2 as size_t;
+        args.items = &raw mut args__items as *mut Object;
+        let c2rust_fresh4 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh4 as isize) = object {
+            type_0: kObjectTypeString,
+            data: C2Rust_Unnamed {
+                string: String_0 {
+                    data: b"termresponse\0".as_ptr() as *const ::core::ffi::c_char
+                        as *mut ::core::ffi::c_char,
+                    size: ::core::mem::size_of::<[::core::ffi::c_char; 13]>()
+                        .wrapping_sub(1 as size_t),
+                },
+            },
+        };
+        let mut response: StringBuilder = StringBuilder {
+            size: 0 as size_t,
+            capacity: 0 as size_t,
+            items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+        };
+        match (*key).type_0 as ::core::ffi::c_int {
+            7 => {
+                kv_do_printf(
+                    &raw mut response,
+                    b"\x1B]%s\0".as_ptr() as *const ::core::ffi::c_char,
+                    str,
+                );
+            }
+            6 => {
+                kv_do_printf(
+                    &raw mut response,
+                    b"\x1BP%s\0".as_ptr() as *const ::core::ffi::c_char,
+                    str,
+                );
+            }
+            8 => {
+                kv_do_printf(
+                    &raw mut response,
+                    b"\x1B_%s\0".as_ptr() as *const ::core::ffi::c_char,
+                    str,
+                );
+            }
+            _ => {
+                unreachable!();
+            }
+        }
+        let c2rust_fresh5 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh5 as isize) = object {
+            type_0: kObjectTypeString,
+            data: C2Rust_Unnamed {
+                string: String_0 {
+                    data: response.items,
+                    size: response.size,
+                },
+            },
+        };
+        rpc_send_event(
+            ui_client_channel_id,
+            b"nvim_ui_term_event\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
+        xfree(response.items as *mut ::core::ffi::c_void);
+        response.capacity = 0 as size_t;
+        response.size = response.capacity;
+        response.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    }
+}
+unsafe extern "C" fn handle_primary_device_attr(
+    mut input: *mut TermInput,
+    mut params: *mut TermKeyCsiParam,
+    mut nparams: size_t,
+) {
+    if (*input).callbacks.primary_device_attr.is_some() {
+        let mut cb_save: Option<unsafe extern "C" fn(*mut TUIData) -> ()> = (*input)
+            .callbacks
+            .primary_device_attr;
+        (*input).callbacks.primary_device_attr = None;
+        cb_save.expect("non-null function pointer")((*input).tui_data);
+    }
+    if nparams == 0 as size_t {
+        return;
+    }
+    let mut args: Array = ARRAY_DICT_INIT;
+    let mut args__items: [Object; 2] = [Object {
+        type_0: kObjectTypeNil,
+        data: C2Rust_Unnamed { boolean: false },
+    }; 2];
+    args.capacity = 2 as size_t;
+    args.items = &raw mut args__items as *mut Object;
+    let c2rust_fresh8 = args.size;
+    args.size = args.size.wrapping_add(1);
+    *args.items.offset(c2rust_fresh8 as isize) = object {
+        type_0: kObjectTypeString,
+        data: C2Rust_Unnamed {
+            string: String_0 {
+                data: b"termresponse\0".as_ptr() as *const ::core::ffi::c_char
+                    as *mut ::core::ffi::c_char,
+                size: ::core::mem::size_of::<[::core::ffi::c_char; 13]>()
+                    .wrapping_sub(1 as size_t),
+            },
+        },
+    };
+    let mut response: StringBuilder = StringBuilder {
+        size: 0 as size_t,
+        capacity: 0 as size_t,
+        items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+    };
+    if strlen(b"\x1B[?\0".as_ptr() as *const ::core::ffi::c_char) > 0 as size_t {
+        if response.capacity
+            < response
+                .size
+                .wrapping_add(strlen(b"\x1B[?\0".as_ptr() as *const ::core::ffi::c_char))
+        {
+            response.capacity = response
+                .size
+                .wrapping_add(
+                    strlen(b"\x1B[?\0".as_ptr() as *const ::core::ffi::c_char),
+                );
+            response.capacity = response.capacity.wrapping_sub(1);
+            response.capacity |= response.capacity >> 1 as ::core::ffi::c_int;
+            response.capacity |= response.capacity >> 2 as ::core::ffi::c_int;
+            response.capacity |= response.capacity >> 4 as ::core::ffi::c_int;
+            response.capacity |= response.capacity >> 8 as ::core::ffi::c_int;
+            response.capacity |= response.capacity >> 16 as ::core::ffi::c_int;
+            response.capacity = response.capacity.wrapping_add(1);
+            response.capacity = response.capacity;
+            response.items = xrealloc(
+                response.items as *mut ::core::ffi::c_void,
+                ::core::mem::size_of::<::core::ffi::c_char>()
+                    .wrapping_mul(response.capacity),
+            ) as *mut ::core::ffi::c_char;
+        }
+        '_c2rust_label: {
+            if !response.items.is_null() {} else {
+                __assert_fail(
+                    b"(response).items\0".as_ptr() as *const ::core::ffi::c_char,
+                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                    637 as ::core::ffi::c_uint,
+                    b"void handle_primary_device_attr(TermInput *, TermKeyCsiParam *, size_t)\0"
+                        .as_ptr() as *const ::core::ffi::c_char,
+                );
+            }
+        };
+        memcpy(
+            response.items.offset(response.size as isize) as *mut ::core::ffi::c_void,
+            b"\x1B[?\0".as_ptr() as *const ::core::ffi::c_char
+                as *const ::core::ffi::c_void,
+            ::core::mem::size_of::<::core::ffi::c_char>()
+                .wrapping_mul(strlen(b"\x1B[?\0".as_ptr() as *const ::core::ffi::c_char)),
+        );
+        response.size = response
+            .size
+            .wrapping_add(strlen(b"\x1B[?\0".as_ptr() as *const ::core::ffi::c_char));
+    }
+    let mut i: size_t = 0 as size_t;
+    '_out: {
+        while i < nparams {
+            let mut arg: ::core::ffi::c_int = 0;
+            if termkey_interpret_csi_param(
+                *params.offset(i as isize),
+                &raw mut arg,
+                ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                ::core::ptr::null_mut::<size_t>(),
+            ) as ::core::ffi::c_uint
+                != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+            {
+                break '_out;
+            }
+            kv_do_printf(
+                &raw mut response,
+                b"%d\0".as_ptr() as *const ::core::ffi::c_char,
+                arg,
+            );
+            if i < nparams.wrapping_sub(1 as size_t) {
+                if response.size == response.capacity {
+                    response.capacity = (if response.capacity != 0 {
+                        response.capacity << 1 as ::core::ffi::c_int
+                    } else {
+                        8 as size_t
+                    });
+                    response.items = xrealloc(
+                        response.items as *mut ::core::ffi::c_void,
+                        ::core::mem::size_of::<::core::ffi::c_char>()
+                            .wrapping_mul(response.capacity),
+                    ) as *mut ::core::ffi::c_char;
+                } else {};
+                let c2rust_fresh9 = response.size;
+                response.size = response.size.wrapping_add(1);
+                *response.items.offset(c2rust_fresh9 as isize) = ';'
+                    as ::core::ffi::c_char;
+            }
+            i = i.wrapping_add(1);
+        }
+        if response.size == response.capacity {
+            response.capacity = (if response.capacity != 0 {
+                response.capacity << 1 as ::core::ffi::c_int
+            } else {
+                8 as size_t
+            });
+            response.items = xrealloc(
+                response.items as *mut ::core::ffi::c_void,
+                ::core::mem::size_of::<::core::ffi::c_char>()
+                    .wrapping_mul(response.capacity),
+            ) as *mut ::core::ffi::c_char;
+        } else {};
+        let c2rust_fresh10 = response.size;
+        response.size = response.size.wrapping_add(1);
+        *response.items.offset(c2rust_fresh10 as isize) = 'c' as ::core::ffi::c_char;
+        let c2rust_fresh11 = args.size;
+        args.size = args.size.wrapping_add(1);
+        *args.items.offset(c2rust_fresh11 as isize) = object {
+            type_0: kObjectTypeString,
+            data: C2Rust_Unnamed {
+                string: String_0 {
+                    data: response.items,
+                    size: response.size,
+                },
+            },
+        };
+        rpc_send_event(
+            ui_client_channel_id,
+            b"nvim_ui_term_event\0".as_ptr() as *const ::core::ffi::c_char,
+            args,
+        );
+    }
+    xfree(response.items as *mut ::core::ffi::c_void);
+    response.capacity = 0 as size_t;
+    response.size = response.capacity;
+    response.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
+}
+unsafe extern "C" fn handle_modereport(
+    mut input: *mut TermInput,
+    mut key: *const TermKeyKey,
+) {
+    let mut initial: ::core::ffi::c_int = 0;
+    let mut mode: ::core::ffi::c_int = 0;
+    let mut value: ::core::ffi::c_int = 0;
+    if termkey_interpret_modereport(
+        (*input).tk,
+        key,
+        &raw mut initial,
+        &raw mut mode,
+        &raw mut value,
+    ) as ::core::ffi::c_uint
+        == TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+    {
+        tui_handle_term_mode(
+            (*input).tui_data,
+            mode as TermMode,
+            value as TermModeState,
+        );
+    }
+}
+unsafe extern "C" fn handle_unknown_csi(
+    mut input: *mut TermInput,
+    mut key: *const TermKeyKey,
+) {
+    let mut params: [TermKeyCsiParam; 16] = [TermKeyCsiParam {
+        param: ::core::ptr::null::<::core::ffi::c_uchar>(),
+        length: 0,
+    }; 16];
+    let mut nparams: size_t = 16 as size_t;
+    let mut cmd: ::core::ffi::c_uint = 0;
+    if termkey_interpret_csi(
+        (*input).tk,
+        key,
+        &raw mut params as *mut TermKeyCsiParam,
+        &raw mut nparams,
+        &raw mut cmd,
+    ) as ::core::ffi::c_uint
+        != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+    {
+        return;
+    }
+    let mut intermediate: uint8_t = (cmd >> 16 as ::core::ffi::c_int
+        & 0xff as ::core::ffi::c_uint) as uint8_t;
+    let mut initial: uint8_t = (cmd >> 8 as ::core::ffi::c_int
+        & 0xff as ::core::ffi::c_uint) as uint8_t;
+    let mut command: uint8_t = (cmd & 0xff as ::core::ffi::c_uint) as uint8_t;
+    match command as ::core::ffi::c_int {
+        117 => {
+            match initial as ::core::ffi::c_int {
+                63 => {
+                    (*input).key_encoding = kKeyEncodingKitty;
+                }
+                _ => {}
+            }
+        }
+        99 => {
+            match initial as ::core::ffi::c_int {
+                63 => {
+                    handle_primary_device_attr(
+                        input,
+                        &raw mut params as *mut TermKeyCsiParam,
+                        nparams,
+                    );
+                }
+                _ => {}
+            }
+        }
+        116 => {
+            if nparams == 5 as size_t {
+                let mut args: [::core::ffi::c_int; 3] = [0; 3];
+                let mut i: size_t = 0 as size_t;
+                while i
+                    < ::core::mem::size_of::<[::core::ffi::c_int; 3]>()
+                        .wrapping_div(::core::mem::size_of::<::core::ffi::c_int>())
+                        .wrapping_div(
+                            (::core::mem::size_of::<[::core::ffi::c_int; 3]>()
+                                .wrapping_rem(::core::mem::size_of::<::core::ffi::c_int>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        )
+                {
+                    if termkey_interpret_csi_param(
+                        params[i as usize],
+                        (&raw mut args as *mut ::core::ffi::c_int).offset(i as isize),
+                        ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                        ::core::ptr::null_mut::<size_t>(),
+                    ) as ::core::ffi::c_uint
+                        != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+                    {
+                        return;
+                    }
+                    i = i.wrapping_add(1);
+                }
+                if args[0 as ::core::ffi::c_int as usize] == 48 as ::core::ffi::c_int {
+                    let mut height_chars: ::core::ffi::c_int = args[1
+                        as ::core::ffi::c_int as usize];
+                    let mut width_chars: ::core::ffi::c_int = args[2
+                        as ::core::ffi::c_int as usize];
+                    tui_set_size((*input).tui_data, width_chars, height_chars);
+                }
+            }
+        }
+        110 => {
+            if nparams == 1 as size_t {
+                let mut arg: ::core::ffi::c_int = 0;
+                if termkey_interpret_csi_param(
+                    params[0 as ::core::ffi::c_int as usize],
+                    &raw mut arg,
+                    ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                    ::core::ptr::null_mut::<size_t>(),
+                ) as ::core::ffi::c_uint
+                    != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+                {
+                    return;
+                }
+                let mut args_0: Array = ARRAY_DICT_INIT;
+                let mut args__items: [Object; 2] = [Object {
+                    type_0: kObjectTypeNil,
+                    data: C2Rust_Unnamed { boolean: false },
+                }; 2];
+                args_0.capacity = 2 as size_t;
+                args_0.items = &raw mut args__items as *mut Object;
+                let c2rust_fresh6 = args_0.size;
+                args_0.size = args_0.size.wrapping_add(1);
+                *args_0.items.offset(c2rust_fresh6 as isize) = object {
+                    type_0: kObjectTypeString,
+                    data: C2Rust_Unnamed {
+                        string: String_0 {
+                            data: b"termresponse\0".as_ptr()
+                                as *const ::core::ffi::c_char as *mut ::core::ffi::c_char,
+                            size: ::core::mem::size_of::<[::core::ffi::c_char; 13]>()
+                                .wrapping_sub(1 as size_t),
+                        },
+                    },
+                };
+                let mut response: StringBuilder = StringBuilder {
+                    size: 0 as size_t,
+                    capacity: 0 as size_t,
+                    items: ::core::ptr::null_mut::<::core::ffi::c_char>(),
+                };
+                kv_do_printf(
+                    &raw mut response,
+                    b"\x1B[%dn\0".as_ptr() as *const ::core::ffi::c_char,
+                    arg,
+                );
+                let c2rust_fresh7 = args_0.size;
+                args_0.size = args_0.size.wrapping_add(1);
+                *args_0.items.offset(c2rust_fresh7 as isize) = object {
+                    type_0: kObjectTypeString,
+                    data: C2Rust_Unnamed {
+                        string: String_0 {
+                            data: response.items,
+                            size: response.size,
+                        },
+                    },
+                };
+                rpc_send_event(
+                    ui_client_channel_id,
+                    b"nvim_ui_term_event\0".as_ptr() as *const ::core::ffi::c_char,
+                    args_0,
+                );
+                xfree(response.items as *mut ::core::ffi::c_void);
+                response.capacity = 0 as size_t;
+                response.size = response.capacity;
+                response.items = ::core::ptr::null_mut::<::core::ffi::c_char>();
+            } else if nparams == 2 as size_t {
+                let mut args_1: [::core::ffi::c_int; 2] = [0; 2];
+                let mut i_0: size_t = 0 as size_t;
+                while i_0
+                    < ::core::mem::size_of::<[::core::ffi::c_int; 2]>()
+                        .wrapping_div(::core::mem::size_of::<::core::ffi::c_int>())
+                        .wrapping_div(
+                            (::core::mem::size_of::<[::core::ffi::c_int; 2]>()
+                                .wrapping_rem(::core::mem::size_of::<::core::ffi::c_int>())
+                                == 0) as ::core::ffi::c_int as usize,
+                        )
+                {
+                    if termkey_interpret_csi_param(
+                        params[i_0 as usize],
+                        (&raw mut args_1 as *mut ::core::ffi::c_int)
+                            .offset(i_0 as isize),
+                        ::core::ptr::null_mut::<::core::ffi::c_int>(),
+                        ::core::ptr::null_mut::<size_t>(),
+                    ) as ::core::ffi::c_uint
+                        != TERMKEY_RES_KEY as ::core::ffi::c_int as ::core::ffi::c_uint
+                    {
+                        return;
+                    }
+                    i_0 = i_0.wrapping_add(1);
+                }
+                if args_1[0 as ::core::ffi::c_int as usize] == 997 as ::core::ffi::c_int
+                {
+                    if uv_timer_get_due_in(&raw mut (*input).bg_query_timer)
+                        > 0 as uint64_t
+                    {
+                        return;
+                    }
+                    uv_timer_start(
+                        &raw mut (*input).bg_query_timer,
+                        Some(
+                            bg_query_timer_cb
+                                as unsafe extern "C" fn(*mut uv_timer_t) -> (),
+                        ),
+                        100 as uint64_t,
+                        0 as uint64_t,
+                    );
+                }
+            }
+        }
+        _ => {}
+    };
+}
+unsafe extern "C" fn handle_raw_buffer(
+    mut input: *mut TermInput,
+    mut force: bool,
+    mut data: *const ::core::ffi::c_char,
+    mut size: size_t,
+) -> size_t {
+    let mut ptr: *const ::core::ffi::c_char = data;
+    loop {
+        's_4: {
+            if !force {
+                let mut consumed: size_t = handle_focus_event(input, ptr, size);
+                if consumed != 0 {
+                    ptr = ptr.offset(consumed as isize);
+                    size = size.wrapping_sub(consumed);
+                    break 's_4;
+                } else {
+                    let mut incomplete: bool = false_0 != 0;
+                    consumed = handle_bracketed_paste(
+                        input,
+                        ptr,
+                        size,
+                        &raw mut incomplete,
+                    );
+                    if incomplete {
+                        '_c2rust_label: {
+                            if consumed == 0 as size_t {} else {
+                                __assert_fail(
+                                    b"consumed == 0\0".as_ptr() as *const ::core::ffi::c_char,
+                                    b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                                        .as_ptr() as *const ::core::ffi::c_char,
+                                    799 as ::core::ffi::c_uint,
+                                    b"size_t handle_raw_buffer(TermInput *, _Bool, const char *, size_t)\0"
+                                        .as_ptr() as *const ::core::ffi::c_char,
+                                );
+                            }
+                        };
+                        return ptr.offset_from(data) as size_t;
+                    } else if consumed != 0 {
+                        ptr = ptr.offset(consumed as isize);
+                        size = size.wrapping_sub(consumed);
+                        break 's_4;
+                    }
+                }
+            }
+            let mut count: size_t = 0 as size_t;
+            let mut i: size_t = 0 as size_t;
+            while i < size {
+                count = i.wrapping_add(1 as size_t);
+                if *ptr.offset(i as isize) as ::core::ffi::c_int
+                    == '\u{1b}' as ::core::ffi::c_int && count > 1 as size_t
+                {
+                    count = count.wrapping_sub(1);
+                    break;
+                } else {
+                    i = i.wrapping_add(1);
+                }
+            }
+            if (*input).paste != 0 {
+                tinput_enqueue(input, ptr, count);
+                ptr = ptr.offset(count as isize);
+                size = size.wrapping_sub(count);
+            } else {
+                let to_use: size_t = if count < size { count } else { size };
+                if to_use > termkey_get_buffer_remaining((*input).tk) {
+                    let delta: size_t = to_use
+                        .wrapping_sub(termkey_get_buffer_remaining((*input).tk));
+                    let bufsize: size_t = termkey_get_buffer_size((*input).tk);
+                    if termkey_set_buffer_size(
+                        (*input).tk,
+                        if bufsize.wrapping_add(delta)
+                            > bufsize.wrapping_mul(2 as size_t)
+                        {
+                            bufsize.wrapping_add(delta)
+                        } else {
+                            bufsize.wrapping_mul(2 as size_t)
+                        },
+                    ) == 0
+                    {
+                        abort();
+                    }
+                }
+                let mut consumed_0: size_t = termkey_push_bytes(
+                    (*input).tk,
+                    ptr,
+                    to_use,
+                );
+                '_c2rust_label_0: {
+                    if consumed_0 <= to_use {} else {
+                        __assert_fail(
+                            b"consumed <= to_use\0".as_ptr()
+                                as *const ::core::ffi::c_char,
+                            b"/home/overlord/projects/neovim/neovim/src/nvim/tui/input.c\0"
+                                .as_ptr() as *const ::core::ffi::c_char,
+                            849 as ::core::ffi::c_uint,
+                            b"size_t handle_raw_buffer(TermInput *, _Bool, const char *, size_t)\0"
+                                .as_ptr() as *const ::core::ffi::c_char,
+                        );
+                    }
+                };
+                ptr = ptr.offset(consumed_0 as isize);
+                size = size.wrapping_sub(consumed_0);
+                tk_getkeys(input, false_0 != 0);
+            }
+        }
+        if size == 0 {
+            break;
+        }
+    }
+    let tk_size: size_t = termkey_get_buffer_size((*input).tk);
+    let tk_remaining: size_t = termkey_get_buffer_remaining((*input).tk);
+    let tk_count: size_t = tk_size.wrapping_sub(tk_remaining);
+    if tk_count < INPUT_BUFFER_SIZE as size_t && tk_size > INPUT_BUFFER_SIZE as size_t {
+        if termkey_set_buffer_size((*input).tk, INPUT_BUFFER_SIZE as size_t) == 0 {
+            abort();
+        }
+    }
+    return ptr.offset_from(data) as size_t;
+}
+unsafe extern "C" fn tinput_read_cb(
+    mut stream: *mut RStream,
+    mut buf: *const ::core::ffi::c_char,
+    mut count_: size_t,
+    mut data: *mut ::core::ffi::c_void,
+    mut eof: bool,
+) -> size_t {
+    let mut input: *mut TermInput = data as *mut TermInput;
+    let mut consumed: size_t = handle_raw_buffer(input, false_0 != 0, buf, count_);
+    tinput_flush(input);
+    if eof {
+        loop_schedule_fast(
+            &raw mut main_loop,
+            Event {
+                handler: ::core::mem::transmute::<
+                    Option<unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> !>,
+                    argv_callback,
+                >(
+                    Some(
+                        tinput_done_event
+                            as unsafe extern "C" fn(*mut *mut ::core::ffi::c_void) -> !,
+                    ),
+                ),
+                argv: [
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                    ::core::ptr::null_mut::<::core::ffi::c_void>(),
+                ],
+            },
+        );
+        return consumed;
+    }
+    if consumed < count_ {
+        let mut ms: int64_t = if (*input).ttimeout as ::core::ffi::c_int != 0 {
+            if (*input).ttimeoutlen >= 0 as OptInt {
+                (*input).ttimeoutlen as int64_t
+            } else {
+                0 as int64_t
+            }
+        } else {
+            0 as int64_t
+        };
+        uv_timer_stop(&raw mut (*input).timer_handle);
+        uv_timer_start(
+            &raw mut (*input).timer_handle,
+            Some(tinput_timer_cb as unsafe extern "C" fn(*mut uv_timer_t) -> ()),
+            ms as uint32_t as uint64_t,
+            0 as uint64_t,
+        );
+    }
+    return consumed;
+}
+pub const KEY_BUFFER_SIZE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int;
+pub const true_0: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
+pub const false_0: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
