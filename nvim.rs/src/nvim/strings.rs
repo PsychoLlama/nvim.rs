@@ -1998,6 +1998,97 @@ unsafe extern "C" fn parse_fmt_types(
     *num_posarg = 0 as ::core::ffi::c_int;
     return FAIL;
 }
+// Hand-ported from neovim's static `skip_to_arg` in src/nvim/strings.c.
+// c2rust drops this definition (it takes `va_list` by value, which its
+// variadic support cannot translate) yet still emits the 17 call sites in
+// `vim_vsnprintf_typval` below. This faithful port keeps the positional
+// (`%N$`) printf path correct. The signature matches exactly what those call
+// sites pass: `ap_start` is the freshly re-borrowed `VaList` from
+// `ap_start.as_va_list()`, and `ap` is a pointer to the working `VaListImpl`.
+unsafe extern "C" fn skip_to_arg<'a, 'f: 'a>(
+    ap_types: *mut *const ::core::ffi::c_char,
+    ap_start: ::core::ffi::VaList<'a, 'f>,
+    ap: *mut ::core::ffi::VaListImpl<'f>,
+    arg_idx: *mut ::core::ffi::c_int,
+    arg_cur: *mut ::core::ffi::c_int,
+    fmt: *const ::core::ffi::c_char,
+) {
+    let mut arg_min: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
+    if *arg_cur + 1 as ::core::ffi::c_int == *arg_idx {
+        *arg_cur += 1;
+        *arg_idx += 1;
+        return;
+    }
+    if *arg_cur >= *arg_idx {
+        // Reset ap to ap_start and skip arg_idx - 1 types (va_end + va_copy).
+        *ap = ap_start.clone();
+    } else {
+        // Skip over any we should skip.
+        arg_min = *arg_cur;
+    }
+    *arg_cur = arg_min;
+    while *arg_cur < *arg_idx - 1 as ::core::ffi::c_int {
+        if ap_types.is_null()
+            || (*ap_types.offset(*arg_cur as isize)).is_null()
+        {
+            siemsg(
+                e_aptypes_is_null_nr_str.as_ptr() as *const ::core::ffi::c_char,
+                fmt,
+                *arg_cur,
+            );
+            return;
+        }
+        let p: *const ::core::ffi::c_char = *ap_types.offset(*arg_cur as isize);
+        let fmt_type: ::core::ffi::c_int = format_typeof(p);
+        // get parameter value, do initial processing (consume one va_arg)
+        match fmt_type {
+            TYPE_PERCENT | TYPE_UNKNOWN => {}
+            TYPE_CHAR => {
+                (*ap).arg::<::core::ffi::c_int>();
+            }
+            TYPE_STRING => {
+                (*ap).arg::<*const ::core::ffi::c_char>();
+            }
+            TYPE_POINTER => {
+                (*ap).arg::<*mut ::core::ffi::c_void>();
+            }
+            TYPE_INT => {
+                (*ap).arg::<::core::ffi::c_int>();
+            }
+            TYPE_LONGINT => {
+                (*ap).arg::<::core::ffi::c_long>();
+            }
+            TYPE_LONGLONGINT => {
+                (*ap).arg::<::core::ffi::c_longlong>();
+            }
+            TYPE_SIGNEDSIZET => {
+                // implementation-defined, usually ptrdiff_t
+                (*ap).arg::<isize>();
+            }
+            TYPE_UNSIGNEDINT => {
+                (*ap).arg::<::core::ffi::c_uint>();
+            }
+            TYPE_UNSIGNEDLONGINT => {
+                (*ap).arg::<::core::ffi::c_ulong>();
+            }
+            TYPE_UNSIGNEDLONGLONGINT => {
+                (*ap).arg::<::core::ffi::c_ulonglong>();
+            }
+            TYPE_SIZET => {
+                (*ap).arg::<size_t>();
+            }
+            TYPE_FLOAT => {
+                (*ap).arg::<::core::ffi::c_double>();
+            }
+            _ => {}
+        }
+        *arg_cur += 1;
+    }
+    // Because we know that after we return from this call, a va_arg() call is
+    // made, we can pre-emptively increment the current argument index.
+    *arg_cur += 1;
+    *arg_idx += 1;
+}
 #[no_mangle]
 pub unsafe extern "C" fn vim_vsnprintf_typval(
     mut str: *mut ::core::ffi::c_char,

@@ -6595,8 +6595,9 @@ static mut e_missing_function_argument: [::core::ffi::c_char; 33] = unsafe {
         [::core::ffi::c_char; 33],
     >(*b"E1132: Missing function argument\0")
 };
-static mut dummy_ap: ::core::ffi::VaListImpl = ::core::mem::MaybeUninit::uninit()
-    .assume_init();
+static mut dummy_ap: ::core::ffi::VaListImpl = unsafe {
+    ::core::mem::transmute::<[u8; 24], ::core::ffi::VaListImpl>([0u8; 24])
+};
 #[no_mangle]
 pub unsafe extern "C" fn get_function_name(
     mut xp: *mut expand_T,
