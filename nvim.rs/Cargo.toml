@@ -8,11 +8,23 @@ version = "0.0.0"
 publish = false
 edition = "2021"
 autobins = false
+# Enumerate package files explicitly so cargo lists them by walking the
+# directory instead of reading neovim's git index — cargo's bundled libgit2
+# rejects that index's checksum ("invalid data in index").
+include = ["**/*.rs", "Cargo.toml", "Cargo.lock", "build.rs", "rust-toolchain.toml"]
 
 [lib]
 name = "c2rust_neovim"
 path = "lib.rs"
 crate-type = ["staticlib", "rlib"]
+
+# Runnable `nvim` executable. `autobins = false` above disables bin
+# auto-discovery, so the entry point is declared explicitly here; it just
+# calls the `main()` c2rust generated in src/nvim/main.rs.
+[[bin]]
+name = "nvim"
+path = "src/bin/nvim.rs"
+
 [dependencies]
 c2rust-bitfields = { path = "/home/overlord/projects/immunant/c2rust/c2rust-bitfields" }
 libc = "0.2"
