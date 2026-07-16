@@ -54,6 +54,12 @@
                   "rustfmt"
                 ]
               )
+              # Native toolchain for building neovim's bundled C dependencies
+              # (LuaJIT, libuv, tree-sitter, …) under `.deps/`, which the Rust
+              # crate links against. cmake drives the `cmake.deps` build and
+              # emits a Ninja build; a C compiler comes from the stdenv shell.
+              pkgs.cmake
+              pkgs.ninja
               pkgs.pkg-config
               pkgs.nixfmt
               pkgs.prettier
